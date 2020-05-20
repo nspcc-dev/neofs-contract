@@ -230,35 +230,27 @@ func Main(op string, args []interface{}) interface{} {
 		offset = 10
 		newIR := []node{}
 
-		for i := 0; i < listItemCount; i++ {
+	loop:
+		for i := 0; i < listItemCount; i, offset = i+1, offset+33 {
 			pub := data[offset : offset+33]
-
-			finished := false
 
 			for j := 0; j < len(irList); j++ {
 				n := irList[j]
 				if util.Equals(n.pub, pub) {
 					newIR = append(newIR, n)
-					finished = true
-					break
+					continue loop
 				}
 			}
 
-			if !finished {
-				for j := 0; j < len(candidates); j++ {
-					n := candidates[j]
-					if util.Equals(n.pub, pub) {
-						newIR = append(newIR, n)
-						finished = true
-						break
-					}
-				}
-				if !finished {
-					panic("unknown inner ring candidate present in the list")
+			for j := 0; j < len(candidates); j++ {
+				n := candidates[j]
+				if util.Equals(n.pub, pub) {
+					newIR = append(newIR, n)
+					continue loop
 				}
 			}
-			offset += 33
 		}
+
 		if len(newIR) != listItemCount {
 			panic("new inner ring wasn't processed correctly")
 		}
