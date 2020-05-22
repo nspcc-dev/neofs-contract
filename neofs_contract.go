@@ -33,27 +33,27 @@ func Main(op string, args []interface{}) interface{} {
 	}
 
 	/*
-			Utility operations - they will be changed in production:
-			- Deploy(params: address, pubKey, ... )  - setup initial inner ring state
+		Utility operations - they will be changed in production:
+		- Deploy(params: address, pubKey, ... )  - setup initial inner ring state
 
-			User operations:
-			- InnerRingList()                                - get list of inner ring nodes addresses and public keys
-			- InnerRingAddress(params: address, pubKey)      - update address of the inner ring node with given public key
-			- InnerRingCandidateRemove(params: pubKey)       - remove node with given public key from the inner ring candidate queue
-			- InnerRingCandidateAdd(params: address, pubKey) - add node to the inner ring candidate queue
-			- Deposit(params: pubKey, amount)                - deposit GAS to the NeoFS account
-			- Withdraw(params: withdrawCheque)               - withdraw GAS from the NeoFS account
-			- InnerRingUpdate(params: irCheque)              - change list of inner ring nodes
-			- Version()                                      - get version of the NeoFS smart-contract
+		User operations:
+		- InnerRingList()                                - get list of inner ring nodes addresses and public keys
+		- InnerRingAddress(params: address, pubKey)      - update address of the inner ring node with given public key
+		- InnerRingCandidateRemove(params: pubKey)       - remove node with given public key from the inner ring candidate queue
+		- InnerRingCandidateAdd(params: address, pubKey) - add node to the inner ring candidate queue
+		- Deposit(params: pubKey, amount)                - deposit GAS to the NeoFS account
+		- Withdraw(params: withdrawCheque)               - withdraw GAS from the NeoFS account
+		- InnerRingUpdate(params: irCheque)              - change list of inner ring nodes
+		- IsInnerRing(params: pubKey)                    - returns true if pubKey presented in inner ring list
+		- Version()                                      - get version of the NeoFS smart-contract
 
-			Params:
-			- address        - string of the valid multiaddress (github.com/multiformats/multiaddr)
-			- pubKey         - 33 byte public key
-		    - withdrawCheque - serialized structure, that confirms GAS transfer;
-							   contains inner ring signatures
-			- irCheque       - serialized structure, that confirms new inner ring node list;
-							   contains inner ring signatures
-
+		Params:
+		- address        - string of the valid multiaddress (github.com/multiformats/multiaddr)
+		- pubKey         - 33 byte public key
+		- withdrawCheque - serialized structure, that confirms GAS transfer;
+		                   contains inner ring signatures
+		- irCheque       - serialized structure, that confirms new inner ring node list;
+		                   contains inner ring signatures
 	*/
 
 	ctx := storage.GetContext()
@@ -265,6 +265,26 @@ func Main(op string, args []interface{}) interface{} {
 		putSerialized(ctx, "UsedVerifCheckList", c)
 
 		return true
+	case "IsInnerRing":
+		if len(args) != 1 {
+			panic("isInnerRing: wrong arguments")
+		}
+
+		key := args[0].([]byte)
+		if len(key) != 33 {
+			panic("isInnerRing: incorrect public key")
+		}
+
+		irList := getSerialized(ctx, "InnerRingList").([]node)
+		for i := range irList {
+			node := irList[i]
+
+			if util.Equals(node.pub, key) {
+				return true
+			}
+		}
+
+		return false
 	case "Version":
 		return version
 	}
