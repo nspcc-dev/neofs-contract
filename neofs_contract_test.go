@@ -37,7 +37,6 @@ var (
 
 type contract struct {
 	script   []byte
-	addrs    []multiaddr.Multiaddr
 	privs    []*ecdsa.PrivateKey
 	cgasHash string
 }
@@ -49,42 +48,19 @@ func TestContract(t *testing.T) {
 
 	plug.cgas[contractStr] = util.Fixed8FromInt64(1000)
 
-	// fail if odd number of arguments provided
-	v := initVM(contract, plug)
-	loadArg(t, v, "Deploy", []interface{}{contract.addrs[0].String()})
-	require.Error(t, v.Run())
-
-	// correct arguments
 	var args []interface{}
-	for i := range contract.addrs {
-		args = append(args, contract.addrs[i].String())
+	for i := range contract.privs {
 		args = append(args, crypto.MarshalPublicKey(&contract.privs[i].PublicKey))
 	}
 
-	v = initVM(contract, plug)
+	v := initVM(contract, plug)
 	loadArg(t, v, "Deploy", args)
 	require.NoError(t, v.Run())
 
-	// double withdraw
+	// double deploy
 	v = initVM(contract, plug)
 	loadArg(t, v, "Deploy", args)
 	require.Error(t, v.Run())
-
-	t.Run("InnerRingAddress", func(t *testing.T) {
-		newAddr, err := multiaddr.NewMultiaddr("/dns6/fdb5:7305:0adf:0b0b::/tcp/8080")
-		require.NoError(t, err)
-
-		previousAddr := contract.addrs[0]
-		key := crypto.MarshalPublicKey(&contract.privs[0].PublicKey)
-
-		v := initVM(contract, plug)
-		loadArg(t, v, "InnerRingAddress", []interface{}{newAddr.String(), key})
-		require.NoError(t, v.Run())
-		require.False(t, bytes.Contains(plug.mem["InnerRingList"], []byte(previousAddr.String())))
-		require.True(t, bytes.Contains(plug.mem["InnerRingList"], []byte(newAddr.String())))
-
-		contract.addrs[0] = newAddr
-	})
 
 	t.Run("Deposit", func(t *testing.T) {
 		v := initVM(contract, plug)
@@ -128,7 +104,7 @@ func TestContract(t *testing.T) {
 		key := crypto.MarshalPublicKey(&test.DecodeKey(1).PublicKey)
 		plug.setCGASBalance(key, 4000)
 
-		loadArg(t, v, "InnerRingCandidateAdd", []interface{}{"/ip6/2001:4860:4860::8888/tcp/80", key})
+		loadArg(t, v, "InnerRingCandidateAdd", []interface{}{key})
 		require.NoError(t, v.Run())
 
 		fee := util.Fixed8FromInt64(1)
@@ -140,7 +116,7 @@ func TestContract(t *testing.T) {
 
 		t.Run("Double InnerRingCandidateAdd", func(t *testing.T) {
 			v := initVM(contract, plug)
-			loadArg(t, v, "InnerRingCandidateAdd", []interface{}{"/ip4/8.8.8.8/tcp/80", key})
+			loadArg(t, v, "InnerRingCandidateAdd", []interface{}{key})
 			require.Error(t, v.Run())
 		})
 	})
@@ -150,7 +126,7 @@ func TestContract(t *testing.T) {
 		plug.setCGASBalance(key, 4000)
 
 		v := initVM(contract, plug)
-		loadArg(t, v, "InnerRingCandidateAdd", []interface{}{"/ip6/2001:4860:4860::8888/tcp/80", key})
+		loadArg(t, v, "InnerRingCandidateAdd", []interface{}{key})
 		require.NoError(t, v.Run())
 		require.True(t, bytes.Contains(plug.mem["InnerRingCandidates"], key))
 
@@ -253,7 +229,7 @@ func initGoContract(t *testing.T, path string, n int) *contract {
 	buf, err := compiler.Compile(f)
 	require.NoError(t, err)
 
-	return &contract{script: buf, privs: getKeys(t, n), addrs: getAddrs(t, n)}
+	return &contract{script: buf, privs: getKeys(t, n)}
 }
 
 func getKeys(t *testing.T, n int) []*ecdsa.PrivateKey {
