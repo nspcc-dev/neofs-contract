@@ -9,8 +9,7 @@ import (
 )
 
 type node struct {
-	addr []byte
-	pub  []byte
+	pub []byte
 }
 
 type check struct {
@@ -38,9 +37,8 @@ func Main(op string, args []interface{}) interface{} {
 
 		User operations:
 		- InnerRingList()                                - get list of inner ring nodes addresses and public keys
-		- InnerRingAddress(params: address, pubKey)      - update address of the inner ring node with given public key
 		- InnerRingCandidateRemove(params: pubKey)       - remove node with given public key from the inner ring candidate queue
-		- InnerRingCandidateAdd(params: address, pubKey) - add node to the inner ring candidate queue
+		- InnerRingCandidateAdd(params: pubKey)          - add node to the inner ring candidate queue
 		- Deposit(params: pubKey, amount)                - deposit GAS to the NeoFS account
 		- Withdraw(params: withdrawCheque)               - withdraw GAS from the NeoFS account
 		- InnerRingUpdate(params: irCheque)              - change list of inner ring nodes
@@ -64,16 +62,10 @@ func Main(op string, args []interface{}) interface{} {
 			panic("contract already deployed")
 		}
 
-		ln := len(args)
-		if ln%2 != 0 {
-			panic("provide pairs of inner ring address and public key")
-		}
-
 		irList = []node{}
-		for i := 0; i < ln/2; i++ {
-			addr := args[i*2].([]byte)
-			pub := args[i*2+1].([]byte)
-			irList = append(irList, node{addr: addr, pub: pub})
+		for i := 0; i < len(args); i++ {
+			pub := args[i].([]byte)
+			irList = append(irList, node{pub: pub})
 		}
 
 		data := runtime.Serialize(irList)
@@ -88,22 +80,6 @@ func Main(op string, args []interface{}) interface{} {
 		irList := getSerialized(ctx, "InnerRingList").([]node)
 
 		return irList
-	case "InnerRingAddress":
-		addr := args[0].([]byte)
-		pub := args[1].([]byte)
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		if !containsPub(irList, pub) {
-			panic("inner ring node does not exist")
-		}
-
-		if runtime.CheckWitness(pub) {
-			n := node{addr: addr, pub: pub}
-
-			delSerializedIR(ctx, "InnerRingList", pub)
-			putSerialized(ctx, "InnerRingList", n)
-		}
-
-		return true
 	case "InnerRingCandidateRemove":
 		data := args[0].([]byte) // public key
 		if !runtime.CheckWitness(data) {
@@ -114,19 +90,18 @@ func Main(op string, args []interface{}) interface{} {
 
 		return true
 	case "InnerRingCandidateAdd":
-		addr := args[0].([]byte) // valid multiaddr string
-		data := args[1].([]byte) // public key
+		key := args[0].([]byte) // public key
 
-		if !runtime.CheckWitness(data) {
+		if !runtime.CheckWitness(key) {
 			panic("you should be the owner of the public key")
 		}
 
 		candidates := getSerialized(ctx, "InnerRingCandidates").([]node)
-		if containsPub(candidates, data) {
+		if containsPub(candidates, key) {
 			panic("is already in list")
 		}
 
-		from := pubToScriptHash(data)
+		from := pubToScriptHash(key)
 		to := engine.GetExecutingScriptHash()
 		params := []interface{}{from, to, innerRingCandidateFee}
 
@@ -135,10 +110,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("failed to transfer funds, aborting")
 		}
 
-		candidate := node{
-			addr: addr,
-			pub:  data,
-		}
+		candidate := node{pub: key}
 		if !putSerialized(ctx, "InnerRingCandidates", candidate) {
 			panic("failed to put candidate into the queue")
 		}
