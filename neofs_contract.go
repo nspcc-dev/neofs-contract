@@ -8,21 +8,29 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
 
-type node struct {
-	pub []byte
-}
+type (
+	ballot struct {
+		id []byte
+		n  int
+	}
 
-type check struct {
-	id     []byte
-	height []byte
-}
+	node struct {
+		pub []byte
+	}
 
-// GAS NEP-5 HASH
-const tokenHash = "\x77\xea\x59\x6b\x7a\xdf\x7e\x4d\xd1\x40\x76\x97\x31\xb7\xd2\xf0\xe0\x6b\xcd\x9b"
+	check struct {
+		id     []byte
+		height []byte
+	}
+)
 
-const innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
-
-const version = 1
+const (
+	// GAS NEP-5 HASH
+	tokenHash             = "\x77\xea\x59\x6b\x7a\xdf\x7e\x4d\xd1\x40\x76\x97\x31\xb7\xd2\xf0\xe0\x6b\xcd\x9b"
+	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
+	version               = 1
+	voteKey               = "ballots"
+)
 
 func Main(op string, args []interface{}) interface{} {
 	// The trigger determines whether this smart-contract is being
@@ -74,6 +82,9 @@ func Main(op string, args []interface{}) interface{} {
 		data = runtime.Serialize([]interface{}{})
 		storage.Put(ctx, "UsedVerifCheckList", data)
 		storage.Put(ctx, "InnerRingCandidates", data)
+
+		data = runtime.Serialize([]ballot{})
+		storage.Put(ctx, voteKey, data)
 
 		return true
 	case "InnerRingList":
@@ -181,60 +192,66 @@ func Main(op string, args []interface{}) interface{} {
 		listSize := listItemCount * 33
 
 		offset := 8 + 2 + listSize
-		msg := data[:offset]
-		message := crypto.SHA256(msg)
 
 		irList := getSerialized(ctx, "InnerRingList").([]node)
-		if !verifySignatures(irList, data, message, offset) {
-			panic("can't verify signatures")
-		}
-
 		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
-		c := check{
-			id:     id,
-			height: []byte{1}, // ir update cheques use height as id
+		threshold := len(irList)/3*2 + 1
+
+		if !isInnerRingRequest(irList) {
+			panic("innerRingUpdate: invoked by non inner ring node")
 		}
+
+		c := check{id: id}
 		if containsCheck(usedList, c) {
-			panic("check has already been used")
+			panic("innerRingUpdate: cheque has non unique id")
 		}
 
-		candidates := getSerialized(ctx, "InnerRingCandidates").([]node)
-		offset = 10
-		newIR := []node{}
+		chequeHash := crypto.Hash256(data)
 
-	loop:
-		for i := 0; i < listItemCount; i, offset = i+1, offset+33 {
-			pub := data[offset : offset+33]
+		n := vote(ctx, chequeHash)
+		if n >= threshold {
+			removeVotes(ctx, chequeHash)
 
-			for j := 0; j < len(irList); j++ {
-				n := irList[j]
-				if util.Equals(n.pub, pub) {
-					newIR = append(newIR, n)
-					continue loop
+			candidates := getSerialized(ctx, "InnerRingCandidates").([]node)
+			offset = 10
+			newIR := []node{}
+
+		loop:
+			for i := 0; i < listItemCount; i, offset = i+1, offset+33 {
+				pub := data[offset : offset+33]
+
+				for j := 0; j < len(irList); j++ {
+					n := irList[j]
+					if util.Equals(n.pub, pub) {
+						newIR = append(newIR, n)
+						continue loop
+					}
+				}
+
+				for j := 0; j < len(candidates); j++ {
+					n := candidates[j]
+					if util.Equals(n.pub, pub) {
+						newIR = append(newIR, n)
+						continue loop
+					}
 				}
 			}
 
-			for j := 0; j < len(candidates); j++ {
-				n := candidates[j]
-				if util.Equals(n.pub, pub) {
-					newIR = append(newIR, n)
-					continue loop
-				}
+			if len(newIR) != listItemCount {
+				panic("new inner ring wasn't processed correctly")
 			}
-		}
 
-		if len(newIR) != listItemCount {
-			panic("new inner ring wasn't processed correctly")
-		}
+			for i := 0; i < len(newIR); i++ {
+				n := newIR[i]
+				delSerializedIR(ctx, "InnerRingCandidates", n.pub)
+			}
 
-		for i := 0; i < len(newIR); i++ {
-			n := newIR[i]
-			delSerializedIR(ctx, "InnerRingCandidates", n.pub)
-		}
+			newIRData := runtime.Serialize(newIR)
+			storage.Put(ctx, "InnerRingList", newIRData)
+			putSerialized(ctx, "UsedVerifCheckList", c)
 
-		newIRData := runtime.Serialize(newIR)
-		storage.Put(ctx, "InnerRingList", newIRData)
-		putSerialized(ctx, "UsedVerifCheckList", c)
+			runtime.Notify("InnerRingUpdate", c.id, newIRData)
+		}
 
 		return true
 	case "IsInnerRing":
@@ -404,4 +421,62 @@ func verifySignatures(irList []node, data []byte, message []byte, offset int) bo
 
 	runtime.Log("not enough verified signatures")
 	return false
+}
+
+// isInnerRingRequest returns true if contract was invoked by inner ring node.
+func isInnerRingRequest(irList []node) bool {
+	for i := 0; i < len(irList); i++ {
+		irNode := irList[i]
+
+		if runtime.CheckWitness(irNode.pub) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// todo: votes must be from unique inner ring nods
+func vote(ctx storage.Context, id []byte) int {
+	var (
+		newCandidates = []ballot{}
+		candidates    = getSerialized(ctx, voteKey).([]ballot)
+		found         = -1
+	)
+
+	for i := 0; i < len(candidates); i++ {
+		cnd := candidates[i]
+		if util.Equals(cnd.id, id) {
+			cnd = ballot{id: id, n: cnd.n + 1}
+			found = cnd.n
+		}
+		newCandidates = append(newCandidates, cnd)
+	}
+
+	if found < 0 {
+		newCandidates = append(newCandidates, ballot{id: id, n: 1})
+		found = 1
+	}
+
+	data := runtime.Serialize(newCandidates)
+	storage.Put(ctx, voteKey, data)
+
+	return found
+}
+
+func removeVotes(ctx storage.Context, id []byte) {
+	var (
+		newCandidates = []ballot{}
+		candidates    = getSerialized(ctx, voteKey).([]ballot)
+	)
+
+	for i := 0; i < len(candidates); i++ {
+		cnd := candidates[i]
+		if !util.Equals(cnd.id, id) {
+			newCandidates = append(newCandidates, cnd)
+		}
+	}
+
+	data := runtime.Serialize(newCandidates)
+	storage.Put(ctx, voteKey, data)
 }

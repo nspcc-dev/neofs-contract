@@ -91,12 +91,6 @@ PASS
 ok      github.com/nspcc-dev/neofs-contract     0.453s
 ```
 
-### Skipped tests
-
-Some tests might be skipped for now. These tests used `neofs-node` 
-structures, that are not publicly available yet, e.g. cheque for 
-`InnerRingUpdate` call.
-
 ## License
 
 This project is licensed under the GPLv3 License - see the 

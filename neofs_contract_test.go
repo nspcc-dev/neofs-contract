@@ -11,7 +11,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/multiformats/go-multiaddr"
 	"github.com/nspcc-dev/neo-go/pkg/compiler"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/io"
@@ -145,48 +144,6 @@ func TestContract(t *testing.T) {
 		require.NoError(t, v.Run())
 		require.False(t, bytes.Contains(plug.mem["InnerRingCandidates"], key))
 	})
-
-	t.Run("InnerRingUpdate", func(t *testing.T) {
-		t.Skip("implement getIRExcludeCheque without neofs-node dependency")
-
-		pubKey := &test.DecodeKey(4).PublicKey
-		key := crypto.MarshalPublicKey(pubKey)
-		plug.setCGASBalance(key, 4000)
-
-		var pubs []*ecdsa.PublicKey
-		for i := 0; i < len(contract.privs)-1; i++ {
-			pubs = append(pubs, &contract.privs[i].PublicKey)
-		}
-		pubs = append(pubs, pubKey)
-		cheque := getIRExcludeCheque(t, contract, pubs, 777)
-
-		t.Run("Try without candidate", func(t *testing.T) {
-			v := initVM(contract, plug)
-			loadArg(t, v, "InnerRingUpdate", []interface{}{cheque})
-			require.Error(t, v.Run())
-		})
-
-		v := initVM(contract, plug)
-		loadArg(t, v, "InnerRingCandidateAdd", []interface{}{"addrX", key})
-		require.NoError(t, v.Run())
-
-		v = initVM(contract, plug)
-		loadArg(t, v, "InnerRingUpdate", []interface{}{cheque})
-		require.NoError(t, v.Run())
-
-		for i := 0; i < len(contract.privs)-1; i++ {
-			require.True(t, bytes.Contains(plug.mem["InnerRingList"],
-				crypto.MarshalPublicKey(&contract.privs[i].PublicKey)))
-		}
-		require.True(t, bytes.Contains(plug.mem["InnerRingList"], key))
-
-		t.Run("Double InnerRingUpdate", func(t *testing.T) {
-			newCheque := getIRExcludeCheque(t, contract, pubs, 777)
-			v = initVM(contract, plug)
-			loadArg(t, v, "InnerRingUpdate", []interface{}{newCheque})
-			require.Error(t, v.Run())
-		})
-	})
 }
 
 func getCheque(t *testing.T, c *contract, amount int64) (refs.OwnerID, []byte) {
@@ -242,20 +199,6 @@ func getKeys(t *testing.T, n int) []*ecdsa.PrivateKey {
 	}
 
 	return privs
-}
-
-func getAddrs(t *testing.T, n int) []multiaddr.Multiaddr {
-	const template = "/dns4/10.120.14.%d/tcp/8080"
-
-	addrs := make([]multiaddr.Multiaddr, n)
-	for i := range addrs {
-		var err error
-
-		addrs[i], err = multiaddr.NewMultiaddr(fmt.Sprintf(template, i))
-		require.NoError(t, err)
-	}
-
-	return addrs
 }
 
 func mustHex(s string) []byte {
