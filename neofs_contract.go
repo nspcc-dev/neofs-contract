@@ -19,8 +19,7 @@ type (
 	}
 
 	check struct {
-		id     []byte
-		height []byte
+		id []byte
 	}
 )
 
@@ -148,39 +147,74 @@ func Main(op string, args []interface{}) interface{} {
 
 		runtime.Log("funds have been transferred")
 
+		var rcv = []byte{}
+		if len(args) == 3 {
+			rcv = args[2].([]byte) // todo: check if rcv value is valid
+		}
+
+		runtime.Notify("Deposit", pk, amount, rcv)
+
 		return true
 	case "Withdraw":
-		from := engine.GetExecutingScriptHash()
-		data := args[0].([]byte)
-		message := data[0:66]
-		uuid := data[0:25]
-		owner := data[25:50]
-		value := data[50:58]
-		height := data[58:66]
-		offset := 68
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
-
-		c := check{
-			id:     uuid,
-			height: height,
-		}
-		if containsCheck(usedList, c) {
-			panic("verification check has already been used")
+		if len(args) != 2 {
+			panic("withdraw: bad arguments")
 		}
 
+		user := args[0].([]byte)
+		if !runtime.CheckWitness(user) {
+			// todo: consider something different with neoID
+			panic("withdraw: you should be the owner of the account")
+		}
+
+		amount := args[1].(int)
+		if amount > 0 {
+			amount = amount * 100000000
+		}
+
+		runtime.Notify("Withdraw", user, amount)
+
+		return true
+	case "Cheque":
+		if len(args) != 4 {
+			panic("cheque: bad arguments")
+		}
+
+		id := args[0].([]byte)      // unique cheque id
+		user := args[1].([]byte)    // GAS receiver
+		amount := args[2].(int)     // amount of GAS
+		lockAcc := args[3].([]byte) // lock account from internal banking that must be cashed out
+
+		ctx := storage.GetContext()
+
+		hashID := crypto.Hash256(id)
 		irList := getSerialized(ctx, "InnerRingList").([]node)
-		if !verifySignatures(irList, data, message, offset) {
-			panic("can't verify signatures")
+		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
+		threshold := len(irList)/3*2 + 1
+
+		if !isInnerRingRequest(irList) {
+			panic("cheque: invoked by non inner ring node")
 		}
 
-		h := owner[1:21]
-		params := []interface{}{from, h, value}
-		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
-		if !transferred {
-			panic("failed to transfer funds, aborting")
+		c := check{id: id} // todo: use different cheque id for inner ring update and withdraw
+		if containsCheck(usedList, c) {
+			panic("cheque: non unique id")
 		}
 
-		putSerialized(ctx, "UsedVerifCheckList", c)
+		n := vote(ctx, hashID)
+		if n >= threshold {
+			removeVotes(ctx, hashID)
+
+			from := engine.GetExecutingScriptHash()
+			params := []interface{}{from, user, amount}
+
+			transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+			if !transferred {
+				panic("cheque: failed to transfer funds, aborting")
+			}
+
+			putSerialized(ctx, "UsedVerifCheckList", c)
+			runtime.Notify("Cheque", id, user, amount, lockAcc)
+		}
 
 		return true
 	case "InnerRingUpdate":
@@ -385,41 +419,6 @@ func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
 	}
 
 	runtime.Log("target element has not been removed")
-	return false
-}
-func verifySignatures(irList []node, data []byte, message []byte, offset int) bool {
-	n := len(irList)
-	f := (n - 1) / 3
-	s := n - f
-	if s < 3 {
-		runtime.Log("not enough inner ring nodes for consensus")
-		return false
-	}
-
-	used := [][]byte{}
-	count := 0
-	for count < s && offset < len(data) {
-		pubkey := data[offset : offset+33]
-		signature := data[offset+33 : offset+97]
-		if containsPub(irList, pubkey) {
-			if crypto.VerifySignature(message, signature, pubkey) {
-				count++
-				for i := 0; i < len(used); i++ {
-					if util.Equals(used[i], pubkey) {
-						panic("duplicate public keys")
-					}
-				}
-				used = append(used, pubkey)
-			}
-		}
-		offset += 97
-	}
-
-	if count >= s {
-		return true
-	}
-
-	runtime.Log("not enough verified signatures")
 	return false
 }
 
