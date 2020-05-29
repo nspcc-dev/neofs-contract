@@ -29,6 +29,7 @@ var (
 	contractHash = util.Uint160{0x1, 0x2, 0x3, 0x4}
 	// token hash is not random to run tests of .avm or .go files
 	contractStr = string(contractHash[:])
+	txHash      = mustHex("3ca2575bd90129e3730c46ba3f163fcfd5fff11eaedb2b6aa3d76bd03ab8a890")
 )
 
 type contract struct {
@@ -78,7 +79,7 @@ func TestContract(t *testing.T) {
 
 		require.Equal(t, before+gas, plug.cgas[contractStr])
 		require.Equal(t, util.Fixed8FromInt64(balance-amount), plug.cgas[string(key.GetScriptHash().BytesBE())])
-		checkNotification(t, plug.notify, []byte("Deposit"), key.Bytes(), big.NewInt(int64(gas)), []byte{})
+		checkNotification(t, plug.notify, []byte("Deposit"), key.Bytes(), big.NewInt(int64(gas)), []byte{}, txHash)
 	})
 
 	t.Run("Withdraw", func(t *testing.T) {
@@ -92,7 +93,7 @@ func TestContract(t *testing.T) {
 		v := initVM(contract, plug)
 		loadArg(t, v, "Withdraw", []interface{}{key.Bytes(), amount})
 		require.NoError(t, v.Run())
-		checkNotification(t, plug.notify, []byte("Withdraw"), key.Bytes(), big.NewInt(int64(gas)))
+		checkNotification(t, plug.notify, []byte("Withdraw"), key.Bytes(), big.NewInt(int64(gas)), txHash)
 	})
 
 	t.Run("Cheque", func(t *testing.T) {
@@ -287,6 +288,8 @@ func newStoragePlugin(t *testing.T) *storagePlugin {
 		s.notify = append(s.notify, toInterface(val))
 		return nil
 	}
+	s.interops[getID("System.ExecutionEngine.GetScriptContainer")] = s.GetScriptContainer
+	s.interops[getID("Neo.Transaction.GetHash")] = s.GetHash
 
 	return s
 }
@@ -407,6 +410,16 @@ func (s *storagePlugin) GetExecutingScriptHash(v *vm.VM) error {
 	var h util.Uint160
 	copy(h[:], contractHash[:])
 	v.Estack().PushVal(h.BytesBE())
+	return nil
+}
+
+func (s *storagePlugin) GetScriptContainer(v *vm.VM) error {
+	v.Estack().PushVal(true)
+	return nil
+}
+
+func (s *storagePlugin) GetHash(v *vm.VM) error {
+	v.Estack().PushVal(txHash)
 	return nil
 }
 
