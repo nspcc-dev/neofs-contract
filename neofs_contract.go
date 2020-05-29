@@ -5,6 +5,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/interop/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
 
@@ -152,7 +153,10 @@ func Main(op string, args []interface{}) interface{} {
 			rcv = args[2].([]byte) // todo: check if rcv value is valid
 		}
 
-		runtime.Notify("Deposit", pk, amount, rcv)
+		tx := engine.GetScriptContainer()
+		txHash := transaction.GetHash(tx)
+
+		runtime.Notify("Deposit", pk, amount, rcv, txHash)
 
 		return true
 	case "Withdraw":
@@ -171,7 +175,10 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		runtime.Notify("Withdraw", user, amount)
+		tx := engine.GetScriptContainer()
+		txHash := transaction.GetHash(tx)
+
+		runtime.Notify("Withdraw", user, amount, txHash)
 
 		return true
 	case "Cheque":
