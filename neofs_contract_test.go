@@ -59,34 +59,47 @@ func TestContract(t *testing.T) {
 	require.Error(t, v.Run())
 
 	t.Run("Deposit", func(t *testing.T) {
-		v := initVM(contract, plug)
+		const (
+			amount  = 1000
+			balance = 4000
+		)
+
 		before := plug.cgas[contractStr]
+		gas := util.Fixed8FromInt64(amount)
 
-		key := mustHex("031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a")
-		plug.setCGASBalance(key, 4000)
+		key, err := keys.NewPublicKeyFromString("031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a")
+		require.NoError(t, err)
 
-		loadArg(t, v, "Deposit", []interface{}{key, 1000})
+		plug.setCGASBalance(key.Bytes(), balance)
+
+		v := initVM(contract, plug)
+		loadArg(t, v, "Deposit", []interface{}{key.Bytes(), int(gas.IntegralValue())})
 		require.NoError(t, v.Run())
 
-		require.Equal(t, before+util.Fixed8FromInt64(1000), plug.cgas[contractStr])
-		require.Equal(t, util.Fixed8FromInt64(3000), plug.cgas[string(mustPKey(key).GetScriptHash().BytesBE())])
-		require.True(t, len(plug.notify) > 0)
-		require.True(t, bytes.Equal([]byte("Deposit"), plug.notify[len(plug.notify)-1].([]byte)))
+		require.Equal(t, before+gas, plug.cgas[contractStr])
+		require.Equal(t, util.Fixed8FromInt64(balance-amount), plug.cgas[string(key.GetScriptHash().BytesBE())])
+		checkNotification(t, plug.notify, []byte("Deposit"), key.Bytes(), big.NewInt(int64(gas)), []byte{})
 	})
 
 	t.Run("Withdraw", func(t *testing.T) {
 		const amount = 21
-		key := mustHex("031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a")
+
+		gas := util.Fixed8FromInt64(amount)
+
+		key, err := keys.NewPublicKeyFromString("031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a")
+		require.NoError(t, err)
 
 		v := initVM(contract, plug)
-		loadArg(t, v, "Withdraw", []interface{}{key, amount})
+		loadArg(t, v, "Withdraw", []interface{}{key.Bytes(), amount})
 		require.NoError(t, v.Run())
-		require.True(t, bytes.Equal([]byte("Withdraw"), plug.notify[len(plug.notify)-1].([]byte)))
+		checkNotification(t, plug.notify, []byte("Withdraw"), key.Bytes(), big.NewInt(int64(gas)))
 	})
 
 	t.Run("Cheque", func(t *testing.T) {
 		const amount = 21
 
+		id := []byte("id")
+		gas := util.Fixed8FromInt64(amount)
 		user := randScriptHash()
 		lockAcc := randScriptHash()
 		contractGas := plug.cgas[contractStr]
@@ -95,25 +108,18 @@ func TestContract(t *testing.T) {
 		for i := 0; i < 2*nodeCount/3+1; i++ {
 			v := initVM(contract, plug)
 
-			loadArg(t, v, "Cheque", []interface{}{
-				[]byte("id"),
-				user,
-				int(util.Fixed8FromInt64(amount)),
-				lockAcc})
-
+			loadArg(t, v, "Cheque", []interface{}{id, user, int(gas), lockAcc})
 			require.NoError(t, v.Run())
 		}
 
-		require.Equal(t, contractGas-util.Fixed8FromInt64(amount), plug.cgas[contractStr])
-		require.Equal(t, util.Fixed8FromInt64(amount), plug.cgas[string(user)])
-		require.True(t, len(plug.notify) > 0)
-		require.True(t, bytes.Equal([]byte("Cheque"), plug.notify[len(plug.notify)-1].([]byte)))
+		require.Equal(t, contractGas-gas, plug.cgas[contractStr])
+		require.Equal(t, gas, plug.cgas[string(user)])
+		checkNotification(t, plug.notify, []byte("Cheque"), id, user, big.NewInt(int64(gas)), lockAcc)
 
 		t.Run("Double cheque", func(t *testing.T) {
 			v := initVM(contract, plug)
 
-			loadArg(t, v, "Cheque", []interface{}{
-				[]byte("id"), user, amount, lockAcc})
+			loadArg(t, v, "Cheque", []interface{}{id, user, int(gas), lockAcc})
 			require.Error(t, v.Run())
 		})
 	})
@@ -229,7 +235,7 @@ func loadArg(t *testing.T, v *vm.VM, operation string, params []interface{}) {
 func toStackItem(v interface{}) vm.StackItem {
 	switch val := v.(type) {
 	case int:
-		return vm.NewBigIntegerItem(val)
+		return vm.NewBigIntegerItem(int64(val))
 	case string:
 		return vm.NewByteArrayItem([]byte(val))
 	case []byte:
@@ -447,4 +453,16 @@ func (s *storagePlugin) GetContext(v *vm.VM) error {
 	// the compiler, thinking it has pushed the context ^^.
 	v.Estack().PushVal(10)
 	return nil
+}
+
+func checkNotification(t *testing.T, store []interface{}, args ...interface{}) {
+	ln := len(store)
+	require.True(t, ln > 0)
+
+	notification := store[ln-1].([]interface{})
+	require.Equal(t, len(args), len(notification))
+
+	for i := range args {
+		require.Equal(t, args[i], notification[i])
+	}
 }
