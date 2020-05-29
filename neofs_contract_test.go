@@ -18,9 +18,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/emit"
-	"github.com/nspcc-dev/neofs-api-go/accounting"
-	"github.com/nspcc-dev/neofs-api-go/decimal"
-	"github.com/nspcc-dev/neofs-api-go/refs"
 	crypto "github.com/nspcc-dev/neofs-crypto"
 	"github.com/nspcc-dev/neofs-crypto/test"
 	"github.com/stretchr/testify/require"
@@ -73,25 +70,50 @@ func TestContract(t *testing.T) {
 
 		require.Equal(t, before+util.Fixed8FromInt64(1000), plug.cgas[contractStr])
 		require.Equal(t, util.Fixed8FromInt64(3000), plug.cgas[string(mustPKey(key).GetScriptHash().BytesBE())])
+		require.True(t, len(plug.notify) > 0)
+		require.True(t, bytes.Equal([]byte("Deposit"), plug.notify[len(plug.notify)-1].([]byte)))
 	})
 
 	t.Run("Withdraw", func(t *testing.T) {
 		const amount = 21
+		key := mustHex("031a6c6fbbdf02ca351745fa86b9ba5a9452d785ac4f7fc2b7548ca2a46c4fcf4a")
 
 		v := initVM(contract, plug)
-		owner, cheque := getCheque(t, contract, amount)
-		ownerStr := string(owner[1:21])
+		loadArg(t, v, "Withdraw", []interface{}{key, amount})
+		require.NoError(t, v.Run())
+		require.True(t, bytes.Equal([]byte("Withdraw"), plug.notify[len(plug.notify)-1].([]byte)))
+	})
+
+	t.Run("Cheque", func(t *testing.T) {
+		const amount = 21
+
+		user := randScriptHash()
+		lockAcc := randScriptHash()
 		contractGas := plug.cgas[contractStr]
 
-		loadArg(t, v, "Withdraw", []interface{}{cheque})
-		require.NoError(t, v.Run())
-		require.Equal(t, contractGas-util.Fixed8FromInt64(amount), plug.cgas[contractStr])
-		require.Equal(t, util.Fixed8FromInt64(amount), plug.cgas[ownerStr])
-
-		t.Run("Double Withdraw", func(t *testing.T) {
+		// call it threshold amount of times
+		for i := 0; i < 2*nodeCount/3+1; i++ {
 			v := initVM(contract, plug)
 
-			loadArg(t, v, "Withdraw", []interface{}{cheque})
+			loadArg(t, v, "Cheque", []interface{}{
+				[]byte("id"),
+				user,
+				int(util.Fixed8FromInt64(amount)),
+				lockAcc})
+
+			require.NoError(t, v.Run())
+		}
+
+		require.Equal(t, contractGas-util.Fixed8FromInt64(amount), plug.cgas[contractStr])
+		require.Equal(t, util.Fixed8FromInt64(amount), plug.cgas[string(user)])
+		require.True(t, len(plug.notify) > 0)
+		require.True(t, bytes.Equal([]byte("Cheque"), plug.notify[len(plug.notify)-1].([]byte)))
+
+		t.Run("Double cheque", func(t *testing.T) {
+			v := initVM(contract, plug)
+
+			loadArg(t, v, "Cheque", []interface{}{
+				[]byte("id"), user, amount, lockAcc})
 			require.Error(t, v.Run())
 		})
 	})
@@ -146,37 +168,6 @@ func TestContract(t *testing.T) {
 	})
 }
 
-func getCheque(t *testing.T, c *contract, amount int64) (refs.OwnerID, []byte) {
-	id, err := accounting.NewChequeID()
-	require.NoError(t, err)
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	owner, err := refs.NewOwnerID(&priv.PublicKey)
-	require.NoError(t, err)
-
-	cheque := accounting.Cheque{
-		ID:     id,
-		Owner:  owner,
-		Amount: decimal.NewGAS(amount),
-		Height: 0,
-	}
-
-	for _, key := range c.privs {
-		require.NoError(t, cheque.Sign(key))
-	}
-
-	data, err := cheque.MarshalBinary()
-	require.NoError(t, err)
-
-	return owner, data
-}
-
-func getIRExcludeCheque(t *testing.T, c *contract, pub []*ecdsa.PublicKey, id uint64) []byte {
-	panic("implement without neofs-node dependency")
-}
-
 func initGoContract(t *testing.T, path string, n int) *contract {
 	f, err := os.Open(path)
 	require.NoError(t, err)
@@ -199,6 +190,12 @@ func getKeys(t *testing.T, n int) []*ecdsa.PrivateKey {
 	}
 
 	return privs
+}
+
+func randScriptHash() []byte {
+	var scriptHash = make([]byte, 20)
+	rand.Read(scriptHash)
+	return scriptHash
 }
 
 func mustHex(s string) []byte {
