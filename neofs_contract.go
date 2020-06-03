@@ -30,6 +30,7 @@ const (
 	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
 	version               = 1
 	voteKey               = "ballots"
+	initConfigKey         = "initConfigKey"
 )
 
 var cfgPrefix = []byte("cfg")
@@ -355,6 +356,27 @@ func Main(op string, args []interface{}) interface{} {
 		key := args[0].([]byte)
 
 		return storage.Get(ctx, append(cfgPrefix, key...))
+	case "InitConfig":
+		ln := len(args)
+		if ln%2 != 0 {
+			panic("initConfig: bad arguments")
+		}
+
+		once := storage.Get(ctx, initConfigKey).([]byte)
+		if len(once) != 0 {
+			panic("initConfig: initial config already deployed")
+		}
+
+		for i := 0; i < ln/2; i++ {
+			configKey := args[i*2].([]byte)
+			configVal := args[i*2+1].([]byte)
+
+			storage.Put(ctx, append(cfgPrefix, configKey...), configVal)
+		}
+
+		storage.Put(ctx, initConfigKey, []byte("done"))
+
+		return true
 	case "Version":
 		return version
 	}
