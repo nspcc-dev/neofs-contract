@@ -3,6 +3,7 @@ package smart_contract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/transaction"
@@ -21,6 +22,11 @@ type (
 
 	check struct {
 		id []byte
+	}
+
+	configParam struct {
+		key []byte
+		val []byte
 	}
 )
 
@@ -342,7 +348,7 @@ func Main(op string, args []interface{}) interface{} {
 		if n >= threshold {
 			removeVotes(ctx, hashID)
 			storage.Put(ctx, append(cfgPrefix, key...), val)
-			runtime.Log("setConfig: config updated")
+			runtime.Log("setConfig: configParam updated")
 		} else {
 			runtime.Log("setConfig: processed inner ring invoke")
 		}
@@ -350,7 +356,7 @@ func Main(op string, args []interface{}) interface{} {
 		return true
 	case "Config":
 		if len(args) != 1 {
-			panic("config: bad argument")
+			panic("configParam: bad argument")
 		}
 
 		key := args[0].([]byte)
@@ -364,7 +370,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		once := storage.Get(ctx, initConfigKey).([]byte)
 		if len(once) != 0 {
-			panic("initConfig: initial config already deployed")
+			panic("initConfig: initial configParam already deployed")
 		}
 
 		for i := 0; i < ln/2; i++ {
@@ -377,6 +383,19 @@ func Main(op string, args []interface{}) interface{} {
 		storage.Put(ctx, initConfigKey, []byte("done"))
 
 		return true
+	case "ListConfig":
+		var config []configParam
+		it := storage.Find(ctx, cfgPrefix)
+		for iterator.Next(it) {
+			key := iterator.Key(it).([]byte)
+			// remove cfgPrefix from the name of the parameter
+			key = key[len(cfgPrefix):]
+			val := iterator.Value(it).([]byte)
+
+			config = append(config, configParam{key: key, val: val})
+		}
+
+		return config
 	case "Version":
 		return version
 	}
