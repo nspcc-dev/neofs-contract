@@ -32,6 +32,8 @@ const (
 	voteKey               = "ballots"
 )
 
+var cfgPrefix = []byte("cfg")
+
 func Main(op string, args []interface{}) interface{} {
 	// The trigger determines whether this smart-contract is being
 	// run in 'verification' or 'application' mode.
@@ -51,6 +53,8 @@ func Main(op string, args []interface{}) interface{} {
 		- Withdraw(params: withdrawCheque)               - withdraw GAS from the NeoFS account
 		- InnerRingUpdate(params: irCheque)              - change list of inner ring nodes
 		- IsInnerRing(params: pubKey)                    - returns true if pubKey presented in inner ring list
+		- SetConfig(params: key, value)                  - set global configuration parameter
+		- Config(params: key)                            - get global configuration parameter
 		- Version()                                      - get version of the NeoFS smart-contract
 
 		Params:
@@ -315,6 +319,42 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		return false
+	case "SetConfig":
+		if len(args) != 2 {
+			panic("setConfig: bad arguments")
+		}
+
+		irList := getSerialized(ctx, "InnerRingList").([]node)
+		threshold := len(irList)/3*2 + 1
+
+		if !isInnerRingRequest(irList) {
+			panic("setConfig: invoked by non inner ring node")
+		}
+
+		key := args[0].([]byte)
+		val := args[1].([]byte)
+
+		id := append(key, val...)
+		hashID := crypto.SHA256(id)
+		n := vote(ctx, hashID)
+
+		if n >= threshold {
+			removeVotes(ctx, hashID)
+			storage.Put(ctx, append(cfgPrefix, key...), val)
+			runtime.Log("setConfig: config updated")
+		} else {
+			runtime.Log("setConfig: processed inner ring invoke")
+		}
+
+		return true
+	case "Config":
+		if len(args) != 1 {
+			panic("config: bad argument")
+		}
+
+		key := args[0].([]byte)
+
+		return storage.Get(ctx, append(cfgPrefix, key...))
 	case "Version":
 		return version
 	}
