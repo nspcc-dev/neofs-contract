@@ -49,8 +49,9 @@ func Main(op string, args []interface{}) interface{} {
 	}
 
 	/*
-		Utility operations - they will be changed in production:
-		- Deploy(params: address, pubKey, ... )  - setup initial inner ring state
+		Utility operations:
+		- Deploy(params: address... )      - setup initial inner ring state
+		- InitConfig(params: k-v pairs...) - setup initial neofs configuration
 
 		User operations:
 		- InnerRingList()                                - get list of inner ring nodes addresses and public keys
@@ -62,6 +63,7 @@ func Main(op string, args []interface{}) interface{} {
 		- IsInnerRing(params: pubKey)                    - returns true if pubKey presented in inner ring list
 		- SetConfig(params: key, value)                  - set global configuration parameter
 		- Config(params: key)                            - get global configuration parameter
+		- ListConfig()                                   - get all available key-value pairs of neofs configuration
 		- Version()                                      - get version of the NeoFS smart-contract
 
 		Params:

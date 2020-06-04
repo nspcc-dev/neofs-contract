@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/compiler"
@@ -172,6 +173,48 @@ func TestContract(t *testing.T) {
 		loadArg(t, v, "InnerRingCandidateRemove", []interface{}{key})
 		require.NoError(t, v.Run())
 		require.False(t, bytes.Contains(plug.mem["InnerRingCandidates"], key))
+	})
+
+	t.Run("Config", func(t *testing.T) {
+		key := "NeoFSParameter"
+		value := []byte("NeoFSValue")
+
+		v := initVM(contract, plug)
+		loadArg(t, v, "InitConfig", []interface{}{
+			key + "1", append(value, 0x1),
+			key + "2", append(value, 0x2),
+			key + "3", append(value, 0x3),
+		})
+		require.NoError(t, v.Run())
+
+		for i := 1; i <= 3; i++ {
+			k := "cfg" + key + strconv.Itoa(i)
+			val := append(value, uint8(i))
+			require.Equal(t, plug.mem[k], val)
+		}
+
+		t.Run("Double init", func(t *testing.T) {
+			v := initVM(contract, plug)
+			loadArg(t, v, "InitConfig", []interface{}{
+				key + "1", append(value, 0x1),
+				key + "2", append(value, 0x2),
+				key + "3", append(value, 0x3),
+			})
+			require.Error(t, v.Run())
+		})
+
+		t.Run("SetConfig", func(t *testing.T) {
+			k := key + "1"
+			val := []byte("NewValue")
+			for i := 0; i < 2*nodeCount/3+1; i++ {
+				v := initVM(contract, plug)
+				loadArg(t, v, "SetConfig", []interface{}{k, val})
+				require.NoError(t, v.Run())
+			}
+
+			require.Equal(t, val, plug.mem["cfg"+k])
+		})
+
 	})
 }
 
