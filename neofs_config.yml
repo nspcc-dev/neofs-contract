@@ -1,0 +1,12 @@
+---
+
+project:
+  author: Neo SPCC
+  email: ops@nspcc.ru
+  version: 0.99
+  name: Neofs Smart Contract
+  hasstorage: true
+  hasdynamicinvocation: true
+  ispayable: true
+  returntype: ByteArray
+  parameters: ['String', 'Array']
