@@ -434,7 +434,7 @@ func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
 	return false
 }
 
-// isInnerRingInvoker returns public key of inner ring node that invoked contract.
+// innerRingInvoker returns public key of inner ring node that invoked contract.
 func innerRingInvoker(ir []node) []byte {
 	for i := 0; i < len(ir); i++ {
 		node := ir[i]

@@ -44,6 +44,7 @@ func TestContract(t *testing.T) {
 	contract := initGoContract(t, contractTemplate, nodeCount)
 
 	plug.cgas[contractStr] = util.Fixed8FromInt64(1000)
+	plug.invokeKey = crypto.MarshalPublicKey(&contract.privs[0].PublicKey)
 
 	var args []interface{}
 	for i := range contract.privs {
@@ -107,6 +108,7 @@ func TestContract(t *testing.T) {
 
 		// call it threshold amount of times
 		for i := 0; i < 2*nodeCount/3+1; i++ {
+			plug.invokeKey = crypto.MarshalPublicKey(&contract.privs[i].PublicKey)
 			v := initVM(contract, plug)
 
 			loadArg(t, v, "Cheque", []interface{}{id, user, int(gas), lockAcc})
@@ -260,6 +262,7 @@ type storagePlugin struct {
 	interops   map[uint32]vm.InteropFunc
 	storageOps []kv
 	notify     []interface{}
+	invokeKey  []byte
 }
 
 func newStoragePlugin(t *testing.T) *storagePlugin {
@@ -290,6 +293,7 @@ func newStoragePlugin(t *testing.T) *storagePlugin {
 	}
 	s.interops[getID("System.ExecutionEngine.GetScriptContainer")] = s.GetScriptContainer
 	s.interops[getID("Neo.Transaction.GetHash")] = s.GetHash
+	s.interops[getID("Neo.Blockchain.GetHeight")] = s.GetHeight
 
 	return s
 }
@@ -402,7 +406,13 @@ func (s *storagePlugin) GetTrigger(v *vm.VM) error {
 }
 
 func (s *storagePlugin) CheckWitness(v *vm.VM) error {
-	v.Estack().PushVal(true)
+	key := v.Estack().Pop().Value().([]byte)
+	if bytes.Equal(key, s.invokeKey) {
+		v.Estack().PushVal(true)
+	} else {
+		v.Estack().PushVal(false)
+	}
+
 	return nil
 }
 
@@ -420,6 +430,11 @@ func (s *storagePlugin) GetScriptContainer(v *vm.VM) error {
 
 func (s *storagePlugin) GetHash(v *vm.VM) error {
 	v.Estack().PushVal(txHash)
+	return nil
+}
+
+func (s *storagePlugin) GetHeight(v *vm.VM) error {
+	v.Estack().PushVal(42)
 	return nil
 }
 
