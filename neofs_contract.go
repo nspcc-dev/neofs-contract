@@ -1,6 +1,7 @@
 package smart_contract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -11,8 +12,9 @@ import (
 
 type (
 	ballot struct {
-		id []byte
-		n  int
+		id    []byte   // id of the voting decision
+		n     [][]byte // already voted inner ring nodes
+		block int      // block with the last vote
 	}
 
 	node struct {
@@ -30,6 +32,7 @@ const (
 	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
 	version               = 1
 	voteKey               = "ballots"
+	blockDiff             = 20 // change base on performance evaluation
 )
 
 func Main(op string, args []interface{}) interface{} {
@@ -198,7 +201,8 @@ func Main(op string, args []interface{}) interface{} {
 		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
 		threshold := len(irList)/3*2 + 1
 
-		if !isInnerRingRequest(irList) {
+		irKey := innerRingInvoker(irList)
+		if len(irKey) == 0 {
 			panic("cheque: invoked by non inner ring node")
 		}
 
@@ -207,7 +211,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("cheque: non unique id")
 		}
 
-		n := vote(ctx, hashID)
+		n := vote(ctx, hashID, irKey)
 		if n >= threshold {
 			removeVotes(ctx, hashID)
 
@@ -238,7 +242,8 @@ func Main(op string, args []interface{}) interface{} {
 		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
 		threshold := len(irList)/3*2 + 1
 
-		if !isInnerRingRequest(irList) {
+		irKey := innerRingInvoker(irList)
+		if len(irKey) == 0 {
 			panic("innerRingUpdate: invoked by non inner ring node")
 		}
 
@@ -249,7 +254,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		chequeHash := crypto.Hash256(data)
 
-		n := vote(ctx, chequeHash)
+		n := vote(ctx, chequeHash, irKey)
 		if n >= threshold {
 			removeVotes(ctx, chequeHash)
 
@@ -429,38 +434,54 @@ func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
 	return false
 }
 
-// isInnerRingRequest returns true if contract was invoked by inner ring node.
-func isInnerRingRequest(irList []node) bool {
-	for i := 0; i < len(irList); i++ {
-		irNode := irList[i]
-
-		if runtime.CheckWitness(irNode.pub) {
-			return true
+// innerRingInvoker returns public key of inner ring node that invoked contract.
+func innerRingInvoker(ir []node) []byte {
+	for i := 0; i < len(ir); i++ {
+		node := ir[i]
+		if runtime.CheckWitness(node.pub) {
+			return node.pub
 		}
 	}
 
-	return false
+	return nil
 }
 
-// todo: votes must be from unique inner ring nods
-func vote(ctx storage.Context, id []byte) int {
+func vote(ctx storage.Context, id, from []byte) int {
 	var (
-		newCandidates = []ballot{}
+		newCandidates []ballot
 		candidates    = getSerialized(ctx, voteKey).([]ballot)
 		found         = -1
+		blockHeight   = blockchain.GetHeight()
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
 		if util.Equals(cnd.id, id) {
-			cnd = ballot{id: id, n: cnd.n + 1}
-			found = cnd.n
+			voters := cnd.n
+
+			for j := range voters {
+				if util.Equals(voters[j], from) {
+					return len(voters)
+				}
+			}
+
+			voters = append(voters, from)
+			cnd = ballot{id: id, n: voters, block: blockHeight}
+			found = len(voters)
 		}
-		newCandidates = append(newCandidates, cnd)
+
+		// do not add old ballots, they are invalid
+		if blockHeight-cnd.block <= blockDiff {
+			newCandidates = append(newCandidates, cnd)
+		}
 	}
 
 	if found < 0 {
-		newCandidates = append(newCandidates, ballot{id: id, n: 1})
+		voters := [][]byte{from}
+		newCandidates = append(newCandidates, ballot{
+			id:    id,
+			n:     voters,
+			block: blockHeight})
 		found = 1
 	}
 
