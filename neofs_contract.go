@@ -170,8 +170,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		user := args[0].([]byte)
 		if !runtime.CheckWitness(user) {
-			// todo: consider something different with neoID
-			panic("withdraw: you should be the owner of the account")
+			panic("withdraw: you should be the owner of the wallet")
 		}
 
 		amount := args[1].(int)
@@ -179,9 +178,8 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		txHash := runtime.GetScriptContainer().Hash
-
-		runtime.Notify("Withdraw", user, amount, txHash)
+		tx := runtime.GetScriptContainer()
+		runtime.Notify("Withdraw", user, amount, tx.Hash)
 
 		return true
 	case "Cheque":
