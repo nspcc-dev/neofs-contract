@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/mr-tron/base58 v1.1.3 // indirect
-	github.com/nspcc-dev/neo-go v0.90.0-pre.0.20200709120952-d234db9864e2
+	github.com/nspcc-dev/neo-go v0.90.0
 	github.com/nspcc-dev/neofs-crypto v0.3.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.5.1
