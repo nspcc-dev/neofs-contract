@@ -453,18 +453,18 @@ func innerRingInvoker(ir []node) []byte {
 func vote(ctx storage.Context, id, from []byte) int {
 	var (
 		newCandidates []ballot
-		candidates    = getSerialized(ctx, voteKey).([]ballot)
+		candidates    = getBallots(ctx)
 		found         = -1
 		blockHeight   = blockchain.GetHeight()
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if util.Equals(cnd.id, id) {
+		if bytesEqual(cnd.id, id) {
 			voters := cnd.n
 
 			for j := range voters {
-				if util.Equals(voters[j], from) {
+				if bytesEqual(voters[j], from) {
 					return len(voters)
 				}
 			}
@@ -481,33 +481,54 @@ func vote(ctx storage.Context, id, from []byte) int {
 	}
 
 	if found < 0 {
+		found = 1
 		voters := [][]byte{from}
+
 		newCandidates = append(newCandidates, ballot{
 			id:    id,
 			n:     voters,
 			block: blockHeight})
-		found = 1
 	}
 
-	data := binary.Serialize(newCandidates)
-	storage.Put(ctx, voteKey, data)
+	setSerialized(ctx, voteKey, newCandidates)
 
 	return found
 }
 
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates = []ballot{}
-		candidates    = getSerialized(ctx, voteKey).([]ballot)
+		newCandidates []ballot
+		candidates    = getBallots(ctx)
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !util.Equals(cnd.id, id) {
+		if !bytesEqual(cnd.id, id) {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
 
-	data := binary.Serialize(newCandidates)
-	storage.Put(ctx, voteKey, data)
+	setSerialized(ctx, voteKey, newCandidates)
+}
+
+// setSerialized serializes data and puts it into contract storage.
+func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
+	data := binary.Serialize(value)
+	storage.Put(ctx, key, data)
+}
+
+// getInnerRingNodes returns deserialized slice of vote ballots.
+func getBallots(ctx storage.Context) []ballot {
+	data := storage.Get(ctx, voteKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]ballot)
+	}
+
+	return []ballot{}
+}
+
+// bytesEqual compares two slice of bytes by wrapping them into strings,
+// which is necessary with new util.Equal interop behaviour, see neo-go#1176.
+func bytesEqual(a []byte, b []byte) bool {
+	return util.Equals(string(a), string(b))
 }
