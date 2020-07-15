@@ -27,10 +27,9 @@ type (
 )
 
 const (
-	// GAS NEP-5 HASH
-	tokenHash             = "\x77\xea\x59\x6b\x7a\xdf\x7e\x4d\xd1\x40\x76\x97\x31\xb7\xd2\xf0\xe0\x6b\xcd\x9b"
+	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
 	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
-	version               = 1
+	version               = 2
 	voteKey               = "ballots"
 	blockDiff             = 20 // change base on performance evaluation
 )
@@ -131,9 +130,13 @@ func Main(op string, args []interface{}) interface{} {
 
 		return true
 	case "Deposit":
-		pk := args[0].([]byte)
-		if !runtime.CheckWitness(pk) {
-			panic("you should be the owner of the public key")
+		if len(args) < 2 || len(args) > 3 {
+			panic("deposit: bad arguments")
+		}
+
+		from := args[0].([]byte)
+		if !runtime.CheckWitness(from) {
+			panic("deposit: you should be the owner of the wallet")
 		}
 
 		amount := args[1].(int)
@@ -141,24 +144,23 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		from := pubToScriptHash(pk)
 		to := runtime.GetExecutingScriptHash()
 		params := []interface{}{from, to, amount}
+
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
-			panic("failed to transfer funds, aborting")
+			panic("deposit: failed to transfer funds, aborting")
 		}
 
-		runtime.Log("funds have been transferred")
+		runtime.Log("deposit: funds have been transferred")
 
-		var rcv = []byte{}
+		var rcv = from
 		if len(args) == 3 {
 			rcv = args[2].([]byte) // todo: check if rcv value is valid
 		}
 
-		txHash := runtime.GetScriptContainer().Hash
-
-		runtime.Notify("Deposit", pk, amount, rcv, txHash)
+		tx := runtime.GetScriptContainer()
+		runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
 
 		return true
 	case "Withdraw":
