@@ -1,12 +1,12 @@
 package smart_contract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
 
@@ -79,14 +79,14 @@ func Main(op string, args []interface{}) interface{} {
 			irList = append(irList, node{pub: pub})
 		}
 
-		data := runtime.Serialize(irList)
+		data := binary.Serialize(irList)
 		storage.Put(ctx, "InnerRingList", data)
 
-		data = runtime.Serialize([]interface{}{})
+		data = binary.Serialize([]interface{}{})
 		storage.Put(ctx, "UsedVerifCheckList", data)
 		storage.Put(ctx, "InnerRingCandidates", data)
 
-		data = runtime.Serialize([]ballot{})
+		data = binary.Serialize([]ballot{})
 		storage.Put(ctx, voteKey, data)
 
 		return true
@@ -116,7 +116,7 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		from := pubToScriptHash(key)
-		to := engine.GetExecutingScriptHash()
+		to := runtime.GetExecutingScriptHash()
 		params := []interface{}{from, to, innerRingCandidateFee}
 
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
@@ -142,7 +142,7 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		from := pubToScriptHash(pk)
-		to := engine.GetExecutingScriptHash()
+		to := runtime.GetExecutingScriptHash()
 		params := []interface{}{from, to, amount}
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
@@ -156,8 +156,7 @@ func Main(op string, args []interface{}) interface{} {
 			rcv = args[2].([]byte) // todo: check if rcv value is valid
 		}
 
-		tx := engine.GetScriptContainer()
-		txHash := transaction.GetHash(tx)
+		txHash := runtime.GetScriptContainer().Hash
 
 		runtime.Notify("Deposit", pk, amount, rcv, txHash)
 
@@ -178,8 +177,7 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		tx := engine.GetScriptContainer()
-		txHash := transaction.GetHash(tx)
+		txHash := runtime.GetScriptContainer().Hash
 
 		runtime.Notify("Withdraw", user, amount, txHash)
 
@@ -196,7 +194,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		ctx := storage.GetContext()
 
-		hashID := crypto.Hash256(id)
+		hashID := crypto.SHA256(id)
 		irList := getSerialized(ctx, "InnerRingList").([]node)
 		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
 		threshold := len(irList)/3*2 + 1
@@ -215,7 +213,7 @@ func Main(op string, args []interface{}) interface{} {
 		if n >= threshold {
 			removeVotes(ctx, hashID)
 
-			from := engine.GetExecutingScriptHash()
+			from := runtime.GetExecutingScriptHash()
 			params := []interface{}{from, user, amount}
 
 			transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
@@ -252,7 +250,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("innerRingUpdate: cheque has non unique id")
 		}
 
-		chequeHash := crypto.Hash256(data)
+		chequeHash := crypto.SHA256(data)
 
 		n := vote(ctx, chequeHash, irKey)
 		if n >= threshold {
@@ -292,7 +290,7 @@ func Main(op string, args []interface{}) interface{} {
 				delSerializedIR(ctx, "InnerRingCandidates", n.pub)
 			}
 
-			newIRData := runtime.Serialize(newIR)
+			newIRData := binary.Serialize(newIR)
 			storage.Put(ctx, "InnerRingList", newIRData)
 			putSerialized(ctx, "UsedVerifCheckList", c)
 
@@ -327,10 +325,11 @@ func Main(op string, args []interface{}) interface{} {
 	panic("unknown operation")
 }
 
+// fixme: use strict type deserialization wrappers
 func getSerialized(ctx storage.Context, key string) interface{} {
 	data := storage.Get(ctx, key).([]byte)
 	if len(data) != 0 {
-		return runtime.Deserialize(data)
+		return binary.Deserialize(data)
 	}
 	return nil
 }
@@ -341,7 +340,7 @@ func delSerialized(ctx storage.Context, key string, value []byte) bool {
 
 	var newList [][]byte
 	if len(data) != 0 {
-		lst := runtime.Deserialize(data).([][]byte)
+		lst := binary.Deserialize(data).([][]byte)
 		for i := 0; i < len(lst); i++ {
 			if util.Equals(value, lst[i]) {
 				deleted = true
@@ -351,7 +350,7 @@ func delSerialized(ctx storage.Context, key string, value []byte) bool {
 		}
 		if deleted {
 			if len(newList) != 0 {
-				data := runtime.Serialize(newList)
+				data := binary.Serialize(newList)
 				storage.Put(ctx, key, data)
 			} else {
 				storage.Delete(ctx, key)
@@ -371,22 +370,27 @@ func putSerialized(ctx storage.Context, key string, value interface{}) bool {
 
 	var lst []interface{}
 	if len(data) != 0 {
-		lst = runtime.Deserialize(data).([]interface{})
+		lst = binary.Deserialize(data).([]interface{})
 	}
 
 	lst = append(lst, value)
-	data = runtime.Serialize(lst)
+	data = binary.Serialize(lst)
 	storage.Put(ctx, key, data)
 
 	return true
 }
 
 func pubToScriptHash(pkey []byte) []byte {
-	pre := []byte{0x21}
-	buf := append(pre, pkey...)
-	buf = append(buf, 0xac)
-	h := crypto.Hash160(buf)
-	return h
+	// pre := []byte{0x21}
+	// buf := append(pre, pkey...)
+	// buf = append(buf, 0xac)
+	// h := crypto.Hash160(buf)
+	//
+	// return h
+
+	// fixme: someday ripemd syscall will appear
+	//        or simply store script-hashes along with public key
+	return []byte{0x0F, 0xED}
 }
 
 func containsCheck(lst []check, c check) bool {
@@ -413,7 +417,7 @@ func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
 
 	newList := []node{}
 	if len(data) != 0 {
-		lst := runtime.Deserialize(data).([]node)
+		lst := binary.Deserialize(data).([]node)
 		for i := 0; i < len(lst); i++ {
 			n := lst[i]
 			if util.Equals(value, n.pub) {
@@ -423,7 +427,7 @@ func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
 			}
 		}
 		if deleted {
-			data := runtime.Serialize(newList)
+			data := binary.Serialize(newList)
 			storage.Put(ctx, key, data)
 			runtime.Log("target element has been removed")
 			return true
@@ -485,7 +489,7 @@ func vote(ctx storage.Context, id, from []byte) int {
 		found = 1
 	}
 
-	data := runtime.Serialize(newCandidates)
+	data := binary.Serialize(newCandidates)
 	storage.Put(ctx, voteKey, data)
 
 	return found
@@ -504,6 +508,6 @@ func removeVotes(ctx storage.Context, id []byte) {
 		}
 	}
 
-	data := runtime.Serialize(newCandidates)
+	data := binary.Serialize(newCandidates)
 	storage.Put(ctx, voteKey, data)
 }
