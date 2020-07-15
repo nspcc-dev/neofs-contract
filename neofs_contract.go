@@ -30,7 +30,10 @@ const (
 	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
 	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
 	version               = 2
+	innerRingKey          = "innerring"
 	voteKey               = "ballots"
+	candidatesKey         = "candidates"
+	cashedChequesKey      = "cheques"
 	blockDiff             = 20 // change base on performance evaluation
 )
 
@@ -65,34 +68,31 @@ func Main(op string, args []interface{}) interface{} {
 	*/
 
 	ctx := storage.GetContext()
+
 	switch op {
-	case "Deploy":
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		if len(irList) >= 3 {
-			panic("contract already deployed")
+	case "Init":
+		if storage.Get(ctx, innerRingKey) != nil {
+			panic("neofs: contract already deployed")
 		}
 
-		irList = []node{}
+		var irList []node
+
 		for i := 0; i < len(args); i++ {
 			pub := args[i].([]byte)
 			irList = append(irList, node{pub: pub})
 		}
 
-		data := binary.Serialize(irList)
-		storage.Put(ctx, "InnerRingList", data)
+		// initialize all storage slices
+		setSerialized(ctx, innerRingKey, irList)
+		setSerialized(ctx, voteKey, []ballot{})
+		setSerialized(ctx, candidatesKey, []node{})
+		setSerialized(ctx, cashedChequesKey, []cheque{})
 
-		data = binary.Serialize([]interface{}{})
-		storage.Put(ctx, "UsedVerifCheckList", data)
-		storage.Put(ctx, "InnerRingCandidates", data)
-
-		data = binary.Serialize([]ballot{})
-		storage.Put(ctx, voteKey, data)
+		runtime.Log("neofs: contract initialized")
 
 		return true
 	case "InnerRingList":
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-
-		return irList
+		return getInnerRingNodes(ctx)
 	case "InnerRingCandidateRemove":
 		data := args[0].([]byte) // public key
 		if !runtime.CheckWitness(data) {
@@ -308,11 +308,11 @@ func Main(op string, args []interface{}) interface{} {
 			panic("isInnerRing: incorrect public key")
 		}
 
-		irList := getSerialized(ctx, "InnerRingList").([]node)
+		irList := getInnerRingNodes(ctx)
 		for i := range irList {
 			node := irList[i]
 
-			if util.Equals(node.pub, key) {
+			if bytesEqual(node.pub, key) {
 				return true
 			}
 		}
@@ -515,6 +515,16 @@ func removeVotes(ctx storage.Context, id []byte) {
 func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
 	data := binary.Serialize(value)
 	storage.Put(ctx, key, data)
+}
+
+// getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
+func getInnerRingNodes(ctx storage.Context) []node {
+	data := storage.Get(ctx, innerRingKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]node)
+	}
+
+	return []node{}
 }
 
 // getInnerRingNodes returns deserialized slice of vote ballots.
