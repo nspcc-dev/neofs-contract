@@ -190,22 +190,23 @@ func Main(op string, args []interface{}) interface{} {
 		id := args[0].([]byte)      // unique cheque id
 		user := args[1].([]byte)    // GAS receiver
 		amount := args[2].(int)     // amount of GAS
-		lockAcc := args[3].([]byte) // lock account from internal banking that must be cashed out
+		lockAcc := args[3].([]byte) // lock account from internal balance contract
 
-		ctx := storage.GetContext()
-
-		hashID := crypto.SHA256(id)
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]cheque)
+		irList := getInnerRingNodes(ctx)
 		threshold := len(irList)/3*2 + 1
+
+		cashedCheques := getCashedCheques(ctx)
+		hashID := crypto.SHA256(id)
 
 		irKey := innerRingInvoker(irList)
 		if len(irKey) == 0 {
 			panic("cheque: invoked by non inner ring node")
 		}
 
-		c := cheque{id: id} // todo: use different cheque id for inner ring update and withdraw
-		if containsCheck(usedList, c) {
+		c := cheque{id: id}
+
+		list, ok := addCheque(cashedCheques, c)
+		if !ok {
 			panic("cheque: non unique id")
 		}
 
@@ -221,7 +222,9 @@ func Main(op string, args []interface{}) interface{} {
 				panic("cheque: failed to transfer funds, aborting")
 			}
 
-			putSerialized(ctx, "UsedVerifCheckList", c)
+			runtime.Log("cheque: funds have been transferred")
+
+			setSerialized(ctx, cashedChequesKey, list)
 			runtime.Notify("Cheque", id, user, amount, lockAcc)
 		}
 
@@ -527,6 +530,16 @@ func getInnerRingNodes(ctx storage.Context) []node {
 	return []node{}
 }
 
+// getInnerRingNodes returns deserialized slice of used cheques.
+func getCashedCheques(ctx storage.Context) []cheque {
+	data := storage.Get(ctx, cashedChequesKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]cheque)
+	}
+
+	return []cheque{}
+}
+
 // getInnerRingNodes returns deserialized slice of vote ballots.
 func getBallots(ctx storage.Context) []ballot {
 	data := storage.Get(ctx, voteKey)
@@ -535,6 +548,19 @@ func getBallots(ctx storage.Context) []ballot {
 	}
 
 	return []ballot{}
+}
+
+// addCheque returns slice of cheques with appended cheque 'c' and bool flag
+// that set to false if cheque 'c' is already presented in the slice 'lst'.
+func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
+	for i := 0; i < len(lst); i++ {
+		if bytesEqual(c.id, lst[i].id) {
+			return nil, false
+		}
+	}
+
+	lst = append(lst, c)
+	return lst, true
 }
 
 // bytesEqual compares two slice of bytes by wrapping them into strings,
