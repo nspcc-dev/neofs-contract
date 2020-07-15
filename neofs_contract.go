@@ -21,7 +21,7 @@ type (
 		pub []byte
 	}
 
-	check struct {
+	cheque struct {
 		id []byte
 	}
 )
@@ -196,7 +196,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		hashID := crypto.SHA256(id)
 		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
+		usedList := getSerialized(ctx, "UsedVerifCheckList").([]cheque)
 		threshold := len(irList)/3*2 + 1
 
 		irKey := innerRingInvoker(irList)
@@ -204,7 +204,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("cheque: invoked by non inner ring node")
 		}
 
-		c := check{id: id} // todo: use different cheque id for inner ring update and withdraw
+		c := cheque{id: id} // todo: use different cheque id for inner ring update and withdraw
 		if containsCheck(usedList, c) {
 			panic("cheque: non unique id")
 		}
@@ -237,7 +237,7 @@ func Main(op string, args []interface{}) interface{} {
 		offset := 8 + 2 + listSize
 
 		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
+		usedList := getSerialized(ctx, "UsedVerifCheckList").([]cheque)
 		threshold := len(irList)/3*2 + 1
 
 		irKey := innerRingInvoker(irList)
@@ -245,7 +245,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("innerRingUpdate: invoked by non inner ring node")
 		}
 
-		c := check{id: id}
+		c := cheque{id: id}
 		if containsCheck(usedList, c) {
 			panic("innerRingUpdate: cheque has non unique id")
 		}
@@ -393,7 +393,7 @@ func pubToScriptHash(pkey []byte) []byte {
 	return []byte{0x0F, 0xED}
 }
 
-func containsCheck(lst []check, c check) bool {
+func containsCheck(lst []cheque, c cheque) bool {
 	for i := 0; i < len(lst); i++ {
 		if util.Equals(c, lst[i]) {
 			return true
