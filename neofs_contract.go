@@ -6,6 +6,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -25,11 +26,17 @@ type (
 	cheque struct {
 		id []byte
 	}
+
+	record struct {
+		key []byte
+		val []byte
+	}
 )
 
 const (
 	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
-	innerRingCandidateFee = 100 * 1_0000_0000 // 100 Fixed8 Gas
+	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
+	candidateFeeConfigKey = "InnerRingCandidateFee"
 	version               = 2
 	innerRingKey          = "innerring"
 	voteKey               = "ballots"
@@ -38,6 +45,10 @@ const (
 	blockDiff             = 20 // change base on performance evaluation
 	publicKeySize         = 33
 	minInnerRingSize      = 3
+)
+
+var (
+	configPrefix = []byte("config")
 )
 
 func Main(op string, args []interface{}) interface{} {
@@ -143,7 +154,8 @@ func Main(op string, args []interface{}) interface{} {
 
 		from := contract.CreateStandardAccount(key)
 		to := runtime.GetExecutingScriptHash()
-		params := []interface{}{from, to, innerRingCandidateFee}
+		fee := getConfig(ctx, candidateFeeConfigKey).(int)
+		params := []interface{}{from, to, fee}
 
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
@@ -369,6 +381,91 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		return false
+	case "Config":
+		if len(args) != 1 {
+			panic("config: bad arguments")
+		}
+
+		key := args[0].([]byte)
+
+		return getConfig(ctx, key)
+	case "SetConfig":
+		if len(args) != 3 {
+			panic("setConfig: bad arguments")
+		}
+
+		// check if it is inner ring invocation
+		irList := getInnerRingNodes(ctx, innerRingKey)
+		threshold := len(irList)/3*2 + 1
+
+		irKey := innerRingInvoker(irList)
+		if len(irKey) == 0 {
+			panic("setConfig: invoked by non inner ring node")
+		}
+
+		// check unique id of the operation
+		id := args[0].([]byte)
+		c := cheque{id: id}
+		cashedCheques := getCashedCheques(ctx)
+
+		chequesList, ok := addCheque(cashedCheques, c)
+		if !ok {
+			panic("setConfig: non unique id")
+		}
+
+		// vote for new configuration value
+		hashID := crypto.SHA256(id)
+
+		n := vote(ctx, hashID, irKey)
+		if n >= threshold {
+			removeVotes(ctx, hashID)
+
+			key := args[1]
+			val := args[2]
+
+			setConfig(ctx, key, val)
+			setSerialized(ctx, cashedChequesKey, chequesList)
+
+			runtime.Notify("SetConfig", id, key, val)
+			runtime.Log("setConfig: configuration has been updated")
+		}
+
+		return true
+	case "ListConfig":
+		var config []record
+
+		it := storage.Find(ctx, configPrefix)
+		for iterator.Next(it) {
+			key := iterator.Key(it).([]byte)
+			val := iterator.Value(it).([]byte)
+			r := record{key: key[len(configPrefix):], val: val}
+
+			config = append(config, r)
+		}
+
+		return config
+	case "InitConfig":
+		if getConfig(ctx, candidateFeeConfigKey) != nil {
+			panic("neofs: configuration already installed")
+		}
+
+		ln := len(args)
+		if ln%2 != 0 {
+			panic("initConfig: bad arguments")
+		}
+
+		setConfig(ctx, candidateFeeConfigKey, defaultCandidateFee)
+
+		for i := 0; i < ln/2; i++ {
+			key := args[i*2]
+			val := args[i*2+1]
+
+			setConfig(ctx, key, val)
+		}
+
+		runtime.Log("neofs: config has been installed")
+
+		return true
 	case "Version":
 		return version
 	}
@@ -596,6 +693,22 @@ func getBallots(ctx storage.Context) []ballot {
 	}
 
 	return []ballot{}
+}
+
+// getConfig returns installed neofs configuration value or nil if it is not set.
+func getConfig(ctx storage.Context, key interface{}) interface{} {
+	postfix := key.([]byte)
+	storageKey := append(configPrefix, postfix...)
+
+	return storage.Get(ctx, storageKey)
+}
+
+// setConfig sets neofs configuration value in the contract storage.
+func setConfig(ctx storage.Context, key, val interface{}) {
+	postfix := key.([]byte)
+	storageKey := append(configPrefix, postfix...)
+
+	storage.Put(ctx, storageKey, val)
 }
 
 // addCheque returns slice of cheques with appended cheque 'c' and bool flag
