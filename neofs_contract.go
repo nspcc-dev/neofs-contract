@@ -35,6 +35,7 @@ const (
 	candidatesKey         = "candidates"
 	cashedChequesKey      = "cheques"
 	blockDiff             = 20 // change base on performance evaluation
+	publicKeySize         = 33
 )
 
 func Main(op string, args []interface{}) interface{} {
@@ -227,6 +228,29 @@ func Main(op string, args []interface{}) interface{} {
 			setSerialized(ctx, cashedChequesKey, list)
 			runtime.Notify("Cheque", id, user, amount, lockAcc)
 		}
+
+		return true
+	case "Bind", "Unbind":
+		if len(args) < 2 {
+			panic("binding: bad arguments")
+		}
+
+		user := args[0].([]byte)
+		if !runtime.CheckWitness(user) {
+			panic("binding: you should be the owner of the wallet")
+		}
+
+		var keys [][]byte
+		for i := 1; i < len(args); i++ {
+			pub := args[i].([]byte)
+			if len(pub) != publicKeySize {
+				panic("binding: incorrect public key size")
+			}
+
+			keys = append(keys, pub)
+		}
+
+		runtime.Notify(op, user, keys)
 
 		return true
 	case "InnerRingUpdate":
