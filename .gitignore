@@ -1,2 +1,4 @@
 *.avm
+*.nef
+config.json
 /vendor/

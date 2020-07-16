@@ -21,17 +21,19 @@ type (
 		pub []byte
 	}
 
-	check struct {
+	cheque struct {
 		id []byte
 	}
 )
 
 const (
-	// GAS NEP-5 HASH
-	tokenHash             = "\x77\xea\x59\x6b\x7a\xdf\x7e\x4d\xd1\x40\x76\x97\x31\xb7\xd2\xf0\xe0\x6b\xcd\x9b"
+	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
 	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
-	version               = 1
+	version               = 2
+	innerRingKey          = "innerring"
 	voteKey               = "ballots"
+	candidatesKey         = "candidates"
+	cashedChequesKey      = "cheques"
 	blockDiff             = 20 // change base on performance evaluation
 )
 
@@ -66,34 +68,31 @@ func Main(op string, args []interface{}) interface{} {
 	*/
 
 	ctx := storage.GetContext()
+
 	switch op {
-	case "Deploy":
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		if len(irList) >= 3 {
-			panic("contract already deployed")
+	case "Init":
+		if storage.Get(ctx, innerRingKey) != nil {
+			panic("neofs: contract already deployed")
 		}
 
-		irList = []node{}
+		var irList []node
+
 		for i := 0; i < len(args); i++ {
 			pub := args[i].([]byte)
 			irList = append(irList, node{pub: pub})
 		}
 
-		data := binary.Serialize(irList)
-		storage.Put(ctx, "InnerRingList", data)
+		// initialize all storage slices
+		setSerialized(ctx, innerRingKey, irList)
+		setSerialized(ctx, voteKey, []ballot{})
+		setSerialized(ctx, candidatesKey, []node{})
+		setSerialized(ctx, cashedChequesKey, []cheque{})
 
-		data = binary.Serialize([]interface{}{})
-		storage.Put(ctx, "UsedVerifCheckList", data)
-		storage.Put(ctx, "InnerRingCandidates", data)
-
-		data = binary.Serialize([]ballot{})
-		storage.Put(ctx, voteKey, data)
+		runtime.Log("neofs: contract initialized")
 
 		return true
 	case "InnerRingList":
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-
-		return irList
+		return getInnerRingNodes(ctx)
 	case "InnerRingCandidateRemove":
 		data := args[0].([]byte) // public key
 		if !runtime.CheckWitness(data) {
@@ -131,9 +130,13 @@ func Main(op string, args []interface{}) interface{} {
 
 		return true
 	case "Deposit":
-		pk := args[0].([]byte)
-		if !runtime.CheckWitness(pk) {
-			panic("you should be the owner of the public key")
+		if len(args) < 2 || len(args) > 3 {
+			panic("deposit: bad arguments")
+		}
+
+		from := args[0].([]byte)
+		if !runtime.CheckWitness(from) {
+			panic("deposit: you should be the owner of the wallet")
 		}
 
 		amount := args[1].(int)
@@ -141,24 +144,23 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		from := pubToScriptHash(pk)
 		to := runtime.GetExecutingScriptHash()
 		params := []interface{}{from, to, amount}
+
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
-			panic("failed to transfer funds, aborting")
+			panic("deposit: failed to transfer funds, aborting")
 		}
 
-		runtime.Log("funds have been transferred")
+		runtime.Log("deposit: funds have been transferred")
 
-		var rcv = []byte{}
+		var rcv = from
 		if len(args) == 3 {
 			rcv = args[2].([]byte) // todo: check if rcv value is valid
 		}
 
-		txHash := runtime.GetScriptContainer().Hash
-
-		runtime.Notify("Deposit", pk, amount, rcv, txHash)
+		tx := runtime.GetScriptContainer()
+		runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
 
 		return true
 	case "Withdraw":
@@ -168,8 +170,7 @@ func Main(op string, args []interface{}) interface{} {
 
 		user := args[0].([]byte)
 		if !runtime.CheckWitness(user) {
-			// todo: consider something different with neoID
-			panic("withdraw: you should be the owner of the account")
+			panic("withdraw: you should be the owner of the wallet")
 		}
 
 		amount := args[1].(int)
@@ -177,9 +178,8 @@ func Main(op string, args []interface{}) interface{} {
 			amount = amount * 100000000
 		}
 
-		txHash := runtime.GetScriptContainer().Hash
-
-		runtime.Notify("Withdraw", user, amount, txHash)
+		tx := runtime.GetScriptContainer()
+		runtime.Notify("Withdraw", user, amount, tx.Hash)
 
 		return true
 	case "Cheque":
@@ -190,22 +190,23 @@ func Main(op string, args []interface{}) interface{} {
 		id := args[0].([]byte)      // unique cheque id
 		user := args[1].([]byte)    // GAS receiver
 		amount := args[2].(int)     // amount of GAS
-		lockAcc := args[3].([]byte) // lock account from internal banking that must be cashed out
+		lockAcc := args[3].([]byte) // lock account from internal balance contract
 
-		ctx := storage.GetContext()
-
-		hashID := crypto.SHA256(id)
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
+		irList := getInnerRingNodes(ctx)
 		threshold := len(irList)/3*2 + 1
+
+		cashedCheques := getCashedCheques(ctx)
+		hashID := crypto.SHA256(id)
 
 		irKey := innerRingInvoker(irList)
 		if len(irKey) == 0 {
 			panic("cheque: invoked by non inner ring node")
 		}
 
-		c := check{id: id} // todo: use different cheque id for inner ring update and withdraw
-		if containsCheck(usedList, c) {
+		c := cheque{id: id}
+
+		list, ok := addCheque(cashedCheques, c)
+		if !ok {
 			panic("cheque: non unique id")
 		}
 
@@ -221,7 +222,9 @@ func Main(op string, args []interface{}) interface{} {
 				panic("cheque: failed to transfer funds, aborting")
 			}
 
-			putSerialized(ctx, "UsedVerifCheckList", c)
+			runtime.Log("cheque: funds have been transferred")
+
+			setSerialized(ctx, cashedChequesKey, list)
 			runtime.Notify("Cheque", id, user, amount, lockAcc)
 		}
 
@@ -237,7 +240,7 @@ func Main(op string, args []interface{}) interface{} {
 		offset := 8 + 2 + listSize
 
 		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]check)
+		usedList := getSerialized(ctx, "UsedVerifCheckList").([]cheque)
 		threshold := len(irList)/3*2 + 1
 
 		irKey := innerRingInvoker(irList)
@@ -245,7 +248,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("innerRingUpdate: invoked by non inner ring node")
 		}
 
-		c := check{id: id}
+		c := cheque{id: id}
 		if containsCheck(usedList, c) {
 			panic("innerRingUpdate: cheque has non unique id")
 		}
@@ -308,11 +311,11 @@ func Main(op string, args []interface{}) interface{} {
 			panic("isInnerRing: incorrect public key")
 		}
 
-		irList := getSerialized(ctx, "InnerRingList").([]node)
+		irList := getInnerRingNodes(ctx)
 		for i := range irList {
 			node := irList[i]
 
-			if util.Equals(node.pub, key) {
+			if bytesEqual(node.pub, key) {
 				return true
 			}
 		}
@@ -393,7 +396,7 @@ func pubToScriptHash(pkey []byte) []byte {
 	return []byte{0x0F, 0xED}
 }
 
-func containsCheck(lst []check, c check) bool {
+func containsCheck(lst []cheque, c cheque) bool {
 	for i := 0; i < len(lst); i++ {
 		if util.Equals(c, lst[i]) {
 			return true
@@ -453,18 +456,18 @@ func innerRingInvoker(ir []node) []byte {
 func vote(ctx storage.Context, id, from []byte) int {
 	var (
 		newCandidates []ballot
-		candidates    = getSerialized(ctx, voteKey).([]ballot)
+		candidates    = getBallots(ctx)
 		found         = -1
 		blockHeight   = blockchain.GetHeight()
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if util.Equals(cnd.id, id) {
+		if bytesEqual(cnd.id, id) {
 			voters := cnd.n
 
 			for j := range voters {
-				if util.Equals(voters[j], from) {
+				if bytesEqual(voters[j], from) {
 					return len(voters)
 				}
 			}
@@ -481,33 +484,87 @@ func vote(ctx storage.Context, id, from []byte) int {
 	}
 
 	if found < 0 {
+		found = 1
 		voters := [][]byte{from}
+
 		newCandidates = append(newCandidates, ballot{
 			id:    id,
 			n:     voters,
 			block: blockHeight})
-		found = 1
 	}
 
-	data := binary.Serialize(newCandidates)
-	storage.Put(ctx, voteKey, data)
+	setSerialized(ctx, voteKey, newCandidates)
 
 	return found
 }
 
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates = []ballot{}
-		candidates    = getSerialized(ctx, voteKey).([]ballot)
+		newCandidates []ballot
+		candidates    = getBallots(ctx)
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !util.Equals(cnd.id, id) {
+		if !bytesEqual(cnd.id, id) {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
 
-	data := binary.Serialize(newCandidates)
-	storage.Put(ctx, voteKey, data)
+	setSerialized(ctx, voteKey, newCandidates)
+}
+
+// setSerialized serializes data and puts it into contract storage.
+func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
+	data := binary.Serialize(value)
+	storage.Put(ctx, key, data)
+}
+
+// getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
+func getInnerRingNodes(ctx storage.Context) []node {
+	data := storage.Get(ctx, innerRingKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]node)
+	}
+
+	return []node{}
+}
+
+// getInnerRingNodes returns deserialized slice of used cheques.
+func getCashedCheques(ctx storage.Context) []cheque {
+	data := storage.Get(ctx, cashedChequesKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]cheque)
+	}
+
+	return []cheque{}
+}
+
+// getInnerRingNodes returns deserialized slice of vote ballots.
+func getBallots(ctx storage.Context) []ballot {
+	data := storage.Get(ctx, voteKey)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).([]ballot)
+	}
+
+	return []ballot{}
+}
+
+// addCheque returns slice of cheques with appended cheque 'c' and bool flag
+// that set to false if cheque 'c' is already presented in the slice 'lst'.
+func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
+	for i := 0; i < len(lst); i++ {
+		if bytesEqual(c.id, lst[i].id) {
+			return nil, false
+		}
+	}
+
+	lst = append(lst, c)
+	return lst, true
+}
+
+// bytesEqual compares two slice of bytes by wrapping them into strings,
+// which is necessary with new util.Equal interop behaviour, see neo-go#1176.
+func bytesEqual(a []byte, b []byte) bool {
+	return util.Equals(string(a), string(b))
 }
