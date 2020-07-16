@@ -37,6 +37,7 @@ const (
 	cashedChequesKey      = "cheques"
 	blockDiff             = 20 // change base on performance evaluation
 	publicKeySize         = 33
+	minInnerRingSize      = 3
 )
 
 func Main(op string, args []interface{}) interface{} {
@@ -107,7 +108,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("irCandidateRemove: you should be the owner of the public key")
 		}
 
-		var nodes = []node{} // it is explicit declaration of empty slice, not nil
+		nodes := []node{} // it is explicit declaration of empty slice, not nil
 		candidates := getInnerRingNodes(ctx, candidatesKey)
 
 		for i := range candidates {
@@ -277,17 +278,12 @@ func Main(op string, args []interface{}) interface{} {
 
 		return true
 	case "InnerRingUpdate":
-		data := args[0].([]byte)
+		if len(args) < 1+minInnerRingSize {
+			// cheque id + inner ring public keys
+			panic("irUpdate: bad arguments")
+		}
 
-		id := data[:8]
-		var ln interface{} = data[8:10]
-		listItemCount := ln.(int)
-		listSize := listItemCount * 33
-
-		offset := 8 + 2 + listSize
-
-		irList := getSerialized(ctx, "InnerRingList").([]node)
-		usedList := getSerialized(ctx, "UsedVerifCheckList").([]cheque)
+		irList := getInnerRingNodes(ctx, innerRingKey)
 		threshold := len(irList)/3*2 + 1
 
 		irKey := innerRingInvoker(irList)
@@ -295,56 +291,61 @@ func Main(op string, args []interface{}) interface{} {
 			panic("innerRingUpdate: invoked by non inner ring node")
 		}
 
+		id := args[0].([]byte)
 		c := cheque{id: id}
-		if containsCheck(usedList, c) {
-			panic("innerRingUpdate: cheque has non unique id")
+
+		cashedCheques := getCashedCheques(ctx)
+
+		chequesList, ok := addCheque(cashedCheques, c)
+		if !ok {
+			panic("irUpdate: non unique id")
 		}
 
-		chequeHash := crypto.SHA256(data)
+		oldNodes := 0
+		candidates := getInnerRingNodes(ctx, candidatesKey)
+		newIR := []node{}
 
-		n := vote(ctx, chequeHash, irKey)
+	loop:
+		for i := 1; i < len(args); i++ {
+			key := args[i].([]byte)
+			if len(key) != publicKeySize {
+				panic("irUpdate: invalid public key in inner ring list")
+			}
+
+			// find key in actual inner ring list
+			for j := 0; j < len(irList); j++ {
+				n := irList[j]
+				if bytesEqual(n.pub, key) {
+					newIR = append(newIR, n)
+					oldNodes++
+
+					continue loop
+				}
+			}
+
+			// find key in candidates list
+			candidates, newIR, ok = rmNodeByKey(candidates, newIR, key)
+			if !ok {
+				panic("irUpdate: unknown public key in inner ring list")
+			}
+		}
+
+		if oldNodes < len(newIR)*2/3+1 {
+			panic("irUpdate: inner ring change rate must not be more than 1/3 ")
+		}
+
+		hashID := crypto.SHA256(id)
+
+		n := vote(ctx, hashID, irKey)
 		if n >= threshold {
-			removeVotes(ctx, chequeHash)
+			removeVotes(ctx, hashID)
 
-			candidates := getSerialized(ctx, "InnerRingCandidates").([]node)
-			offset = 10
-			newIR := []node{}
+			setSerialized(ctx, candidatesKey, candidates)
+			setSerialized(ctx, innerRingKey, newIR)
+			setSerialized(ctx, cashedChequesKey, chequesList)
 
-		loop:
-			for i := 0; i < listItemCount; i, offset = i+1, offset+33 {
-				pub := data[offset : offset+33]
-
-				for j := 0; j < len(irList); j++ {
-					n := irList[j]
-					if util.Equals(n.pub, pub) {
-						newIR = append(newIR, n)
-						continue loop
-					}
-				}
-
-				for j := 0; j < len(candidates); j++ {
-					n := candidates[j]
-					if util.Equals(n.pub, pub) {
-						newIR = append(newIR, n)
-						continue loop
-					}
-				}
-			}
-
-			if len(newIR) != listItemCount {
-				panic("new inner ring wasn't processed correctly")
-			}
-
-			for i := 0; i < len(newIR); i++ {
-				n := newIR[i]
-				delSerializedIR(ctx, "InnerRingCandidates", n.pub)
-			}
-
-			newIRData := binary.Serialize(newIR)
-			storage.Put(ctx, "InnerRingList", newIRData)
-			putSerialized(ctx, "UsedVerifCheckList", c)
-
-			runtime.Notify("InnerRingUpdate", c.id, newIRData)
+			runtime.Notify("InnerRingUpdate", c.id, newIR)
+			runtime.Log("irUpdate: inner ring list has been updated")
 		}
 
 		return true
@@ -621,6 +622,27 @@ func addNode(lst []node, n node) ([]node, bool) {
 
 	lst = append(lst, n)
 	return lst, true
+}
+
+// rmNodeByKey returns slice of nodes without node with key 'k',
+// slices of nodes 'add' with node with key 'k' and bool flag,
+// that set to false if node with a key 'k' does not exists in the slice 'lst'.
+func rmNodeByKey(lst, add []node, k []byte) ([]node, []node, bool) {
+	var (
+		flag   bool
+		newLst = []node{} // it is explicit declaration of empty slice, not nil
+	)
+
+	for i := 0; i < len(lst); i++ {
+		if bytesEqual(k, lst[i].pub) {
+			add = append(add, lst[i])
+			flag = true
+		} else {
+			newLst = append(newLst, lst[i])
+		}
+	}
+
+	return newLst, add, flag
 }
 
 // bytesEqual compares two slice of bytes by wrapping them into strings,
