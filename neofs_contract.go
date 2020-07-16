@@ -3,6 +3,7 @@ package smart_contract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -28,7 +29,7 @@ type (
 
 const (
 	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
-	innerRingCandidateFee = 100 * 1000 * 1000 // 10^8
+	innerRingCandidateFee = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	version               = 2
 	innerRingKey          = "innerring"
 	voteKey               = "ballots"
@@ -93,41 +94,63 @@ func Main(op string, args []interface{}) interface{} {
 
 		return true
 	case "InnerRingList":
-		return getInnerRingNodes(ctx)
+		return getInnerRingNodes(ctx, innerRingKey)
+	case "InnerRingCandidates":
+		return getInnerRingNodes(ctx, candidatesKey)
 	case "InnerRingCandidateRemove":
-		data := args[0].([]byte) // public key
-		if !runtime.CheckWitness(data) {
-			panic("you should be the owner of the public key")
+		if len(args) != 1 {
+			panic("irCandidateRemove: bad arguments")
 		}
 
-		delSerializedIR(ctx, "InnerRingCandidates", data)
+		key := args[0].([]byte) // inner ring candidate public key
+		if !runtime.CheckWitness(key) {
+			panic("irCandidateRemove: you should be the owner of the public key")
+		}
+
+		var nodes = []node{} // it is explicit declaration of empty slice, not nil
+		candidates := getInnerRingNodes(ctx, candidatesKey)
+
+		for i := range candidates {
+			c := candidates[i]
+			if !bytesEqual(c.pub, key) {
+				nodes = append(nodes, c)
+			} else {
+				runtime.Log("irCandidateRemove: candidate has been removed")
+			}
+		}
+
+		setSerialized(ctx, candidatesKey, nodes)
 
 		return true
 	case "InnerRingCandidateAdd":
-		key := args[0].([]byte) // public key
+		if len(args) != 1 {
+			panic("irCandidateAdd: bad arguments")
+		}
 
+		key := args[0].([]byte) // inner ring candidate public key
 		if !runtime.CheckWitness(key) {
-			panic("you should be the owner of the public key")
+			panic("irCandidateAdd: you should be the owner of the public key")
 		}
 
-		candidates := getSerialized(ctx, "InnerRingCandidates").([]node)
-		if containsPub(candidates, key) {
-			panic("is already in list")
+		c := node{pub: key}
+		candidates := getInnerRingNodes(ctx, candidatesKey)
+
+		list, ok := addNode(candidates, c)
+		if !ok {
+			panic("irCandidateAdd: candidate already in the list")
 		}
 
-		from := pubToScriptHash(key)
+		from := contract.CreateStandardAccount(key)
 		to := runtime.GetExecutingScriptHash()
 		params := []interface{}{from, to, innerRingCandidateFee}
 
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
-			panic("failed to transfer funds, aborting")
+			panic("irCandidateAdd: failed to transfer funds, aborting")
 		}
 
-		candidate := node{pub: key}
-		if !putSerialized(ctx, "InnerRingCandidates", candidate) {
-			panic("failed to put candidate into the queue")
-		}
+		runtime.Log("irCandidateAdd: candidate has been added")
+		setSerialized(ctx, candidatesKey, list)
 
 		return true
 	case "Deposit":
@@ -193,7 +216,7 @@ func Main(op string, args []interface{}) interface{} {
 		amount := args[2].(int)     // amount of GAS
 		lockAcc := args[3].([]byte) // lock account from internal balance contract
 
-		irList := getInnerRingNodes(ctx)
+		irList := getInnerRingNodes(ctx, innerRingKey)
 		threshold := len(irList)/3*2 + 1
 
 		cashedCheques := getCashedCheques(ctx)
@@ -335,7 +358,7 @@ func Main(op string, args []interface{}) interface{} {
 			panic("isInnerRing: incorrect public key")
 		}
 
-		irList := getInnerRingNodes(ctx)
+		irList := getInnerRingNodes(ctx, innerRingKey)
 		for i := range irList {
 			node := irList[i]
 
@@ -545,8 +568,8 @@ func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
 }
 
 // getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
-func getInnerRingNodes(ctx storage.Context) []node {
-	data := storage.Get(ctx, innerRingKey)
+func getInnerRingNodes(ctx storage.Context, key string) []node {
+	data := storage.Get(ctx, key)
 	if data != nil {
 		return binary.Deserialize(data.([]byte)).([]node)
 	}
@@ -584,6 +607,19 @@ func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
 	}
 
 	lst = append(lst, c)
+	return lst, true
+}
+
+// addNode returns slice of nodes with appended node 'n' and bool flag
+// that set to false if node 'n' is already presented in the slice 'lst'.
+func addNode(lst []node, n node) ([]node, bool) {
+	for i := 0; i < len(lst); i++ {
+		if bytesEqual(n.pub, lst[i].pub) {
+			return nil, false
+		}
+	}
+
+	lst = append(lst, n)
 	return lst, true
 }
 
