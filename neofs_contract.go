@@ -1,5 +1,42 @@
 package smart_contract
 
+/*
+	NeoFS Smart Contract for NEO3.0.
+
+	Utility operations, executed once in deploy stage:
+	- Init(pubKey, ... )                    - setup initial inner ring nodes
+	- InitConfig(key, value, key, value...) - setup initial NeoFS configuration
+
+	User operations:
+	- Deposit(script-hash, amount, script-hash(?)) - deposit gas assets to this script-hash address to NeoFS balance
+	- Withdraw(script-hash, amount)                - initialize gas asset withdraw from NeoFS balance
+	- Bind(script-hash, pubKeys...)                - bind public key with user's account to use it in NeoFS requests
+	- Unbind(script-hash, pubKeys...)              - unbind public key from user's account
+
+	Inner ring list operations:
+	- InnerRingList()                  - returns array of inner ring node keys
+	- InnerRingCandidates()            - returns array of inner ring candidate node keys
+	- IsInnerRing(pubKey)              - returns 'true' if key is inside of inner ring list
+	- InnerRingCandidateAdd(pubKey)    - adds key to the list of inner ring candidates
+	- InnerRingCandidateRemove(pubKey) - removes key from the list of inner ring candidates
+	- InnerRingUpdate(id, pubKeys...)  - updates list of inner ring nodes with provided list of public keys
+
+	Config operations:
+	- Config(key)               - returns value of NeoFS configuration with key 'key'
+	- ListConfig()              - returns array of all key-value pairs of NeoFS configuration
+	- SetConfig(id, key, value) - set key-value pair as a NeoFS runtime configuration value
+
+	Other utility operations:
+	- Version                                       - returns contract version
+	- Cheque(id, script- hash, amount, script-hash) - sends gas assets back to the user if they were successfully
+	                                                  locked in NeoFS balance contract
+
+	Parameters:
+	- (?)    - parameter can be omitted
+	- pubKey - 33 bytes of public key
+	- id     - unique byte sequence
+*/
+
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
@@ -34,17 +71,22 @@ type (
 )
 
 const (
-	tokenHash             = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
+	// native gas token script hash
+	tokenHash = "\x3b\x7d\x37\x11\xc6\xf0\xcc\xf9\xb1\xdc\xa9\x03\xd1\xbf\xa1\xd8\x96\xf1\x23\x8c"
+
 	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	candidateFeeConfigKey = "InnerRingCandidateFee"
-	version               = 2
-	innerRingKey          = "innerring"
-	voteKey               = "ballots"
-	candidatesKey         = "candidates"
-	cashedChequesKey      = "cheques"
-	blockDiff             = 20 // change base on performance evaluation
-	publicKeySize         = 33
-	minInnerRingSize      = 3
+
+	version = 2
+
+	innerRingKey     = "innerring"
+	voteKey          = "ballots"
+	candidatesKey    = "candidates"
+	cashedChequesKey = "cheques"
+
+	blockDiff        = 20 // change base on performance evaluation
+	publicKeySize    = 33
+	minInnerRingSize = 3
 )
 
 var (
@@ -57,29 +99,6 @@ func Main(op string, args []interface{}) interface{} {
 	if runtime.GetTrigger() != runtime.Application() {
 		return false
 	}
-
-	/*
-		Utility operations - they will be changed in production:
-		- Deploy(params: address, pubKey, ... )  - setup initial inner ring state
-
-		User operations:
-		- InnerRingList()                                - get list of inner ring nodes addresses and public keys
-		- InnerRingCandidateRemove(params: pubKey)       - remove node with given public key from the inner ring candidate queue
-		- InnerRingCandidateAdd(params: pubKey)          - add node to the inner ring candidate queue
-		- Deposit(params: pubKey, amount)                - deposit GAS to the NeoFS account
-		- Withdraw(params: withdrawCheque)               - withdraw GAS from the NeoFS account
-		- InnerRingUpdate(params: irCheque)              - change list of inner ring nodes
-		- IsInnerRing(params: pubKey)                    - returns true if pubKey presented in inner ring list
-		- Version()                                      - get version of the NeoFS smart-contract
-
-		Params:
-		- address        - string of the valid multiaddress (github.com/multiformats/multiaddr)
-		- pubKey         - 33 byte public key
-		- withdrawCheque - serialized structure, that confirms GAS transfer;
-		                   contains inner ring signatures
-		- irCheque       - serialized structure, that confirms new inner ring node list;
-		                   contains inner ring signatures
-	*/
 
 	ctx := storage.GetContext()
 
@@ -277,6 +296,7 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		var keys [][]byte
+
 		for i := 1; i < len(args); i++ {
 			pub := args[i].([]byte)
 			if len(pub) != publicKeySize {
@@ -367,7 +387,7 @@ func Main(op string, args []interface{}) interface{} {
 		}
 
 		key := args[0].([]byte)
-		if len(key) != 33 {
+		if len(key) != publicKeySize {
 			panic("isInnerRing: incorrect public key")
 		}
 
@@ -473,119 +493,6 @@ func Main(op string, args []interface{}) interface{} {
 	panic("unknown operation")
 }
 
-// fixme: use strict type deserialization wrappers
-func getSerialized(ctx storage.Context, key string) interface{} {
-	data := storage.Get(ctx, key).([]byte)
-	if len(data) != 0 {
-		return binary.Deserialize(data)
-	}
-	return nil
-}
-
-func delSerialized(ctx storage.Context, key string, value []byte) bool {
-	data := storage.Get(ctx, key).([]byte)
-	deleted := false
-
-	var newList [][]byte
-	if len(data) != 0 {
-		lst := binary.Deserialize(data).([][]byte)
-		for i := 0; i < len(lst); i++ {
-			if util.Equals(value, lst[i]) {
-				deleted = true
-			} else {
-				newList = append(newList, lst[i])
-			}
-		}
-		if deleted {
-			if len(newList) != 0 {
-				data := binary.Serialize(newList)
-				storage.Put(ctx, key, data)
-			} else {
-				storage.Delete(ctx, key)
-			}
-			runtime.Log("target element has been removed")
-			return true
-		}
-
-	}
-
-	runtime.Log("target element has not been removed")
-	return false
-}
-
-func putSerialized(ctx storage.Context, key string, value interface{}) bool {
-	data := storage.Get(ctx, key).([]byte)
-
-	var lst []interface{}
-	if len(data) != 0 {
-		lst = binary.Deserialize(data).([]interface{})
-	}
-
-	lst = append(lst, value)
-	data = binary.Serialize(lst)
-	storage.Put(ctx, key, data)
-
-	return true
-}
-
-func pubToScriptHash(pkey []byte) []byte {
-	// pre := []byte{0x21}
-	// buf := append(pre, pkey...)
-	// buf = append(buf, 0xac)
-	// h := crypto.Hash160(buf)
-	//
-	// return h
-
-	// fixme: someday ripemd syscall will appear
-	//        or simply store script-hashes along with public key
-	return []byte{0x0F, 0xED}
-}
-
-func containsCheck(lst []cheque, c cheque) bool {
-	for i := 0; i < len(lst); i++ {
-		if util.Equals(c, lst[i]) {
-			return true
-		}
-	}
-	return false
-}
-func containsPub(lst []node, elem []byte) bool {
-	for i := 0; i < len(lst); i++ {
-		e := lst[i]
-		if util.Equals(elem, e.pub) {
-			return true
-		}
-	}
-	return false
-}
-
-func delSerializedIR(ctx storage.Context, key string, value []byte) bool {
-	data := storage.Get(ctx, key).([]byte)
-	deleted := false
-
-	newList := []node{}
-	if len(data) != 0 {
-		lst := binary.Deserialize(data).([]node)
-		for i := 0; i < len(lst); i++ {
-			n := lst[i]
-			if util.Equals(value, n.pub) {
-				deleted = true
-			} else {
-				newList = append(newList, n)
-			}
-		}
-		if deleted {
-			data := binary.Serialize(newList)
-			storage.Put(ctx, key, data)
-			runtime.Log("target element has been removed")
-			return true
-		}
-	}
-
-	runtime.Log("target element has not been removed")
-	return false
-}
-
 // innerRingInvoker returns public key of inner ring node that invoked contract.
 func innerRingInvoker(ir []node) []byte {
 	for i := 0; i < len(ir); i++ {
@@ -598,9 +505,11 @@ func innerRingInvoker(ir []node) []byte {
 	return nil
 }
 
+// vote adds ballot for the decision with specific 'id' and returns amount
+// on unique voters for that decision.
 func vote(ctx storage.Context, id, from []byte) int {
 	var (
-		newCandidates []ballot
+		newCandidates = []ballot{} // it is explicit declaration of empty slice, not nil
 		candidates    = getBallots(ctx)
 		found         = -1
 		blockHeight   = blockchain.GetHeight()
@@ -643,9 +552,11 @@ func vote(ctx storage.Context, id, from []byte) int {
 	return found
 }
 
+// removeVotes clears ballots of the decision that has benn aceepted by
+// inner ring nodes.
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates []ballot
+		newCandidates = []ballot{} // it is explicit declaration of empty slice, not nil
 		candidates    = getBallots(ctx)
 	)
 
@@ -721,6 +632,7 @@ func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
 	}
 
 	lst = append(lst, c)
+
 	return lst, true
 }
 
@@ -734,6 +646,7 @@ func addNode(lst []node, n node) ([]node, bool) {
 	}
 
 	lst = append(lst, n)
+
 	return lst, true
 }
 
