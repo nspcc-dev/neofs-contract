@@ -96,7 +96,7 @@ var (
 func Main(op string, args []interface{}) interface{} {
 	// The trigger determines whether this smart-contract is being
 	// run in 'verification' or 'application' mode.
-	if runtime.GetTrigger() != runtime.Application() {
+	if runtime.GetTrigger() != runtime.Application {
 		return false
 	}
 
