@@ -3,38 +3,32 @@ package smart_contract
 /*
 	NeoFS Smart Contract for NEO3.0.
 
-	Utility operations, executed once in deploy stage:
-	- Init(pubKey, ... )                    - setup initial inner ring nodes
-	- InitConfig(key, value, key, value...) - setup initial NeoFS configuration
+	Utility methods, executed once in deploy stage:
+	- Init
+	- InitConfig
 
-	User operations:
-	- Deposit(script-hash, amount, script-hash(?)) - deposit gas assets to this script-hash address to NeoFS balance
-	- Withdraw(script-hash, amount)                - initialize gas asset withdraw from NeoFS balance
-	- Bind(script-hash, pubKeys...)                - bind public key with user's account to use it in NeoFS requests
-	- Unbind(script-hash, pubKeys...)              - unbind public key from user's account
+	User related methods:
+	- Deposit
+	- Withdraw
+	- Bind
+	- Unbind
 
-	Inner ring list operations:
-	- InnerRingList()                  - returns array of inner ring node keys
-	- InnerRingCandidates()            - returns array of inner ring candidate node keys
-	- IsInnerRing(pubKey)              - returns 'true' if key is inside of inner ring list
-	- InnerRingCandidateAdd(pubKey)    - adds key to the list of inner ring candidates
-	- InnerRingCandidateRemove(pubKey) - removes key from the list of inner ring candidates
-	- InnerRingUpdate(id, pubKeys...)  - updates list of inner ring nodes with provided list of public keys
+	Inner ring list related methods:
+	- InnerRingList
+	- InnerRingCandidates
+	- IsInnerRing
+	- InnerRingCandidateAdd
+	- InnerRingCandidateRemove
+	- InnerRingUpdate
 
-	Config operations:
-	- Config(key)               - returns value of NeoFS configuration with key 'key'
-	- ListConfig()              - returns array of all key-value pairs of NeoFS configuration
-	- SetConfig(id, key, value) - set key-value pair as a NeoFS runtime configuration value
+	Config methods:
+	- Config
+	- ListConfig
+	- SetConfig
 
-	Other utility operations:
-	- Version                                       - returns contract version
-	- Cheque(id, script- hash, amount, script-hash) - sends gas assets back to the user if they were successfully
-	                                                  locked in NeoFS balance contract
-
-	Parameters:
-	- (?)    - parameter can be omitted
-	- pubKey - 33 bytes of public key
-	- id     - unique byte sequence
+	Other utility methods:
+	- Version
+	- Cheque
 */
 
 import (
@@ -106,6 +100,7 @@ func init() {
 
 }
 
+// Init set up initial inner ring node keys.
 func Init(args []interface{}) bool {
 	if storage.Get(ctx, innerRingKey) != nil {
 		panic("neofs: contract already deployed")
@@ -129,14 +124,17 @@ func Init(args []interface{}) bool {
 	return true
 }
 
+// InnerRingList returns array of inner ring node keys.
 func InnerRingList() []node {
 	return getInnerRingNodes(ctx, innerRingKey)
 }
 
+// InnerRingCandidates returns array of inner ring candidate node keys.
 func InnerRingCandidates() []node {
 	return getInnerRingNodes(ctx, candidatesKey)
 }
 
+// InnerRingCandidateRemove removes key from the list of inner ring candidates.
 func InnerRingCandidateRemove(key []byte) bool {
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateRemove: you should be the owner of the public key")
@@ -159,6 +157,7 @@ func InnerRingCandidateRemove(key []byte) bool {
 	return true
 }
 
+// InnerRingCandidateAdd adds key to the list of inner ring candidates.
 func InnerRingCandidateAdd(key []byte) bool {
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateAdd: you should be the owner of the public key")
@@ -188,6 +187,7 @@ func InnerRingCandidateAdd(key []byte) bool {
 	return true
 }
 
+// Deposit gas assets to this script-hash address in NeoFS balance contract.
 func Deposit(from []byte, args []interface{}) bool {
 	if len(args) < 1 || len(args) > 2 {
 		panic("deposit: bad arguments")
@@ -223,6 +223,7 @@ func Deposit(from []byte, args []interface{}) bool {
 	return true
 }
 
+// Withdraw initialize gas asset withdraw from NeoFS balance.
 func Withdraw(user []byte, amount int) bool {
 	if !runtime.CheckWitness(user) {
 		panic("withdraw: you should be the owner of the wallet")
@@ -240,6 +241,8 @@ func Withdraw(user []byte, amount int) bool {
 	return true
 }
 
+// Cheque sends gas assets back to the user if they were successfully
+// locked in NeoFS balance contract.
 func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
@@ -280,6 +283,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 	return true
 }
 
+// Bind public key with user's account to use it in NeoFS requests.
 func Bind(user []byte, keys []interface{}) bool {
 	if !runtime.CheckWitness(user) {
 		panic("binding: you should be the owner of the wallet")
@@ -297,6 +301,7 @@ func Bind(user []byte, keys []interface{}) bool {
 	return true
 }
 
+// Unbind public key from user's account
 func Unbind(user []byte, keys []interface{}) bool {
 	if !runtime.CheckWitness(user) {
 		panic("unbinding: you should be the owner of the wallet")
@@ -314,6 +319,8 @@ func Unbind(user []byte, keys []interface{}) bool {
 	return true
 }
 
+// InnerRingUpdate updates list of inner ring nodes with provided list of
+// public keys.
 func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
 	if len(args) < minInnerRingSize {
 		panic("irUpdate: bad arguments")
@@ -386,6 +393,7 @@ loop:
 	return true
 }
 
+// IsInnerRing returns 'true' if key is inside of inner ring list.
 func IsInnerRing(key []byte) bool {
 	if len(key) != publicKeySize {
 		panic("isInnerRing: incorrect public key")
@@ -403,10 +411,12 @@ func IsInnerRing(key []byte) bool {
 	return false
 }
 
+// Config returns value of NeoFS configuration with provided key.
 func Config(key []byte) interface{} {
 	return getConfig(ctx, key)
 }
 
+// SetConfig key-value pair as a NeoFS runtime configuration value.
 func SetConfig(id, key, val []byte) bool {
 	// check if it is inner ring invocation
 	irList := getInnerRingNodes(ctx, innerRingKey)
@@ -443,6 +453,7 @@ func SetConfig(id, key, val []byte) bool {
 	return true
 }
 
+// ListConfig returns array of all key-value pairs of NeoFS configuration.
 func ListConfig() []record {
 	var config []record
 
@@ -458,6 +469,7 @@ func ListConfig() []record {
 	return config
 }
 
+// InitConfig set up initial NeoFS key-value configuration.
 func InitConfig(args []interface{}) bool {
 	if getConfig(ctx, candidateFeeConfigKey) != nil {
 		panic("neofs: configuration already installed")
@@ -482,6 +494,7 @@ func InitConfig(args []interface{}) bool {
 	return true
 }
 
+// Version of contract.
 func Version() int {
 	return version
 }
