@@ -1,2 +1,57 @@
 hasstorage: true
 ispayable: false
+events:
+  - name: Deposit
+    parameters:
+      - name: from
+        type: ByteString
+      - name: amount
+        type: Integer
+      - name: receiver
+        type: ByteString
+      - name: txHash
+        type: ByteString
+  - name: Withdraw
+    parameters:
+      - name: user
+        type: ByteString
+      - name: amount
+        type: Integer
+      - name: txHash
+        type: ByteString
+  - name: Cheque
+    parameters:
+      - name: id
+        type: ByteString
+      - name: user
+        type: ByteString
+      - name: amount
+        type: Integer
+      - name: lockAccount
+        type: ByteString
+  - name: Bind
+    parameters:
+      - name: user
+        type: ByteString
+      - name: keys
+        type: Array
+  - name: Unbind
+    parameters:
+      - name: user
+        type: ByteString
+      - name: keys
+        type: Array
+  - name: InnerRingUpdate
+    parameters:
+      - name: id
+        type: ByteString
+      - name: innerRingList
+        type: Array
+  - name: SetConfig
+    parameters:
+      - name: id
+        type: ByteString
+      - name: key
+        type: ByteString
+      - name: value
+        type: ByteString

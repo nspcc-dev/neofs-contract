@@ -1,4 +1,4 @@
 *.avm
 *.nef
-config.json
+*.manifest.json
 /vendor/

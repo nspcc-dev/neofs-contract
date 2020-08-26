@@ -4,7 +4,7 @@ NEOGO?=neo-go
 .PHONY: build tests
 
 build:
-	$(NEOGO) contract compile -i neofs_contract.go -c neofs_config.yml -m config.json
+	$(NEOGO) contract compile -i neofs_contract.go -c neofs_config.yml -m neofs.manifest.json
 
 tests:
 	go mod vendor
