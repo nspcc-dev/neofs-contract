@@ -228,9 +228,11 @@ func Withdraw(user []byte, amount int) bool {
 		panic("withdraw: you should be the owner of the wallet")
 	}
 
-	if amount > 0 {
-		amount = amount * 100000000
+	if amount < 0 {
+		panic("withdraw: non positive amount number")
 	}
+
+	amount = amount * 100000000
 
 	tx := runtime.GetScriptContainer()
 	runtime.Notify("Withdraw", user, amount, tx.Hash)
