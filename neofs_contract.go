@@ -77,7 +77,7 @@ const (
 	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	candidateFeeConfigKey = "InnerRingCandidateFee"
 
-	version = 2
+	version = 3
 
 	innerRingKey     = "innerring"
 	voteKey          = "ballots"
@@ -91,406 +91,397 @@ const (
 
 var (
 	configPrefix = []byte("config")
+
+	ctx storage.Context
 )
 
-func Main(op string, args []interface{}) interface{} {
+func init() {
 	// The trigger determines whether this smart-contract is being
 	// run in 'verification' or 'application' mode.
 	if runtime.GetTrigger() != runtime.Application {
-		return false
+		panic("contract has not been called in application node")
 	}
 
-	ctx := storage.GetContext()
+	ctx = storage.GetContext()
 
-	switch op {
-	case "Init":
-		if storage.Get(ctx, innerRingKey) != nil {
-			panic("neofs: contract already deployed")
+}
+
+func Init(args []interface{}) bool {
+	if storage.Get(ctx, innerRingKey) != nil {
+		panic("neofs: contract already deployed")
+	}
+
+	var irList []node
+
+	for i := 0; i < len(args); i++ {
+		pub := args[i].([]byte)
+		irList = append(irList, node{pub: pub})
+	}
+
+	// initialize all storage slices
+	setSerialized(ctx, innerRingKey, irList)
+	setSerialized(ctx, voteKey, []ballot{})
+	setSerialized(ctx, candidatesKey, []node{})
+	setSerialized(ctx, cashedChequesKey, []cheque{})
+
+	runtime.Log("neofs: contract initialized")
+
+	return true
+}
+
+func InnerRingList() []node {
+	return getInnerRingNodes(ctx, innerRingKey)
+}
+
+func InnerRingCandidates() []node {
+	return getInnerRingNodes(ctx, candidatesKey)
+}
+
+func InnerRingCandidateRemove(key []byte) bool {
+	if !runtime.CheckWitness(key) {
+		panic("irCandidateRemove: you should be the owner of the public key")
+	}
+
+	nodes := []node{} // it is explicit declaration of empty slice, not nil
+	candidates := getInnerRingNodes(ctx, candidatesKey)
+
+	for i := range candidates {
+		c := candidates[i]
+		if !bytesEqual(c.pub, key) {
+			nodes = append(nodes, c)
+		} else {
+			runtime.Log("irCandidateRemove: candidate has been removed")
 		}
+	}
 
-		var irList []node
+	setSerialized(ctx, candidatesKey, nodes)
 
-		for i := 0; i < len(args); i++ {
-			pub := args[i].([]byte)
-			irList = append(irList, node{pub: pub})
-		}
+	return true
+}
 
-		// initialize all storage slices
-		setSerialized(ctx, innerRingKey, irList)
-		setSerialized(ctx, voteKey, []ballot{})
-		setSerialized(ctx, candidatesKey, []node{})
-		setSerialized(ctx, cashedChequesKey, []cheque{})
+func InnerRingCandidateAdd(key []byte) bool {
+	if !runtime.CheckWitness(key) {
+		panic("irCandidateAdd: you should be the owner of the public key")
+	}
 
-		runtime.Log("neofs: contract initialized")
+	c := node{pub: key}
+	candidates := getInnerRingNodes(ctx, candidatesKey)
 
-		return true
-	case "InnerRingList":
-		return getInnerRingNodes(ctx, innerRingKey)
-	case "InnerRingCandidates":
-		return getInnerRingNodes(ctx, candidatesKey)
-	case "InnerRingCandidateRemove":
-		if len(args) != 1 {
-			panic("irCandidateRemove: bad arguments")
-		}
+	list, ok := addNode(candidates, c)
+	if !ok {
+		panic("irCandidateAdd: candidate already in the list")
+	}
 
-		key := args[0].([]byte) // inner ring candidate public key
-		if !runtime.CheckWitness(key) {
-			panic("irCandidateRemove: you should be the owner of the public key")
-		}
+	from := contract.CreateStandardAccount(key)
+	to := runtime.GetExecutingScriptHash()
+	fee := getConfig(ctx, candidateFeeConfigKey).(int)
+	params := []interface{}{from, to, fee}
 
-		nodes := []node{} // it is explicit declaration of empty slice, not nil
-		candidates := getInnerRingNodes(ctx, candidatesKey)
+	transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+	if !transferred {
+		panic("irCandidateAdd: failed to transfer funds, aborting")
+	}
 
-		for i := range candidates {
-			c := candidates[i]
-			if !bytesEqual(c.pub, key) {
-				nodes = append(nodes, c)
-			} else {
-				runtime.Log("irCandidateRemove: candidate has been removed")
-			}
-		}
+	runtime.Log("irCandidateAdd: candidate has been added")
+	setSerialized(ctx, candidatesKey, list)
 
-		setSerialized(ctx, candidatesKey, nodes)
+	return true
+}
 
-		return true
-	case "InnerRingCandidateAdd":
-		if len(args) != 1 {
-			panic("irCandidateAdd: bad arguments")
-		}
+func Deposit(from []byte, args []interface{}) bool {
+	if len(args) < 1 || len(args) > 2 {
+		panic("deposit: bad arguments")
+	}
 
-		key := args[0].([]byte) // inner ring candidate public key
-		if !runtime.CheckWitness(key) {
-			panic("irCandidateAdd: you should be the owner of the public key")
-		}
+	if !runtime.CheckWitness(from) {
+		panic("deposit: you should be the owner of the wallet")
+	}
 
-		c := node{pub: key}
-		candidates := getInnerRingNodes(ctx, candidatesKey)
+	amount := args[0].(int)
+	if amount > 0 {
+		amount = amount * 100000000
+	}
 
-		list, ok := addNode(candidates, c)
-		if !ok {
-			panic("irCandidateAdd: candidate already in the list")
-		}
+	to := runtime.GetExecutingScriptHash()
+	params := []interface{}{from, to, amount}
 
-		from := contract.CreateStandardAccount(key)
-		to := runtime.GetExecutingScriptHash()
-		fee := getConfig(ctx, candidateFeeConfigKey).(int)
-		params := []interface{}{from, to, fee}
+	transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+	if !transferred {
+		panic("deposit: failed to transfer funds, aborting")
+	}
+
+	runtime.Log("deposit: funds have been transferred")
+
+	var rcv = from
+	if len(args) == 2 {
+		rcv = args[1].([]byte) // todo: check if rcv value is valid
+	}
+
+	tx := runtime.GetScriptContainer()
+	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
+
+	return true
+}
+
+func Withdraw(user []byte, amount int) bool {
+	if !runtime.CheckWitness(user) {
+		panic("withdraw: you should be the owner of the wallet")
+	}
+
+	if amount > 0 {
+		amount = amount * 100000000
+	}
+
+	tx := runtime.GetScriptContainer()
+	runtime.Notify("Withdraw", user, amount, tx.Hash)
+
+	return true
+}
+
+func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
+	irList := getInnerRingNodes(ctx, innerRingKey)
+	threshold := len(irList)/3*2 + 1
+
+	cashedCheques := getCashedCheques(ctx)
+	hashID := crypto.SHA256(id)
+
+	irKey := innerRingInvoker(irList)
+	if len(irKey) == 0 {
+		panic("cheque: invoked by non inner ring node")
+	}
+
+	c := cheque{id: id}
+
+	list, ok := addCheque(cashedCheques, c)
+	if !ok {
+		panic("cheque: non unique id")
+	}
+
+	n := vote(ctx, hashID, irKey)
+	if n >= threshold {
+		removeVotes(ctx, hashID)
+
+		from := runtime.GetExecutingScriptHash()
+		params := []interface{}{from, user, amount}
 
 		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
 		if !transferred {
-			panic("irCandidateAdd: failed to transfer funds, aborting")
+			panic("cheque: failed to transfer funds, aborting")
 		}
 
-		runtime.Log("irCandidateAdd: candidate has been added")
-		setSerialized(ctx, candidatesKey, list)
+		runtime.Log("cheque: funds have been transferred")
 
-		return true
-	case "Deposit":
-		if len(args) < 2 || len(args) > 3 {
-			panic("deposit: bad arguments")
+		setSerialized(ctx, cashedChequesKey, list)
+		runtime.Notify("Cheque", id, user, amount, lockAcc)
+	}
+
+	return true
+}
+
+func Bind(user []byte, keys []interface{}) bool {
+	if !runtime.CheckWitness(user) {
+		panic("binding: you should be the owner of the wallet")
+	}
+
+	for i := 0; i < len(keys); i++ {
+		pubKey := keys[i].([]byte)
+		if len(pubKey) != publicKeySize {
+			panic("binding: incorrect public key size")
 		}
+	}
 
-		from := args[0].([]byte)
-		if !runtime.CheckWitness(from) {
-			panic("deposit: you should be the owner of the wallet")
+	runtime.Notify("Bind", user, keys)
+
+	return true
+}
+
+func Unbind(user []byte, keys []interface{}) bool {
+	if !runtime.CheckWitness(user) {
+		panic("unbinding: you should be the owner of the wallet")
+	}
+
+	for i := 0; i < len(keys); i++ {
+		pubKey := keys[i].([]byte)
+		if len(pubKey) != publicKeySize {
+			panic("unbinding: incorrect public key size")
 		}
+	}
 
-		amount := args[1].(int)
-		if amount > 0 {
-			amount = amount * 100000000
-		}
+	runtime.Notify("Unbind", user, keys)
 
-		to := runtime.GetExecutingScriptHash()
-		params := []interface{}{from, to, amount}
+	return true
+}
 
-		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
-		if !transferred {
-			panic("deposit: failed to transfer funds, aborting")
-		}
+func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
+	if len(args) < minInnerRingSize {
+		panic("irUpdate: bad arguments")
+	}
 
-		runtime.Log("deposit: funds have been transferred")
+	irList := getInnerRingNodes(ctx, innerRingKey)
+	threshold := len(irList)/3*2 + 1
 
-		var rcv = from
-		if len(args) == 3 {
-			rcv = args[2].([]byte) // todo: check if rcv value is valid
-		}
+	irKey := innerRingInvoker(irList)
+	if len(irKey) == 0 {
+		panic("innerRingUpdate: invoked by non inner ring node")
+	}
 
-		tx := runtime.GetScriptContainer()
-		runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
+	c := cheque{id: chequeID}
 
-		return true
-	case "Withdraw":
-		if len(args) != 2 {
-			panic("withdraw: bad arguments")
-		}
+	cashedCheques := getCashedCheques(ctx)
 
-		user := args[0].([]byte)
-		if !runtime.CheckWitness(user) {
-			panic("withdraw: you should be the owner of the wallet")
-		}
+	chequesList, ok := addCheque(cashedCheques, c)
+	if !ok {
+		panic("irUpdate: non unique chequeID")
+	}
 
-		amount := args[1].(int)
-		if amount > 0 {
-			amount = amount * 100000000
-		}
+	oldNodes := 0
+	candidates := getInnerRingNodes(ctx, candidatesKey)
+	newIR := []node{}
 
-		tx := runtime.GetScriptContainer()
-		runtime.Notify("Withdraw", user, amount, tx.Hash)
-
-		return true
-	case "Cheque":
-		if len(args) != 4 {
-			panic("cheque: bad arguments")
-		}
-
-		id := args[0].([]byte)      // unique cheque id
-		user := args[1].([]byte)    // GAS receiver
-		amount := args[2].(int)     // amount of GAS
-		lockAcc := args[3].([]byte) // lock account from internal balance contract
-
-		irList := getInnerRingNodes(ctx, innerRingKey)
-		threshold := len(irList)/3*2 + 1
-
-		cashedCheques := getCashedCheques(ctx)
-		hashID := crypto.SHA256(id)
-
-		irKey := innerRingInvoker(irList)
-		if len(irKey) == 0 {
-			panic("cheque: invoked by non inner ring node")
-		}
-
-		c := cheque{id: id}
-
-		list, ok := addCheque(cashedCheques, c)
-		if !ok {
-			panic("cheque: non unique id")
-		}
-
-		n := vote(ctx, hashID, irKey)
-		if n >= threshold {
-			removeVotes(ctx, hashID)
-
-			from := runtime.GetExecutingScriptHash()
-			params := []interface{}{from, user, amount}
-
-			transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
-			if !transferred {
-				panic("cheque: failed to transfer funds, aborting")
-			}
-
-			runtime.Log("cheque: funds have been transferred")
-
-			setSerialized(ctx, cashedChequesKey, list)
-			runtime.Notify("Cheque", id, user, amount, lockAcc)
-		}
-
-		return true
-	case "Bind", "Unbind":
-		if len(args) < 2 {
-			panic("binding: bad arguments")
-		}
-
-		user := args[0].([]byte)
-		if !runtime.CheckWitness(user) {
-			panic("binding: you should be the owner of the wallet")
-		}
-
-		var keys [][]byte
-
-		for i := 1; i < len(args); i++ {
-			pub := args[i].([]byte)
-			if len(pub) != publicKeySize {
-				panic("binding: incorrect public key size")
-			}
-
-			keys = append(keys, pub)
-		}
-
-		runtime.Notify(op, user, keys)
-
-		return true
-	case "InnerRingUpdate":
-		if len(args) < 1+minInnerRingSize {
-			// cheque id + inner ring public keys
-			panic("irUpdate: bad arguments")
-		}
-
-		irList := getInnerRingNodes(ctx, innerRingKey)
-		threshold := len(irList)/3*2 + 1
-
-		irKey := innerRingInvoker(irList)
-		if len(irKey) == 0 {
-			panic("innerRingUpdate: invoked by non inner ring node")
-		}
-
-		id := args[0].([]byte)
-		c := cheque{id: id}
-
-		cashedCheques := getCashedCheques(ctx)
-
-		chequesList, ok := addCheque(cashedCheques, c)
-		if !ok {
-			panic("irUpdate: non unique id")
-		}
-
-		oldNodes := 0
-		candidates := getInnerRingNodes(ctx, candidatesKey)
-		newIR := []node{}
-
-	loop:
-		for i := 1; i < len(args); i++ {
-			key := args[i].([]byte)
-			if len(key) != publicKeySize {
-				panic("irUpdate: invalid public key in inner ring list")
-			}
-
-			// find key in actual inner ring list
-			for j := 0; j < len(irList); j++ {
-				n := irList[j]
-				if bytesEqual(n.pub, key) {
-					newIR = append(newIR, n)
-					oldNodes++
-
-					continue loop
-				}
-			}
-
-			// find key in candidates list
-			candidates, newIR, ok = rmNodeByKey(candidates, newIR, key)
-			if !ok {
-				panic("irUpdate: unknown public key in inner ring list")
-			}
-		}
-
-		if oldNodes < len(newIR)*2/3+1 {
-			panic("irUpdate: inner ring change rate must not be more than 1/3 ")
-		}
-
-		hashID := crypto.SHA256(id)
-
-		n := vote(ctx, hashID, irKey)
-		if n >= threshold {
-			removeVotes(ctx, hashID)
-
-			setSerialized(ctx, candidatesKey, candidates)
-			setSerialized(ctx, innerRingKey, newIR)
-			setSerialized(ctx, cashedChequesKey, chequesList)
-
-			runtime.Notify("InnerRingUpdate", c.id, newIR)
-			runtime.Log("irUpdate: inner ring list has been updated")
-		}
-
-		return true
-	case "IsInnerRing":
-		if len(args) != 1 {
-			panic("isInnerRing: wrong arguments")
-		}
-
-		key := args[0].([]byte)
+loop:
+	for i := 1; i < len(args); i++ {
+		key := args[i]
 		if len(key) != publicKeySize {
-			panic("isInnerRing: incorrect public key")
+			panic("irUpdate: invalid public key in inner ring list")
 		}
 
-		irList := getInnerRingNodes(ctx, innerRingKey)
-		for i := range irList {
-			node := irList[i]
+		// find key in actual inner ring list
+		for j := 0; j < len(irList); j++ {
+			n := irList[j]
+			if bytesEqual(n.pub, key) {
+				newIR = append(newIR, n)
+				oldNodes++
 
-			if bytesEqual(node.pub, key) {
-				return true
+				continue loop
 			}
 		}
 
-		return false
-	case "Config":
-		if len(args) != 1 {
-			panic("config: bad arguments")
-		}
-
-		key := args[0].([]byte)
-
-		return getConfig(ctx, key)
-	case "SetConfig":
-		if len(args) != 3 {
-			panic("setConfig: bad arguments")
-		}
-
-		// check if it is inner ring invocation
-		irList := getInnerRingNodes(ctx, innerRingKey)
-		threshold := len(irList)/3*2 + 1
-
-		irKey := innerRingInvoker(irList)
-		if len(irKey) == 0 {
-			panic("setConfig: invoked by non inner ring node")
-		}
-
-		// check unique id of the operation
-		id := args[0].([]byte)
-		c := cheque{id: id}
-		cashedCheques := getCashedCheques(ctx)
-
-		chequesList, ok := addCheque(cashedCheques, c)
+		// find key in candidates list
+		candidates, newIR, ok = rmNodeByKey(candidates, newIR, key)
 		if !ok {
-			panic("setConfig: non unique id")
+			panic("irUpdate: unknown public key in inner ring list")
 		}
-
-		// vote for new configuration value
-		hashID := crypto.SHA256(id)
-
-		n := vote(ctx, hashID, irKey)
-		if n >= threshold {
-			removeVotes(ctx, hashID)
-
-			key := args[1]
-			val := args[2]
-
-			setConfig(ctx, key, val)
-			setSerialized(ctx, cashedChequesKey, chequesList)
-
-			runtime.Notify("SetConfig", id, key, val)
-			runtime.Log("setConfig: configuration has been updated")
-		}
-
-		return true
-	case "ListConfig":
-		var config []record
-
-		it := storage.Find(ctx, configPrefix)
-		for iterator.Next(it) {
-			key := iterator.Key(it).([]byte)
-			val := iterator.Value(it).([]byte)
-			r := record{key: key[len(configPrefix):], val: val}
-
-			config = append(config, r)
-		}
-
-		return config
-	case "InitConfig":
-		if getConfig(ctx, candidateFeeConfigKey) != nil {
-			panic("neofs: configuration already installed")
-		}
-
-		ln := len(args)
-		if ln%2 != 0 {
-			panic("initConfig: bad arguments")
-		}
-
-		setConfig(ctx, candidateFeeConfigKey, defaultCandidateFee)
-
-		for i := 0; i < ln/2; i++ {
-			key := args[i*2]
-			val := args[i*2+1]
-
-			setConfig(ctx, key, val)
-		}
-
-		runtime.Log("neofs: config has been installed")
-
-		return true
-	case "Version":
-		return version
 	}
 
-	panic("unknown operation")
+	if oldNodes < len(newIR)*2/3+1 {
+		panic("irUpdate: inner ring change rate must not be more than 1/3 ")
+	}
+
+	hashID := crypto.SHA256(chequeID)
+
+	n := vote(ctx, hashID, irKey)
+	if n >= threshold {
+		removeVotes(ctx, hashID)
+
+		setSerialized(ctx, candidatesKey, candidates)
+		setSerialized(ctx, innerRingKey, newIR)
+		setSerialized(ctx, cashedChequesKey, chequesList)
+
+		runtime.Notify("InnerRingUpdate", c.id, newIR)
+		runtime.Log("irUpdate: inner ring list has been updated")
+	}
+
+	return true
+}
+
+func IsInnerRing(key []byte) bool {
+	if len(key) != publicKeySize {
+		panic("isInnerRing: incorrect public key")
+	}
+
+	irList := getInnerRingNodes(ctx, innerRingKey)
+	for i := range irList {
+		node := irList[i]
+
+		if bytesEqual(node.pub, key) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func Config(key []byte) interface{} {
+	return getConfig(ctx, key)
+}
+
+func SetConfig(id, key, val []byte) bool {
+	// check if it is inner ring invocation
+	irList := getInnerRingNodes(ctx, innerRingKey)
+	threshold := len(irList)/3*2 + 1
+
+	irKey := innerRingInvoker(irList)
+	if len(irKey) == 0 {
+		panic("setConfig: invoked by non inner ring node")
+	}
+
+	// check unique id of the operation
+	c := cheque{id: id}
+	cashedCheques := getCashedCheques(ctx)
+
+	chequesList, ok := addCheque(cashedCheques, c)
+	if !ok {
+		panic("setConfig: non unique id")
+	}
+
+	// vote for new configuration value
+	hashID := crypto.SHA256(id)
+
+	n := vote(ctx, hashID, irKey)
+	if n >= threshold {
+		removeVotes(ctx, hashID)
+
+		setConfig(ctx, key, val)
+		setSerialized(ctx, cashedChequesKey, chequesList)
+
+		runtime.Notify("SetConfig", id, key, val)
+		runtime.Log("setConfig: configuration has been updated")
+	}
+
+	return true
+}
+
+func ListConfig() []record {
+	var config []record
+
+	it := storage.Find(ctx, configPrefix)
+	for iterator.Next(it) {
+		key := iterator.Key(it).([]byte)
+		val := iterator.Value(it).([]byte)
+		r := record{key: key[len(configPrefix):], val: val}
+
+		config = append(config, r)
+	}
+
+	return config
+}
+
+func InitConfig(args []interface{}) bool {
+	if getConfig(ctx, candidateFeeConfigKey) != nil {
+		panic("neofs: configuration already installed")
+	}
+
+	ln := len(args)
+	if ln%2 != 0 {
+		panic("initConfig: bad arguments")
+	}
+
+	setConfig(ctx, candidateFeeConfigKey, defaultCandidateFee)
+
+	for i := 0; i < ln/2; i++ {
+		key := args[i*2]
+		val := args[i*2+1]
+
+		setConfig(ctx, key, val)
+	}
+
+	runtime.Log("neofs: config has been installed")
+
+	return true
+}
+
+func Version() int {
+	return version
 }
 
 // innerRingInvoker returns public key of inner ring node that invoked contract.
@@ -552,7 +543,7 @@ func vote(ctx storage.Context, id, from []byte) int {
 	return found
 }
 
-// removeVotes clears ballots of the decision that has benn aceepted by
+// removeVotes clears ballots of the decision that has been accepted by
 // inner ring nodes.
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
