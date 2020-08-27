@@ -174,9 +174,8 @@ func InnerRingCandidateAdd(key []byte) bool {
 	from := contract.CreateStandardAccount(key)
 	to := runtime.GetExecutingScriptHash()
 	fee := getConfig(ctx, candidateFeeConfigKey).(int)
-	params := []interface{}{from, to, fee}
 
-	transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+	transferred := engine.AppCall([]byte(tokenHash), "transfer", from, to, fee).(bool)
 	if !transferred {
 		panic("irCandidateAdd: failed to transfer funds, aborting")
 	}
@@ -203,9 +202,8 @@ func Deposit(from []byte, args []interface{}) bool {
 	}
 
 	to := runtime.GetExecutingScriptHash()
-	params := []interface{}{from, to, amount}
 
-	transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+	transferred := engine.AppCall([]byte(tokenHash), "transfer", from, to, amount).(bool)
 	if !transferred {
 		panic("deposit: failed to transfer funds, aborting")
 	}
@@ -267,9 +265,8 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 		removeVotes(ctx, hashID)
 
 		from := runtime.GetExecutingScriptHash()
-		params := []interface{}{from, user, amount}
 
-		transferred := engine.AppCall([]byte(tokenHash), "transfer", params).(bool)
+		transferred := engine.AppCall([]byte(tokenHash), "transfer", from, user, amount).(bool)
 		if !transferred {
 			panic("cheque: failed to transfer funds, aborting")
 		}
