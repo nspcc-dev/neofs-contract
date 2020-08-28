@@ -101,7 +101,7 @@ func init() {
 }
 
 // Init set up initial inner ring node keys.
-func Init(args []interface{}) bool {
+func Init(args [][]byte) bool {
 	if storage.Get(ctx, innerRingKey) != nil {
 		panic("neofs: contract already deployed")
 	}
@@ -109,7 +109,7 @@ func Init(args []interface{}) bool {
 	var irList []node
 
 	for i := 0; i < len(args); i++ {
-		pub := args[i].([]byte)
+		pub := args[i]
 		irList = append(irList, node{pub: pub})
 	}
 
@@ -187,19 +187,15 @@ func InnerRingCandidateAdd(key []byte) bool {
 }
 
 // Deposit gas assets to this script-hash address in NeoFS balance contract.
-func Deposit(from []byte, args []interface{}) bool {
-	if len(args) < 1 || len(args) > 2 {
-		panic("deposit: bad arguments")
-	}
-
+func Deposit(from []byte, amount int, rcv []byte) bool {
 	if !runtime.CheckWitness(from) {
 		panic("deposit: you should be the owner of the wallet")
 	}
 
-	amount := args[0].(int)
-	if amount > 0 {
-		amount = amount * 100000000
+	if amount <= 0 {
+		return false
 	}
+	amount = amount * 100000000
 
 	to := runtime.GetExecutingScriptHash()
 
@@ -210,9 +206,8 @@ func Deposit(from []byte, args []interface{}) bool {
 
 	runtime.Log("deposit: funds have been transferred")
 
-	var rcv = from
-	if len(args) == 2 {
-		rcv = args[1].([]byte) // todo: check if rcv value is valid
+	if len(rcv) == 0 {
+		rcv = from
 	}
 
 	tx := runtime.GetScriptContainer()
@@ -281,13 +276,13 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 }
 
 // Bind public key with user's account to use it in NeoFS requests.
-func Bind(user []byte, keys []interface{}) bool {
+func Bind(user []byte, keys [][]byte) bool {
 	if !runtime.CheckWitness(user) {
 		panic("binding: you should be the owner of the wallet")
 	}
 
 	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i].([]byte)
+		pubKey := keys[i]
 		if len(pubKey) != publicKeySize {
 			panic("binding: incorrect public key size")
 		}
@@ -299,13 +294,13 @@ func Bind(user []byte, keys []interface{}) bool {
 }
 
 // Unbind public key from user's account
-func Unbind(user []byte, keys []interface{}) bool {
+func Unbind(user []byte, keys [][]byte) bool {
 	if !runtime.CheckWitness(user) {
 		panic("unbinding: you should be the owner of the wallet")
 	}
 
 	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i].([]byte)
+		pubKey := keys[i]
 		if len(pubKey) != publicKeySize {
 			panic("unbinding: incorrect public key size")
 		}
@@ -467,7 +462,7 @@ func ListConfig() []record {
 }
 
 // InitConfig set up initial NeoFS key-value configuration.
-func InitConfig(args []interface{}) bool {
+func InitConfig(args [][]byte) bool {
 	if getConfig(ctx, candidateFeeConfigKey) != nil {
 		panic("neofs: configuration already installed")
 	}
