@@ -108,8 +108,15 @@ func Init(args [][]byte) bool {
 
 	var irList []node
 
+	if len(args) < 3 {
+		panic("neofs: at least three inner ring keys must be provided")
+	}
+
 	for i := 0; i < len(args); i++ {
 		pub := args[i]
+		if len(pub) != publicKeySize {
+			panic("neofs: incorrect public key length")
+		}
 		irList = append(irList, node{pub: pub})
 	}
 
