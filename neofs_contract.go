@@ -81,6 +81,8 @@ const (
 	blockDiff        = 20 // change base on performance evaluation
 	publicKeySize    = 33
 	minInnerRingSize = 3
+
+	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
 )
 
 var (
@@ -199,6 +201,10 @@ func Deposit(from []byte, amount int, rcv []byte) bool {
 		panic("deposit: you should be the owner of the wallet")
 	}
 
+	if amount > maxBalanceAmount {
+		panic("deposit: out of max amount limit")
+	}
+
 	if amount <= 0 {
 		return false
 	}
@@ -231,6 +237,10 @@ func Withdraw(user []byte, amount int) bool {
 
 	if amount < 0 {
 		panic("withdraw: non positive amount number")
+	}
+
+	if amount > maxBalanceAmount {
+		panic("withdraw: out of max amount limit")
 	}
 
 	amount = amount * 100000000
