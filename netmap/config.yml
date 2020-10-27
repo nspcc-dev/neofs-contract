@@ -1,0 +1,17 @@
+hasstorage: true
+ispayable: false
+events:
+  - name: AddPeer
+    parameters:
+      - name: nodeInfo
+        type: ByteString
+  - name: UpdateState
+    parameters:
+      - name: state
+        type: Integer
+      - name: publicKey
+        type: ByteString
+  - name: NewEpoch
+    parameters:
+      - name: epoch
+        type: Integer
