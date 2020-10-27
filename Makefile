@@ -1,11 +1,39 @@
-PACKAGE=github.com/nspcc-dev/neofs-contract
+#!/usr/bin/make -f
+
+SHELL=bash
 NEOGO?=neo-go
 
-.PHONY: build tests
+.PHONY: all build sidechain
+build: all
+all: sidechain mainnet
+sidechain: alphabet morph
 
-build:
-	$(NEOGO) contract compile -i neofs_contract.go -c neofs_config.yml -m neofs.manifest.json
+alphabet_sc = az buky vedi glagoli dobro jest zhivete
+morph_sc = audit balance container neofsid netmap reputation
+mainnet_sc = neofs
 
-tests:
-	go mod vendor
-	go test -mod=vendor -v -race $(PACKAGE)
+define sc_template
+$(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
+	$(NEOGO) contract compile -i $(2)$(1)/$(1)_contract.go -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json
+
+$(if $(2),$(2)$(1)/$(1)_contract.go: alphabet/alphabet.go alphabet/alphabet.tpl
+	go run alphabet/alphabet.go
+)
+endef
+
+$(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc),alphabet/)))
+$(foreach sc,$(morph_sc),$(eval $(call sc_template,$(sc))))
+$(foreach sc,$(mainnet_sc),$(eval $(call sc_template,$(sc))))
+
+alphabet: $(foreach sc,$(alphabet_sc),alphabet/$(sc)/$(sc)_contract.nef)
+morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
+mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
+
+clean:
+	find . -name '*.nef' -exec rm -rf {} \;
+	find . -name 'config.json' -exec rm -rf {} \;
+
+mr_proper: clean
+	for sc in $(alphabet_sc); do\
+	  rm -rf alphabet/$$sc; \
+	done
