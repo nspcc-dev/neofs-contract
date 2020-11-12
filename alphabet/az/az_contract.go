@@ -119,7 +119,12 @@ func Vote(candidate []byte) {
 
 	address := runtime.GetExecutingScriptHash()
 
-	_ = engine.AppCall([]byte(neoHash), "vote", address, candidate)
+	ok := engine.AppCall([]byte(neoHash), "vote", address, candidate).(bool)
+	if ok {
+		runtime.Log("successfully voted for validator")
+	} else {
+		runtime.Log("vote has been failed")
+	}
 
 	return
 }
