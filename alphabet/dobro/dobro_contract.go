@@ -111,6 +111,19 @@ func Emit() bool {
 	return true
 }
 
+func Vote(candidate []byte) {
+	innerRingKeys := irList()
+	if !checkPermission(innerRingKeys) {
+		panic("invalid invoker")
+	}
+
+	address := runtime.GetExecutingScriptHash()
+
+	_ = engine.AppCall([]byte(neoHash), "vote", address, candidate)
+
+	return
+}
+
 func Name() string {
 	return name
 }
