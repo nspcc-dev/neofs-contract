@@ -68,6 +68,9 @@ const (
 	// native gas token script hash
 	tokenHash = "\xbc\xaf\x41\xd6\x84\xc7\xd4\xad\x6e\xe0\xd9\x9d\xa9\x70\x7b\x9d\x1f\x0c\x8e\x66"
 
+	// native neo token script hash
+	neoHash = "\x25\x05\x9e\xcb\x48\x78\xd3\xa8\x75\xf9\x1c\x51\xce\xde\xd3\x30\xd4\x57\x5f\xde"
+
 	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	candidateFeeConfigKey = "InnerRingCandidateFee"
 
@@ -83,6 +86,8 @@ const (
 	minInnerRingSize = 3
 
 	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
+
+	getCommitteeMethod = "getСommittee"
 )
 
 var (
@@ -338,9 +343,15 @@ func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
 
-	irKey := innerRingInvoker(irList)
-	if len(irKey) == 0 {
-		panic("innerRingUpdate: invoked by non inner ring node")
+	voteKey := innerRingInvoker(irList)
+	if len(voteKey) == 0 {
+		committee := getCommitteeKeys()
+		threshold = len(committee)/3*2 + 1
+
+		voteKey = committeeInvoker(committee)
+		if len(voteKey) == 0 {
+			panic("innerRingUpdate: invoked by non inner ring or committee key")
+		}
 	}
 
 	c := cheque{id: chequeID}
@@ -387,7 +398,7 @@ loop:
 
 	hashID := crypto.SHA256(chequeID)
 
-	n := vote(ctx, hashID, irKey)
+	n := vote(ctx, hashID, voteKey)
 	if n >= threshold {
 		removeVotes(ctx, hashID)
 
@@ -514,6 +525,17 @@ func innerRingInvoker(ir []node) []byte {
 		node := ir[i]
 		if runtime.CheckWitness(node.pub) {
 			return node.pub
+		}
+	}
+
+	return nil
+}
+
+func committeeInvoker(cmt [][]byte) []byte {
+	for i := 0; i < len(cmt); i++ {
+		node := cmt[i]
+		if runtime.CheckWitness(node) {
+			return node
 		}
 	}
 
@@ -690,4 +712,9 @@ func rmNodeByKey(lst, add []node, k []byte) ([]node, []node, bool) {
 // which is necessary with new util.Equal interop behaviour, see neo-go#1176.
 func bytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
+}
+
+// getCommitteeKeys return slice of 33-byte public keys of committee members.
+func getCommitteeKeys() [][]byte {
+	return engine.AppCall([]byte(neoHash), getCommitteeMethod).([][]byte)
 }
