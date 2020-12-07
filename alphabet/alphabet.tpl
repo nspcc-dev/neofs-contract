@@ -2,7 +2,6 @@ package alphabetcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
@@ -17,9 +16,9 @@ type (
 	}
 
 	ballot struct {
-		id    []byte   // id of the voting decision
-		n     [][]byte // already voted inner ring nodes
-		block int      // block with the last vote
+		id     []byte   // hash of validators list
+		n      [][]byte // already voted inner ring nodes
+		height int      // height is an neofs epoch when ballot was registered
 	}
 )
 
@@ -34,8 +33,6 @@ const (
 	index = {{ .Index }}
 
 	netmapContractKey = "netmapScriptHash"
-
-	blockDiff = 20 // amount of blocks when ballot get discarded
 
 	threshold = totalAlphabetContracts * 2 / 3 + 1
 	voteKey   = "ballots"
@@ -89,6 +86,11 @@ func balance(hash string, addr []byte) int {
 func irList() []irNode {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	return engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+}
+
+func currentEpoch() int {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	return engine.AppCall(netmapContractAddr, "epoch").(int)
 }
 
 func checkPermission(ir []irNode) bool {
@@ -153,8 +155,13 @@ func Vote(epoch int, candidates [][]byte) {
 		panic("invalid invoker")
 	}
 
+	curEpoch := currentEpoch()
+	if epoch != curEpoch {
+		panic("invalid epoch")
+	}
+
 	id := voteID(epoch, candidates)
-	n := vote(ctx, id, key)
+	n := vote(ctx, curEpoch, id, key)
 
 	if n >= threshold {
 		candidate := candidates[index%len(candidates)]
@@ -178,12 +185,11 @@ func Name() string {
 	return name
 }
 
-func vote(ctx storage.Context, id, from []byte) int {
+func vote(ctx storage.Context, epoch int, id, from []byte) int {
 	var (
 		newCandidates []ballot
 		candidates    = getBallots(ctx)
 		found         = -1
-		blockHeight   = blockchain.GetHeight()
 	)
 
 	for i := 0; i < len(candidates); i++ {
@@ -198,12 +204,12 @@ func vote(ctx storage.Context, id, from []byte) int {
 			}
 
 			voters = append(voters, from)
-			cnd = ballot{id: id, n: voters, block: blockHeight}
+			cnd = ballot{id: id, n: voters, height: epoch}
 			found = len(voters)
 		}
 
-		// do not add old ballots, they are invalid
-		if blockHeight-cnd.block <= blockDiff {
+		// add only valid ballots with current epochs
+		if cnd.height == epoch {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
@@ -211,9 +217,9 @@ func vote(ctx storage.Context, id, from []byte) int {
 	if found < 0 {
 		voters := [][]byte{from}
 		newCandidates = append(newCandidates, ballot{
-			id:    id,
-			n:     voters,
-			block: blockHeight})
+			id:     id,
+			n:      voters,
+			height: epoch})
 		found = 1
 	}
 
