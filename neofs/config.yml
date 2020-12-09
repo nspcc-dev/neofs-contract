@@ -4,11 +4,11 @@ events:
   - name: Deposit
     parameters:
       - name: from
-        type: ByteArray
+        type: Hash160
       - name: amount
         type: Integer
       - name: receiver
-        type: ByteArray
+        type: Hash160
       - name: txHash
         type: Hash256
   - name: Withdraw
