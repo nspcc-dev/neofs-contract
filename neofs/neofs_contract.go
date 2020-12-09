@@ -32,6 +32,7 @@ package smart_contract
 */
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
@@ -82,6 +83,9 @@ const (
 	minInnerRingSize = 3
 
 	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
+
+	// hardcoded value to ignore deposit notification in onReceive
+	ignoreDepositNotification = "\x57\x0b"
 )
 
 var (
@@ -183,7 +187,9 @@ func InnerRingCandidateAdd(key []byte) bool {
 	to := runtime.GetExecutingScriptHash()
 	fee := getConfig(ctx, candidateFeeConfigKey).(int)
 
-	transferred := contract.Call([]byte(tokenHash), "transfer", from, to, fee, nil).(bool)
+	transferred := contract.Call([]byte(tokenHash),
+		"transfer", from, to, fee,
+		[]byte(ignoreDepositNotification)).(bool)
 	if !transferred {
 		panic("irCandidateAdd: failed to transfer funds, aborting")
 	}
@@ -194,8 +200,34 @@ func InnerRingCandidateAdd(key []byte) bool {
 	return true
 }
 
+// OnPayment is a callback for NEP-17 compatible native GAS contract.
+func OnPayment(from interop.Hash160, amount int, data interface{}) {
+	rcv := data.(interop.Hash160)
+	if bytesEqual(rcv, []byte(ignoreDepositNotification)) {
+		return
+	}
+
+	caller := runtime.GetCallingScriptHash()
+	if !bytesEqual(caller, []byte(tokenHash)) {
+		panic("onPayment: only GAS can be accepted for deposit")
+	}
+
+	switch len(rcv) {
+	case 20:
+	case 0:
+		rcv = from
+	default:
+		panic("onPayment: invalid data argument, expected Hash160")
+	}
+
+	runtime.Log("onPayment: funds have been transferred")
+
+	tx := runtime.GetScriptContainer()
+	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
+}
+
 // Deposit gas assets to this script-hash address in NeoFS balance contract.
-func Deposit(from []byte, amount int, rcv []byte) bool {
+func Deposit(from interop.Hash160, amount int, rcv interop.Hash160) bool {
 	if !runtime.CheckWitness(from) {
 		panic("deposit: you should be the owner of the wallet")
 	}
@@ -211,19 +243,11 @@ func Deposit(from []byte, amount int, rcv []byte) bool {
 
 	to := runtime.GetExecutingScriptHash()
 
-	transferred := contract.Call([]byte(tokenHash), "transfer", from, to, amount, nil).(bool)
+	transferred := contract.Call([]byte(tokenHash), "transfer",
+		from, to, amount, rcv).(bool)
 	if !transferred {
 		panic("deposit: failed to transfer funds, aborting")
 	}
-
-	runtime.Log("deposit: funds have been transferred")
-
-	if len(rcv) == 0 {
-		rcv = from
-	}
-
-	tx := runtime.GetScriptContainer()
-	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
 
 	return true
 }
@@ -277,7 +301,8 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 
 		from := runtime.GetExecutingScriptHash()
 
-		transferred := contract.Call([]byte(tokenHash), "transfer", from, user, amount, nil).(bool)
+		transferred := contract.Call([]byte(tokenHash),
+			"transfer", from, user, amount, nil).(bool)
 		if !transferred {
 			panic("cheque: failed to transfer funds, aborting")
 		}
