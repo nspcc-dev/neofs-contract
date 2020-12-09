@@ -4,11 +4,11 @@ events:
   - name: Lock
     parameters:
       - name: txID
-        type: ByteString
+        type: ByteArray
       - name: from
-        type: ByteString
+        type: ByteArray
       - name: to
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
       - name: until
@@ -16,30 +16,30 @@ events:
   - name: transfer
     parameters:
       - name: from
-        type: ByteString
+        type: ByteArray
       - name: to
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
   - name: transferX
     parameters:
       - name: from
-        type: ByteString
+        type: ByteArray
       - name: to
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
       - name: details
-        type: ByteString
+        type: ByteArray
   - name: Mint
     parameters:
       - name: from
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
   - name: Burn
     parameters:
       - name: to
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer

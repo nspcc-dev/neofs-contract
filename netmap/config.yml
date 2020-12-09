@@ -4,13 +4,13 @@ events:
   - name: AddPeer
     parameters:
       - name: nodeInfo
-        type: ByteString
+        type: ByteArray
   - name: UpdateState
     parameters:
       - name: state
         type: Integer
       - name: publicKey
-        type: ByteString
+        type: ByteArray
   - name: NewEpoch
     parameters:
       - name: epoch
