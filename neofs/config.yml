@@ -4,54 +4,54 @@ events:
   - name: Deposit
     parameters:
       - name: from
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
       - name: receiver
-        type: ByteString
+        type: ByteArray
       - name: txHash
-        type: ByteString
+        type: Hash256
   - name: Withdraw
     parameters:
       - name: user
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
       - name: txHash
-        type: ByteString
+        type: Hash256
   - name: Cheque
     parameters:
       - name: id
-        type: ByteString
+        type: ByteArray
       - name: user
-        type: ByteString
+        type: ByteArray
       - name: amount
         type: Integer
       - name: lockAccount
-        type: ByteString
+        type: ByteArray
   - name: Bind
     parameters:
       - name: user
-        type: ByteString
+        type: ByteArray
       - name: keys
         type: Array
   - name: Unbind
     parameters:
       - name: user
-        type: ByteString
+        type: ByteArray
       - name: keys
         type: Array
   - name: InnerRingUpdate
     parameters:
       - name: id
-        type: ByteString
+        type: ByteArray
       - name: innerRingList
         type: Array
   - name: SetConfig
     parameters:
       - name: id
-        type: ByteString
+        type: ByteArray
       - name: key
-        type: ByteString
+        type: ByteArray
       - name: value
-        type: ByteString
+        type: ByteArray

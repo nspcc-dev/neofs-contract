@@ -4,14 +4,14 @@ events:
   - name: containerPut
     parameters:
       - name: container
-        type: ByteString
+        type: ByteArray
       - name: signature
-        type: ByteString
+        type: ByteArray
       - name: publicKey
-        type: ByteString
+        type: ByteArray
   - name: containerDelete
     parameters:
       - name: containerID
-        type: ByteString
+        type: ByteArray
       - name: signature
-        type: ByteString
+        type: ByteArray
