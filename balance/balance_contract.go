@@ -1,6 +1,7 @@
 package balancecontract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
@@ -24,8 +25,6 @@ type (
 
 	// Token holds all token info.
 	Token struct {
-		// Token name
-		Name string
 		// Ticker symbol
 		Symbol string
 		// Amount of decimals
@@ -46,7 +45,6 @@ type (
 )
 
 const (
-	name        = "NeoFS Balance"
 	symbol      = "NEOFS"
 	decimals    = 12
 	circulation = "MainnetGAS"
@@ -70,7 +68,6 @@ var (
 // CreateToken initializes the Token Interface for the Smart Contract to operate with.
 func CreateToken() Token {
 	return Token{
-		Name:           name,
 		Symbol:         symbol,
 		Decimals:       decimals,
 		CirculationKey: circulation,
@@ -101,10 +98,6 @@ func Init(addrNetmap, addrContainer []byte) {
 	runtime.Log("balance contract initialized")
 }
 
-func Name() string {
-	return token.Name
-}
-
 func Symbol() string {
 	return token.Symbol
 }
@@ -117,15 +110,15 @@ func TotalSupply() int {
 	return token.getSupply(ctx)
 }
 
-func BalanceOf(holder []byte) interface{} {
-	return token.balanceOf(ctx, holder)
+func BalanceOf(account interop.Hash160) int {
+	return token.balanceOf(ctx, account)
 }
 
-func Transfer(from, to []byte, amount int) bool {
+func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 	return token.transfer(ctx, from, to, amount, false, nil)
 }
 
-func TransferX(from, to []byte, amount int, details []byte) bool {
+func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	var (
 		n        int    // number of votes for inner ring invoke
 		hashTxID []byte // ballot key of the inner ring invocation
@@ -166,7 +159,7 @@ func TransferX(from, to []byte, amount int, details []byte) bool {
 	return false
 }
 
-func Lock(txID, from, to []byte, amount, until int) bool {
+func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
@@ -243,7 +236,7 @@ func NewEpoch(epochNum int) bool {
 	return true
 }
 
-func Mint(to []byte, amount int, details []byte) bool {
+func Mint(to interop.Hash160, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
@@ -274,7 +267,7 @@ func Mint(to []byte, amount int, details []byte) bool {
 	return true
 }
 
-func Burn(from []byte, amount int, details []byte) bool {
+func Burn(from interop.Hash160, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
@@ -324,13 +317,13 @@ func (t Token) getSupply(ctx storage.Context) int {
 }
 
 // BalanceOf gets the token balance of a specific address.
-func (t Token) balanceOf(ctx storage.Context, holder []byte) interface{} {
+func (t Token) balanceOf(ctx storage.Context, holder interop.Hash160) int {
 	acc := getAccount(ctx, holder)
 
 	return acc.Balance
 }
 
-func (t Token) transfer(ctx storage.Context, from []byte, to []byte, amount int, innerRing bool, details []byte) bool {
+func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount int, innerRing bool, details []byte) bool {
 	amountFrom, ok := t.canTransfer(ctx, from, to, amount, innerRing)
 	if !ok {
 		return false
@@ -351,14 +344,14 @@ func (t Token) transfer(ctx storage.Context, from []byte, to []byte, amount int,
 		setSerialized(ctx, to, amountTo)
 	}
 
-	runtime.Notify("transfer", from, to, amount)
-	runtime.Notify("transferX", from, to, amount, details)
+	runtime.Notify("Transfer", from, to, amount)
+	runtime.Notify("TransferX", from, to, amount, details)
 
 	return true
 }
 
 // canTransfer returns the amount it can transfer.
-func (t Token) canTransfer(ctx storage.Context, from []byte, to []byte, amount int, innerRing bool) (Account, bool) {
+func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount int, innerRing bool) (Account, bool) {
 	var (
 		emptyAcc = Account{}
 	)
@@ -383,7 +376,7 @@ func (t Token) canTransfer(ctx storage.Context, from []byte, to []byte, amount i
 }
 
 // isUsableAddress checks if the sender is either the correct NEO address or SC address.
-func isUsableAddress(addr []byte) bool {
+func isUsableAddress(addr interop.Hash160) bool {
 	if len(addr) == 20 {
 		if runtime.CheckWitness(addr) {
 			return true
@@ -527,11 +520,8 @@ func bytesEqual(a []byte, b []byte) bool {
    smart-contracts, that will be set up at `Init` method.
 */
 
-func fromKnownContract(caller []byte) bool {
+func fromKnownContract(caller interop.Hash160) bool {
 	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
-	if bytesEqual(caller, containerContractAddr) {
-		return true
-	}
 
-	return false
+	return bytesEqual(caller, containerContractAddr)
 }
