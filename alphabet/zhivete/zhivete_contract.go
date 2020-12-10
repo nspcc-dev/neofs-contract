@@ -1,6 +1,7 @@
 package alphabetcontract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
@@ -33,7 +34,7 @@ const (
 
 	netmapContractKey = "netmapScriptHash"
 
-	threshold = totalAlphabetContracts * 2 / 3 + 1
+	threshold = totalAlphabetContracts*2/3 + 1
 	voteKey   = "ballots"
 
 	totalAlphabetContracts = 7
@@ -49,6 +50,14 @@ func init() {
 	}
 
 	ctx = storage.GetContext()
+}
+
+// OnPayment is a callback for NEP-17 compatible native GAS and NEO contracts.
+func OnPayment(from interop.Hash160, amount int, data interface{}) {
+	caller := runtime.GetCallingScriptHash()
+	if !bytesEqual(caller, []byte(gasHash)) && !bytesEqual(caller, []byte(neoHash)) {
+		panic("onPayment: alphabet contract accepts GAS and NEO only")
+	}
 }
 
 func Init(addrNetmap []byte) {
@@ -264,7 +273,7 @@ func bytesEqual(a []byte, b []byte) bool {
 
 func voteID(epoch interface{}, args [][]byte) []byte {
 	var (
-		result []byte
+		result     []byte
 		epochBytes = epoch.([]byte)
 	)
 
