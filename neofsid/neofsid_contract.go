@@ -3,8 +3,8 @@ package neofsidcontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -74,7 +74,7 @@ func AddKey(owner []byte, keys [][]byte) bool {
 	}
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)
@@ -128,7 +128,7 @@ func RemoveKey(owner []byte, keys [][]byte) bool {
 	}
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)

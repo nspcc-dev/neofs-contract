@@ -3,8 +3,8 @@ package balancecontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -132,7 +132,7 @@ func TransferX(from, to []byte, amount int, details []byte) bool {
 	)
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)
@@ -168,7 +168,7 @@ func TransferX(from, to []byte, amount int, details []byte) bool {
 
 func Lock(txID, from, to []byte, amount, until int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)
@@ -206,7 +206,7 @@ func Lock(txID, from, to []byte, amount, until int) bool {
 
 func NewEpoch(epochNum int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)
@@ -245,7 +245,7 @@ func NewEpoch(epochNum int) bool {
 
 func Mint(to []byte, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)
@@ -276,7 +276,7 @@ func Mint(to []byte, amount int, details []byte) bool {
 
 func Burn(from []byte, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := innerRingInvoker(innerRing)

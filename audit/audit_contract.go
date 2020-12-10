@@ -3,7 +3,6 @@ package auditcontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -88,7 +87,7 @@ func Init(addrNetmap, addrBalance, addrContainer []byte) {
 
 func Put(rawAuditResult []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 
 	auditResult, err := newAuditResult(rawAuditResult)
 	if err {
@@ -122,7 +121,7 @@ func Put(rawAuditResult []byte) bool {
 		containerContract := storage.Get(ctx, containerContractKey).([]byte)
 
 		// todo: implement easy way to get owner from the container id
-		ownerID := engine.AppCall(containerContract, "owner", auditResult.ContainerID).([]byte)
+		ownerID := contract.Call(containerContract, "owner", auditResult.ContainerID).([]byte)
 		if len(ownerID) != ownerIDLength {
 			runtime.Log("put: can't get owner id of the container")
 
@@ -135,7 +134,7 @@ func Put(rawAuditResult []byte) bool {
 		balanceContract := storage.Get(ctx, balanceContractKey).([]byte)
 		irScriptHash := contract.CreateStandardAccount(auditResult.InnerRingNode)
 
-		tx := engine.AppCall(balanceContract, "transferX",
+		tx := contract.Call(balanceContract, "transferX",
 			ownerScriptHash,
 			irScriptHash,
 			auditFee,
@@ -149,7 +148,7 @@ func Put(rawAuditResult []byte) bool {
 			node := auditResult.Nodes[i]
 			nodeScriptHash := contract.CreateStandardAccount(node.Key)
 
-			tx := engine.AppCall(balanceContract, "transferX",
+			tx := contract.Call(balanceContract, "transferX",
 				ownerScriptHash,
 				nodeScriptHash,
 				node.Reward,
