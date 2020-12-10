@@ -125,7 +125,7 @@ func Emit() bool {
 	contractHash := runtime.GetExecutingScriptHash()
 	neo := balance(neoHash, contractHash)
 
-	_ = contract.Call([]byte(neoHash), "transfer", contractHash, contractHash, neo)
+	_ = contract.Call([]byte(neoHash), "transfer", contractHash, contractHash, neo, nil)
 
 	gas := balance(gasHash, contractHash)
 	gasPerNode := gas * 7 / 8 / len(innerRingKeys)
@@ -139,7 +139,7 @@ func Emit() bool {
 		node := innerRingKeys[i]
 		address := contract.CreateStandardAccount(node.key)
 
-		_ = contract.Call([]byte(gasHash), "transfer", contractHash, address, gasPerNode)
+		_ = contract.Call([]byte(gasHash), "transfer", contractHash, address, gasPerNode, nil)
 	}
 
 	runtime.Log("utility token has been emitted to inner ring nodes")
