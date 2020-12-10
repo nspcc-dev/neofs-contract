@@ -4,7 +4,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -79,18 +78,18 @@ func Neo() int {
 }
 
 func balance(hash string, addr []byte) int {
-	balance := engine.AppCall([]byte(hash), "balanceOf", addr)
+	balance := contract.Call([]byte(hash), "balanceOf", addr)
 	return balance.(int)
 }
 
 func irList() []irNode {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	return engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	return contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 }
 
 func currentEpoch() int {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	return engine.AppCall(netmapContractAddr, "epoch").(int)
+	return contract.Call(netmapContractAddr, "epoch").(int)
 }
 
 func checkPermission(ir []irNode) bool {
@@ -126,7 +125,7 @@ func Emit() bool {
 	contractHash := runtime.GetExecutingScriptHash()
 	neo := balance(neoHash, contractHash)
 
-	_ = engine.AppCall([]byte(neoHash), "transfer", contractHash, contractHash, neo)
+	_ = contract.Call([]byte(neoHash), "transfer", contractHash, contractHash, neo)
 
 	gas := balance(gasHash, contractHash)
 	gasPerNode := gas * 7 / 8 / len(innerRingKeys)
@@ -140,7 +139,7 @@ func Emit() bool {
 		node := innerRingKeys[i]
 		address := contract.CreateStandardAccount(node.key)
 
-		_ = engine.AppCall([]byte(gasHash), "transfer", contractHash, address, gasPerNode)
+		_ = contract.Call([]byte(gasHash), "transfer", contractHash, address, gasPerNode)
 	}
 
 	runtime.Log("utility token has been emitted to inner ring nodes")
@@ -167,7 +166,7 @@ func Vote(epoch int, candidates [][]byte) {
 		candidate := candidates[index%len(candidates)]
 		address := runtime.GetExecutingScriptHash()
 
-		ok := engine.AppCall([]byte(neoHash), "vote", address, candidate).(bool)
+		ok := contract.Call([]byte(neoHash), "vote", address, candidate).(bool)
 		if ok {
 			runtime.Log(name + ": successfully voted for validator")
 			removeVotes(ctx, id)

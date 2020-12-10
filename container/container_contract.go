@@ -5,7 +5,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -78,7 +77,7 @@ func Init(addrNetmap, addrBalance, addrID []byte) {
 
 func Put(container, signature, publicKey []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	offset := int(container[1])
@@ -94,7 +93,7 @@ func Put(container, signature, publicKey []byte) bool {
 		// check provided key
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
-			keys := engine.AppCall(neofsIDContractAddr, "key", ownerID).([][]byte)
+			keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
 			if !verifySignature(container, signature, keys) {
 				panic("put: invalid owner signature")
 			}
@@ -107,7 +106,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 	from := walletToScripHash(ownerID)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
-	containerFee := engine.AppCall(netmapContractAddr, "config", containerFeeKey).(int)
+	containerFee := contract.Call(netmapContractAddr, "config", containerFeeKey).(int)
 	hashCandidate := invokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
 	n := vote(ctx, hashCandidate, irKey)
@@ -119,7 +118,7 @@ func Put(container, signature, publicKey []byte) bool {
 			node := innerRing[i]
 			to := contract.CreateStandardAccount(node.key)
 
-			tx := engine.AppCall(balanceContractAddr, "transferX",
+			tx := contract.Call(balanceContractAddr, "transferX",
 				from,
 				to,
 				containerFee,
@@ -133,7 +132,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 		addContainer(ctx, containerID, ownerID, container)
 		// try to remove underscore at v0.92.0
-		_ = engine.AppCall(neofsIDContractAddr, "addKey", ownerID, [][]byte{publicKey})
+		_ = contract.Call(neofsIDContractAddr, "addKey", ownerID, [][]byte{publicKey})
 
 		runtime.Log("put: added new container")
 	} else {
@@ -145,7 +144,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 func Delete(containerID, signature []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := engine.AppCall(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	ownerID := getOwnerByID(ctx, containerID)
@@ -159,7 +158,7 @@ func Delete(containerID, signature []byte) bool {
 	if len(irKey) == 0 {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-		keys := engine.AppCall(neofsIDContractAddr, "key", ownerID).([][]byte)
+		keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
 
 		if !verifySignature(containerID, signature, keys) {
 			panic("delete: invalid owner signature")
@@ -228,7 +227,7 @@ func SetEACL(eACL, signature []byte) bool {
 	}
 
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-	keys := engine.AppCall(neofsIDContractAddr, "key", ownerID).([][]byte)
+	keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
 
 	if !verifySignature(eACL, signature, keys) {
 		panic("setEACL: invalid eACL signature")
