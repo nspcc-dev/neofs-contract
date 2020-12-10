@@ -1,6 +1,7 @@
 package alphabetcontract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
@@ -49,6 +50,14 @@ func init() {
 	}
 
 	ctx = storage.GetContext()
+}
+
+// OnPayment is a callback for NEP-17 compatible native GAS and NEO contracts.
+func OnPayment(from interop.Hash160, amount int, data interface{}) {
+	caller := runtime.GetCallingScriptHash()
+	if !bytesEqual(caller, []byte(gasHash)) && !bytesEqual(caller, []byte(neoHash)) {
+		panic("onPayment: alphabet contract accepts GAS and NEO only")
+	}
 }
 
 func Init(addrNetmap []byte) {
