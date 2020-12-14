@@ -357,7 +357,7 @@ func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
 	newIR := []node{}
 
 loop:
-	for i := 1; i < len(args); i++ {
+	for i := 0; i < len(args); i++ {
 		key := args[i]
 		if len(key) != publicKeySize {
 			panic("irUpdate: invalid public key in inner ring list")
