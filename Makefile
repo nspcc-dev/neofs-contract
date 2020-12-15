@@ -8,7 +8,7 @@ build: all
 all: sidechain mainnet
 sidechain: alphabet morph
 
-alphabet_sc = az buky vedi glagoli dobro jest zhivete
+alphabet_sc = alphabet
 morph_sc = audit balance container neofsid netmap reputation
 mainnet_sc = neofs
 
@@ -21,11 +21,11 @@ $(if $(2),$(2)$(1)/$(1)_contract.go: alphabet/alphabet.go alphabet/alphabet.tpl
 )
 endef
 
-$(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc),alphabet/)))
+$(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc))))
 $(foreach sc,$(morph_sc),$(eval $(call sc_template,$(sc))))
 $(foreach sc,$(mainnet_sc),$(eval $(call sc_template,$(sc))))
 
-alphabet: $(foreach sc,$(alphabet_sc),alphabet/$(sc)/$(sc)_contract.nef)
+alphabet: $(foreach sc,$(alphabet_sc),$(sc)/$(sc)_contract.nef)
 morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
 mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
 
