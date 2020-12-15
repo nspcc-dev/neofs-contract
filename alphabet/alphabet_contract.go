@@ -29,15 +29,11 @@ const (
 	// native neo token script hash
 	neoHash = "\xb9\x7b\x8d\x5a\x73\x11\x81\x6f\xf7\xb1\xbf\xb0\x14\x20\xe2\x59\x0d\xa3\xc1\x24"
 
-	name  = "Glagoli"
-	index = 3
-
-	netmapContractKey = "netmapScriptHash"
-
-	threshold = totalAlphabetContracts*2/3 + 1
+	netmapKey = "netmapScriptHash"
+	indexKey  = "index"
+	totalKey  = "threshold"
+	nameKey   = "name"
 	voteKey   = "ballots"
-
-	totalAlphabetContracts = 7
 )
 
 var (
@@ -60,8 +56,8 @@ func OnPayment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(addrNetmap []byte) {
-	if storage.Get(ctx, netmapContractKey) != nil {
+func Init(addrNetmap []byte, name string, index, total int) {
+	if storage.Get(ctx, netmapKey) != nil {
 		panic("contract already deployed")
 	}
 
@@ -69,7 +65,10 @@ func Init(addrNetmap []byte) {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, netmapContractKey, addrNetmap)
+	storage.Put(ctx, netmapKey, addrNetmap)
+	storage.Put(ctx, nameKey, name)
+	storage.Put(ctx, indexKey, index)
+	storage.Put(ctx, totalKey, total)
 
 	setSerialized(ctx, voteKey, []ballot{})
 
@@ -92,16 +91,30 @@ func balance(hash string, addr []byte) int {
 }
 
 func irList() []irNode {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
 	return contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 }
 
 func currentEpoch() int {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
 	return contract.Call(netmapContractAddr, "epoch").(int)
 }
 
+func name() string {
+	return storage.Get(ctx, nameKey).(string)
+}
+
+func index() int {
+	return storage.Get(ctx, indexKey).(int)
+}
+
+func total() int {
+	return storage.Get(ctx, totalKey).(int)
+}
+
 func checkPermission(ir []irNode) bool {
+	index := index() // read from contract memory
+
 	if len(ir) <= index {
 		return false
 	}
@@ -111,8 +124,10 @@ func checkPermission(ir []irNode) bool {
 }
 
 func innerRingInvoker(ir []irNode) []byte {
+	amountOfContracts := total() // read from contract memory
+
 	for i := 0; i < len(ir); i++ {
-		if i >= totalAlphabetContracts {
+		if i >= amountOfContracts {
 			return nil
 		}
 
@@ -157,6 +172,9 @@ func Emit() bool {
 
 func Vote(epoch int, candidates [][]byte) {
 	innerRingKeys := irList()
+	threshold := total()/3*2 + 1
+	index := index()
+	name := name()
 
 	key := innerRingInvoker(innerRingKeys)
 	if len(key) == 0 {
@@ -190,7 +208,7 @@ func Vote(epoch int, candidates [][]byte) {
 }
 
 func Name() string {
-	return name
+	return name()
 }
 
 func vote(ctx storage.Context, epoch int, id, from []byte) int {
