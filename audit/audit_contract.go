@@ -1,8 +1,10 @@
 package auditcontract
 
 import (
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -10,52 +12,40 @@ import (
 
 type (
 	irNode struct {
-		key []byte
+		key interop.PublicKey
 	}
 
-	CheckedNode struct {
-		Key    []byte // 33 bytes
-		Pair   int    // 2 bytes
-		Reward int    // ? up to 32 byte
-	}
-
-	AuditResult struct {
-		InnerRingNode  []byte // 33 bytes
-		Epoch          int    // 8 bytes
-		ContainerID    []byte // 32 bytes
-		StorageGroupID []byte // 16 bytes
-		PoR            bool   // 1 byte
-		PDP            bool   // 1 byte
-		// --- 91 bytes -- //
-		// --- 2 more bytes to size of the []CheckedNode //
-		Nodes []CheckedNode // <= 67 bytes per node
-		// about 1400 nodes may be presented in container
+	auditHeader struct {
+		epoch int
+		cid   []byte
+		from  interop.PublicKey
 	}
 )
+
+// Audit key is a combination of epoch, container ID and public key of node that
+// executed audit. Together it should be no more than 64 bytes. We can't shrink
+// epoch and container ID since we iterate over these values. But we can shrink
+// public key by using first bytes of the hashed value.
+
+const maxKeySize = 24 // 24 + 32 (container ID length) + 8 (epoch length) = 64
+
+func (a auditHeader) ID() []byte {
+	var buf interface{} = a.epoch
+
+	hashedKey := crypto.SHA256(a.from)
+	shortedKey := hashedKey[:maxKeySize]
+
+	return append(buf.([]byte), append(a.cid, shortedKey...)...)
+}
 
 const (
 	version = 1
 
-	// 1E-8 GAS in precision of balance container.
-	// This value may be calculated in runtime based on decimal value of
-	// balance contract. We can also provide methods to change fee
-	// in runtime.
-	auditFee = 1 * 100_000_000
-
-	ownerIDLength = 25
-
-	journalKey           = "auditJournal"
-	balanceContractKey   = "balanceScriptHash"
-	containerContractKey = "containerScriptHash"
-	netmapContractKey    = "netmapScriptHash"
+	netmapContractKey   = "netmapScriptHash"
+	netmapContractKeyLn = len(netmapContractKey)
 )
 
-var (
-	auditFeeTransferMsg    = []byte("audit execution fee")
-	auditRewardTransferMsg = []byte("data audit reward")
-
-	ctx storage.Context
-)
+var ctx storage.Context
 
 func init() {
 	if runtime.GetTrigger() != runtime.Application {
@@ -65,22 +55,16 @@ func init() {
 	ctx = storage.GetContext()
 }
 
-func Init(addrNetmap, addrBalance, addrContainer []byte) {
-	if storage.Get(ctx, netmapContractKey) != nil &&
-		storage.Get(ctx, balanceContractKey) != nil &&
-		storage.Get(ctx, containerContractKey) != nil {
+func Init(addrNetmap interop.Hash160) {
+	if storage.Get(ctx, netmapContractKey) != nil {
 		panic("init: contract already deployed")
 	}
 
-	if len(addrNetmap) != 20 || len(addrBalance) != 20 || len(addrContainer) != 20 {
+	if len(addrNetmap) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)
-	storage.Put(ctx, balanceContractKey, addrBalance)
-	storage.Put(ctx, containerContractKey, addrContainer)
-
-	setSerialized(ctx, journalKey, []AuditResult{})
 
 	runtime.Log("audit contract initialized")
 }
@@ -89,164 +73,110 @@ func Put(rawAuditResult []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
 
-	auditResult, err := newAuditResult(rawAuditResult)
-	if err {
-		panic("put: can't parse audit result")
-	}
-
-	var presented = false
+	hdr := newAuditHeader(rawAuditResult)
+	presented := false
 
 	for i := range innerRing {
 		ir := innerRing[i]
-		if bytesEqual(ir.key, auditResult.InnerRingNode) {
+		if bytesEqual(ir.key, hdr.from) {
 			presented = true
+
 			break
 		}
 	}
 
-	if !runtime.CheckWitness(auditResult.InnerRingNode) || !presented {
-		panic("put: access denied")
+	if !runtime.CheckWitness(hdr.from) || !presented {
+		panic("audit: put access denied")
 	}
 
-	// todo: limit size of the audit journal:
-	//       history will be stored in chain (args or notifies)
-	//       contract storage will be used as a cache if needed
-	journal := getAuditResult(ctx)
-	journal = append(journal, auditResult)
+	storage.Put(ctx, hdr.ID(), rawAuditResult)
 
-	setSerialized(ctx, journalKey, journal)
-
-	if auditResult.PDP && auditResult.PoR {
-		// find who is the ownerID
-		containerContract := storage.Get(ctx, containerContractKey).([]byte)
-
-		// todo: implement easy way to get owner from the container id
-		ownerID := contract.Call(containerContract, "owner", auditResult.ContainerID).([]byte)
-		if len(ownerID) != ownerIDLength {
-			runtime.Log("put: can't get owner id of the container")
-
-			return false
-		}
-
-		ownerScriptHash := walletToScripHash(ownerID)
-
-		// transfer fee to the inner ring node
-		balanceContract := storage.Get(ctx, balanceContractKey).([]byte)
-		irScriptHash := contract.CreateStandardAccount(auditResult.InnerRingNode)
-
-		tx := contract.Call(balanceContract, "transferX",
-			ownerScriptHash,
-			irScriptHash,
-			auditFee,
-			auditFeeTransferMsg, // todo: add epoch, container and storage group info
-		)
-		if !tx.(bool) {
-			panic("put: can't transfer inner ring fee")
-		}
-
-		for i := 0; i < len(auditResult.Nodes); i++ {
-			node := auditResult.Nodes[i]
-			nodeScriptHash := contract.CreateStandardAccount(node.Key)
-
-			tx := contract.Call(balanceContract, "transferX",
-				ownerScriptHash,
-				nodeScriptHash,
-				node.Reward,
-				auditRewardTransferMsg, // todo: add epoch, container and storage group info
-			)
-			if !tx.(bool) {
-				runtime.Log("put: can't transfer storage payment")
-
-				return false
-			}
-		}
-	}
+	runtime.Log("audit: result has been saved")
 
 	return true
+}
+
+func Get(id []byte) []byte {
+	return storage.Get(ctx, id).([]byte)
+}
+
+func List() [][]byte {
+	it := storage.Find(ctx, []byte{})
+
+	return list(it)
+}
+
+func ListByEpoch(epoch int) [][]byte {
+	it := storage.Find(ctx, epoch)
+
+	return list(it)
+}
+
+func ListByCID(epoch int, cid []byte) [][]byte {
+	var buf interface{} = epoch
+
+	prefix := append(buf.([]byte), cid...)
+	it := storage.Find(ctx, prefix)
+
+	return list(it)
+}
+
+func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
+	hdr := auditHeader{
+		epoch: epoch,
+		cid:   cid,
+		from:  key,
+	}
+
+	it := storage.Find(ctx, hdr.ID())
+
+	return list(it)
+}
+
+func list(it iterator.Iterator) [][]byte {
+	var result [][]byte
+
+	for iterator.Next(it) {
+		key := iterator.Key(it).([]byte)
+		if len(key) == netmapContractKeyLn {
+			continue
+		}
+
+		result = append(result, key)
+	}
+
+	return result
 }
 
 func Version() int {
 	return version
 }
 
-func newAuditResult(data []byte) (AuditResult, bool) {
-	var (
-		tmp    interface{}
-		ln     = len(data)
-		result = AuditResult{
-			InnerRingNode:  nil, // neo-go#949
-			ContainerID:    nil,
-			StorageGroupID: nil,
-			Nodes:          []CheckedNode{},
-		}
-	)
+// readNext reads length from first byte and then reads data (max 127 bytes).
+func readNext(input []byte) ([]byte, int) {
+	var buf interface{} = input[0]
+	ln := buf.(int)
 
-	if len(data) < 91 { // all required headers
-		runtime.Log("newAuditResult: can't parse audit result header")
-		return result, true
-	}
-
-	result.InnerRingNode = data[0:33]
-
-	epoch := data[33:41]
-	tmp = epoch
-	result.Epoch = tmp.(int)
-
-	result.ContainerID = data[41:73]
-	result.StorageGroupID = data[73:89]
-	result.PoR = util.Equals(data[90], 0x01)
-	result.PDP = util.Equals(data[91], 0x01)
-
-	// if there are nodes, that were checked
-	if len(data) > 93 {
-		rawCounter := data[91:93]
-		tmp = rawCounter
-		counter := tmp.(int)
-
-		ptr := 93
-
-		for i := 0; i < counter; i++ {
-			if ptr+33+2+32 > ln {
-				runtime.Log("newAuditResult: broken node")
-				return result, false
-			}
-
-			node := CheckedNode{
-				Key: nil, // neo-go#949
-			}
-			node.Key = data[ptr : ptr+33]
-
-			pair := data[ptr+33 : ptr+35]
-			tmp = pair
-			node.Pair = tmp.(int)
-
-			reward := data[ptr+35 : ptr+67]
-			tmp = reward
-			node.Reward = tmp.(int)
-
-			result.Nodes = append(result.Nodes, node)
-		}
-	}
-
-	return result, false
+	return input[1 : 1+ln], 1 + ln
 }
 
-func getAuditResult(ctx storage.Context) []AuditResult {
-	data := storage.Get(ctx, journalKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]AuditResult)
+func newAuditHeader(input []byte) auditHeader {
+	var buf interface{} = input[1:9] // [ epoch wireType (1 byte), 8 integer bytes ]
+	epoch := buf.(int)
+
+	// cid is a nested structure with raw bytes
+	// [ cid struct prefix (wireType + len = 2 bytes), cid value wireType (1 byte), ... ]
+	cid, offset := readNext(input[9+2+1:])
+
+	// key is a raw byte
+	// [ public key wireType (1 byte), ... ]
+	key, _ := readNext(input[9+2+1+offset+1:])
+
+	return auditHeader{
+		epoch,
+		cid,
+		key,
 	}
-
-	return []AuditResult{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
-func walletToScripHash(wallet []byte) []byte {
-	return wallet[1 : len(wallet)-4]
 }
 
 // neo-go#1176
