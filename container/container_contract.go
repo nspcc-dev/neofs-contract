@@ -6,6 +6,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/engine"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
@@ -38,6 +39,8 @@ const (
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
 	containerFeeKey    = "ContainerFee"
+
+	containerIDSize = 32 // SHA256 size
 )
 
 var (
@@ -189,6 +192,10 @@ func Owner(containerID []byte) []byte {
 }
 
 func List(owner []byte) [][]byte {
+	if len(owner) == 0 {
+		return getAllContainers(ctx)
+	}
+
 	var list [][]byte
 
 	owners := getList(ctx, ownersKey)
@@ -383,6 +390,20 @@ func getList(ctx storage.Context, key interface{}) [][]byte {
 	}
 
 	return [][]byte{}
+}
+
+func getAllContainers(ctx storage.Context) [][]byte {
+	var list [][]byte
+
+	it := storage.Find(ctx, []byte{})
+	for iterator.Next(it) {
+		key := iterator.Key(it).([]byte)
+		if len(key) == containerIDSize {
+			list = append(list, key)
+		}
+	}
+
+	return list
 }
 
 func getBallots(ctx storage.Context) []ballot {
