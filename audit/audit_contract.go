@@ -161,16 +161,21 @@ func readNext(input []byte) ([]byte, int) {
 }
 
 func newAuditHeader(input []byte) auditHeader {
-	var buf interface{} = input[1:9] // [ epoch wireType (1 byte), 8 integer bytes ]
+	offset := int(input[1])
+	offset = 2 + offset + 1 // version prefix + version len + epoch prefix
+
+	var buf interface{} = input[offset : offset+8] // [ 8 integer bytes ]
 	epoch := buf.(int)
+
+	offset = offset + 8
 
 	// cid is a nested structure with raw bytes
 	// [ cid struct prefix (wireType + len = 2 bytes), cid value wireType (1 byte), ... ]
-	cid, offset := readNext(input[9+2+1:])
+	cid, cidOffset := readNext(input[offset+2+1:])
 
 	// key is a raw byte
 	// [ public key wireType (1 byte), ... ]
-	key, _ := readNext(input[9+2+1+offset+1:])
+	key, _ := readNext(input[offset+2+1+cidOffset+1:])
 
 	return auditHeader{
 		epoch,
