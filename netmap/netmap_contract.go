@@ -219,6 +219,11 @@ func NewEpoch(epochNum int) bool {
 		panic("newEpoch: this method must be invoked by inner ring nodes")
 	}
 
+	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
+	if epochNum <= currentEpoch {
+		return false // ignore invocations with invalid epoch
+	}
+
 	data0snapshot := getSnapshot(ctx, snapshot0Key)
 	dataOnlineState := filterNetmap(ctx, onlineState)
 
