@@ -19,7 +19,7 @@ Mainnet contract:
 
 Sidechain contracts:
 
-- alphabet contracts
+- alphabet
 - audit
 - balance
 - container
@@ -33,13 +33,7 @@ Sidechain contracts:
 
 To compile smart contracts you need:
 
--   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.91.0
-
-Alphabet contracts built from template. To regenerate contracts from 
-template you need:
-
--   [go](https://golang.org/dl/) >= 1.12
-
+-   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.92.0
 
 ## Compilation
 
@@ -49,13 +43,7 @@ corresponding directories.
 
 ```
 $ make all
-neo-go contract compile -i alphabet/az/az_contract.go -c alphabet/config.yml -m alphabet/az/config.json
-neo-go contract compile -i alphabet/buky/buky_contract.go -c alphabet/config.yml -m alphabet/buky/config.json
-neo-go contract compile -i alphabet/vedi/vedi_contract.go -c alphabet/config.yml -m alphabet/vedi/config.json
-neo-go contract compile -i alphabet/glagoli/glagoli_contract.go -c alphabet/config.yml -m alphabet/glagoli/config.json
-neo-go contract compile -i alphabet/dobro/dobro_contract.go -c alphabet/config.yml -m alphabet/dobro/config.json
-neo-go contract compile -i alphabet/jest/jest_contract.go -c alphabet/config.yml -m alphabet/jest/config.json
-neo-go contract compile -i alphabet/zhivete/zhivete_contract.go -c alphabet/config.yml -m alphabet/zhivete/config.json
+neo-go contract compile -i alphabet/alphabet_contract.go -c alphabet/config.yml -m alphabet/config.json
 neo-go contract compile -i audit/audit_contract.go -c audit/config.yml -m audit/config.json
 neo-go contract compile -i balance/balance_contract.go -c balance/config.yml -m balance/config.json
 neo-go contract compile -i container/container_contract.go -c container/config.yml -m container/config.json
@@ -71,10 +59,7 @@ You can specify path to the `neo-go` binary with `NEOGO` environment variable:
 $ NEOGO=/home/user/neo-go/bin/neo-go make all
 ```
 
-Remove compiled files with `make clean` command.
-
-Remove compiled files and alphabet contracts with `make mr_proper` command. Next time
-`make all` or `make alphabet` command will generate new alphabet contracts from template.
+Remove compiled files with `make clean` or `make mr_proper` command.
 
 
 # License
