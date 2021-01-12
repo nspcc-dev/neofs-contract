@@ -273,6 +273,12 @@ func Snapshot(diff int) []storageNode {
 	return getSnapshot(ctx, key)
 }
 
+func SnapshotByEpoch(epoch int) []storageNode {
+	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
+
+	return Snapshot(currentEpoch - epoch)
+}
+
 func Config(key []byte) interface{} {
 	return getConfig(ctx, key)
 }
