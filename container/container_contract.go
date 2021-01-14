@@ -1,6 +1,7 @@
 package containercontract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
@@ -25,6 +26,7 @@ type (
 	extendedACL struct {
 		val []byte
 		sig []byte
+		pub interop.PublicKey
 	}
 )
 
@@ -247,7 +249,32 @@ func SetEACL(eACL, signature []byte) bool {
 }
 
 func EACL(containerID []byte) extendedACL {
-	return getEACL(ctx, containerID)
+	ownerID := getOwnerByID(ctx, containerID)
+	if len(ownerID) == 0 {
+		panic("getEACL: container does not exists")
+	}
+
+	eacl := getEACL(ctx, containerID)
+
+	if len(eacl.sig) == 0 {
+		return eacl
+	}
+
+	// attach corresponding public key if it was not revoked from neofs id
+
+	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
+	keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
+
+	for i := range keys {
+		key := keys[i]
+		if crypto.ECDsaSecp256r1Verify(eacl.val, key, eacl.sig) {
+			eacl.pub = key
+
+			break
+		}
+	}
+
+	return eacl
 }
 
 func Version() int {
@@ -421,7 +448,7 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 		return binary.Deserialize(data.([]byte)).(extendedACL)
 	}
 
-	return extendedACL{val: []byte{}, sig: []byte{}}
+	return extendedACL{val: []byte{}, sig: []byte{}, pub: []byte{}}
 }
 
 func setSerialized(ctx storage.Context, key, value interface{}) {
