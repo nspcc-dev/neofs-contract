@@ -17,6 +17,10 @@ type (
 		key []byte
 	}
 
+	storageNode struct {
+		info []byte
+	}
+
 	ballot struct {
 		id    []byte   // id of the voting decision
 		n     [][]byte // already voted inner ring nodes
@@ -27,6 +31,16 @@ type (
 		val []byte
 		sig []byte
 		pub interop.PublicKey
+	}
+
+	estimation struct {
+		from interop.PublicKey
+		size int
+	}
+
+	containerSizes struct {
+		cid         []byte
+		estimations []estimation
 	}
 )
 
@@ -42,6 +56,8 @@ const (
 	containerFeeKey    = "ContainerFee"
 
 	containerIDSize = 32 // SHA256 size
+
+	estimateKeyPrefix = "cnr"
 )
 
 var (
@@ -275,6 +291,60 @@ func EACL(containerID []byte) extendedACL {
 	}
 
 	return eacl
+}
+
+func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) bool {
+	if !runtime.CheckWitness(pubKey) {
+		panic("container: invalid witness for size estimation")
+	}
+
+	if !isStorageNode(pubKey) {
+		panic("container: only storage nodes can save size estimations")
+	}
+
+	key := estimationKey(epoch, cid)
+	s := getContainerSizeEstimation(key, cid)
+
+	// do not add estimation twice
+	for i := range s.estimations {
+		est := s.estimations[i]
+		if bytesEqual(est.from, pubKey) {
+			return false
+		}
+	}
+
+	s.estimations = append(s.estimations, estimation{
+		from: pubKey,
+		size: usedSize,
+	})
+
+	storage.Put(ctx, key, binary.Serialize(s))
+
+	runtime.Log("container: saved container size estimation")
+
+	return true
+}
+
+func GetContainerSize(id []byte) containerSizes {
+	return getContainerSizeEstimation(id, nil)
+}
+
+func ListContainerSizes(epoch int) [][]byte {
+	var buf interface{} = epoch
+
+	key := []byte(estimateKeyPrefix)
+	key = append(key, buf.([]byte)...)
+
+	it := storage.Find(ctx, key)
+
+	var result [][]byte
+
+	for iterator.Next(it) {
+		key := iterator.Key(it).([]byte)
+		result = append(result, key)
+	}
+
+	return result
 }
 
 func Version() int {
@@ -515,4 +585,43 @@ func isOwnerFromKey(owner []byte, key []byte) bool {
 	keySH := contract.CreateStandardAccount(key)
 
 	return bytesEqual(ownerSH, keySH)
+}
+
+func estimationKey(epoch int, cid []byte) []byte {
+	var buf interface{} = epoch
+
+	result := []byte(estimateKeyPrefix)
+	result = append(result, buf.([]byte)...)
+
+	return append(result, cid...)
+}
+
+func getContainerSizeEstimation(key, cid []byte) containerSizes {
+	data := storage.Get(ctx, key)
+	if data != nil {
+		return binary.Deserialize(data.([]byte)).(containerSizes)
+	}
+
+	return containerSizes{
+		cid:         cid,
+		estimations: []estimation{},
+	}
+}
+
+// isStorageNode looks into _previous_ epoch network map, because storage node
+// announce container size estimation of previous epoch.
+func isStorageNode(key interop.PublicKey) bool {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	snapshot := contract.Call(netmapContractAddr, "snapshot", 1).([]storageNode)
+
+	for i := range snapshot {
+		nodeInfo := snapshot[i].info
+		nodeKey := nodeInfo[2:35] // offset:2, len:33
+
+		if bytesEqual(key, nodeKey) {
+			return true
+		}
+	}
+
+	return false
 }
