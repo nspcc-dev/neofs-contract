@@ -58,6 +58,7 @@ const (
 	containerIDSize = 32 // SHA256 size
 
 	estimateKeyPrefix = "cnr"
+	cleanupDelta      = 3
 )
 
 var (
@@ -347,6 +348,30 @@ func ListContainerSizes(epoch int) [][]byte {
 	return result
 }
 
+func ProcessEpoch(epochNum int) {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	threshold := len(innerRing)/3*2 + 1
+
+	irKey := innerRingInvoker(innerRing)
+	if len(irKey) == 0 {
+		panic("processEpoch: this method must be invoked from inner ring")
+	}
+
+	candidates := keysToDelete(epochNum)
+	epochID := invokeID([]interface{}{epochNum}, []byte("epoch"))
+
+	n := vote(ctx, epochID, irKey)
+	if n >= threshold {
+		removeVotes(ctx, epochID)
+
+		for i := range candidates {
+			candidate := candidates[i]
+			storage.Delete(ctx, candidate)
+		}
+	}
+}
+
 func Version() int {
 	return version
 }
@@ -624,4 +649,22 @@ func isStorageNode(key interop.PublicKey) bool {
 	}
 
 	return false
+}
+
+func keysToDelete(epoch int) [][]byte {
+	results := [][]byte{}
+
+	it := storage.Find(ctx, []byte(estimateKeyPrefix))
+	for iterator.Next(it) {
+		k := iterator.Key(it).([]byte)
+		nbytes := k[len(estimateKeyPrefix) : len(k)-32]
+
+		var n interface{} = nbytes
+
+		if epoch-n.(int) > cleanupDelta {
+			results = append(results, k)
+		}
+	}
+
+	return results
 }
