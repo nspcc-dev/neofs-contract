@@ -372,6 +372,54 @@ func ProcessEpoch(epochNum int) {
 	}
 }
 
+func StartContainerEstimation(epoch int) bool {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	threshold := len(innerRing)/3*2 + 1
+
+	irKey := innerRingInvoker(innerRing)
+	if len(irKey) == 0 {
+		panic("startEstimation: only inner ring nodes can invoke this")
+	}
+
+	hashCandidate := invokeID([]interface{}{epoch}, []byte("startEstimation"))
+
+	n := vote(ctx, hashCandidate, irKey)
+	if n >= threshold {
+		removeVotes(ctx, hashCandidate)
+		runtime.Notify("StartEstimation", epoch)
+		runtime.Log("startEstimation: notification has been produced")
+	} else {
+		runtime.Log("startEstimation: processed invoke from inner ring")
+	}
+
+	return true
+}
+
+func StopContainerEstimation(epoch int) bool {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	threshold := len(innerRing)/3*2 + 1
+
+	irKey := innerRingInvoker(innerRing)
+	if len(irKey) == 0 {
+		panic("stopEstimation: only inner ring nodes can invoke this")
+	}
+
+	hashCandidate := invokeID([]interface{}{epoch}, []byte("stopEstimation"))
+
+	n := vote(ctx, hashCandidate, irKey)
+	if n >= threshold {
+		removeVotes(ctx, hashCandidate)
+		runtime.Notify("StopEstimation", epoch)
+		runtime.Log("stopEstimation: notification has been produced")
+	} else {
+		runtime.Log("stopEstimation: processed invoke from inner ring")
+	}
+
+	return true
+}
+
 func Version() int {
 	return version
 }
