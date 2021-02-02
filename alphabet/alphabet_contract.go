@@ -10,12 +10,6 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
-type (
-	irNode struct {
-		key []byte
-	}
-)
-
 const (
 	// native gas token script hash
 	gasHash = "\xfb\xed\xfe\x2e\xd2\x22\x65\x92\xb6\x48\xc4\xda\x97\xb9\xc9\xcd\x5d\xc1\xa6\xa6"
@@ -84,9 +78,9 @@ func balance(hash string, addr []byte) int {
 	return balance.(int)
 }
 
-func irList() []irNode {
+func irList() []common.IRNode {
 	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
-	return contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	return contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 }
 
 func currentEpoch() int {
@@ -106,7 +100,7 @@ func total() int {
 	return storage.Get(ctx, totalKey).(int)
 }
 
-func checkPermission(ir []irNode) bool {
+func checkPermission(ir []common.IRNode) bool {
 	index := index() // read from contract memory
 
 	if len(ir) <= index {
@@ -114,24 +108,7 @@ func checkPermission(ir []irNode) bool {
 	}
 
 	node := ir[index]
-	return runtime.CheckWitness(node.key)
-}
-
-func innerRingInvoker(ir []irNode) []byte {
-	amountOfContracts := total() // read from contract memory
-
-	for i := 0; i < len(ir); i++ {
-		if i >= amountOfContracts {
-			return nil
-		}
-
-		node := ir[i]
-		if runtime.CheckWitness(node.key) {
-			return node.key
-		}
-	}
-
-	return nil
+	return runtime.CheckWitness(node.PublicKey)
 }
 
 func Emit() bool {
@@ -155,7 +132,7 @@ func Emit() bool {
 
 	for i := range innerRingKeys {
 		node := innerRingKeys[i]
-		address := contract.CreateStandardAccount(node.key)
+		address := contract.CreateStandardAccount(node.PublicKey)
 
 		_ = contract.Call([]byte(gasHash), "transfer", contractHash, address, gasPerNode, nil)
 	}
@@ -170,7 +147,7 @@ func Vote(epoch int, candidates [][]byte) {
 	index := index()
 	name := name()
 
-	key := innerRingInvoker(innerRingKeys)
+	key := common.InnerRingInvoker(innerRingKeys)
 	if len(key) == 0 {
 		panic("invalid invoker")
 	}

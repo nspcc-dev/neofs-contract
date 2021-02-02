@@ -10,10 +10,6 @@ import (
 )
 
 type (
-	irNode struct {
-		key []byte
-	}
-
 	storageNode struct {
 		info []byte
 	}
@@ -70,11 +66,11 @@ func Init(keys [][]byte) {
 		panic("netmap: contract already initialized")
 	}
 
-	var irList []irNode
+	var irList []common.IRNode
 
 	for i := 0; i < len(keys); i++ {
 		key := keys[i]
-		irList = append(irList, irNode{key: key})
+		irList = append(irList, common.IRNode{PublicKey: key})
 	}
 
 	common.SetSerialized(ctx, innerRingKey, irList)
@@ -91,7 +87,7 @@ func Init(keys [][]byte) {
 	runtime.Log("netmap contract initialized")
 }
 
-func InnerRingList() []irNode {
+func InnerRingList() []common.IRNode {
 	return getIRNodes(ctx)
 }
 
@@ -99,16 +95,16 @@ func UpdateInnerRing(keys [][]byte) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("updateInnerRing: this method must be invoked by inner ring nodes")
 	}
 
-	var irList []irNode
+	var irList []common.IRNode
 
 	for i := 0; i < len(keys); i++ {
 		key := keys[i]
-		irList = append(irList, irNode{key: key})
+		irList = append(irList, common.IRNode{PublicKey: key})
 	}
 
 	rawIRList := binary.Serialize(irList)
@@ -130,7 +126,7 @@ func AddPeer(nodeInfo []byte) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
@@ -172,7 +168,7 @@ func UpdateState(state int, publicKey []byte) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		if !runtime.CheckWitness(publicKey) {
 			panic("updateState: witness check failed")
@@ -205,7 +201,7 @@ func NewEpoch(epochNum int) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("newEpoch: this method must be invoked by inner ring nodes")
 	}
@@ -279,7 +275,7 @@ func SetConfig(id, key, val []byte) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("setConfig: invoked by non inner ring node")
 	}
@@ -338,17 +334,6 @@ func ListConfig() []record {
 
 func Version() int {
 	return version
-}
-
-func innerRingInvoker(ir []irNode) []byte {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.key) {
-			return node.key
-		}
-	}
-
-	return nil
 }
 
 func addToNetmap(ctx storage.Context, n storageNode) []netmapNode {
@@ -412,13 +397,13 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 	return result
 }
 
-func getIRNodes(ctx storage.Context) []irNode {
+func getIRNodes(ctx storage.Context) []common.IRNode {
 	data := storage.Get(ctx, innerRingKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]irNode)
+		return binary.Deserialize(data.([]byte)).([]common.IRNode)
 	}
 
-	return []irNode{}
+	return []common.IRNode{}
 }
 
 func getNetmapNodes(ctx storage.Context) []netmapNode {
