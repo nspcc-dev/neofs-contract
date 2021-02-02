@@ -12,10 +12,6 @@ import (
 )
 
 type (
-	irNode struct {
-		key []byte
-	}
-
 	storageNode struct {
 		info []byte
 	}
@@ -87,7 +83,7 @@ func Init(addrNetmap, addrBalance, addrID []byte) {
 
 func Put(container, signature, publicKey []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	offset := int(container[1])
@@ -98,7 +94,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 	// If invoked from storage node, ignore it.
 	// Inner ring will find tx, validate it and send it again.
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		// check provided key
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
@@ -126,7 +122,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 		for i := 0; i < len(innerRing); i++ {
 			node := innerRing[i]
-			to := contract.CreateStandardAccount(node.key)
+			to := contract.CreateStandardAccount(node.PublicKey)
 
 			tx := contract.Call(balanceContractAddr, "transferX",
 				from,
@@ -154,7 +150,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 func Delete(containerID, signature []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
 	ownerID := getOwnerByID(ctx, containerID)
@@ -164,7 +160,7 @@ func Delete(containerID, signature []byte) bool {
 
 	// If invoked from storage node, ignore it.
 	// Inner ring will find tx, validate it and send it again.
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
@@ -341,10 +337,10 @@ func ListContainerSizes(epoch int) [][]byte {
 
 func ProcessEpoch(epochNum int) {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("processEpoch: this method must be invoked from inner ring")
 	}
@@ -365,10 +361,10 @@ func ProcessEpoch(epochNum int) {
 
 func StartContainerEstimation(epoch int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("startEstimation: only inner ring nodes can invoke this")
 	}
@@ -389,10 +385,10 @@ func StartContainerEstimation(epoch int) bool {
 
 func StopContainerEstimation(epoch int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("stopEstimation: only inner ring nodes can invoke this")
 	}
@@ -470,17 +466,6 @@ func remove(ctx storage.Context, key interface{}, value []byte) int {
 	}
 
 	return ln
-}
-
-func innerRingInvoker(ir []irNode) []byte {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.key) {
-			return node.key
-		}
-	}
-
-	return nil
 }
 
 func getList(ctx storage.Context, key interface{}) [][]byte {

@@ -10,10 +10,6 @@ import (
 )
 
 type (
-	irNode struct {
-		key []byte
-	}
-
 	UserInfo struct {
 		Keys [][]byte
 	}
@@ -64,10 +60,10 @@ func AddKey(owner []byte, keys [][]byte) bool {
 	}
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("addKey: invocation from non inner ring node")
 	}
@@ -118,10 +114,10 @@ func RemoveKey(owner []byte, keys [][]byte) bool {
 	}
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("removeKey: invocation from non inner ring node")
 	}
@@ -184,17 +180,6 @@ func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	}
 
 	return UserInfo{Keys: [][]byte{}}
-}
-
-func innerRingInvoker(ir []irNode) []byte {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.key) {
-			return node.key
-		}
-	}
-
-	return nil
 }
 
 func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {

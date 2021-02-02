@@ -43,10 +43,6 @@ import (
 )
 
 type (
-	node struct {
-		pub []byte
-	}
-
 	cheque struct {
 		id []byte
 	}
@@ -102,7 +98,7 @@ func Init(args [][]byte) bool {
 		panic("neofs: contract already deployed")
 	}
 
-	var irList []node
+	var irList []common.IRNode
 
 	if len(args) < 3 {
 		panic("neofs: at least three inner ring keys must be provided")
@@ -113,13 +109,13 @@ func Init(args [][]byte) bool {
 		if len(pub) != publicKeySize {
 			panic("neofs: incorrect public key length")
 		}
-		irList = append(irList, node{pub: pub})
+		irList = append(irList, common.IRNode{PublicKey: pub})
 	}
 
 	// initialize all storage slices
 	common.SetSerialized(ctx, innerRingKey, irList)
 	common.InitVote(ctx)
-	common.SetSerialized(ctx, candidatesKey, []node{})
+	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 	common.SetSerialized(ctx, cashedChequesKey, []cheque{})
 
 	runtime.Log("neofs: contract initialized")
@@ -128,12 +124,12 @@ func Init(args [][]byte) bool {
 }
 
 // InnerRingList returns array of inner ring node keys.
-func InnerRingList() []node {
+func InnerRingList() []common.IRNode {
 	return getInnerRingNodes(ctx, innerRingKey)
 }
 
 // InnerRingCandidates returns array of inner ring candidate node keys.
-func InnerRingCandidates() []node {
+func InnerRingCandidates() []common.IRNode {
 	return getInnerRingNodes(ctx, candidatesKey)
 }
 
@@ -143,12 +139,12 @@ func InnerRingCandidateRemove(key []byte) bool {
 		panic("irCandidateRemove: you should be the owner of the public key")
 	}
 
-	nodes := []node{} // it is explicit declaration of empty slice, not nil
+	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
 	candidates := getInnerRingNodes(ctx, candidatesKey)
 
 	for i := range candidates {
 		c := candidates[i]
-		if !common.BytesEqual(c.pub, key) {
+		if !common.BytesEqual(c.PublicKey, key) {
 			nodes = append(nodes, c)
 		} else {
 			runtime.Log("irCandidateRemove: candidate has been removed")
@@ -166,7 +162,7 @@ func InnerRingCandidateAdd(key []byte) bool {
 		panic("irCandidateAdd: you should be the owner of the public key")
 	}
 
-	c := node{pub: key}
+	c := common.IRNode{PublicKey: key}
 	candidates := getInnerRingNodes(ctx, candidatesKey)
 
 	list, ok := addNode(candidates, c)
@@ -274,7 +270,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 	cashedCheques := getCashedCheques(ctx)
 	hashID := crypto.SHA256(id)
 
-	irKey := innerRingInvoker(irList)
+	irKey := common.InnerRingInvoker(irList)
 	if len(irKey) == 0 {
 		panic("cheque: invoked by non inner ring node")
 	}
@@ -353,7 +349,7 @@ func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
 
-	irKey := innerRingInvoker(irList)
+	irKey := common.InnerRingInvoker(irList)
 	if len(irKey) == 0 {
 		panic("innerRingUpdate: invoked by non inner ring node")
 	}
@@ -369,7 +365,7 @@ func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
 
 	oldNodes := 0
 	candidates := getInnerRingNodes(ctx, candidatesKey)
-	newIR := []node{}
+	newIR := []common.IRNode{}
 
 loop:
 	for i := 0; i < len(args); i++ {
@@ -381,7 +377,7 @@ loop:
 		// find key in actual inner ring list
 		for j := 0; j < len(irList); j++ {
 			n := irList[j]
-			if common.BytesEqual(n.pub, key) {
+			if common.BytesEqual(n.PublicKey, key) {
 				newIR = append(newIR, n)
 				oldNodes++
 
@@ -427,7 +423,7 @@ func IsInnerRing(key []byte) bool {
 	for i := range irList {
 		node := irList[i]
 
-		if common.BytesEqual(node.pub, key) {
+		if common.BytesEqual(node.PublicKey, key) {
 			return true
 		}
 	}
@@ -446,7 +442,7 @@ func SetConfig(id, key, val []byte) bool {
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
 
-	irKey := innerRingInvoker(irList)
+	irKey := common.InnerRingInvoker(irList)
 	if len(irKey) == 0 {
 		panic("setConfig: invoked by non inner ring node")
 	}
@@ -523,26 +519,14 @@ func Version() int {
 	return version
 }
 
-// innerRingInvoker returns public key of inner ring node that invoked contract.
-func innerRingInvoker(ir []node) []byte {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.pub) {
-			return node.pub
-		}
-	}
-
-	return nil
-}
-
 // getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
-func getInnerRingNodes(ctx storage.Context, key string) []node {
+func getInnerRingNodes(ctx storage.Context, key string) []common.IRNode {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]node)
+		return binary.Deserialize(data.([]byte)).([]common.IRNode)
 	}
 
-	return []node{}
+	return []common.IRNode{}
 }
 
 // getInnerRingNodes returns deserialized slice of used cheques.
@@ -587,9 +571,9 @@ func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
 
 // addNode returns slice of nodes with appended node 'n' and bool flag
 // that set to false if node 'n' is already presented in the slice 'lst'.
-func addNode(lst []node, n node) ([]node, bool) {
+func addNode(lst []common.IRNode, n common.IRNode) ([]common.IRNode, bool) {
 	for i := 0; i < len(lst); i++ {
-		if common.BytesEqual(n.pub, lst[i].pub) {
+		if common.BytesEqual(n.PublicKey, lst[i].PublicKey) {
 			return nil, false
 		}
 	}
@@ -602,14 +586,14 @@ func addNode(lst []node, n node) ([]node, bool) {
 // rmNodeByKey returns slice of nodes without node with key 'k',
 // slices of nodes 'add' with node with key 'k' and bool flag,
 // that set to false if node with a key 'k' does not exists in the slice 'lst'.
-func rmNodeByKey(lst, add []node, k []byte) ([]node, []node, bool) {
+func rmNodeByKey(lst, add []common.IRNode, k []byte) ([]common.IRNode, []common.IRNode, bool) {
 	var (
 		flag   bool
-		newLst = []node{} // it is explicit declaration of empty slice, not nil
+		newLst = []common.IRNode{} // it is explicit declaration of empty slice, not nil
 	)
 
 	for i := 0; i < len(lst); i++ {
-		if common.BytesEqual(k, lst[i].pub) {
+		if common.BytesEqual(k, lst[i].PublicKey) {
 			add = append(add, lst[i])
 			flag = true
 		} else {

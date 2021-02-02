@@ -11,10 +11,6 @@ import (
 )
 
 type (
-	irNode struct {
-		key []byte
-	}
-
 	// Token holds all token info.
 	Token struct {
 		// Ticker symbol
@@ -114,10 +110,10 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	)
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("transferX: this method must be invoked from inner ring")
 	}
@@ -150,10 +146,10 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 
 func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("lock: this method must be invoked from inner ring")
 	}
@@ -188,10 +184,10 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 
 func NewEpoch(epochNum int) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("epochNum: this method must be invoked from inner ring")
 	}
@@ -227,10 +223,10 @@ func NewEpoch(epochNum int) bool {
 
 func Mint(to interop.Hash160, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("burn: this method must be invoked from inner ring")
 	}
@@ -258,10 +254,10 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 
 func Burn(from interop.Hash160, amount int, details []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
 	threshold := len(innerRing)/3*2 + 1
 
-	irKey := innerRingInvoker(innerRing)
+	irKey := common.InnerRingInvoker(innerRing)
 	if len(irKey) == 0 {
 		panic("burn: this method must be invoked from inner ring")
 	}
@@ -379,17 +375,6 @@ func isUsableAddress(addr interop.Hash160) bool {
 	}
 
 	return false
-}
-
-func innerRingInvoker(ir []irNode) []byte {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.key) {
-			return node.key
-		}
-	}
-
-	return nil
 }
 
 func getAccount(ctx storage.Context, key interface{}) Account {
