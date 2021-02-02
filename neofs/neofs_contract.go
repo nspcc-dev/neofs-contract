@@ -34,13 +34,11 @@ package smart_contract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -69,11 +67,9 @@ const (
 	version = 3
 
 	innerRingKey     = "innerring"
-	voteKey          = "ballots"
 	candidatesKey    = "candidates"
 	cashedChequesKey = "cheques"
 
-	blockDiff        = 20 // change base on performance evaluation
 	publicKeySize    = 33
 	minInnerRingSize = 3
 
@@ -121,10 +117,10 @@ func Init(args [][]byte) bool {
 	}
 
 	// initialize all storage slices
-	setSerialized(ctx, innerRingKey, irList)
-	setSerialized(ctx, voteKey, []common.Ballot{})
-	setSerialized(ctx, candidatesKey, []node{})
-	setSerialized(ctx, cashedChequesKey, []cheque{})
+	common.SetSerialized(ctx, innerRingKey, irList)
+	common.InitVote(ctx)
+	common.SetSerialized(ctx, candidatesKey, []node{})
+	common.SetSerialized(ctx, cashedChequesKey, []cheque{})
 
 	runtime.Log("neofs: contract initialized")
 
@@ -152,14 +148,14 @@ func InnerRingCandidateRemove(key []byte) bool {
 
 	for i := range candidates {
 		c := candidates[i]
-		if !bytesEqual(c.pub, key) {
+		if !common.BytesEqual(c.pub, key) {
 			nodes = append(nodes, c)
 		} else {
 			runtime.Log("irCandidateRemove: candidate has been removed")
 		}
 	}
 
-	setSerialized(ctx, candidatesKey, nodes)
+	common.SetSerialized(ctx, candidatesKey, nodes)
 
 	return true
 }
@@ -190,7 +186,7 @@ func InnerRingCandidateAdd(key []byte) bool {
 	}
 
 	runtime.Log("irCandidateAdd: candidate has been added")
-	setSerialized(ctx, candidatesKey, list)
+	common.SetSerialized(ctx, candidatesKey, list)
 
 	return true
 }
@@ -198,12 +194,12 @@ func InnerRingCandidateAdd(key []byte) bool {
 // OnPayment is a callback for NEP-17 compatible native GAS contract.
 func OnPayment(from interop.Hash160, amount int, data interface{}) {
 	rcv := data.(interop.Hash160)
-	if bytesEqual(rcv, []byte(ignoreDepositNotification)) {
+	if common.BytesEqual(rcv, []byte(ignoreDepositNotification)) {
 		return
 	}
 
 	caller := runtime.GetCallingScriptHash()
-	if !bytesEqual(caller, []byte(tokenHash)) {
+	if !common.BytesEqual(caller, []byte(tokenHash)) {
 		panic("onPayment: only GAS can be accepted for deposit")
 	}
 
@@ -290,9 +286,9 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 		panic("cheque: non unique id")
 	}
 
-	n := vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashID)
+		common.RemoveVotes(ctx, hashID)
 
 		from := runtime.GetExecutingScriptHash()
 
@@ -304,7 +300,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 
 		runtime.Log("cheque: funds have been transferred")
 
-		setSerialized(ctx, cashedChequesKey, list)
+		common.SetSerialized(ctx, cashedChequesKey, list)
 		runtime.Notify("Cheque", id, user, amount, lockAcc)
 	}
 
@@ -385,7 +381,7 @@ loop:
 		// find key in actual inner ring list
 		for j := 0; j < len(irList); j++ {
 			n := irList[j]
-			if bytesEqual(n.pub, key) {
+			if common.BytesEqual(n.pub, key) {
 				newIR = append(newIR, n)
 				oldNodes++
 
@@ -406,13 +402,13 @@ loop:
 
 	hashID := crypto.SHA256(chequeID)
 
-	n := vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashID)
+		common.RemoveVotes(ctx, hashID)
 
-		setSerialized(ctx, candidatesKey, candidates)
-		setSerialized(ctx, innerRingKey, newIR)
-		setSerialized(ctx, cashedChequesKey, chequesList)
+		common.SetSerialized(ctx, candidatesKey, candidates)
+		common.SetSerialized(ctx, innerRingKey, newIR)
+		common.SetSerialized(ctx, cashedChequesKey, chequesList)
 
 		runtime.Notify("InnerRingUpdate", c.id, newIR)
 		runtime.Log("irUpdate: inner ring list has been updated")
@@ -431,7 +427,7 @@ func IsInnerRing(key []byte) bool {
 	for i := range irList {
 		node := irList[i]
 
-		if bytesEqual(node.pub, key) {
+		if common.BytesEqual(node.pub, key) {
 			return true
 		}
 	}
@@ -467,12 +463,12 @@ func SetConfig(id, key, val []byte) bool {
 	// vote for new configuration value
 	hashID := crypto.SHA256(id)
 
-	n := vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashID)
+		common.RemoveVotes(ctx, hashID)
 
 		setConfig(ctx, key, val)
-		setSerialized(ctx, cashedChequesKey, chequesList)
+		common.SetSerialized(ctx, cashedChequesKey, chequesList)
 
 		runtime.Notify("SetConfig", id, key, val)
 		runtime.Log("setConfig: configuration has been updated")
@@ -539,79 +535,6 @@ func innerRingInvoker(ir []node) []byte {
 	return nil
 }
 
-// vote adds ballot for the decision with specific 'id' and returns amount
-// on unique voters for that decision.
-func vote(ctx storage.Context, id, from []byte) int {
-	var (
-		newCandidates = []common.Ballot{} // it is explicit declaration of empty slice, not nil
-		candidates    = getBallots(ctx)
-		found         = -1
-		blockHeight   = blockchain.GetHeight()
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
-		if blockHeight-cnd.Height > blockDiff {
-			continue
-		}
-
-		if bytesEqual(cnd.ID, id) {
-			voters := cnd.Voters
-
-			for j := range voters {
-				if bytesEqual(voters[j], from) {
-					return len(voters)
-				}
-			}
-
-			voters = append(voters, from)
-			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
-			found = len(voters)
-		}
-
-		newCandidates = append(newCandidates, cnd)
-	}
-
-	if found < 0 {
-		found = 1
-		voters := [][]byte{from}
-
-		newCandidates = append(newCandidates, common.Ballot{
-			ID:     id,
-			Voters: voters,
-			Height: blockHeight})
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-
-	return found
-}
-
-// removeVotes clears ballots of the decision that has been accepted by
-// inner ring nodes.
-func removeVotes(ctx storage.Context, id []byte) {
-	var (
-		newCandidates = []common.Ballot{} // it is explicit declaration of empty slice, not nil
-		candidates    = getBallots(ctx)
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
-		}
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-}
-
-// setSerialized serializes data and puts it into contract storage.
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
 // getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
 func getInnerRingNodes(ctx storage.Context, key string) []node {
 	data := storage.Get(ctx, key)
@@ -630,16 +553,6 @@ func getCashedCheques(ctx storage.Context) []cheque {
 	}
 
 	return []cheque{}
-}
-
-// getInnerRingNodes returns deserialized slice of vote ballots.
-func getBallots(ctx storage.Context) []common.Ballot {
-	data := storage.Get(ctx, voteKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.Ballot)
-	}
-
-	return []common.Ballot{}
 }
 
 // getConfig returns installed neofs configuration value or nil if it is not set.
@@ -662,7 +575,7 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 // that set to false if cheque 'c' is already presented in the slice 'lst'.
 func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
 	for i := 0; i < len(lst); i++ {
-		if bytesEqual(c.id, lst[i].id) {
+		if common.BytesEqual(c.id, lst[i].id) {
 			return nil, false
 		}
 	}
@@ -676,7 +589,7 @@ func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
 // that set to false if node 'n' is already presented in the slice 'lst'.
 func addNode(lst []node, n node) ([]node, bool) {
 	for i := 0; i < len(lst); i++ {
-		if bytesEqual(n.pub, lst[i].pub) {
+		if common.BytesEqual(n.pub, lst[i].pub) {
 			return nil, false
 		}
 	}
@@ -696,7 +609,7 @@ func rmNodeByKey(lst, add []node, k []byte) ([]node, []node, bool) {
 	)
 
 	for i := 0; i < len(lst); i++ {
-		if bytesEqual(k, lst[i].pub) {
+		if common.BytesEqual(k, lst[i].pub) {
 			add = append(add, lst[i])
 			flag = true
 		} else {
@@ -705,10 +618,4 @@ func rmNodeByKey(lst, add []node, k []byte) ([]node, []node, bool) {
 	}
 
 	return newLst, add, flag
-}
-
-// bytesEqual compares two slice of bytes by wrapping them into strings,
-// which is necessary with new util.Equal interop behaviour, see neo-go#1176.
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }

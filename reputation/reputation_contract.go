@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
+	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 const version = 1
@@ -64,7 +65,7 @@ func Put(manager, epoch, typ []byte, newTrustList [][]byte) bool {
 		}
 	}
 
-	setSerialized(ctx, key, trustList)
+	common.SetSerialized(ctx, key, trustList)
 
 	runtime.Log("trust list was successfully updated")
 
@@ -84,9 +85,4 @@ func getList(ctx storage.Context, key interface{}) [][]byte {
 	}
 
 	return [][]byte{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
 }

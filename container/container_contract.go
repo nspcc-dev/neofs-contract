@@ -3,13 +3,11 @@ package containercontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -41,9 +39,7 @@ type (
 
 const (
 	version   = 1
-	voteKey   = "ballots"
 	ownersKey = "ownersList"
-	blockDiff = 20 // change base on performance evaluation
 
 	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
@@ -123,9 +119,9 @@ func Put(container, signature, publicKey []byte) bool {
 	containerFee := contract.Call(netmapContractAddr, "config", containerFeeKey).(int)
 	hashCandidate := invokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
-	n := vote(ctx, hashCandidate, irKey)
+	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashCandidate)
+		common.RemoveVotes(ctx, hashCandidate)
 		// todo: check if new container with unique container id
 
 		for i := 0; i < len(innerRing); i++ {
@@ -184,9 +180,9 @@ func Delete(containerID, signature []byte) bool {
 
 	hashCandidate := invokeID([]interface{}{containerID, signature}, []byte("delete"))
 
-	n := vote(ctx, hashCandidate, irKey)
+	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashCandidate)
+		common.RemoveVotes(ctx, hashCandidate)
 		removeContainer(ctx, containerID, ownerID)
 		runtime.Log("delete: remove container")
 	} else {
@@ -214,7 +210,7 @@ func List(owner []byte) [][]byte {
 	owners := getList(ctx, ownersKey)
 	for i := 0; i < len(owners); i++ {
 		ownerID := owners[i]
-		if len(owner) != 0 && !bytesEqual(owner, ownerID) {
+		if len(owner) != 0 && !common.BytesEqual(owner, ownerID) {
 			continue
 		}
 
@@ -253,7 +249,7 @@ func SetEACL(eACL, signature []byte) bool {
 	}
 
 	key := append(eACLPrefix, containerID...)
-	setSerialized(ctx, key, rule)
+	common.SetSerialized(ctx, key, rule)
 
 	runtime.Log("setEACL: success")
 
@@ -304,7 +300,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	// do not add estimation twice
 	for i := range s.estimations {
 		est := s.estimations[i]
-		if bytesEqual(est.from, pubKey) {
+		if common.BytesEqual(est.from, pubKey) {
 			return false
 		}
 	}
@@ -356,9 +352,9 @@ func ProcessEpoch(epochNum int) {
 	candidates := keysToDelete(epochNum)
 	epochID := invokeID([]interface{}{epochNum}, []byte("epoch"))
 
-	n := vote(ctx, epochID, irKey)
+	n := common.Vote(ctx, epochID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, epochID)
+		common.RemoveVotes(ctx, epochID)
 
 		for i := range candidates {
 			candidate := candidates[i]
@@ -379,9 +375,9 @@ func StartContainerEstimation(epoch int) bool {
 
 	hashCandidate := invokeID([]interface{}{epoch}, []byte("startEstimation"))
 
-	n := vote(ctx, hashCandidate, irKey)
+	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashCandidate)
+		common.RemoveVotes(ctx, hashCandidate)
 		runtime.Notify("StartEstimation", epoch)
 		runtime.Log("startEstimation: notification has been produced")
 	} else {
@@ -403,9 +399,9 @@ func StopContainerEstimation(epoch int) bool {
 
 	hashCandidate := invokeID([]interface{}{epoch}, []byte("stopEstimation"))
 
-	n := vote(ctx, hashCandidate, irKey)
+	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashCandidate)
+		common.RemoveVotes(ctx, hashCandidate)
 		runtime.Notify("StopEstimation", epoch)
 		runtime.Log("stopEstimation: notification has been produced")
 	} else {
@@ -439,7 +435,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 func addOrAppend(ctx storage.Context, key interface{}, value []byte) {
 	list := getList(ctx, key)
 	for i := 0; i < len(list); i++ {
-		if bytesEqual(list[i], value) {
+		if common.BytesEqual(list[i], value) {
 			return
 		}
 	}
@@ -450,7 +446,7 @@ func addOrAppend(ctx storage.Context, key interface{}, value []byte) {
 		list = append(list, value)
 	}
 
-	setSerialized(ctx, key, list)
+	common.SetSerialized(ctx, key, list)
 }
 
 // remove returns amount of left elements in the list
@@ -461,7 +457,7 @@ func remove(ctx storage.Context, key interface{}, value []byte) int {
 	)
 
 	for i := 0; i < len(list); i++ {
-		if !bytesEqual(list[i], value) {
+		if !common.BytesEqual(list[i], value) {
 			newList = append(newList, list[i])
 		}
 	}
@@ -470,7 +466,7 @@ func remove(ctx storage.Context, key interface{}, value []byte) int {
 	if ln == 0 {
 		storage.Delete(ctx, key)
 	} else {
-		setSerialized(ctx, key, newList)
+		common.SetSerialized(ctx, key, newList)
 	}
 
 	return ln
@@ -485,68 +481,6 @@ func innerRingInvoker(ir []irNode) []byte {
 	}
 
 	return nil
-}
-
-func vote(ctx storage.Context, id, from []byte) int {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-		found         = -1
-		blockHeight   = blockchain.GetHeight()
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
-		if blockHeight-cnd.Height > blockDiff {
-			continue
-		}
-
-		if bytesEqual(cnd.ID, id) {
-			voters := cnd.Voters
-
-			for j := range voters {
-				if bytesEqual(voters[j], from) {
-					return len(voters)
-				}
-			}
-
-			voters = append(voters, from)
-			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
-			found = len(voters)
-		}
-
-		newCandidates = append(newCandidates, cnd)
-	}
-
-	if found < 0 {
-		voters := [][]byte{from}
-		newCandidates = append(newCandidates, common.Ballot{
-			ID:     id,
-			Voters: voters,
-			Height: blockHeight})
-		found = 1
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-
-	return found
-}
-
-func removeVotes(ctx storage.Context, id []byte) {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
-		}
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
 }
 
 func getList(ctx storage.Context, key interface{}) [][]byte {
@@ -572,15 +506,6 @@ func getAllContainers(ctx storage.Context) [][]byte {
 	return list
 }
 
-func getBallots(ctx storage.Context) []common.Ballot {
-	data := storage.Get(ctx, voteKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.Ballot)
-	}
-
-	return []common.Ballot{}
-}
-
 func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	key := append(eACLPrefix, cid...)
 	data := storage.Get(ctx, key)
@@ -589,11 +514,6 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	}
 
 	return extendedACL{val: []byte{}, sig: []byte{}, pub: []byte{}}
-}
-
-func setSerialized(ctx storage.Context, key, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
 }
 
 func walletToScripHash(wallet []byte) []byte {
@@ -628,18 +548,13 @@ func getOwnerByID(ctx storage.Context, id []byte) []byte {
 
 		for j := 0; j < len(containers); j++ {
 			container := containers[j]
-			if bytesEqual(container, id) {
+			if common.BytesEqual(container, id) {
 				return ownerID
 			}
 		}
 	}
 
 	return nil
-}
-
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }
 
 func isSignedByOwnerKey(msg, sig, owner, key []byte) bool {
@@ -654,7 +569,7 @@ func isOwnerFromKey(owner []byte, key []byte) bool {
 	ownerSH := walletToScripHash(owner)
 	keySH := contract.CreateStandardAccount(key)
 
-	return bytesEqual(ownerSH, keySH)
+	return common.BytesEqual(ownerSH, keySH)
 }
 
 func estimationKey(epoch int, cid []byte) []byte {
@@ -688,7 +603,7 @@ func isStorageNode(key interop.PublicKey) bool {
 		nodeInfo := snapshot[i].info
 		nodeKey := nodeInfo[2:35] // offset:2, len:33
 
-		if bytesEqual(key, nodeKey) {
+		if common.BytesEqual(key, nodeKey) {
 			return true
 		}
 	}

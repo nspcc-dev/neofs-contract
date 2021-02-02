@@ -7,7 +7,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -46,7 +45,7 @@ func init() {
 // OnPayment is a callback for NEP-17 compatible native GAS and NEO contracts.
 func OnPayment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
-	if !bytesEqual(caller, []byte(gasHash)) && !bytesEqual(caller, []byte(neoHash)) {
+	if !common.BytesEqual(caller, []byte(gasHash)) && !common.BytesEqual(caller, []byte(neoHash)) {
 		panic("onPayment: alphabet contract accepts GAS and NEO only")
 	}
 }
@@ -65,7 +64,7 @@ func Init(addrNetmap []byte, name string, index, total int) {
 	storage.Put(ctx, indexKey, index)
 	storage.Put(ctx, totalKey, total)
 
-	setSerialized(ctx, voteKey, []common.Ballot{})
+	common.SetSerialized(ctx, voteKey, []common.Ballot{})
 
 	runtime.Log(name + " contract initialized")
 }
@@ -215,11 +214,11 @@ func vote(ctx storage.Context, epoch int, id, from []byte) int {
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if bytesEqual(cnd.ID, id) {
+		if common.BytesEqual(cnd.ID, id) {
 			voters := cnd.Voters
 
 			for j := range voters {
-				if bytesEqual(voters[j], from) {
+				if common.BytesEqual(voters[j], from) {
 					return len(voters)
 				}
 			}
@@ -244,7 +243,7 @@ func vote(ctx storage.Context, epoch int, id, from []byte) int {
 		found = 1
 	}
 
-	setSerialized(ctx, voteKey, newCandidates)
+	common.SetSerialized(ctx, voteKey, newCandidates)
 
 	return found
 }
@@ -257,12 +256,12 @@ func removeVotes(ctx storage.Context, id []byte) {
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
+		if !common.BytesEqual(cnd.ID, id) {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
 
-	setSerialized(ctx, voteKey, newCandidates)
+	common.SetSerialized(ctx, voteKey, newCandidates)
 }
 
 func getBallots(ctx storage.Context) []common.Ballot {
@@ -272,16 +271,6 @@ func getBallots(ctx storage.Context) []common.Ballot {
 	}
 
 	return []common.Ballot{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }
 
 func voteID(epoch interface{}, args [][]byte) []byte {
