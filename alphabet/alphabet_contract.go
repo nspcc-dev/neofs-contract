@@ -79,8 +79,7 @@ func balance(hash string, addr []byte) int {
 }
 
 func irList() []common.IRNode {
-	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
-	return contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	return common.InnerRingListViaStorage(ctx, netmapKey)
 }
 
 func currentEpoch() int {

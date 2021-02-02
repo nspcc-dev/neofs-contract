@@ -2,7 +2,6 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -59,8 +58,7 @@ func AddKey(owner []byte, keys [][]byte) bool {
 		panic("addKey: incorrect owner")
 	}
 
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := common.InnerRingInvoker(innerRing)
@@ -113,8 +111,7 @@ func RemoveKey(owner []byte, keys [][]byte) bool {
 		panic("removeKey: incorrect owner")
 	}
 
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := common.InnerRingInvoker(innerRing)
@@ -198,4 +195,8 @@ func fromKnownContract(caller []byte) bool {
 	}
 
 	return false
+}
+
+func irList() []common.IRNode {
+	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
