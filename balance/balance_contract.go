@@ -10,17 +10,12 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
+	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 type (
 	irNode struct {
 		key []byte
-	}
-
-	ballot struct {
-		id    []byte   // id of the voting decision
-		n     [][]byte // already voted inner ring nodes
-		block int      // block with the last vote
 	}
 
 	// Token holds all token info.
@@ -405,7 +400,7 @@ func innerRingInvoker(ir []irNode) []byte {
 
 func vote(ctx storage.Context, id, from []byte) int {
 	var (
-		newCandidates []ballot
+		newCandidates []common.Ballot
 		candidates    = getBallots(ctx)
 		found         = -1
 		blockHeight   = blockchain.GetHeight()
@@ -414,12 +409,12 @@ func vote(ctx storage.Context, id, from []byte) int {
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
 
-		if blockHeight-cnd.block > blockDiff {
+		if blockHeight-cnd.Height > blockDiff {
 			continue
 		}
 
-		if bytesEqual(cnd.id, id) {
-			voters := cnd.n
+		if bytesEqual(cnd.ID, id) {
+			voters := cnd.Voters
 
 			for j := range voters {
 				if bytesEqual(voters[j], from) {
@@ -428,7 +423,7 @@ func vote(ctx storage.Context, id, from []byte) int {
 			}
 
 			voters = append(voters, from)
-			cnd = ballot{id: id, n: voters, block: blockHeight}
+			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
 			found = len(voters)
 		}
 
@@ -437,10 +432,10 @@ func vote(ctx storage.Context, id, from []byte) int {
 
 	if found < 0 {
 		voters := [][]byte{from}
-		newCandidates = append(newCandidates, ballot{
-			id:    id,
-			n:     voters,
-			block: blockHeight})
+		newCandidates = append(newCandidates, common.Ballot{
+			ID:     id,
+			Voters: voters,
+			Height: blockHeight})
 		found = 1
 	}
 
@@ -451,13 +446,13 @@ func vote(ctx storage.Context, id, from []byte) int {
 
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates []ballot
+		newCandidates []common.Ballot
 		candidates    = getBallots(ctx)
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !bytesEqual(cnd.id, id) {
+		if !bytesEqual(cnd.ID, id) {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
@@ -465,13 +460,13 @@ func removeVotes(ctx storage.Context, id []byte) {
 	setSerialized(ctx, voteKey, newCandidates)
 }
 
-func getBallots(ctx storage.Context) []ballot {
+func getBallots(ctx storage.Context) []common.Ballot {
 	data := storage.Get(ctx, voteKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]ballot)
+		return binary.Deserialize(data.([]byte)).([]common.Ballot)
 	}
 
-	return []ballot{}
+	return []common.Ballot{}
 }
 
 func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
