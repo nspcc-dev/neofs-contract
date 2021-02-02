@@ -117,7 +117,7 @@ func Put(container, signature, publicKey []byte) bool {
 	from := walletToScripHash(ownerID)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
 	containerFee := contract.Call(netmapContractAddr, "config", containerFeeKey).(int)
-	hashCandidate := invokeID([]interface{}{container, signature, publicKey}, []byte("put"))
+	hashCandidate := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
 	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
@@ -178,7 +178,7 @@ func Delete(containerID, signature []byte) bool {
 		return true
 	}
 
-	hashCandidate := invokeID([]interface{}{containerID, signature}, []byte("delete"))
+	hashCandidate := common.InvokeID([]interface{}{containerID, signature}, []byte("delete"))
 
 	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
@@ -350,7 +350,7 @@ func ProcessEpoch(epochNum int) {
 	}
 
 	candidates := keysToDelete(epochNum)
-	epochID := invokeID([]interface{}{epochNum}, []byte("epoch"))
+	epochID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
 
 	n := common.Vote(ctx, epochID, irKey)
 	if n >= threshold {
@@ -373,7 +373,7 @@ func StartContainerEstimation(epoch int) bool {
 		panic("startEstimation: only inner ring nodes can invoke this")
 	}
 
-	hashCandidate := invokeID([]interface{}{epoch}, []byte("startEstimation"))
+	hashCandidate := common.InvokeID([]interface{}{epoch}, []byte("startEstimation"))
 
 	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
@@ -397,7 +397,7 @@ func StopContainerEstimation(epoch int) bool {
 		panic("stopEstimation: only inner ring nodes can invoke this")
 	}
 
-	hashCandidate := invokeID([]interface{}{epoch}, []byte("stopEstimation"))
+	hashCandidate := common.InvokeID([]interface{}{epoch}, []byte("stopEstimation"))
 
 	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
@@ -529,15 +529,6 @@ func verifySignature(msg, sig []byte, keys [][]byte) bool {
 	}
 
 	return false
-}
-
-func invokeID(args []interface{}, prefix []byte) []byte {
-	for i := range args {
-		arg := args[i].([]byte)
-		prefix = append(prefix, arg...)
-	}
-
-	return crypto.SHA256(prefix)
 }
 
 func getOwnerByID(ctx storage.Context, id []byte) []byte {

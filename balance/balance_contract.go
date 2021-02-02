@@ -4,7 +4,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -128,7 +127,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 		n = threshold
 		runtime.Log("transferX: processed indirect invoke")
 	} else {
-		hashTxID = invokeID([]interface{}{from, to, amount}, []byte("transfer"))
+		hashTxID = common.InvokeID([]interface{}{from, to, amount}, []byte("transfer"))
 		n = common.Vote(ctx, hashTxID, irKey)
 	}
 
@@ -159,7 +158,7 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 		panic("lock: this method must be invoked from inner ring")
 	}
 
-	hashTxID := invokeID([]interface{}{txID, from, to, amount, until}, []byte("lock"))
+	hashTxID := common.InvokeID([]interface{}{txID, from, to, amount, until}, []byte("lock"))
 
 	n := common.Vote(ctx, hashTxID, irKey)
 	if n >= threshold {
@@ -197,7 +196,7 @@ func NewEpoch(epochNum int) bool {
 		panic("epochNum: this method must be invoked from inner ring")
 	}
 
-	epochID := invokeID([]interface{}{epochNum}, []byte("epoch"))
+	epochID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
 
 	n := common.Vote(ctx, epochID, irKey)
 	if n >= threshold {
@@ -236,7 +235,7 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 		panic("burn: this method must be invoked from inner ring")
 	}
 
-	mintID := invokeID([]interface{}{to, amount, details}, []byte("mint"))
+	mintID := common.InvokeID([]interface{}{to, amount, details}, []byte("mint"))
 
 	n := common.Vote(ctx, mintID, irKey)
 	if n >= threshold {
@@ -267,7 +266,7 @@ func Burn(from interop.Hash160, amount int, details []byte) bool {
 		panic("burn: this method must be invoked from inner ring")
 	}
 
-	burnID := invokeID([]interface{}{from, amount, details}, []byte("burn"))
+	burnID := common.InvokeID([]interface{}{from, amount, details}, []byte("burn"))
 
 	n := common.Vote(ctx, burnID, irKey)
 	if n >= threshold {
@@ -400,15 +399,6 @@ func getAccount(ctx storage.Context, key interface{}) Account {
 	}
 
 	return Account{}
-}
-
-func invokeID(args []interface{}, prefix []byte) []byte {
-	for i := range args {
-		arg := args[i].([]byte)
-		prefix = append(prefix, arg...)
-	}
-
-	return crypto.SHA256(prefix)
 }
 
 /*

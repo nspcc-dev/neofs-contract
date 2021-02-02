@@ -197,15 +197,6 @@ func innerRingInvoker(ir []irNode) []byte {
 	return nil
 }
 
-func invokeID(args []interface{}, prefix []byte) []byte {
-	for i := range args {
-		arg := args[i].([]byte)
-		prefix = append(prefix, arg...)
-	}
-
-	return crypto.SHA256(prefix)
-}
-
 func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {
 	prefix = append(prefix, owner...)
 	for i := range keys {

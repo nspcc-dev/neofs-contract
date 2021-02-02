@@ -185,7 +185,7 @@ func UpdateState(state int, publicKey []byte) bool {
 	case offlineState:
 		newNetmap := removeFromNetmap(ctx, publicKey)
 
-		hashID := invokeID([]interface{}{publicKey}, []byte("delete"))
+		hashID := common.InvokeID([]interface{}{publicKey}, []byte("delete"))
 		n := common.Vote(ctx, hashID, irKey)
 		if n >= threshold {
 			runtime.Log("updateState: remove storage node from the network map")
@@ -218,7 +218,7 @@ func NewEpoch(epochNum int) bool {
 	data0snapshot := getSnapshot(ctx, snapshot0Key)
 	dataOnlineState := filterNetmap(ctx, onlineState)
 
-	hashID := invokeID([]interface{}{epochNum}, []byte("epoch"))
+	hashID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
 
 	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
@@ -285,7 +285,7 @@ func SetConfig(id, key, val []byte) bool {
 	}
 
 	// check unique id of the operation
-	hashID := invokeID([]interface{}{id, key, val}, []byte("config"))
+	hashID := common.InvokeID([]interface{}{id, key, val}, []byte("config"))
 	n := common.Vote(ctx, hashID, irKey)
 
 	if n >= threshold {
@@ -451,13 +451,4 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storageKey := append(configPrefix, postfix...)
 
 	storage.Put(ctx, storageKey, val)
-}
-
-func invokeID(args []interface{}, prefix []byte) []byte {
-	for i := range args {
-		arg := args[i].([]byte)
-		prefix = append(prefix, arg...)
-	}
-
-	return crypto.SHA256(prefix)
 }
