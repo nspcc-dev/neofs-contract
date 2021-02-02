@@ -2,7 +2,6 @@ package auditcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -11,10 +10,6 @@ import (
 )
 
 type (
-	irNode struct {
-		key interop.PublicKey
-	}
-
 	auditHeader struct {
 		epoch int
 		cid   []byte
@@ -70,15 +65,14 @@ func Init(addrNetmap interop.Hash160) {
 }
 
 func Put(rawAuditResult []byte) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]irNode)
+	innerRing := common.InnerRingListViaStorage(ctx, netmapContractKey)
 
 	hdr := newAuditHeader(rawAuditResult)
 	presented := false
 
 	for i := range innerRing {
 		ir := innerRing[i]
-		if common.BytesEqual(ir.key, hdr.from) {
+		if common.BytesEqual(ir.PublicKey, hdr.from) {
 			presented = true
 
 			break

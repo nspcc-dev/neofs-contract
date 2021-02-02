@@ -83,7 +83,7 @@ func Init(addrNetmap, addrBalance, addrID []byte) {
 
 func Put(container, signature, publicKey []byte) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := common.InnerRingList(netmapContractAddr)
 	threshold := len(innerRing)/3*2 + 1
 
 	offset := int(container[1])
@@ -149,8 +149,7 @@ func Put(container, signature, publicKey []byte) bool {
 }
 
 func Delete(containerID, signature []byte) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	ownerID := getOwnerByID(ctx, containerID)
@@ -336,8 +335,7 @@ func ListContainerSizes(epoch int) [][]byte {
 }
 
 func ProcessEpoch(epochNum int) {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := common.InnerRingInvoker(innerRing)
@@ -360,8 +358,7 @@ func ProcessEpoch(epochNum int) {
 }
 
 func StartContainerEstimation(epoch int) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := common.InnerRingInvoker(innerRing)
@@ -384,8 +381,7 @@ func StartContainerEstimation(epoch int) bool {
 }
 
 func StopContainerEstimation(epoch int) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := contract.Call(netmapContractAddr, "innerRingList").([]common.IRNode)
+	innerRing := irList()
 	threshold := len(innerRing)/3*2 + 1
 
 	irKey := common.InnerRingInvoker(innerRing)
@@ -594,4 +590,8 @@ func keysToDelete(epoch int) [][]byte {
 	}
 
 	return results
+}
+
+func irList() []common.IRNode {
+	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
