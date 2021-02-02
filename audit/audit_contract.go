@@ -7,7 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
+	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 type (
@@ -78,7 +78,7 @@ func Put(rawAuditResult []byte) bool {
 
 	for i := range innerRing {
 		ir := innerRing[i]
-		if bytesEqual(ir.key, hdr.from) {
+		if common.BytesEqual(ir.key, hdr.from) {
 			presented = true
 
 			break
@@ -182,9 +182,4 @@ func newAuditHeader(input []byte) auditHeader {
 		cid,
 		key,
 	}
-}
-
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }

@@ -2,12 +2,10 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -22,10 +20,7 @@ type (
 )
 
 const (
-	version   = 1
-	blockDiff = 20 // change base on performance evaluation
-
-	voteKey = "ballots"
+	version = 1
 
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
@@ -88,7 +83,7 @@ addLoop:
 
 		for j := range info.Keys {
 			key := info.Keys[j]
-			if bytesEqual(key, pubKey) {
+			if common.BytesEqual(key, pubKey) {
 				continue addLoop
 			}
 		}
@@ -102,7 +97,7 @@ addLoop:
 		runtime.Log("addKey: processed indirect invoke")
 	} else {
 		id := invokeIDKeys(owner, keys, []byte("add"))
-		n = vote(ctx, id, irKey)
+		n = common.Vote(ctx, id, irKey)
 	}
 
 	if n < threshold {
@@ -110,8 +105,8 @@ addLoop:
 		return true
 	}
 
-	removeVotes(ctx, id)
-	setSerialized(ctx, owner, info)
+	common.RemoveVotes(ctx, id)
+	common.SetSerialized(ctx, owner, info)
 	runtime.Log("addKey: key bound to the owner")
 
 	return true
@@ -133,13 +128,13 @@ func RemoveKey(owner []byte, keys [][]byte) bool {
 
 	id := invokeIDKeys(owner, keys, []byte("remove"))
 
-	n := vote(ctx, id, irKey)
+	n := common.Vote(ctx, id, irKey)
 	if n < threshold {
 		runtime.Log("removeKey: processed invoke from inner ring")
 		return true
 	}
 
-	removeVotes(ctx, id)
+	common.RemoveVotes(ctx, id)
 
 	info := getUserInfo(ctx, owner)
 	var leftKeys [][]byte
@@ -154,7 +149,7 @@ rmLoop:
 				panic("removeKey: incorrect public key")
 			}
 
-			if bytesEqual(key, pubKey) {
+			if common.BytesEqual(key, pubKey) {
 				continue rmLoop
 			}
 		}
@@ -163,7 +158,7 @@ rmLoop:
 	}
 
 	info.Keys = leftKeys
-	setSerialized(ctx, owner, info)
+	common.SetSerialized(ctx, owner, info)
 
 	return true
 }
@@ -191,20 +186,6 @@ func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	return UserInfo{Keys: [][]byte{}}
 }
 
-func getBallots(ctx storage.Context) []common.Ballot {
-	data := storage.Get(ctx, voteKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.Ballot)
-	}
-
-	return []common.Ballot{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
 func innerRingInvoker(ir []irNode) []byte {
 	for i := 0; i < len(ir); i++ {
 		node := ir[i]
@@ -214,68 +195,6 @@ func innerRingInvoker(ir []irNode) []byte {
 	}
 
 	return nil
-}
-
-func vote(ctx storage.Context, id, from []byte) int {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-		found         = -1
-		blockHeight   = blockchain.GetHeight()
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
-		if blockHeight-cnd.Height > blockDiff {
-			continue
-		}
-
-		if bytesEqual(cnd.ID, id) {
-			voters := cnd.Voters
-
-			for j := range voters {
-				if bytesEqual(voters[j], from) {
-					return len(voters)
-				}
-			}
-
-			voters = append(voters, from)
-			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
-			found = len(voters)
-		}
-
-		newCandidates = append(newCandidates, cnd)
-	}
-
-	if found < 0 {
-		voters := [][]byte{from}
-		newCandidates = append(newCandidates, common.Ballot{
-			ID:     id,
-			Voters: voters,
-			Height: blockHeight})
-		found = 1
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-
-	return found
-}
-
-func removeVotes(ctx storage.Context, id []byte) {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
-		}
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
 }
 
 func invokeID(args []interface{}, prefix []byte) []byte {
@@ -296,14 +215,9 @@ func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {
 	return crypto.SHA256(prefix)
 }
 
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
-}
-
 func fromKnownContract(caller []byte) bool {
 	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
-	if bytesEqual(caller, containerContractAddr) {
+	if common.BytesEqual(caller, containerContractAddr) {
 		return true
 	}
 

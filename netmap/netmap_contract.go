@@ -2,12 +2,10 @@ package netmapcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -34,10 +32,8 @@ type (
 )
 
 const (
-	version   = 1
-	blockDiff = 20 // change base on performance evaluation
+	version = 1
 
-	voteKey       = "ballots"
 	netmapKey     = "netmap"
 	innerRingKey  = "innerring"
 	configuredKey = "initconfig"
@@ -81,16 +77,16 @@ func Init(keys [][]byte) {
 		irList = append(irList, irNode{key: key})
 	}
 
-	setSerialized(ctx, innerRingKey, irList)
+	common.SetSerialized(ctx, innerRingKey, irList)
 
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotEpoch, 0)
 
 	// simplified: this used for const sysfee in AddPeer method
-	setSerialized(ctx, netmapKey, []netmapNode{})
-	setSerialized(ctx, snapshot0Key, []netmapNode{})
-	setSerialized(ctx, snapshot1Key, []netmapNode{})
-	setSerialized(ctx, voteKey, []common.Ballot{})
+	common.SetSerialized(ctx, netmapKey, []netmapNode{})
+	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
+	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
+	common.InitVote(ctx)
 
 	runtime.Log("netmap contract initialized")
 }
@@ -118,11 +114,11 @@ func UpdateInnerRing(keys [][]byte) bool {
 	rawIRList := binary.Serialize(irList)
 	hashIRList := crypto.SHA256(rawIRList)
 
-	n := vote(ctx, hashIRList, irKey)
+	n := common.Vote(ctx, hashIRList, irKey)
 	if n >= threshold {
 		runtime.Log("updateInnerRing: inner ring list updated")
-		setSerialized(ctx, innerRingKey, irList)
-		removeVotes(ctx, hashIRList)
+		common.SetSerialized(ctx, innerRingKey, irList)
+		common.RemoveVotes(ctx, hashIRList)
 	} else {
 		runtime.Log("updateInnerRing: processed invoke from inner ring")
 	}
@@ -152,15 +148,15 @@ func AddPeer(nodeInfo []byte) bool {
 
 	nm := addToNetmap(ctx, candidate)
 
-	n := vote(ctx, hashCandidate, irKey)
+	n := common.Vote(ctx, hashCandidate, irKey)
 	if n >= threshold {
 		if nm == nil {
 			runtime.Log("addPeer: storage node already in the netmap")
 		} else {
-			setSerialized(ctx, netmapKey, nm)
+			common.SetSerialized(ctx, netmapKey, nm)
 			runtime.Log("addPeer: add storage node to the network map")
 		}
-		removeVotes(ctx, hashCandidate)
+		common.RemoveVotes(ctx, hashCandidate)
 	} else {
 		runtime.Log("addPeer: processed invoke from inner ring")
 	}
@@ -190,11 +186,11 @@ func UpdateState(state int, publicKey []byte) bool {
 		newNetmap := removeFromNetmap(ctx, publicKey)
 
 		hashID := invokeID([]interface{}{publicKey}, []byte("delete"))
-		n := vote(ctx, hashID, irKey)
+		n := common.Vote(ctx, hashID, irKey)
 		if n >= threshold {
 			runtime.Log("updateState: remove storage node from the network map")
-			setSerialized(ctx, netmapKey, newNetmap)
-			removeVotes(ctx, hashID)
+			common.SetSerialized(ctx, netmapKey, newNetmap)
+			common.RemoveVotes(ctx, hashID)
 		} else {
 			runtime.Log("updateState: processed invoke from inner ring")
 		}
@@ -224,7 +220,7 @@ func NewEpoch(epochNum int) bool {
 
 	hashID := invokeID([]interface{}{epochNum}, []byte("epoch"))
 
-	n := vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
 		runtime.Log("newEpoch: process new epoch")
 
@@ -232,12 +228,12 @@ func NewEpoch(epochNum int) bool {
 		storage.Put(ctx, snapshotEpoch, epochNum)
 
 		// put actual snapshot into previous snapshot
-		setSerialized(ctx, snapshot1Key, data0snapshot)
+		common.SetSerialized(ctx, snapshot1Key, data0snapshot)
 
 		// put netmap into actual snapshot
-		setSerialized(ctx, snapshot0Key, dataOnlineState)
+		common.SetSerialized(ctx, snapshot0Key, dataOnlineState)
 
-		removeVotes(ctx, hashID)
+		common.RemoveVotes(ctx, hashID)
 		runtime.Notify("NewEpoch", epochNum)
 	} else {
 		runtime.Log("newEpoch: processed invoke from inner ring")
@@ -290,10 +286,10 @@ func SetConfig(id, key, val []byte) bool {
 
 	// check unique id of the operation
 	hashID := invokeID([]interface{}{id, key, val}, []byte("config"))
-	n := vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, irKey)
 
 	if n >= threshold {
-		removeVotes(ctx, hashID)
+		common.RemoveVotes(ctx, hashID)
 		setConfig(ctx, key, val)
 
 		runtime.Log("setConfig: configuration has been updated")
@@ -371,7 +367,7 @@ func addToNetmap(ctx storage.Context, n storageNode) []netmapNode {
 		netmapNode := netmap[i].node.info
 		netmapNodeKey := netmapNode[2:35]
 
-		if bytesEqual(newNodeKey, netmapNodeKey) {
+		if common.BytesEqual(newNodeKey, netmapNodeKey) {
 			return nil
 		}
 	}
@@ -392,7 +388,7 @@ func removeFromNetmap(ctx storage.Context, key []byte) []netmapNode {
 		node := item.node.info
 		publicKey := node[2:35] // offset:2, len:33
 
-		if !bytesEqual(publicKey, key) {
+		if !common.BytesEqual(publicKey, key) {
 			newNetmap = append(newNetmap, item)
 		}
 	}
@@ -414,68 +410,6 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 	}
 
 	return result
-}
-
-func vote(ctx storage.Context, id, from []byte) int {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-		found         = -1
-		blockHeight   = blockchain.GetHeight()
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
-		if blockHeight-cnd.Height > blockDiff {
-			continue
-		}
-
-		if bytesEqual(cnd.ID, id) {
-			voters := cnd.Voters
-
-			for j := range voters {
-				if bytesEqual(voters[j], from) {
-					return len(voters)
-				}
-			}
-
-			voters = append(voters, from)
-			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
-			found = len(voters)
-		}
-
-		newCandidates = append(newCandidates, cnd)
-	}
-
-	if found < 0 {
-		voters := [][]byte{from}
-		newCandidates = append(newCandidates, common.Ballot{
-			ID:     id,
-			Voters: voters,
-			Height: blockHeight})
-		found = 1
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-
-	return found
-}
-
-func removeVotes(ctx storage.Context, id []byte) {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
-		}
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
 }
 
 func getIRNodes(ctx storage.Context) []irNode {
@@ -505,20 +439,6 @@ func getSnapshot(ctx storage.Context, key string) []storageNode {
 	return []storageNode{}
 }
 
-func getBallots(ctx storage.Context) []common.Ballot {
-	data := storage.Get(ctx, voteKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.Ballot)
-	}
-
-	return []common.Ballot{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
 func getConfig(ctx storage.Context, key interface{}) interface{} {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
@@ -540,9 +460,4 @@ func invokeID(args []interface{}, prefix []byte) []byte {
 	}
 
 	return crypto.SHA256(prefix)
-}
-
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }

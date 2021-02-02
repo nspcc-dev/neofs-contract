@@ -3,13 +3,11 @@ package balancecontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -44,9 +42,6 @@ const (
 	decimals    = 12
 	circulation = "MainnetGAS"
 	version     = 1
-
-	voteKey   = "ballots"
-	blockDiff = 20 // change base on performance evaluation
 
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
@@ -134,11 +129,11 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 		runtime.Log("transferX: processed indirect invoke")
 	} else {
 		hashTxID = invokeID([]interface{}{from, to, amount}, []byte("transfer"))
-		n = vote(ctx, hashTxID, irKey)
+		n = common.Vote(ctx, hashTxID, irKey)
 	}
 
 	if n >= threshold {
-		removeVotes(ctx, hashTxID)
+		common.RemoveVotes(ctx, hashTxID)
 
 		result := token.transfer(ctx, from, to, amount, true, details)
 		if result {
@@ -166,16 +161,16 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 
 	hashTxID := invokeID([]interface{}{txID, from, to, amount, until}, []byte("lock"))
 
-	n := vote(ctx, hashTxID, irKey)
+	n := common.Vote(ctx, hashTxID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, hashTxID)
+		common.RemoveVotes(ctx, hashTxID)
 
 		lockAccount := Account{
 			Balance: 0,
 			Until:   until,
 			Parent:  from,
 		}
-		setSerialized(ctx, to, lockAccount)
+		common.SetSerialized(ctx, to, lockAccount)
 
 		result := token.transfer(ctx, from, to, amount, true, lockTransferMsg)
 		if !result {
@@ -204,9 +199,9 @@ func NewEpoch(epochNum int) bool {
 
 	epochID := invokeID([]interface{}{epochNum}, []byte("epoch"))
 
-	n := vote(ctx, epochID, irKey)
+	n := common.Vote(ctx, epochID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, epochID)
+		common.RemoveVotes(ctx, epochID)
 		it := storage.Find(ctx, []byte{})
 		for iterator.Next(it) {
 			addr := iterator.Key(it).([]byte)
@@ -243,9 +238,9 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 
 	mintID := invokeID([]interface{}{to, amount, details}, []byte("mint"))
 
-	n := vote(ctx, mintID, irKey)
+	n := common.Vote(ctx, mintID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, mintID)
+		common.RemoveVotes(ctx, mintID)
 
 		ok := token.transfer(ctx, nil, to, amount, true, details)
 		if !ok {
@@ -274,9 +269,9 @@ func Burn(from interop.Hash160, amount int, details []byte) bool {
 
 	burnID := invokeID([]interface{}{from, amount, details}, []byte("burn"))
 
-	n := vote(ctx, burnID, irKey)
+	n := common.Vote(ctx, burnID, irKey)
 	if n >= threshold {
-		removeVotes(ctx, burnID)
+		common.RemoveVotes(ctx, burnID)
 
 		ok := token.transfer(ctx, from, nil, amount, true, details)
 		if !ok {
@@ -329,14 +324,14 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 			storage.Delete(ctx, from)
 		} else {
 			amountFrom.Balance = amountFrom.Balance - amount // neo-go#953
-			setSerialized(ctx, from, amountFrom)
+			common.SetSerialized(ctx, from, amountFrom)
 		}
 	}
 
 	if len(to) == 20 {
 		amountTo := getAccount(ctx, to)
 		amountTo.Balance = amountTo.Balance + amount // neo-go#953
-		setSerialized(ctx, to, amountTo)
+		common.SetSerialized(ctx, to, amountTo)
 	}
 
 	runtime.Notify("Transfer", from, to, amount)
@@ -379,7 +374,7 @@ func isUsableAddress(addr interop.Hash160) bool {
 
 		// Check if a smart contract is calling script hash
 		callingScriptHash := runtime.GetCallingScriptHash()
-		if bytesEqual(callingScriptHash, addr) {
+		if common.BytesEqual(callingScriptHash, addr) {
 			return true
 		}
 	}
@@ -398,82 +393,6 @@ func innerRingInvoker(ir []irNode) []byte {
 	return nil
 }
 
-func vote(ctx storage.Context, id, from []byte) int {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-		found         = -1
-		blockHeight   = blockchain.GetHeight()
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
-		if blockHeight-cnd.Height > blockDiff {
-			continue
-		}
-
-		if bytesEqual(cnd.ID, id) {
-			voters := cnd.Voters
-
-			for j := range voters {
-				if bytesEqual(voters[j], from) {
-					return len(voters)
-				}
-			}
-
-			voters = append(voters, from)
-			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
-			found = len(voters)
-		}
-
-		newCandidates = append(newCandidates, cnd)
-	}
-
-	if found < 0 {
-		voters := [][]byte{from}
-		newCandidates = append(newCandidates, common.Ballot{
-			ID:     id,
-			Voters: voters,
-			Height: blockHeight})
-		found = 1
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-
-	return found
-}
-
-func removeVotes(ctx storage.Context, id []byte) {
-	var (
-		newCandidates []common.Ballot
-		candidates    = getBallots(ctx)
-	)
-
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-		if !bytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
-		}
-	}
-
-	setSerialized(ctx, voteKey, newCandidates)
-}
-
-func getBallots(ctx storage.Context) []common.Ballot {
-	data := storage.Get(ctx, voteKey)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.Ballot)
-	}
-
-	return []common.Ballot{}
-}
-
-func setSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}
-
 func getAccount(ctx storage.Context, key interface{}) Account {
 	data := storage.Get(ctx, key)
 	if data != nil {
@@ -490,11 +409,6 @@ func invokeID(args []interface{}, prefix []byte) []byte {
 	}
 
 	return crypto.SHA256(prefix)
-}
-
-// neo-go#1176
-func bytesEqual(a []byte, b []byte) bool {
-	return util.Equals(string(a), string(b))
 }
 
 /*
@@ -520,5 +434,5 @@ func bytesEqual(a []byte, b []byte) bool {
 func fromKnownContract(caller interop.Hash160) bool {
 	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
 
-	return bytesEqual(caller, containerContractAddr)
+	return common.BytesEqual(caller, containerContractAddr)
 }
