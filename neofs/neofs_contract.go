@@ -41,15 +41,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
+	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 type (
-	ballot struct {
-		id    []byte   // id of the voting decision
-		n     [][]byte // already voted inner ring nodes
-		block int      // block with the last vote
-	}
-
 	node struct {
 		pub []byte
 	}
@@ -127,7 +122,7 @@ func Init(args [][]byte) bool {
 
 	// initialize all storage slices
 	setSerialized(ctx, innerRingKey, irList)
-	setSerialized(ctx, voteKey, []ballot{})
+	setSerialized(ctx, voteKey, []common.Ballot{})
 	setSerialized(ctx, candidatesKey, []node{})
 	setSerialized(ctx, cashedChequesKey, []cheque{})
 
@@ -548,7 +543,7 @@ func innerRingInvoker(ir []node) []byte {
 // on unique voters for that decision.
 func vote(ctx storage.Context, id, from []byte) int {
 	var (
-		newCandidates = []ballot{} // it is explicit declaration of empty slice, not nil
+		newCandidates = []common.Ballot{} // it is explicit declaration of empty slice, not nil
 		candidates    = getBallots(ctx)
 		found         = -1
 		blockHeight   = blockchain.GetHeight()
@@ -557,12 +552,12 @@ func vote(ctx storage.Context, id, from []byte) int {
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
 
-		if blockHeight-cnd.block > blockDiff {
+		if blockHeight-cnd.Height > blockDiff {
 			continue
 		}
 
-		if bytesEqual(cnd.id, id) {
-			voters := cnd.n
+		if bytesEqual(cnd.ID, id) {
+			voters := cnd.Voters
 
 			for j := range voters {
 				if bytesEqual(voters[j], from) {
@@ -571,7 +566,7 @@ func vote(ctx storage.Context, id, from []byte) int {
 			}
 
 			voters = append(voters, from)
-			cnd = ballot{id: id, n: voters, block: blockHeight}
+			cnd = common.Ballot{ID: id, Voters: voters, Height: blockHeight}
 			found = len(voters)
 		}
 
@@ -582,10 +577,10 @@ func vote(ctx storage.Context, id, from []byte) int {
 		found = 1
 		voters := [][]byte{from}
 
-		newCandidates = append(newCandidates, ballot{
-			id:    id,
-			n:     voters,
-			block: blockHeight})
+		newCandidates = append(newCandidates, common.Ballot{
+			ID:     id,
+			Voters: voters,
+			Height: blockHeight})
 	}
 
 	setSerialized(ctx, voteKey, newCandidates)
@@ -597,13 +592,13 @@ func vote(ctx storage.Context, id, from []byte) int {
 // inner ring nodes.
 func removeVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates = []ballot{} // it is explicit declaration of empty slice, not nil
+		newCandidates = []common.Ballot{} // it is explicit declaration of empty slice, not nil
 		candidates    = getBallots(ctx)
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !bytesEqual(cnd.id, id) {
+		if !bytesEqual(cnd.ID, id) {
 			newCandidates = append(newCandidates, cnd)
 		}
 	}
@@ -638,13 +633,13 @@ func getCashedCheques(ctx storage.Context) []cheque {
 }
 
 // getInnerRingNodes returns deserialized slice of vote ballots.
-func getBallots(ctx storage.Context) []ballot {
+func getBallots(ctx storage.Context) []common.Ballot {
 	data := storage.Get(ctx, voteKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]ballot)
+		return binary.Deserialize(data.([]byte)).([]common.Ballot)
 	}
 
-	return []ballot{}
+	return []common.Ballot{}
 }
 
 // getConfig returns installed neofs configuration value or nil if it is not set.
