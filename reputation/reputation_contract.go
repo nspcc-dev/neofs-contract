@@ -1,7 +1,6 @@
 package reputationcontract
 
 import (
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -53,7 +52,7 @@ func Put(manager, epoch, typ []byte, newTrustList [][]byte) bool {
 	//       contract storage will be used as a cache if needed
 	key := append(trustJournalPrefix, append(epoch, typ...)...)
 
-	trustList := getList(ctx, key)
+	trustList := common.GetList(ctx, key)
 
 	// fixme: with neo3.0 it is kinda unnecessary
 	if len(trustList) == 0 {
@@ -75,14 +74,5 @@ func Put(manager, epoch, typ []byte, newTrustList [][]byte) bool {
 func List(epoch, typ []byte) [][]byte {
 	key := append(trustJournalPrefix, append(epoch, typ...)...)
 
-	return getList(ctx, key)
-}
-
-func getList(ctx storage.Context, key interface{}) [][]byte {
-	data := storage.Get(ctx, key)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([][]byte)
-	}
-
-	return [][]byte{}
+	return common.GetList(ctx, key)
 }
