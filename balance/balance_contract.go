@@ -413,6 +413,11 @@ func vote(ctx storage.Context, id, from []byte) int {
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
+
+		if blockHeight-cnd.block > blockDiff {
+			continue
+		}
+
 		if bytesEqual(cnd.id, id) {
 			voters := cnd.n
 
@@ -427,10 +432,7 @@ func vote(ctx storage.Context, id, from []byte) int {
 			found = len(voters)
 		}
 
-		// do not add old ballots, they are invalid
-		if blockHeight-cnd.block <= blockDiff {
-			newCandidates = append(newCandidates, cnd)
-		}
+		newCandidates = append(newCandidates, cnd)
 	}
 
 	if found < 0 {
