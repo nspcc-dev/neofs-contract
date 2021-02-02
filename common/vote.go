@@ -96,9 +96,3 @@ func getBallots(ctx storage.Context) []Ballot {
 func BytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
 }
-
-// SetSerialized serializes data and puts it into contract storage.
-func SetSerialized(ctx storage.Context, key interface{}, value interface{}) {
-	data := binary.Serialize(value)
-	storage.Put(ctx, key, data)
-}

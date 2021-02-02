@@ -203,14 +203,14 @@ func List(owner []byte) [][]byte {
 
 	var list [][]byte
 
-	owners := getList(ctx, ownersKey)
+	owners := common.GetList(ctx, ownersKey)
 	for i := 0; i < len(owners); i++ {
 		ownerID := owners[i]
 		if len(owner) != 0 && !common.BytesEqual(owner, ownerID) {
 			continue
 		}
 
-		containers := getList(ctx, ownerID)
+		containers := common.GetList(ctx, ownerID)
 
 		for j := 0; j < len(containers); j++ {
 			container := containers[j]
@@ -429,7 +429,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 }
 
 func addOrAppend(ctx storage.Context, key interface{}, value []byte) {
-	list := getList(ctx, key)
+	list := common.GetList(ctx, key)
 	for i := 0; i < len(list); i++ {
 		if common.BytesEqual(list[i], value) {
 			return
@@ -448,7 +448,7 @@ func addOrAppend(ctx storage.Context, key interface{}, value []byte) {
 // remove returns amount of left elements in the list
 func remove(ctx storage.Context, key interface{}, value []byte) int {
 	var (
-		list    = getList(ctx, key)
+		list    = common.GetList(ctx, key)
 		newList = [][]byte{}
 	)
 
@@ -466,15 +466,6 @@ func remove(ctx storage.Context, key interface{}, value []byte) int {
 	}
 
 	return ln
-}
-
-func getList(ctx storage.Context, key interface{}) [][]byte {
-	data := storage.Get(ctx, key)
-	if data != nil {
-		return binary.Deserialize(data.([]byte)).([][]byte)
-	}
-
-	return [][]byte{}
 }
 
 func getAllContainers(ctx storage.Context) [][]byte {
@@ -517,10 +508,10 @@ func verifySignature(msg, sig []byte, keys [][]byte) bool {
 }
 
 func getOwnerByID(ctx storage.Context, id []byte) []byte {
-	owners := getList(ctx, ownersKey)
+	owners := common.GetList(ctx, ownersKey)
 	for i := 0; i < len(owners); i++ {
 		ownerID := owners[i]
-		containers := getList(ctx, ownerID)
+		containers := common.GetList(ctx, ownerID)
 
 		for j := 0; j < len(containers); j++ {
 			container := containers[j]
