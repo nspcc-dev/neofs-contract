@@ -7,6 +7,17 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
 
+type Ballot struct {
+	// ID of the voting decision.
+	ID []byte
+
+	// Public keys of already voted inner ring nodes.
+	Voters [][]byte
+
+	// Height of block with the last vote.
+	Height int
+}
+
 const voteKey = "ballots"
 
 const blockDiff = 20 // change base on performance evaluation
