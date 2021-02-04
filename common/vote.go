@@ -3,6 +3,7 @@ package common
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
+	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
@@ -106,4 +107,13 @@ func getBallots(ctx storage.Context) []Ballot {
 // which is necessary with new util.Equal interop behaviour, see neo-go#1176.
 func BytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
+}
+
+func InvokeID(args []interface{}, prefix []byte) []byte {
+	for i := range args {
+		arg := args[i].([]byte)
+		prefix = append(prefix, arg...)
+	}
+
+	return crypto.SHA256(prefix)
 }
