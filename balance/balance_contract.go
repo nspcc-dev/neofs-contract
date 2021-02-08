@@ -193,9 +193,9 @@ func NewEpoch(epochNum int) bool {
 	n := common.Vote(ctx, epochID, irKey)
 	if n >= threshold {
 		common.RemoveVotes(ctx, epochID)
-		it := storage.Find(ctx, []byte{})
+		it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 		for iterator.Next(it) {
-			addr := iterator.Key(it).([]byte)
+			addr := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
 			if len(addr) != 20 {
 				continue
 			}

@@ -322,12 +322,12 @@ func ListContainerSizes(epoch int) [][]byte {
 	key := []byte(estimateKeyPrefix)
 	key = append(key, buf.([]byte)...)
 
-	it := storage.Find(ctx, key)
+	it := storage.Find(ctx, key, storage.KeysOnly)
 
 	var result [][]byte
 
 	for iterator.Next(it) {
-		key := iterator.Key(it).([]byte)
+		key := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
 		result = append(result, key)
 	}
 
@@ -467,9 +467,9 @@ func remove(ctx storage.Context, key interface{}, value []byte) int {
 func getAllContainers(ctx storage.Context) [][]byte {
 	var list [][]byte
 
-	it := storage.Find(ctx, []byte{})
+	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 	for iterator.Next(it) {
-		key := iterator.Key(it).([]byte)
+		key := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
 		if len(key) == containerIDSize {
 			list = append(list, key)
 		}
@@ -577,9 +577,9 @@ func isStorageNode(key interop.PublicKey) bool {
 func keysToDelete(epoch int) [][]byte {
 	results := [][]byte{}
 
-	it := storage.Find(ctx, []byte(estimateKeyPrefix))
+	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
 	for iterator.Next(it) {
-		k := iterator.Key(it).([]byte)
+		k := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
 		nbytes := k[len(estimateKeyPrefix) : len(k)-32]
 
 		var n interface{} = nbytes

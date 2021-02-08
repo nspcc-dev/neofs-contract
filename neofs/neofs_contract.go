@@ -477,10 +477,11 @@ func SetConfig(id, key, val []byte) bool {
 func ListConfig() []record {
 	var config []record
 
-	it := storage.Find(ctx, configPrefix)
+	it := storage.Find(ctx, configPrefix, storage.None)
 	for iterator.Next(it) {
-		key := iterator.Key(it).([]byte)
-		val := iterator.Value(it).([]byte)
+		pair := iterator.Value(it).([]interface{})
+		key := pair[0].([]byte)
+		val := pair[1].([]byte)
 		r := record{key: key[len(configPrefix):], val: val}
 
 		config = append(config, r)
