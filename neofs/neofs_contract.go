@@ -175,7 +175,7 @@ func InnerRingCandidateAdd(key []byte) bool {
 	fee := getConfig(ctx, candidateFeeConfigKey).(int)
 
 	transferred := contract.Call([]byte(tokenHash),
-		"transfer", from, to, fee,
+		"transfer", contract.All, from, to, fee,
 		[]byte(ignoreDepositNotification)).(bool)
 	if !transferred {
 		panic("irCandidateAdd: failed to transfer funds, aborting")
@@ -231,7 +231,7 @@ func Deposit(from interop.Hash160, amount int, rcv interop.Hash160) bool {
 	to := runtime.GetExecutingScriptHash()
 
 	transferred := contract.Call([]byte(tokenHash), "transfer",
-		from, to, amount, rcv).(bool)
+		contract.All, from, to, amount, rcv).(bool)
 	if !transferred {
 		panic("deposit: failed to transfer funds, aborting")
 	}
@@ -289,7 +289,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 		from := runtime.GetExecutingScriptHash()
 
 		transferred := contract.Call([]byte(tokenHash),
-			"transfer", from, user, amount, nil).(bool)
+			"transfer", contract.All, from, user, amount, nil).(bool)
 		if !transferred {
 			panic("cheque: failed to transfer funds, aborting")
 		}

@@ -99,7 +99,7 @@ func Put(container, signature, publicKey []byte) bool {
 		// check provided key
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
-			keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
+			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
 			if !verifySignature(container, signature, keys) {
 				panic("put: invalid owner signature")
 			}
@@ -112,7 +112,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 	from := walletToScripHash(ownerID)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
-	containerFee := contract.Call(netmapContractAddr, "config", containerFeeKey).(int)
+	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
 	hashCandidate := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
 	n := common.Vote(ctx, hashCandidate, irKey)
@@ -125,6 +125,7 @@ func Put(container, signature, publicKey []byte) bool {
 			to := contract.CreateStandardAccount(node.PublicKey)
 
 			tx := contract.Call(balanceContractAddr, "transferX",
+				contract.All,
 				from,
 				to,
 				containerFee,
@@ -138,7 +139,7 @@ func Put(container, signature, publicKey []byte) bool {
 
 		addContainer(ctx, containerID, ownerID, container)
 		// try to remove underscore at v0.92.0
-		_ = contract.Call(neofsIDContractAddr, "addKey", ownerID, [][]byte{publicKey})
+		_ = contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
 
 		runtime.Log("put: added new container")
 	} else {
@@ -163,7 +164,7 @@ func Delete(containerID, signature []byte) bool {
 	if len(irKey) == 0 {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-		keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
+		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
 
 		if !verifySignature(containerID, signature, keys) {
 			panic("delete: invalid owner signature")
@@ -232,7 +233,7 @@ func SetEACL(eACL, signature []byte) bool {
 	}
 
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-	keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
+	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
 
 	if !verifySignature(eACL, signature, keys) {
 		panic("setEACL: invalid eACL signature")
@@ -266,7 +267,7 @@ func EACL(containerID []byte) extendedACL {
 	// attach corresponding public key if it was not revoked from neofs id
 
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-	keys := contract.Call(neofsIDContractAddr, "key", ownerID).([][]byte)
+	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
 
 	for i := range keys {
 		key := keys[i]
@@ -560,7 +561,7 @@ func getContainerSizeEstimation(key, cid []byte) containerSizes {
 // announce container size estimation of previous epoch.
 func isStorageNode(key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	snapshot := contract.Call(netmapContractAddr, "snapshot", 1).([]storageNode)
+	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)
 
 	for i := range snapshot {
 		nodeInfo := snapshot[i].info
