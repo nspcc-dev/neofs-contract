@@ -95,13 +95,13 @@ func Get(id []byte) []byte {
 }
 
 func List() [][]byte {
-	it := storage.Find(ctx, []byte{})
+	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 
 	return list(it)
 }
 
 func ListByEpoch(epoch int) [][]byte {
-	it := storage.Find(ctx, epoch)
+	it := storage.Find(ctx, epoch, storage.KeysOnly)
 
 	return list(it)
 }
@@ -110,7 +110,7 @@ func ListByCID(epoch int, cid []byte) [][]byte {
 	var buf interface{} = epoch
 
 	prefix := append(buf.([]byte), cid...)
-	it := storage.Find(ctx, prefix)
+	it := storage.Find(ctx, prefix, storage.KeysOnly)
 
 	return list(it)
 }
@@ -122,7 +122,7 @@ func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 		from:  key,
 	}
 
-	it := storage.Find(ctx, hdr.ID())
+	it := storage.Find(ctx, hdr.ID(), storage.KeysOnly)
 
 	return list(it)
 }
@@ -131,7 +131,7 @@ func list(it iterator.Iterator) [][]byte {
 	var result [][]byte
 
 	for iterator.Next(it) {
-		key := iterator.Key(it).([]byte)
+		key := iterator.Value(it).([]byte) // iterator MUST BE `storage.KeysOnly`
 		if len(key) == netmapContractKeyLn {
 			continue
 		}
