@@ -2,8 +2,8 @@ package common
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/blockchain"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
@@ -34,7 +34,7 @@ func Vote(ctx storage.Context, id, from []byte) int {
 		newCandidates []Ballot
 		candidates    = getBallots(ctx)
 		found         = -1
-		blockHeight   = blockchain.GetHeight()
+		blockHeight   = ledger.CurrentIndex()
 	)
 
 	for i := 0; i < len(candidates); i++ {
