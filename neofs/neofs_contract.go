@@ -187,8 +187,8 @@ func InnerRingCandidateAdd(key []byte) bool {
 	return true
 }
 
-// OnPayment is a callback for NEP-17 compatible native GAS contract.
-func OnPayment(from interop.Hash160, amount int, data interface{}) {
+// OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
+func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	rcv := data.(interop.Hash160)
 	if common.BytesEqual(rcv, []byte(ignoreDepositNotification)) {
 		return
@@ -196,7 +196,7 @@ func OnPayment(from interop.Hash160, amount int, data interface{}) {
 
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(tokenHash)) {
-		panic("onPayment: only GAS can be accepted for deposit")
+		panic("onNEP17Payment: only GAS can be accepted for deposit")
 	}
 
 	switch len(rcv) {
@@ -204,10 +204,10 @@ func OnPayment(from interop.Hash160, amount int, data interface{}) {
 	case 0:
 		rcv = from
 	default:
-		panic("onPayment: invalid data argument, expected Hash160")
+		panic("onNEP17Payment: invalid data argument, expected Hash160")
 	}
 
-	runtime.Log("onPayment: funds have been transferred")
+	runtime.Log("onNEP17Payment: funds have been transferred")
 
 	tx := runtime.GetScriptContainer()
 	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)

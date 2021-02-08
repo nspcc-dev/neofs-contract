@@ -36,11 +36,11 @@ func init() {
 	ctx = storage.GetContext()
 }
 
-// OnPayment is a callback for NEP-17 compatible native GAS and NEO contracts.
-func OnPayment(from interop.Hash160, amount int, data interface{}) {
+// OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO contracts.
+func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gasHash)) && !common.BytesEqual(caller, []byte(neoHash)) {
-		panic("onPayment: alphabet contract accepts GAS and NEO only")
+		panic("onNEP17Payment: alphabet contract accepts GAS and NEO only")
 	}
 }
 
