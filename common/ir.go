@@ -37,5 +37,5 @@ func InnerRingListViaStorage(ctx storage.Context, key interface{}) []IRNode {
 // InnerRingList gets list of inner ring through
 // calling "innerRingList" method of smart contract.
 func InnerRingList(sc interop.Hash160) []IRNode {
-	return contract.Call(sc, irListMethod).([]IRNode)
+	return contract.Call(sc, irListMethod, contract.ReadOnly).([]IRNode)
 }

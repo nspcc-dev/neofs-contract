@@ -74,7 +74,7 @@ func Neo() int {
 }
 
 func balance(hash string, addr []byte) int {
-	balance := contract.Call([]byte(hash), "balanceOf", addr)
+	balance := contract.Call([]byte(hash), "balanceOf", contract.ReadOnly, addr)
 	return balance.(int)
 }
 
@@ -84,7 +84,7 @@ func irList() []common.IRNode {
 
 func currentEpoch() int {
 	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
-	return contract.Call(netmapContractAddr, "epoch").(int)
+	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
 func name() string {
@@ -119,7 +119,7 @@ func Emit() bool {
 	contractHash := runtime.GetExecutingScriptHash()
 	neo := balance(neoHash, contractHash)
 
-	_ = contract.Call([]byte(neoHash), "transfer", contractHash, contractHash, neo, nil)
+	_ = contract.Call([]byte(neoHash), "transfer", contract.All, contractHash, contractHash, neo, nil)
 
 	gas := balance(gasHash, contractHash)
 	gasPerNode := gas * 7 / 8 / len(innerRingKeys)
@@ -133,7 +133,7 @@ func Emit() bool {
 		node := innerRingKeys[i]
 		address := contract.CreateStandardAccount(node.PublicKey)
 
-		_ = contract.Call([]byte(gasHash), "transfer", contractHash, address, gasPerNode, nil)
+		_ = contract.Call([]byte(gasHash), "transfer", contract.All, contractHash, address, gasPerNode, nil)
 	}
 
 	runtime.Log("utility token has been emitted to inner ring nodes")
@@ -163,7 +163,7 @@ func Vote(epoch int, candidates [][]byte) {
 		candidate := candidates[index%len(candidates)]
 		address := runtime.GetExecutingScriptHash()
 
-		ok := contract.Call([]byte(neoHash), "vote", address, candidate).(bool)
+		ok := contract.Call([]byte(neoHash), "vote", contract.All, address, candidate).(bool)
 		if ok {
 			runtime.Log(name + ": successfully voted for validator")
 			removeVotes(ctx, id)
