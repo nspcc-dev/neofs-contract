@@ -1,5 +1,3 @@
-hasstorage: true
-ispayable: false
 events:
   - name: AddPeer
     parameters:
