@@ -5,18 +5,14 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 const (
-	// native gas token script hash
-	gasHash = "\x28\xb3\xad\xab\x72\x69\xf9\xc2\x18\x1d\xb3\xcb\x74\x1e\xbf\x55\x19\x30\xe2\x70"
-
-	// native neo token script hash
-	neoHash = "\x83\xab\x06\x79\xad\x55\xc0\x50\xa1\x3a\xd4\x3f\x59\x36\xea\x73\xf5\xeb\x1e\xf6"
-
 	netmapKey = "netmapScriptHash"
 	indexKey  = "index"
 	totalKey  = "threshold"
@@ -33,7 +29,7 @@ func init() {
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO contracts.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(gasHash)) && !common.BytesEqual(caller, []byte(neoHash)) {
+	if !common.BytesEqual(caller, []byte(gas.Hash)) && !common.BytesEqual(caller, []byte(neo.Hash)) {
 		panic("onNEP17Payment: alphabet contract accepts GAS and NEO only")
 	}
 }
@@ -60,18 +56,11 @@ func Init(addrNetmap []byte, name string, index, total int) {
 }
 
 func Gas() int {
-	contractHash := runtime.GetExecutingScriptHash()
-	return balance(gasHash, contractHash)
+	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
 func Neo() int {
-	contractHash := runtime.GetExecutingScriptHash()
-	return balance(neoHash, contractHash)
-}
-
-func balance(hash string, addr []byte) int {
-	balance := contract.Call([]byte(hash), "balanceOf", contract.ReadOnly, addr)
-	return balance.(int)
+	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
 func irList() []common.IRNode {
@@ -123,12 +112,11 @@ func Emit() bool {
 	}
 
 	contractHash := runtime.GetExecutingScriptHash()
-	neo := balance(neoHash, contractHash)
 
-	_ = contract.Call([]byte(neoHash), "transfer", contract.All, contractHash, contractHash, neo, nil)
+	_ = neo.Transfer(contractHash, contractHash, neo.BalanceOf(contractHash), nil)
 
-	gas := balance(gasHash, contractHash)
-	gasPerNode := gas * 7 / 8 / len(innerRingKeys)
+	gasBalance := gas.BalanceOf(contractHash)
+	gasPerNode := gasBalance * 7 / 8 / len(innerRingKeys)
 
 	if gasPerNode == 0 {
 		runtime.Log("no gas to emit")
@@ -139,7 +127,7 @@ func Emit() bool {
 		node := innerRingKeys[i]
 		address := contract.CreateStandardAccount(node.PublicKey)
 
-		_ = contract.Call([]byte(gasHash), "transfer", contract.All, contractHash, address, gasPerNode, nil)
+		_ = gas.Transfer(contractHash, address, gasPerNode, nil)
 	}
 
 	runtime.Log("utility token has been emitted to inner ring nodes")
@@ -171,7 +159,7 @@ func Vote(epoch int, candidates [][]byte) {
 		candidate := candidates[index%len(candidates)]
 		address := runtime.GetExecutingScriptHash()
 
-		ok := contract.Call([]byte(neoHash), "vote", contract.All, address, candidate).(bool)
+		ok := neo.Vote(address, candidate)
 		if ok {
 			runtime.Log(name + ": successfully voted for validator")
 			removeVotes(ctx, id)
