@@ -37,6 +37,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -54,9 +55,6 @@ type (
 )
 
 const (
-	// native gas token script hash
-	tokenHash = "\x28\xb3\xad\xab\x72\x69\xf9\xc2\x18\x1d\xb3\xcb\x74\x1e\xbf\x55\x19\x30\xe2\x70"
-
 	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	candidateFeeConfigKey = "InnerRingCandidateFee"
 
@@ -177,9 +175,7 @@ func InnerRingCandidateAdd(key []byte) bool {
 	to := runtime.GetExecutingScriptHash()
 	fee := getConfig(ctx, candidateFeeConfigKey).(int)
 
-	transferred := contract.Call([]byte(tokenHash),
-		"transfer", contract.All, from, to, fee,
-		[]byte(ignoreDepositNotification)).(bool)
+	transferred := gas.Transfer(from, to, fee, []byte(ignoreDepositNotification))
 	if !transferred {
 		panic("irCandidateAdd: failed to transfer funds, aborting")
 	}
@@ -198,7 +194,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(tokenHash)) {
+	if !common.BytesEqual(caller, []byte(gas.Hash)) {
 		panic("onNEP17Payment: only GAS can be accepted for deposit")
 	}
 
@@ -233,8 +229,7 @@ func Deposit(from interop.Hash160, amount int, rcv interop.Hash160) bool {
 
 	to := runtime.GetExecutingScriptHash()
 
-	transferred := contract.Call([]byte(tokenHash), "transfer",
-		contract.All, from, to, amount, rcv).(bool)
+	transferred := gas.Transfer(from, to, amount, rcv)
 	if !transferred {
 		panic("deposit: failed to transfer funds, aborting")
 	}
@@ -293,8 +288,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 
 		from := runtime.GetExecutingScriptHash()
 
-		transferred := contract.Call([]byte(tokenHash),
-			"transfer", contract.All, from, user, amount, nil).(bool)
+		transferred := gas.Transfer(from, user, amount, nil)
 		if !transferred {
 			panic("cheque: failed to transfer funds, aborting")
 		}
