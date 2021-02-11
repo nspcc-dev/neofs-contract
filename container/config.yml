@@ -1,3 +1,4 @@
+name: "NeoFS Container"
 events:
   - name: containerPut
     parameters:
