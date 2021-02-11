@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -63,19 +64,32 @@ func init() {
 	token = CreateToken()
 }
 
-func Init(addrNetmap, addrContainer []byte) {
-	if storage.Get(ctx, netmapContractKey) != nil {
-		panic("init: contract already deployed")
+func Init(owner interop.Hash160, addrNetmap, addrContainer []byte) {
+	if !common.HasUpdateAccess(ctx) {
+		panic("only owner can reinitialize contract")
 	}
 
 	if len(addrNetmap) != 20 || len(addrContainer) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
 
+	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, containerContractKey, addrContainer)
 
 	runtime.Log("balance contract initialized")
+}
+
+func Migrate(script []byte, manifest []byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		runtime.Log("only owner can update contract")
+		return false
+	}
+
+	management.Update(script, manifest)
+	runtime.Log("balance contract updated")
+
+	return true
 }
 
 func Symbol() string {

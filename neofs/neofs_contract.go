@@ -38,6 +38,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -84,9 +85,9 @@ func init() {
 }
 
 // Init set up initial inner ring node keys.
-func Init(args [][]byte) bool {
-	if storage.Get(ctx, innerRingKey) != nil {
-		panic("neofs: contract already deployed")
+func Init(owner interop.PublicKey, args [][]byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		panic("only owner can reinitialize contract")
 	}
 
 	var irList []common.IRNode
@@ -109,7 +110,22 @@ func Init(args [][]byte) bool {
 	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 	common.SetSerialized(ctx, cashedChequesKey, []cheque{})
 
+	storage.Put(ctx, common.OwnerKey, owner)
+
 	runtime.Log("neofs: contract initialized")
+
+	return true
+}
+
+// Migrate updates smart contract execution script and manifest.
+func Migrate(script []byte, manifest []byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		runtime.Log("only owner can update contract")
+		return false
+	}
+
+	management.Update(script, manifest)
+	runtime.Log("neofs contract updated")
 
 	return true
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -34,15 +35,16 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(addrNetmap []byte, name string, index, total int) {
-	if storage.Get(ctx, netmapKey) != nil {
-		panic("contract already deployed")
+func Init(owner interop.Hash160, addrNetmap []byte, name string, index, total int) {
+	if !common.HasUpdateAccess(ctx) {
+		panic("only owner can reinitialize contract")
 	}
 
 	if len(addrNetmap) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
+	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapKey, addrNetmap)
 	storage.Put(ctx, nameKey, name)
 	storage.Put(ctx, indexKey, index)
@@ -51,6 +53,18 @@ func Init(addrNetmap []byte, name string, index, total int) {
 	common.SetSerialized(ctx, voteKey, []common.Ballot{})
 
 	runtime.Log(name + " contract initialized")
+}
+
+func Migrate(script []byte, manifest []byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		runtime.Log("only owner can update contract")
+		return false
+	}
+
+	management.Update(script, manifest)
+	runtime.Log("alphabet contract updated")
+
+	return true
 }
 
 func Gas() int {
