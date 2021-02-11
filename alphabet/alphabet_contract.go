@@ -20,10 +20,16 @@ const (
 	voteKey   = "ballots"
 )
 
+var (
+	ctx storage.Context
+)
+
 func init() {
 	if runtime.GetTrigger() != runtime.Application {
 		panic("contract has not been called in application node")
 	}
+
+	ctx = storage.GetContext()
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO contracts.
@@ -35,8 +41,6 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 func Init(addrNetmap []byte, name string, index, total int) {
-	ctx := storage.GetContext()
-
 	if storage.Get(ctx, netmapKey) != nil {
 		panic("contract already deployed")
 	}
@@ -64,33 +68,23 @@ func Neo() int {
 }
 
 func irList() []common.IRNode {
-	ctx := storage.GetContext()
-
 	return common.InnerRingListViaStorage(ctx, netmapKey)
 }
 
 func currentEpoch() int {
-	ctx := storage.GetContext()
-
 	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
 func name() string {
-	ctx := storage.GetContext()
-
 	return storage.Get(ctx, nameKey).(string)
 }
 
 func index() int {
-	ctx := storage.GetContext()
-
 	return storage.Get(ctx, indexKey).(int)
 }
 
 func total() int {
-	ctx := storage.GetContext()
-
 	return storage.Get(ctx, totalKey).(int)
 }
 
@@ -135,8 +129,6 @@ func Emit() bool {
 }
 
 func Vote(epoch int, candidates [][]byte) {
-	ctx := storage.GetContext()
-
 	innerRingKeys := irList()
 	threshold := total()/3*2 + 1
 	index := index()
@@ -178,8 +170,6 @@ func Name() string {
 }
 
 func vote(ctx storage.Context, epoch int, id, from []byte) int {
-	ctx = storage.GetContext()
-
 	var (
 		newCandidates []common.Ballot
 		candidates    = getBallots(ctx)
@@ -223,8 +213,6 @@ func vote(ctx storage.Context, epoch int, id, from []byte) int {
 }
 
 func removeVotes(ctx storage.Context, id []byte) {
-	ctx = storage.GetContext()
-
 	var (
 		newCandidates []common.Ballot
 		candidates    = getBallots(ctx)
