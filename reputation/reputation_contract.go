@@ -1,6 +1,8 @@
 package reputationcontract
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -26,6 +28,28 @@ var (
 
 func init() {
 	ctx = storage.GetContext()
+}
+
+func Init(owner interop.Hash160) {
+	if !common.HasUpdateAccess(ctx) {
+		panic("only owner can reinitialize contract")
+	}
+
+	storage.Put(ctx, common.OwnerKey, owner)
+
+	runtime.Log("reputation contract initialized")
+}
+
+func Migrate(script []byte, manifest []byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		runtime.Log("only owner can update contract")
+		return false
+	}
+
+	management.Update(script, manifest)
+	runtime.Log("reputation contract updated")
+
+	return true
 }
 
 func Put(manager, epoch, typ []byte, newTrustList [][]byte) bool {

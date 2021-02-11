@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -36,8 +37,7 @@ func (a auditHeader) ID() []byte {
 const (
 	version = 1
 
-	netmapContractKey   = "netmapScriptHash"
-	netmapContractKeyLn = len(netmapContractKey)
+	netmapContractKey = "netmapScriptHash"
 )
 
 var ctx storage.Context
@@ -46,18 +46,31 @@ func init() {
 	ctx = storage.GetContext()
 }
 
-func Init(addrNetmap interop.Hash160) {
-	if storage.Get(ctx, netmapContractKey) != nil {
-		panic("init: contract already deployed")
+func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
+	if !common.HasUpdateAccess(ctx) {
+		panic("only owner can reinitialize contract")
 	}
 
 	if len(addrNetmap) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
 
+	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 
 	runtime.Log("audit contract initialized")
+}
+
+func Migrate(script []byte, manifest []byte) bool {
+	if !common.HasUpdateAccess(ctx) {
+		runtime.Log("only owner can update contract")
+		return false
+	}
+
+	management.Update(script, manifest)
+	runtime.Log("audit contract updated")
+
+	return true
 }
 
 func Put(rawAuditResult []byte) bool {
@@ -126,10 +139,18 @@ func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 func list(it iterator.Iterator) [][]byte {
 	var result [][]byte
 
+	ignore := [][]byte{
+		[]byte(netmapContractKey),
+		[]byte(common.OwnerKey),
+	}
+
+loop:
 	for iterator.Next(it) {
 		key := iterator.Value(it).([]byte) // iterator MUST BE `storage.KeysOnly`
-		if len(key) == netmapContractKeyLn {
-			continue
+		for _, ignoreKey := range ignore {
+			if common.BytesEqual(key, ignoreKey) {
+				continue loop
+			}
 		}
 
 		result = append(result, key)
