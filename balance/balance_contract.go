@@ -59,10 +59,6 @@ func CreateToken() Token {
 }
 
 func init() {
-	if runtime.GetTrigger() != runtime.Application {
-		panic("contract has not been called in application node")
-	}
-
 	ctx = storage.GetContext()
 	token = CreateToken()
 }

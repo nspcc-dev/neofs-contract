@@ -20,15 +20,9 @@ const (
 	voteKey   = "ballots"
 )
 
-var (
-	ctx storage.Context
-)
+var ctx storage.Context
 
 func init() {
-	if runtime.GetTrigger() != runtime.Application {
-		panic("contract has not been called in application node")
-	}
-
 	ctx = storage.GetContext()
 }
 
