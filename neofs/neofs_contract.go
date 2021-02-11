@@ -80,14 +80,7 @@ var (
 )
 
 func init() {
-	// The trigger determines whether this smart-contract is being
-	// run in 'verification' or 'application' mode.
-	if runtime.GetTrigger() != runtime.Application {
-		panic("contract has not been called in application node")
-	}
-
 	ctx = storage.GetContext()
-
 }
 
 // Init set up initial inner ring node keys.
