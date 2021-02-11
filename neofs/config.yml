@@ -1,3 +1,4 @@
+name: "NeoFS"
 events:
   - name: Deposit
     parameters:
