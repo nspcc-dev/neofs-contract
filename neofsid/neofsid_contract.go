@@ -58,20 +58,12 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func AddKey(owner []byte, keys [][]byte) bool {
-	var (
-		n  int    // number of votes for inner ring invoke
-		id []byte // ballot key of the inner ring invocation
-	)
-
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
 	}
 
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("addKey: invocation from non inner ring node")
 	}
 
@@ -94,21 +86,6 @@ addLoop:
 		info.Keys = append(info.Keys, pubKey)
 	}
 
-	fromKnownContract := fromKnownContract(runtime.GetCallingScriptHash())
-	if fromKnownContract {
-		n = threshold
-		runtime.Log("addKey: processed indirect invoke")
-	} else {
-		id := invokeIDKeys(owner, keys, []byte("add"))
-		n = common.Vote(ctx, id, irKey)
-	}
-
-	if n < threshold {
-		runtime.Log("addKey: processed invoke from inner ring")
-		return true
-	}
-
-	common.RemoveVotes(ctx, id)
 	common.SetSerialized(ctx, owner, info)
 	runtime.Log("addKey: key bound to the owner")
 
@@ -120,23 +97,10 @@ func RemoveKey(owner []byte, keys [][]byte) bool {
 		panic("removeKey: incorrect owner")
 	}
 
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("removeKey: invocation from non inner ring node")
 	}
-
-	id := invokeIDKeys(owner, keys, []byte("remove"))
-
-	n := common.Vote(ctx, id, irKey)
-	if n < threshold {
-		runtime.Log("removeKey: processed invoke from inner ring")
-		return true
-	}
-
-	common.RemoveVotes(ctx, id)
 
 	info := getUserInfo(ctx, owner)
 	var leftKeys [][]byte
