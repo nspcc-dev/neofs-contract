@@ -9,7 +9,7 @@ all: sidechain mainnet
 sidechain: alphabet morph
 
 alphabet_sc = alphabet
-morph_sc = audit balance container neofsid netmap reputation
+morph_sc = audit balance container neofsid netmap proxy reputation
 mainnet_sc = neofs
 
 define sc_template
