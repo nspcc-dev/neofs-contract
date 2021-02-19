@@ -7,7 +7,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 )
 
-const irListMethod = "innerRingList"
+const (
+	irListMethod    = "innerRingList"
+	multiaddrMethod = "multiaddress"
+)
 
 type IRNode struct {
 	PublicKey []byte
@@ -38,4 +41,18 @@ func InnerRingListViaStorage(ctx storage.Context, key interface{}) []IRNode {
 // calling "innerRingList" method of smart contract.
 func InnerRingList(sc interop.Hash160) []IRNode {
 	return contract.Call(sc, irListMethod, contract.ReadOnly).([]IRNode)
+}
+
+// InnerRingMultiAddressViaStorage returns multiaddress of inner ring public
+// keys by invoking netmap contract, which scripthash stored in the contract
+// storage by the key `key`.
+func InnerRingMultiAddressViaStorage(ctx storage.Context, key interface{}) []byte {
+	sc := storage.Get(ctx, key).([]byte)
+	return InnerRingMultiAddress(sc)
+}
+
+// InnerRingMultiAddress returns multiaddress of inner ring public keys by
+// invoking netmap contract.
+func InnerRingMultiAddress(sc interop.Hash160) []byte {
+	return contract.Call(sc, multiaddrMethod, contract.ReadOnly).([]byte)
 }
