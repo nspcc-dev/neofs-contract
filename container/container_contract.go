@@ -90,21 +90,14 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func Put(container, signature, publicKey []byte) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	innerRing := common.InnerRingList(netmapContractAddr)
-	threshold := len(innerRing)/3*2 + 1
-
 	offset := int(container[1])
 	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
 	ownerID := container[offset : offset+25] // offset + size of owner
 	containerID := crypto.SHA256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
 
-	// If invoked from storage node, ignore it.
-	// Inner ring will find tx, validate it and send it again.
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
-		// check provided key
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
 			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
@@ -119,57 +112,45 @@ func Put(container, signature, publicKey []byte) bool {
 	}
 
 	from := walletToScripHash(ownerID)
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
-	hashCandidate := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
-	n := common.Vote(ctx, hashCandidate, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashCandidate)
-		// todo: check if new container with unique container id
+	// todo: check if new container with unique container id
 
-		for i := 0; i < len(innerRing); i++ {
-			node := innerRing[i]
-			to := contract.CreateStandardAccount(node.PublicKey)
+	innerRing := common.InnerRingList(netmapContractAddr)
+	for i := 0; i < len(innerRing); i++ {
+		node := innerRing[i]
+		to := contract.CreateStandardAccount(node.PublicKey)
 
-			tx := contract.Call(balanceContractAddr, "transferX",
-				contract.All,
-				from,
-				to,
-				containerFee,
-				containerFeeTransferMsg, // consider add container id to the message
-			)
-			if !tx.(bool) {
-				// todo: consider using `return false` to remove votes
-				panic("put: can't transfer assets for container creation")
-			}
+		tx := contract.Call(balanceContractAddr, "transferX",
+			contract.All,
+			from,
+			to,
+			containerFee,
+			containerFeeTransferMsg, // consider add container id to the message
+		)
+		if !tx.(bool) {
+			panic("put: can't transfer assets for container creation")
 		}
-
-		addContainer(ctx, containerID, ownerID, container)
-		// try to remove underscore at v0.92.0
-		_ = contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
-
-		runtime.Log("put: added new container")
-	} else {
-		runtime.Log("put: processed invoke from inner ring")
 	}
+
+	addContainer(ctx, containerID, ownerID, container)
+	contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
+
+	runtime.Log("put: added new container")
 
 	return true
 }
 
 func Delete(containerID, signature []byte) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
 		panic("delete: container does not exist")
 	}
 
-	// If invoked from storage node, ignore it.
-	// Inner ring will find tx, validate it and send it again.
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
 		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
@@ -182,16 +163,8 @@ func Delete(containerID, signature []byte) bool {
 		return true
 	}
 
-	hashCandidate := common.InvokeID([]interface{}{containerID, signature}, []byte("delete"))
-
-	n := common.Vote(ctx, hashCandidate, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashCandidate)
-		removeContainer(ctx, containerID, ownerID)
-		runtime.Log("delete: remove container")
-	} else {
-		runtime.Log("delete: processed invoke from inner ring")
-	}
+	removeContainer(ctx, containerID, ownerID)
+	runtime.Log("delete: remove container")
 
 	return true
 }
@@ -344,70 +317,37 @@ func ListContainerSizes(epoch int) [][]byte {
 }
 
 func ProcessEpoch(epochNum int) {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("processEpoch: this method must be invoked from inner ring")
 	}
 
 	candidates := keysToDelete(epochNum)
-	epochID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
-
-	n := common.Vote(ctx, epochID, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, epochID)
-
-		for i := range candidates {
-			candidate := candidates[i]
-			storage.Delete(ctx, candidate)
-		}
+	for _, candidate := range candidates {
+		storage.Delete(ctx, candidate)
 	}
 }
 
 func StartContainerEstimation(epoch int) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("startEstimation: only inner ring nodes can invoke this")
 	}
 
-	hashCandidate := common.InvokeID([]interface{}{epoch}, []byte("startEstimation"))
-
-	n := common.Vote(ctx, hashCandidate, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashCandidate)
-		runtime.Notify("StartEstimation", epoch)
-		runtime.Log("startEstimation: notification has been produced")
-	} else {
-		runtime.Log("startEstimation: processed invoke from inner ring")
-	}
+	runtime.Notify("StartEstimation", epoch)
+	runtime.Log("startEstimation: notification has been produced")
 
 	return true
 }
 
 func StopContainerEstimation(epoch int) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("stopEstimation: only inner ring nodes can invoke this")
 	}
 
-	hashCandidate := common.InvokeID([]interface{}{epoch}, []byte("stopEstimation"))
-
-	n := common.Vote(ctx, hashCandidate, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashCandidate)
-		runtime.Notify("StopEstimation", epoch)
-		runtime.Log("stopEstimation: notification has been produced")
-	} else {
-		runtime.Log("stopEstimation: processed invoke from inner ring")
-	}
+	runtime.Notify("StopEstimation", epoch)
+	runtime.Log("stopEstimation: notification has been produced")
 
 	return true
 }
@@ -599,8 +539,4 @@ func keysToDelete(epoch int) [][]byte {
 	}
 
 	return results
-}
-
-func irList() []common.IRNode {
-	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
