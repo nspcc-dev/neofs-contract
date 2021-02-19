@@ -82,7 +82,6 @@ func Init(owner interop.Hash160, keys [][]byte) {
 	common.SetSerialized(ctx, netmapKey, []netmapNode{})
 	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
 	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
-	common.InitVote(ctx)
 
 	runtime.Log("netmap contract initialized")
 }
@@ -108,11 +107,8 @@ func Multiaddress() []byte {
 }
 
 func UpdateInnerRing(keys [][]byte) bool {
-	innerRing := getIRNodes(ctx)
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := Multiaddress()
+	if !runtime.CheckWitness(multiaddr) {
 		panic("updateInnerRing: this method must be invoked by inner ring nodes")
 	}
 
@@ -123,27 +119,15 @@ func UpdateInnerRing(keys [][]byte) bool {
 		irList = append(irList, common.IRNode{PublicKey: key})
 	}
 
-	rawIRList := binary.Serialize(irList)
-	hashIRList := crypto.SHA256(rawIRList)
-
-	n := common.Vote(ctx, hashIRList, irKey)
-	if n >= threshold {
-		runtime.Log("updateInnerRing: inner ring list updated")
-		common.SetSerialized(ctx, innerRingKey, irList)
-		common.RemoveVotes(ctx, hashIRList)
-	} else {
-		runtime.Log("updateInnerRing: processed invoke from inner ring")
-	}
+	runtime.Log("updateInnerRing: inner ring list updated")
+	common.SetSerialized(ctx, innerRingKey, irList)
 
 	return true
 }
 
 func AddPeer(nodeInfo []byte) bool {
-	innerRing := getIRNodes(ctx)
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := Multiaddress()
+	if !runtime.CheckWitness(multiaddr) {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
 			panic("addPeer: witness check failed")
@@ -155,22 +139,14 @@ func AddPeer(nodeInfo []byte) bool {
 	candidate := storageNode{
 		info: nodeInfo,
 	}
-	rawCandidate := binary.Serialize(candidate)
-	hashCandidate := crypto.SHA256(rawCandidate)
 
 	nm := addToNetmap(ctx, candidate)
 
-	n := common.Vote(ctx, hashCandidate, irKey)
-	if n >= threshold {
-		if nm == nil {
-			runtime.Log("addPeer: storage node already in the netmap")
-		} else {
-			common.SetSerialized(ctx, netmapKey, nm)
-			runtime.Log("addPeer: add storage node to the network map")
-		}
-		common.RemoveVotes(ctx, hashCandidate)
+	if nm == nil {
+		runtime.Log("addPeer: storage node already in the netmap")
 	} else {
-		runtime.Log("addPeer: processed invoke from inner ring")
+		common.SetSerialized(ctx, netmapKey, nm)
+		runtime.Log("addPeer: add storage node to the network map")
 	}
 
 	return true
@@ -181,31 +157,22 @@ func UpdateState(state int, publicKey []byte) bool {
 		panic("updateState: incorrect public key")
 	}
 
-	innerRing := getIRNodes(ctx)
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := Multiaddress()
+	if !runtime.CheckWitness(multiaddr) {
 		if !runtime.CheckWitness(publicKey) {
 			panic("updateState: witness check failed")
 		}
+
 		runtime.Notify("UpdateState", state, publicKey)
+
 		return true
 	}
 
 	switch nodeState(state) {
 	case offlineState:
 		newNetmap := removeFromNetmap(ctx, publicKey)
-
-		hashID := common.InvokeID([]interface{}{publicKey}, []byte("delete"))
-		n := common.Vote(ctx, hashID, irKey)
-		if n >= threshold {
-			runtime.Log("updateState: remove storage node from the network map")
-			common.SetSerialized(ctx, netmapKey, newNetmap)
-			common.RemoveVotes(ctx, hashID)
-		} else {
-			runtime.Log("updateState: processed invoke from inner ring")
-		}
+		runtime.Log("updateState: remove storage node from the network map")
+		common.SetSerialized(ctx, netmapKey, newNetmap)
 	default:
 		panic("updateState: unsupported state")
 	}
@@ -214,11 +181,8 @@ func UpdateState(state int, publicKey []byte) bool {
 }
 
 func NewEpoch(epochNum int) bool {
-	innerRing := getIRNodes(ctx)
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := Multiaddress()
+	if !runtime.CheckWitness(multiaddr) {
 		panic("newEpoch: this method must be invoked by inner ring nodes")
 	}
 
@@ -230,26 +194,18 @@ func NewEpoch(epochNum int) bool {
 	data0snapshot := getSnapshot(ctx, snapshot0Key)
 	dataOnlineState := filterNetmap(ctx, onlineState)
 
-	hashID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
+	runtime.Log("newEpoch: process new epoch")
 
-	n := common.Vote(ctx, hashID, irKey)
-	if n >= threshold {
-		runtime.Log("newEpoch: process new epoch")
+	// todo: check if provided epoch number is bigger than current
+	storage.Put(ctx, snapshotEpoch, epochNum)
 
-		// todo: check if provided epoch number is bigger than current
-		storage.Put(ctx, snapshotEpoch, epochNum)
+	// put actual snapshot into previous snapshot
+	common.SetSerialized(ctx, snapshot1Key, data0snapshot)
 
-		// put actual snapshot into previous snapshot
-		common.SetSerialized(ctx, snapshot1Key, data0snapshot)
+	// put netmap into actual snapshot
+	common.SetSerialized(ctx, snapshot0Key, dataOnlineState)
 
-		// put netmap into actual snapshot
-		common.SetSerialized(ctx, snapshot0Key, dataOnlineState)
-
-		common.RemoveVotes(ctx, hashID)
-		runtime.Notify("NewEpoch", epochNum)
-	} else {
-		runtime.Log("newEpoch: processed invoke from inner ring")
-	}
+	runtime.Notify("NewEpoch", epochNum)
 
 	return true
 }
@@ -287,25 +243,14 @@ func Config(key []byte) interface{} {
 }
 
 func SetConfig(id, key, val []byte) bool {
-	// check if it is inner ring invocation
-	innerRing := getIRNodes(ctx)
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := Multiaddress()
+	if !runtime.CheckWitness(multiaddr) {
 		panic("setConfig: invoked by non inner ring node")
 	}
 
-	// check unique id of the operation
-	hashID := common.InvokeID([]interface{}{id, key, val}, []byte("config"))
-	n := common.Vote(ctx, hashID, irKey)
+	setConfig(ctx, key, val)
 
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashID)
-		setConfig(ctx, key, val)
-
-		runtime.Log("setConfig: configuration has been updated")
-	}
+	runtime.Log("setConfig: configuration has been updated")
 
 	return true
 }
