@@ -113,180 +113,114 @@ func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 }
 
 func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
-	var (
-		n        int    // number of votes for inner ring invoke
-		hashTxID []byte // ballot key of the inner ring invocation
-	)
-
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("transferX: this method must be invoked from inner ring")
 	}
 
-	fromKnownContract := fromKnownContract(runtime.GetCallingScriptHash())
-	if fromKnownContract {
-		n = threshold
-		runtime.Log("transferX: processed indirect invoke")
+	result := token.transfer(ctx, from, to, amount, true, details)
+	if result {
+		runtime.Log("transferX: success")
 	} else {
-		hashTxID = common.InvokeID([]interface{}{from, to, amount}, []byte("transfer"))
-		n = common.Vote(ctx, hashTxID, irKey)
+		// consider panic there
+		runtime.Log("transferX: fail")
 	}
 
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashTxID)
-
-		result := token.transfer(ctx, from, to, amount, true, details)
-		if result {
-			runtime.Log("transferX: success")
-		} else {
-			// consider panic there
-			runtime.Log("transferX: fail")
-		}
-
-		return result
-	}
-
-	return false
+	return result
 }
 
 func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("lock: this method must be invoked from inner ring")
 	}
 
-	hashTxID := common.InvokeID([]interface{}{txID, from, to, amount, until}, []byte("lock"))
+	lockAccount := Account{
+		Balance: 0,
+		Until:   until,
+		Parent:  from,
+	}
+	common.SetSerialized(ctx, to, lockAccount)
 
-	n := common.Vote(ctx, hashTxID, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashTxID)
-
-		lockAccount := Account{
-			Balance: 0,
-			Until:   until,
-			Parent:  from,
-		}
-		common.SetSerialized(ctx, to, lockAccount)
-
-		result := token.transfer(ctx, from, to, amount, true, lockTransferMsg)
-		if !result {
-			// consider using `return false` to remove votes
-			panic("lock: can't lock funds")
-		}
-
-		runtime.Log("lock: created lock account")
-		runtime.Notify("Lock", txID, from, to, amount, until)
+	result := token.transfer(ctx, from, to, amount, true, lockTransferMsg)
+	if !result {
+		// consider using `return false` to remove votes
+		panic("lock: can't lock funds")
 	}
 
-	runtime.Log("lock: processed invoke from inner ring")
+	runtime.Log("lock: created lock account")
+	runtime.Notify("Lock", txID, from, to, amount, until)
 
 	return true
 }
 
 func NewEpoch(epochNum int) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("epochNum: this method must be invoked from inner ring")
 	}
 
-	epochID := common.InvokeID([]interface{}{epochNum}, []byte("epoch"))
+	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
+	for iterator.Next(it) {
+		addr := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
+		if len(addr) != 20 {
+			continue
+		}
 
-	n := common.Vote(ctx, epochID, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, epochID)
-		it := storage.Find(ctx, []byte{}, storage.KeysOnly)
-		for iterator.Next(it) {
-			addr := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
-			if len(addr) != 20 {
-				continue
-			}
+		acc := getAccount(ctx, addr)
+		if acc.Until == 0 {
+			continue
+		}
 
-			acc := getAccount(ctx, addr)
-			if acc.Until == 0 {
-				continue
-			}
-
-			if epochNum >= acc.Until {
-				// return assets back to the parent
-				token.transfer(ctx, addr, acc.Parent, acc.Balance, true, unlockTransferMsg)
-			}
+		if epochNum >= acc.Until {
+			// return assets back to the parent
+			token.transfer(ctx, addr, acc.Parent, acc.Balance, true, unlockTransferMsg)
 		}
 	}
-
-	runtime.Log("newEpoch: processed invoke from inner ring")
 
 	return true
 }
 
 func Mint(to interop.Hash160, amount int, details []byte) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
-		panic("burn: this method must be invoked from inner ring")
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
+		panic("mint: this method must be invoked from inner ring")
 	}
 
-	mintID := common.InvokeID([]interface{}{to, amount, details}, []byte("mint"))
-
-	n := common.Vote(ctx, mintID, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, mintID)
-
-		ok := token.transfer(ctx, nil, to, amount, true, details)
-		if !ok {
-			panic("mint: can't transfer assets")
-		}
-
-		supply := token.getSupply(ctx)
-		supply = supply + amount
-		storage.Put(ctx, token.CirculationKey, supply)
-		runtime.Log("mint: assets were minted")
-		runtime.Notify("Mint", to, amount)
+	ok := token.transfer(ctx, nil, to, amount, true, details)
+	if !ok {
+		panic("mint: can't transfer assets")
 	}
+
+	supply := token.getSupply(ctx)
+	supply = supply + amount
+	storage.Put(ctx, token.CirculationKey, supply)
+	runtime.Log("mint: assets were minted")
+	runtime.Notify("Mint", to, amount)
 
 	return true
 }
 
 func Burn(from interop.Hash160, amount int, details []byte) bool {
-	innerRing := irList()
-	threshold := len(innerRing)/3*2 + 1
-
-	irKey := common.InnerRingInvoker(innerRing)
-	if len(irKey) == 0 {
+	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	if !runtime.CheckWitness(multiaddr) {
 		panic("burn: this method must be invoked from inner ring")
 	}
 
-	burnID := common.InvokeID([]interface{}{from, amount, details}, []byte("burn"))
-
-	n := common.Vote(ctx, burnID, irKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, burnID)
-
-		ok := token.transfer(ctx, from, nil, amount, true, details)
-		if !ok {
-			panic("burn: can't transfer assets")
-		}
-
-		supply := token.getSupply(ctx)
-		if supply < amount {
-			panic("panic, negative supply after burn")
-		}
-
-		supply = supply - amount
-		storage.Put(ctx, token.CirculationKey, supply)
-		runtime.Log("burn: assets were burned")
-		runtime.Notify("Burn", from, amount)
+	ok := token.transfer(ctx, from, nil, amount, true, details)
+	if !ok {
+		panic("burn: can't transfer assets")
 	}
+
+	supply := token.getSupply(ctx)
+	if supply < amount {
+		panic("panic, negative supply after burn")
+	}
+
+	supply = supply - amount
+	storage.Put(ctx, token.CirculationKey, supply)
+	runtime.Log("burn: assets were burned")
+	runtime.Notify("Burn", from, amount)
 
 	return true
 }
@@ -388,34 +322,4 @@ func getAccount(ctx storage.Context, key interface{}) Account {
 	}
 
 	return Account{}
-}
-
-/*
-   Check if invocation made from known container or audit contracts.
-   This is necessary because calls from these contracts require to do transfer
-   without signature collection (1 invoke transfer).
-
-   IR1, IR2, IR3, IR4 -(4 invokes)-> [ Container Contract ] -(1 invoke)-> [ Balance Contract ]
-
-   We can do 1 invoke transfer if:
-   - invoke happened from inner ring node,
-   - it is indirect invocation from other smart-contract.
-
-   However there is a possible attack, when malicious inner ring node creates
-   malicious smart-contract in morph chain to do inderect call.
-
-   MaliciousIR  -(1 invoke)-> [ Malicious Contract ] -(1 invoke) -> [ Balance Contract ]
-
-   To prevent that, we have to allow 1 invoke transfer from authorised well known
-   smart-contracts, that will be set up at `Init` method.
-*/
-
-func fromKnownContract(caller interop.Hash160) bool {
-	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
-
-	return common.BytesEqual(caller, containerContractAddr)
-}
-
-func irList() []common.IRNode {
-	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
