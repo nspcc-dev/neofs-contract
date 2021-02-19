@@ -103,6 +103,10 @@ func InnerRingList() []common.IRNode {
 	return getIRNodes(ctx)
 }
 
+func Multiaddress() []byte {
+	return multiaddress(getIRNodes(ctx))
+}
+
 func UpdateInnerRing(keys [][]byte) bool {
 	innerRing := getIRNodes(ctx)
 	threshold := len(innerRing)/3*2 + 1
@@ -449,4 +453,59 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storageKey := append(configPrefix, postfix...)
 
 	storage.Put(ctx, storageKey, val)
+}
+
+func multiaddress(n []common.IRNode) []byte {
+	threshold := len(n)/3*2 + 1
+
+	var result = []byte{0x10 + uint8(threshold)} // m value =  5
+
+	sortedNodes := insertSort(n)
+
+	for _, node := range sortedNodes {
+		key := node.PublicKey
+
+		result = append(result, []byte{0x0C, 0x21}...) // 33 byte array
+		result = append(result, key...)                // public key
+	}
+
+	ln := 0x10 + uint8(len(sortedNodes))
+	result = append(result, ln) // n value = 7
+
+	result = append(result, 0x0B) // PUSHNULL
+
+	result = append(result, []byte{0x41, 0x13, 0x8D, 0xEF, 0xAF}...) // NeoCryptoCheckMultisigWithECDsaSecp256r1
+
+	shaHash := crypto.SHA256(result)
+
+	return crypto.RIPEMD160(shaHash)
+}
+
+func insertSort(nodes []common.IRNode) []common.IRNode {
+	for i := 1; i < len(nodes); i++ {
+		v := nodes[i]
+		j := i - 1
+		for j >= 0 && more(nodes[j], v) {
+			nodes[j+1] = nodes[j]
+			j--
+		}
+		nodes[j+1] = v
+	}
+
+	return nodes
+}
+
+func more(a, b common.IRNode) bool {
+	keyA := a.PublicKey
+	keyB := b.PublicKey
+
+	for i := 1; i < len(keyA); i++ { // start from 1 because we sort based on Xcoord of public key
+		if keyA[i] == keyB[i] {
+			continue
+		}
+
+		return keyA[i] > keyB[i]
+	}
+
+	return false
 }
