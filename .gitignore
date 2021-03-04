@@ -3,3 +3,4 @@
 *.manifest.json
 config.json
 /vendor/
+.idea
