@@ -28,7 +28,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(owner interop.Hash160, addrNetmap []byte) {
+func Init(owner, addrNetmap interop.Hash160) {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}

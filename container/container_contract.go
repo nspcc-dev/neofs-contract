@@ -60,7 +60,7 @@ func init() {
 	ctx = storage.GetContext()
 }
 
-func Init(owner interop.Hash160, addrNetmap, addrBalance, addrID []byte) {
+func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -89,18 +89,18 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func Put(container, signature, publicKey []byte) bool {
+func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey) bool {
 	offset := int(container[1])
 	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
 	ownerID := container[offset : offset+25] // offset + size of owner
 	containerID := crypto.SHA256(container)
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
+	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
-			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
+			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
 			if !verifySignature(container, signature, keys) {
 				panic("put: invalid owner signature")
 			}
@@ -153,7 +153,7 @@ func Delete(containerID, signature []byte) bool {
 	if !runtime.CheckWitness(multiaddr) {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
+		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
 
 		if !verifySignature(containerID, signature, keys) {
 			panic("delete: invalid owner signature")
@@ -213,8 +213,8 @@ func SetEACL(eACL, signature []byte) bool {
 		panic("setEACL: container does not exists")
 	}
 
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
+	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
+	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
 
 	if !verifySignature(eACL, signature, keys) {
 		panic("setEACL: invalid eACL signature")
@@ -247,8 +247,8 @@ func EACL(containerID []byte) extendedACL {
 
 	// attach corresponding public key if it was not revoked from neofs id
 
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
-	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([][]byte)
+	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
+	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
 
 	for i := range keys {
 		key := keys[i]
@@ -434,14 +434,14 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 		return binary.Deserialize(data.([]byte)).(extendedACL)
 	}
 
-	return extendedACL{val: []byte{}, sig: []byte{}, pub: []byte{}}
+	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
 }
 
 func walletToScripHash(wallet []byte) []byte {
 	return wallet[1 : len(wallet)-4]
 }
 
-func verifySignature(msg, sig []byte, keys [][]byte) bool {
+func verifySignature(msg []byte, sig interop.Signature, keys []interop.PublicKey) bool {
 	for i := range keys {
 		key := keys[i]
 		if crypto.ECDsaSecp256r1Verify(msg, key, sig) {
@@ -469,7 +469,7 @@ func getOwnerByID(ctx storage.Context, id []byte) []byte {
 	return nil
 }
 
-func isSignedByOwnerKey(msg, sig, owner, key []byte) bool {
+func isSignedByOwnerKey(msg []byte, sig interop.Signature, owner []byte, key interop.PublicKey) bool {
 	if !isOwnerFromKey(owner, key) {
 		return false
 	}
@@ -477,7 +477,7 @@ func isSignedByOwnerKey(msg, sig, owner, key []byte) bool {
 	return crypto.ECDsaSecp256r1Verify(msg, key, sig)
 }
 
-func isOwnerFromKey(owner []byte, key []byte) bool {
+func isOwnerFromKey(owner []byte, key interop.PublicKey) bool {
 	ownerSH := walletToScripHash(owner)
 	keySH := contract.CreateStandardAccount(key)
 
@@ -508,7 +508,7 @@ func getContainerSizeEstimation(key, cid []byte) containerSizes {
 // isStorageNode looks into _previous_ epoch network map, because storage node
 // announce container size estimation of previous epoch.
 func isStorageNode(key interop.PublicKey) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)
 
 	for i := range snapshot {

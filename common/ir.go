@@ -13,11 +13,11 @@ const (
 )
 
 type IRNode struct {
-	PublicKey []byte
+	PublicKey interop.PublicKey
 }
 
 // InnerRingInvoker returns public key of inner ring node that invoked contract.
-func InnerRingInvoker(ir []IRNode) []byte {
+func InnerRingInvoker(ir []IRNode) interop.PublicKey {
 	for i := 0; i < len(ir); i++ {
 		node := ir[i]
 		if runtime.CheckWitness(node.PublicKey) {
@@ -33,7 +33,7 @@ func InnerRingInvoker(ir []IRNode) []byte {
 //
 // Address of smart contract is received from storage by key.
 func InnerRingListViaStorage(ctx storage.Context, key interface{}) []IRNode {
-	sc := storage.Get(ctx, key).([]byte)
+	sc := storage.Get(ctx, key).(interop.Hash160)
 	return InnerRingList(sc)
 }
 
@@ -47,7 +47,7 @@ func InnerRingList(sc interop.Hash160) []IRNode {
 // keys by invoking netmap contract, which scripthash stored in the contract
 // storage by the key `key`.
 func InnerRingMultiAddressViaStorage(ctx storage.Context, key interface{}) []byte {
-	sc := storage.Get(ctx, key).([]byte)
+	sc := storage.Get(ctx, key).(interop.Hash160)
 	return InnerRingMultiAddress(sc)
 }
 
