@@ -111,7 +111,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		return true
 	}
 
-	from := walletToScripHash(ownerID)
+	from := walletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
@@ -437,7 +437,7 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
 }
 
-func walletToScripHash(wallet []byte) []byte {
+func walletToScriptHash(wallet []byte) []byte {
 	return wallet[1 : len(wallet)-4]
 }
 
@@ -478,7 +478,7 @@ func isSignedByOwnerKey(msg []byte, sig interop.Signature, owner []byte, key int
 }
 
 func isOwnerFromKey(owner []byte, key interop.PublicKey) bool {
-	ownerSH := walletToScripHash(owner)
+	ownerSH := walletToScriptHash(owner)
 	keySH := contract.CreateStandardAccount(key)
 
 	return common.BytesEqual(ownerSH, keySH)
