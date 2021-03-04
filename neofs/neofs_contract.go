@@ -85,7 +85,7 @@ func init() {
 }
 
 // Init set up initial inner ring node keys.
-func Init(owner interop.PublicKey, args [][]byte) bool {
+func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -141,7 +141,7 @@ func InnerRingCandidates() []common.IRNode {
 }
 
 // InnerRingCandidateRemove removes key from the list of inner ring candidates.
-func InnerRingCandidateRemove(key []byte) bool {
+func InnerRingCandidateRemove(key interop.PublicKey) bool {
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateRemove: you should be the owner of the public key")
 	}
@@ -164,7 +164,7 @@ func InnerRingCandidateRemove(key []byte) bool {
 }
 
 // InnerRingCandidateAdd adds key to the list of inner ring candidates.
-func InnerRingCandidateAdd(key []byte) bool {
+func InnerRingCandidateAdd(key interop.PublicKey) bool {
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateAdd: you should be the owner of the public key")
 	}
@@ -200,7 +200,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(gas.Hash)) {
+	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
 		panic("onNEP17Payment: only GAS can be accepted for deposit")
 	}
 
@@ -267,7 +267,7 @@ func Withdraw(user []byte, amount int) bool {
 
 // Cheque sends gas assets back to the user if they were successfully
 // locked in NeoFS balance contract.
-func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
+func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
 
@@ -307,7 +307,7 @@ func Cheque(id, user []byte, amount int, lockAcc []byte) bool {
 }
 
 // Bind public key with user's account to use it in NeoFS requests.
-func Bind(user []byte, keys [][]byte) bool {
+func Bind(user []byte, keys []interop.PublicKey) bool {
 	if !runtime.CheckWitness(user) {
 		panic("binding: you should be the owner of the wallet")
 	}
@@ -325,7 +325,7 @@ func Bind(user []byte, keys [][]byte) bool {
 }
 
 // Unbind public key from user's account
-func Unbind(user []byte, keys [][]byte) bool {
+func Unbind(user []byte, keys []interop.PublicKey) bool {
 	if !runtime.CheckWitness(user) {
 		panic("unbinding: you should be the owner of the wallet")
 	}
@@ -344,7 +344,7 @@ func Unbind(user []byte, keys [][]byte) bool {
 
 // InnerRingUpdate updates list of inner ring nodes with provided list of
 // public keys.
-func InnerRingUpdate(chequeID []byte, args [][]byte) bool {
+func InnerRingUpdate(chequeID []byte, args []interop.PublicKey) bool {
 	if len(args) < minInnerRingSize {
 		panic("irUpdate: bad arguments")
 	}

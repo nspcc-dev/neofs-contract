@@ -64,7 +64,7 @@ func init() {
 	token = CreateToken()
 }
 
-func Init(owner interop.Hash160, addrNetmap, addrContainer []byte) {
+func Init(owner, addrNetmap, addrContainer interop.Hash160) {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -162,7 +162,7 @@ func NewEpoch(epochNum int) bool {
 
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 	for iterator.Next(it) {
-		addr := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
+		addr := iterator.Value(it).(interop.Hash160) // it MUST BE `storage.KeysOnly`
 		if len(addr) != 20 {
 			continue
 		}

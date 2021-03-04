@@ -29,7 +29,7 @@ func init() {
 	ctx = storage.GetContext()
 }
 
-func Init(owner interop.Hash160, addrNetmap, addrContainer []byte) {
+func Init(owner, addrNetmap, addrContainer interop.Hash160) {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -57,7 +57,7 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func AddKey(owner []byte, keys [][]byte) bool {
+func AddKey(owner []byte, keys []interop.PublicKey) bool {
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
 	}
@@ -92,7 +92,7 @@ addLoop:
 	return true
 }
 
-func RemoveKey(owner []byte, keys [][]byte) bool {
+func RemoveKey(owner []byte, keys []interop.PublicKey) bool {
 	if len(owner) != 25 {
 		panic("removeKey: incorrect owner")
 	}

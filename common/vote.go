@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
@@ -13,7 +14,7 @@ type Ballot struct {
 	ID []byte
 
 	// Public keys of already voted inner ring nodes.
-	Voters [][]byte
+	Voters []interop.PublicKey
 
 	// Height of block with the last vote.
 	Height int
@@ -62,7 +63,7 @@ func Vote(ctx storage.Context, id, from []byte) int {
 	}
 
 	if found < 0 {
-		voters := [][]byte{from}
+		voters := []interop.PublicKey{from}
 		newCandidates = append(newCandidates, Ballot{
 			ID:     id,
 			Voters: voters,

@@ -59,7 +59,7 @@ func init() {
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
-func Init(owner interop.Hash160, keys [][]byte) {
+func Init(owner interop.Hash160, keys []interop.PublicKey) {
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -106,7 +106,7 @@ func Multiaddress() []byte {
 	return multiaddress(getIRNodes(ctx))
 }
 
-func UpdateInnerRing(keys [][]byte) bool {
+func UpdateInnerRing(keys []interop.PublicKey) bool {
 	multiaddr := Multiaddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("updateInnerRing: this method must be invoked by inner ring nodes")
@@ -152,7 +152,7 @@ func AddPeer(nodeInfo []byte) bool {
 	return true
 }
 
-func UpdateState(state int, publicKey []byte) bool {
+func UpdateState(state int, publicKey interop.PublicKey) bool {
 	if len(publicKey) != 33 {
 		panic("updateState: incorrect public key")
 	}
@@ -324,7 +324,7 @@ func addToNetmap(ctx storage.Context, n storageNode) []netmapNode {
 	return netmap
 }
 
-func removeFromNetmap(ctx storage.Context, key []byte) []netmapNode {
+func removeFromNetmap(ctx storage.Context, key interop.PublicKey) []netmapNode {
 	var (
 		netmap    = getNetmapNodes(ctx)
 		newNetmap = []netmapNode{}

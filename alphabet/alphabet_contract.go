@@ -80,7 +80,7 @@ func irList() []common.IRNode {
 }
 
 func currentEpoch() int {
-	netmapContractAddr := storage.Get(ctx, netmapKey).([]byte)
+	netmapContractAddr := storage.Get(ctx, netmapKey).(interop.Hash160)
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
@@ -143,7 +143,7 @@ func Emit() bool {
 	return true
 }
 
-func Vote(epoch int, candidates [][]byte) {
+func Vote(epoch int, candidates []interop.PublicKey) {
 	index := index()
 	name := name()
 
