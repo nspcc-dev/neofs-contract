@@ -1,4 +1,5 @@
 name: "NeoFS"
+safemethods: ["innerRingList", "innerRingCandidates", "withdraw", "bind", "unbind", "isInnerRing", "config", "listConfig", "version"]
 events:
   - name: Deposit
     parameters:

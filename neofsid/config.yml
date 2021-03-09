@@ -1,1 +1,2 @@
 name: "NeoFS ID"
+safemethods: ["key", "version"]

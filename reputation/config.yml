@@ -1,1 +1,2 @@
 name: "NeoFS Reputation"
+safemethods: ["list"]
