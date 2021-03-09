@@ -1,4 +1,5 @@
 name: "NeoFS Netmap"
+safemethods: ["innerRingList", "multiaddress", "addPeer", "epoch", "netmap", "snapshot", "snapshotByEpoch", "config", "listConfig", "version"]
 events:
   - name: AddPeer
     parameters:

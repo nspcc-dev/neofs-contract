@@ -1,1 +1,2 @@
 name: "NeoFS Notary Proxy"
+safemethods: ["verify", "version"]
