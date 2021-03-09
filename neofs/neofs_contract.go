@@ -76,16 +76,12 @@ const (
 
 var (
 	configPrefix = []byte("config")
-
-	ctx storage.Context
 )
-
-func init() {
-	ctx = storage.GetContext()
-}
 
 // Init set up initial inner ring node keys.
 func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -119,6 +115,8 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 
 // Migrate updates smart contract execution script and manifest.
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -132,16 +130,20 @@ func Migrate(script []byte, manifest []byte) bool {
 
 // InnerRingList returns array of inner ring node keys.
 func InnerRingList() []common.IRNode {
+	ctx := storage.GetReadOnlyContext()
 	return getInnerRingNodes(ctx, innerRingKey)
 }
 
 // InnerRingCandidates returns array of inner ring candidate node keys.
 func InnerRingCandidates() []common.IRNode {
+	ctx := storage.GetReadOnlyContext()
 	return getInnerRingNodes(ctx, candidatesKey)
 }
 
 // InnerRingCandidateRemove removes key from the list of inner ring candidates.
 func InnerRingCandidateRemove(key interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateRemove: you should be the owner of the public key")
 	}
@@ -165,6 +167,8 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 
 // InnerRingCandidateAdd adds key to the list of inner ring candidates.
 func InnerRingCandidateAdd(key interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	if !runtime.CheckWitness(key) {
 		panic("irCandidateAdd: you should be the owner of the public key")
 	}
@@ -268,6 +272,7 @@ func Withdraw(user []byte, amount int) bool {
 // Cheque sends gas assets back to the user if they were successfully
 // locked in NeoFS balance contract.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
+	ctx := storage.GetContext()
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
 
@@ -345,6 +350,8 @@ func Unbind(user []byte, keys []interop.PublicKey) bool {
 // InnerRingUpdate updates list of inner ring nodes with provided list of
 // public keys.
 func InnerRingUpdate(chequeID []byte, args []interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	if len(args) < minInnerRingSize {
 		panic("irUpdate: bad arguments")
 	}
@@ -418,6 +425,8 @@ loop:
 
 // IsInnerRing returns 'true' if key is inside of inner ring list.
 func IsInnerRing(key []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if len(key) != publicKeySize {
 		panic("isInnerRing: incorrect public key")
 	}
@@ -436,11 +445,14 @@ func IsInnerRing(key []byte) bool {
 
 // Config returns value of NeoFS configuration with provided key.
 func Config(key []byte) interface{} {
+	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
 
 // SetConfig key-value pair as a NeoFS runtime configuration value.
 func SetConfig(id, key, val []byte) bool {
+	ctx := storage.GetContext()
+
 	// check if it is inner ring invocation
 	irList := getInnerRingNodes(ctx, innerRingKey)
 	threshold := len(irList)/3*2 + 1
@@ -478,6 +490,8 @@ func SetConfig(id, key, val []byte) bool {
 
 // ListConfig returns array of all key-value pairs of NeoFS configuration.
 func ListConfig() []record {
+	ctx := storage.GetReadOnlyContext()
+
 	var config []record
 
 	it := storage.Find(ctx, configPrefix, storage.None)
@@ -495,6 +509,8 @@ func ListConfig() []record {
 
 // InitConfig set up initial NeoFS key-value configuration.
 func InitConfig(args [][]byte) bool {
+	ctx := storage.GetContext()
+
 	if getConfig(ctx, candidateFeeConfigKey) != nil {
 		panic("neofs: configuration already installed")
 	}

@@ -22,12 +22,6 @@ const (
 	version = 1
 )
 
-var ctx storage.Context
-
-func init() {
-	ctx = storage.GetContext()
-}
-
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO contracts.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
@@ -37,6 +31,8 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 func Init(owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name string, index, total int) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -56,6 +52,8 @@ func Init(owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name str
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -75,29 +73,30 @@ func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-func irList() []common.IRNode {
+func irList(ctx storage.Context) []common.IRNode {
 	return common.InnerRingListViaStorage(ctx, netmapKey)
 }
 
-func currentEpoch() int {
+func currentEpoch(ctx storage.Context) int {
 	netmapContractAddr := storage.Get(ctx, netmapKey).(interop.Hash160)
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
-func name() string {
+func name(ctx storage.Context) string {
 	return storage.Get(ctx, nameKey).(string)
 }
 
-func index() int {
+func index(ctx storage.Context) int {
 	return storage.Get(ctx, indexKey).(int)
 }
 
-func total() int {
+func total(ctx storage.Context) int {
 	return storage.Get(ctx, totalKey).(int)
 }
 
 func checkPermission(ir []common.IRNode) bool {
-	index := index() // read from contract memory
+	ctx := storage.GetReadOnlyContext()
+	index := index(ctx) // read from contract memory
 
 	if len(ir) <= index {
 		return false
@@ -108,7 +107,9 @@ func checkPermission(ir []common.IRNode) bool {
 }
 
 func Emit() bool {
-	innerRingKeys := irList()
+	ctx := storage.GetReadOnlyContext()
+
+	innerRingKeys := irList(ctx)
 	if !checkPermission(innerRingKeys) {
 		panic("invalid invoker")
 	}
@@ -144,15 +145,16 @@ func Emit() bool {
 }
 
 func Vote(epoch int, candidates []interop.PublicKey) {
-	index := index()
-	name := name()
+	ctx := storage.GetReadOnlyContext()
+	index := index(ctx)
+	name := name(ctx)
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("invalid invoker")
 	}
 
-	curEpoch := currentEpoch()
+	curEpoch := currentEpoch(ctx)
 	if epoch != curEpoch {
 		panic("invalid epoch")
 	}
@@ -171,7 +173,8 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 }
 
 func Name() string {
-	return name()
+	ctx := storage.GetReadOnlyContext()
+	return name(ctx)
 }
 
 func Version() int {

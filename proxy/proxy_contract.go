@@ -15,12 +15,6 @@ const (
 	netmapContractKey = "netmapScriptHash"
 )
 
-var ctx storage.Context
-
-func init() {
-	ctx = storage.GetContext()
-}
-
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) {
@@ -29,6 +23,8 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 func Init(owner, addrNetmap interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -44,6 +40,8 @@ func Init(owner, addrNetmap interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -56,7 +54,9 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func Verify() bool {
+	ctx := storage.GetReadOnlyContext()
 	sig := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+
 	return runtime.CheckWitness(sig)
 }
 

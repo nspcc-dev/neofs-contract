@@ -23,13 +23,9 @@ const (
 	containerContractKey = "containerScriptHash"
 )
 
-var ctx storage.Context
-
-func init() {
-	ctx = storage.GetContext()
-}
-
 func Init(owner, addrNetmap, addrContainer interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -46,6 +42,8 @@ func Init(owner, addrNetmap, addrContainer interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -61,6 +59,8 @@ func AddKey(owner []byte, keys []interop.PublicKey) bool {
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
 	}
+
+	ctx := storage.GetContext()
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
@@ -96,6 +96,8 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) bool {
 	if len(owner) != 25 {
 		panic("removeKey: incorrect owner")
 	}
+
+	ctx := storage.GetContext()
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
@@ -134,6 +136,8 @@ func Key(owner []byte) [][]byte {
 		panic("key: incorrect owner")
 	}
 
+	ctx := storage.GetReadOnlyContext()
+
 	info := getUserInfo(ctx, owner)
 
 	return info.Keys
@@ -162,6 +166,8 @@ func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {
 }
 
 func fromKnownContract(caller []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
 	if common.BytesEqual(caller, containerContractAddr) {
 		return true
@@ -171,5 +177,6 @@ func fromKnownContract(caller []byte) bool {
 }
 
 func irList() []common.IRNode {
+	ctx := storage.GetReadOnlyContext()
 	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
