@@ -46,7 +46,6 @@ var (
 	lockTransferMsg   = []byte("lock assets to withdraw")
 	unlockTransferMsg = []byte("asset lock expired")
 
-	ctx   storage.Context
 	token Token
 )
 
@@ -60,11 +59,12 @@ func CreateToken() Token {
 }
 
 func init() {
-	ctx = storage.GetContext()
 	token = CreateToken()
 }
 
 func Init(owner, addrNetmap, addrContainer interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -81,6 +81,8 @@ func Init(owner, addrNetmap, addrContainer interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -101,18 +103,23 @@ func Decimals() int {
 }
 
 func TotalSupply() int {
+	ctx := storage.GetReadOnlyContext()
 	return token.getSupply(ctx)
 }
 
 func BalanceOf(account interop.Hash160) int {
+	ctx := storage.GetReadOnlyContext()
 	return token.balanceOf(ctx, account)
 }
 
 func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
+	ctx := storage.GetContext()
 	return token.transfer(ctx, from, to, amount, false, nil)
 }
 
 func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("transferX: this method must be invoked from inner ring")
@@ -130,6 +137,8 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 }
 
 func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("lock: this method must be invoked from inner ring")
@@ -155,6 +164,8 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 }
 
 func NewEpoch(epochNum int) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("epochNum: this method must be invoked from inner ring")
@@ -182,6 +193,8 @@ func NewEpoch(epochNum int) bool {
 }
 
 func Mint(to interop.Hash160, amount int, details []byte) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("mint: this method must be invoked from inner ring")
@@ -202,6 +215,8 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 }
 
 func Burn(from interop.Hash160, amount int, details []byte) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("burn: this method must be invoked from inner ring")

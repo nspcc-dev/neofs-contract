@@ -49,17 +49,13 @@ const (
 
 var (
 	configPrefix = []byte("config")
-
-	ctx storage.Context
 )
-
-func init() {
-	ctx = storage.GetContext()
-}
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
 func Init(owner interop.Hash160, keys []interop.PublicKey) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -87,6 +83,8 @@ func Init(owner interop.Hash160, keys []interop.PublicKey) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -99,14 +97,18 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func InnerRingList() []common.IRNode {
+	ctx := storage.GetReadOnlyContext()
 	return getIRNodes(ctx)
 }
 
 func Multiaddress() []byte {
+	ctx := storage.GetReadOnlyContext()
 	return multiaddress(getIRNodes(ctx))
 }
 
 func UpdateInnerRing(keys []interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := Multiaddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("updateInnerRing: this method must be invoked by inner ring nodes")
@@ -126,6 +128,8 @@ func UpdateInnerRing(keys []interop.PublicKey) bool {
 }
 
 func AddPeer(nodeInfo []byte) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := Multiaddress()
 	if !runtime.CheckWitness(multiaddr) {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
@@ -157,6 +161,8 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 		panic("updateState: incorrect public key")
 	}
 
+	ctx := storage.GetContext()
+
 	multiaddr := Multiaddress()
 	if !runtime.CheckWitness(multiaddr) {
 		if !runtime.CheckWitness(publicKey) {
@@ -181,6 +187,8 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 }
 
 func NewEpoch(epochNum int) bool {
+	ctx := storage.GetContext()
+
 	multiaddr := Multiaddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("newEpoch: this method must be invoked by inner ring nodes")
@@ -211,15 +219,18 @@ func NewEpoch(epochNum int) bool {
 }
 
 func Epoch() int {
+	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, snapshotEpoch).(int)
 }
 
 func Netmap() []storageNode {
+	ctx := storage.GetReadOnlyContext()
 	return getSnapshot(ctx, snapshot0Key)
 }
 
 func Snapshot(diff int) []storageNode {
 	var key string
+
 	switch diff {
 	case 0:
 		key = snapshot0Key
@@ -229,16 +240,19 @@ func Snapshot(diff int) []storageNode {
 		panic("snapshot: incorrect diff")
 	}
 
+	ctx := storage.GetReadOnlyContext()
 	return getSnapshot(ctx, key)
 }
 
 func SnapshotByEpoch(epoch int) []storageNode {
+	ctx := storage.GetReadOnlyContext()
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
 
 	return Snapshot(currentEpoch - epoch)
 }
 
 func Config(key []byte) interface{} {
+	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
 
@@ -248,6 +262,8 @@ func SetConfig(id, key, val []byte) bool {
 		panic("setConfig: invoked by non inner ring node")
 	}
 
+	ctx := storage.GetContext()
+
 	setConfig(ctx, key, val)
 
 	runtime.Log("setConfig: configuration has been updated")
@@ -256,6 +272,8 @@ func SetConfig(id, key, val []byte) bool {
 }
 
 func InitConfig(args [][]byte) bool {
+	ctx := storage.GetContext()
+
 	if storage.Get(ctx, configuredKey) != nil {
 		panic("netmap: configuration already installed")
 	}
@@ -279,6 +297,8 @@ func InitConfig(args [][]byte) bool {
 }
 
 func ListConfig() []record {
+	ctx := storage.GetReadOnlyContext()
+
 	var config []record
 
 	it := storage.Find(ctx, configPrefix, storage.None)

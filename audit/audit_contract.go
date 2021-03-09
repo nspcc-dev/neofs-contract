@@ -40,13 +40,9 @@ const (
 	netmapContractKey = "netmapScriptHash"
 )
 
-var ctx storage.Context
-
-func init() {
-	ctx = storage.GetContext()
-}
-
 func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -62,6 +58,8 @@ func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -74,6 +72,7 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func Put(rawAuditResult []byte) bool {
+	ctx := storage.GetContext()
 	innerRing := common.InnerRingListViaStorage(ctx, netmapContractKey)
 
 	hdr := newAuditHeader(rawAuditResult)
@@ -100,22 +99,27 @@ func Put(rawAuditResult []byte) bool {
 }
 
 func Get(id []byte) []byte {
+	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, id).([]byte)
 }
 
 func List() [][]byte {
+	ctx := storage.GetReadOnlyContext()
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 
 	return list(it)
 }
 
 func ListByEpoch(epoch int) [][]byte {
+	ctx := storage.GetReadOnlyContext()
 	it := storage.Find(ctx, epoch, storage.KeysOnly)
 
 	return list(it)
 }
 
 func ListByCID(epoch int, cid []byte) [][]byte {
+	ctx := storage.GetReadOnlyContext()
+
 	var buf interface{} = epoch
 
 	prefix := append(buf.([]byte), cid...)
@@ -125,6 +129,7 @@ func ListByCID(epoch int, cid []byte) [][]byte {
 }
 
 func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
+	ctx := storage.GetReadOnlyContext()
 	hdr := auditHeader{
 		epoch: epoch,
 		cid:   cid,

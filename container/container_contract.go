@@ -52,15 +52,11 @@ const (
 var (
 	containerFeeTransferMsg = []byte("container creation fee")
 	eACLPrefix              = []byte("eACL")
-
-	ctx storage.Context
 )
 
-func init() {
-	ctx = storage.GetContext()
-}
-
 func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -78,6 +74,8 @@ func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -90,6 +88,8 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	offset := int(container[1])
 	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
 	ownerID := container[offset : offset+25] // offset + size of owner
@@ -144,6 +144,8 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 }
 
 func Delete(containerID, signature []byte) bool {
+	ctx := storage.GetContext()
+
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
 		panic("delete: container does not exist")
@@ -170,14 +172,18 @@ func Delete(containerID, signature []byte) bool {
 }
 
 func Get(containerID []byte) []byte {
+	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, containerID).([]byte)
 }
 
 func Owner(containerID []byte) []byte {
+	ctx := storage.GetReadOnlyContext()
 	return getOwnerByID(ctx, containerID)
 }
 
 func List(owner []byte) [][]byte {
+	ctx := storage.GetReadOnlyContext()
+
 	if len(owner) == 0 {
 		return getAllContainers(ctx)
 	}
@@ -203,6 +209,8 @@ func List(owner []byte) [][]byte {
 }
 
 func SetEACL(eACL, signature []byte) bool {
+	ctx := storage.GetContext()
+
 	// get container ID
 	offset := int(eACL[1])
 	offset = 2 + offset + 4
@@ -234,6 +242,8 @@ func SetEACL(eACL, signature []byte) bool {
 }
 
 func EACL(containerID []byte) extendedACL {
+	ctx := storage.GetReadOnlyContext()
+
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
 		panic("getEACL: container does not exists")
@@ -263,16 +273,18 @@ func EACL(containerID []byte) extendedACL {
 }
 
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
 	if !runtime.CheckWitness(pubKey) {
 		panic("container: invalid witness for size estimation")
 	}
 
-	if !isStorageNode(pubKey) {
+	if !isStorageNode(ctx, pubKey) {
 		panic("container: only storage nodes can save size estimations")
 	}
 
 	key := estimationKey(epoch, cid)
-	s := getContainerSizeEstimation(key, cid)
+	s := getContainerSizeEstimation(ctx, key, cid)
 
 	// do not add estimation twice
 	for i := range s.estimations {
@@ -295,10 +307,13 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 }
 
 func GetContainerSize(id []byte) containerSizes {
-	return getContainerSizeEstimation(id, nil)
+	ctx := storage.GetReadOnlyContext()
+	return getContainerSizeEstimation(ctx, id, nil)
 }
 
 func ListContainerSizes(epoch int) [][]byte {
+	ctx := storage.GetReadOnlyContext()
+
 	var buf interface{} = epoch
 
 	key := []byte(estimateKeyPrefix)
@@ -317,18 +332,22 @@ func ListContainerSizes(epoch int) [][]byte {
 }
 
 func ProcessEpoch(epochNum int) {
+	ctx := storage.GetContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("processEpoch: this method must be invoked from inner ring")
 	}
 
-	candidates := keysToDelete(epochNum)
+	candidates := keysToDelete(ctx, epochNum)
 	for _, candidate := range candidates {
 		storage.Delete(ctx, candidate)
 	}
 }
 
 func StartContainerEstimation(epoch int) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("startEstimation: only inner ring nodes can invoke this")
@@ -341,6 +360,8 @@ func StartContainerEstimation(epoch int) bool {
 }
 
 func StopContainerEstimation(epoch int) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		panic("stopEstimation: only inner ring nodes can invoke this")
@@ -493,7 +514,7 @@ func estimationKey(epoch int, cid []byte) []byte {
 	return append(result, cid...)
 }
 
-func getContainerSizeEstimation(key, cid []byte) containerSizes {
+func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerSizes {
 	data := storage.Get(ctx, key)
 	if data != nil {
 		return binary.Deserialize(data.([]byte)).(containerSizes)
@@ -507,7 +528,7 @@ func getContainerSizeEstimation(key, cid []byte) containerSizes {
 
 // isStorageNode looks into _previous_ epoch network map, because storage node
 // announce container size estimation of previous epoch.
-func isStorageNode(key interop.PublicKey) bool {
+func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)
 
@@ -523,7 +544,7 @@ func isStorageNode(key interop.PublicKey) bool {
 	return false
 }
 
-func keysToDelete(epoch int) [][]byte {
+func keysToDelete(ctx storage.Context, epoch int) [][]byte {
 	results := [][]byte{}
 
 	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
