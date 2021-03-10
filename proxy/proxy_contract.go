@@ -57,7 +57,12 @@ func Verify() bool {
 	ctx := storage.GetReadOnlyContext()
 	sig := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 
-	return runtime.CheckWitness(sig)
+	if !runtime.CheckWitness(sig) {
+		sig = common.CommitteeMultiAddressViaStorage(ctx, netmapContractKey)
+		return runtime.CheckWitness(sig)
+	}
+
+	return true
 }
 
 func Version() int {
