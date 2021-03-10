@@ -10,6 +10,7 @@ import (
 const (
 	irListMethod    = "innerRingList"
 	multiaddrMethod = "multiaddress"
+	committeeMethod = "committee"
 )
 
 type IRNode struct {
@@ -55,4 +56,18 @@ func InnerRingMultiAddressViaStorage(ctx storage.Context, key interface{}) []byt
 // invoking netmap contract.
 func InnerRingMultiAddress(sc interop.Hash160) []byte {
 	return contract.Call(sc, multiaddrMethod, contract.ReadOnly).([]byte)
+}
+
+// CommitteeMultiAddressViaStorage returns multiaddress of committee public
+// keys by invoking netmap contract, which scripthash stored in the contract
+// storage by the key `key`.
+func CommitteeMultiAddressViaStorage(ctx storage.Context, key interface{}) []byte {
+	sc := storage.Get(ctx, key).(interop.Hash160)
+	return CommitteeMultiAddress(sc)
+}
+
+// CommitteeMultiAddress returns multiaddress of committee public keys by
+// invoking netmap contract.
+func CommitteeMultiAddress(sc interop.Hash160) []byte {
+	return contract.Call(sc, committeeMethod, contract.ReadOnly).([]byte)
 }

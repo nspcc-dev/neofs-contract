@@ -103,7 +103,12 @@ func InnerRingList() []common.IRNode {
 
 func Multiaddress() []byte {
 	ctx := storage.GetReadOnlyContext()
-	return multiaddress(getIRNodes(ctx))
+	return multiaddress(getIRNodes(ctx), false)
+}
+
+func Committee() []byte {
+	ctx := storage.GetReadOnlyContext()
+	return multiaddress(getIRNodes(ctx), true)
 }
 
 func UpdateInnerRing(keys []interop.PublicKey) bool {
@@ -420,8 +425,11 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storage.Put(ctx, storageKey, val)
 }
 
-func multiaddress(n []common.IRNode) []byte {
+func multiaddress(n []common.IRNode, committee bool) []byte {
 	threshold := len(n)/3*2 + 1
+	if committee {
+		threshold = len(n)/2 + 1
+	}
 
 	var result = []byte{0x10 + uint8(threshold)} // m value =  5
 
