@@ -2,8 +2,8 @@ package auditcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -28,7 +28,7 @@ const maxKeySize = 24 // 24 + 32 (container ID length) + 8 (epoch length) = 64
 func (a auditHeader) ID() []byte {
 	var buf interface{} = a.epoch
 
-	hashedKey := crypto.SHA256(a.from)
+	hashedKey := crypto.Sha256(a.from)
 	shortedKey := hashedKey[:maxKeySize]
 
 	return append(buf.([]byte), append(a.cid, shortedKey...)...)

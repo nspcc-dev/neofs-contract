@@ -33,12 +33,12 @@ package smart_contract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -277,7 +277,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 	threshold := len(irList)/3*2 + 1
 
 	cashedCheques := getCashedCheques(ctx)
-	hashID := crypto.SHA256(id)
+	hashID := crypto.Sha256(id)
 
 	irKey := common.InnerRingInvoker(irList)
 	if len(irKey) == 0 {
@@ -406,7 +406,7 @@ loop:
 		panic("irUpdate: inner ring change rate must not be more than 1/3 ")
 	}
 
-	hashID := crypto.SHA256(chequeID)
+	hashID := crypto.Sha256(chequeID)
 
 	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
@@ -472,7 +472,7 @@ func SetConfig(id, key, val []byte) bool {
 	}
 
 	// vote for new configuration value
-	hashID := crypto.SHA256(id)
+	hashID := crypto.Sha256(id)
 
 	n := common.Vote(ctx, hashID, irKey)
 	if n >= threshold {
@@ -543,7 +543,7 @@ func Version() int {
 func getInnerRingNodes(ctx storage.Context, key string) []common.IRNode {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.IRNode)
+		return std.Deserialize(data.([]byte)).([]common.IRNode)
 	}
 
 	return []common.IRNode{}
@@ -553,7 +553,7 @@ func getInnerRingNodes(ctx storage.Context, key string) []common.IRNode {
 func getCashedCheques(ctx storage.Context) []cheque {
 	data := storage.Get(ctx, cashedChequesKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]cheque)
+		return std.Deserialize(data.([]byte)).([]cheque)
 	}
 
 	return []cheque{}

@@ -2,9 +2,9 @@ package balancecontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -333,7 +333,7 @@ func isUsableAddress(addr interop.Hash160) bool {
 func getAccount(ctx storage.Context, key interface{}) Account {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).(Account)
+		return std.Deserialize(data.([]byte)).(Account)
 	}
 
 	return Account{}

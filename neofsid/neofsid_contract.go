@@ -2,9 +2,9 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -150,7 +150,7 @@ func Version() int {
 func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).(UserInfo)
+		return std.Deserialize(data.([]byte)).(UserInfo)
 	}
 
 	return UserInfo{Keys: [][]byte{}}
@@ -162,7 +162,7 @@ func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {
 		prefix = append(prefix, keys[i]...)
 	}
 
-	return crypto.SHA256(prefix)
+	return crypto.Sha256(prefix)
 }
 
 func fromKnownContract(caller []byte) bool {
