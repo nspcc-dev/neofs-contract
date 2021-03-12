@@ -2,11 +2,11 @@ package containercontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -93,7 +93,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	offset := int(container[1])
 	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
 	ownerID := container[offset : offset+25] // offset + size of owner
-	containerID := crypto.SHA256(container)
+	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
@@ -262,7 +262,7 @@ func EACL(containerID []byte) extendedACL {
 
 	for i := range keys {
 		key := keys[i]
-		if crypto.ECDsaSecp256r1Verify(eacl.val, key, eacl.sig) {
+		if crypto.VerifyWithECDsa(eacl.val, key, eacl.sig, crypto.Secp256r1) {
 			eacl.pub = key
 
 			break
@@ -299,7 +299,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 		size: usedSize,
 	})
 
-	storage.Put(ctx, key, binary.Serialize(s))
+	storage.Put(ctx, key, std.Serialize(s))
 
 	runtime.Log("container: saved container size estimation")
 
@@ -452,7 +452,7 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	key := append(eACLPrefix, cid...)
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).(extendedACL)
+		return std.Deserialize(data.([]byte)).(extendedACL)
 	}
 
 	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
@@ -465,7 +465,7 @@ func walletToScriptHash(wallet []byte) []byte {
 func verifySignature(msg []byte, sig interop.Signature, keys []interop.PublicKey) bool {
 	for i := range keys {
 		key := keys[i]
-		if crypto.ECDsaSecp256r1Verify(msg, key, sig) {
+		if crypto.VerifyWithECDsa(msg, key, sig, crypto.Secp256r1) {
 			return true
 		}
 	}
@@ -495,7 +495,7 @@ func isSignedByOwnerKey(msg []byte, sig interop.Signature, owner []byte, key int
 		return false
 	}
 
-	return crypto.ECDsaSecp256r1Verify(msg, key, sig)
+	return crypto.VerifyWithECDsa(msg, key, sig, crypto.Secp256r1)
 }
 
 func isOwnerFromKey(owner []byte, key interop.PublicKey) bool {
@@ -517,7 +517,7 @@ func estimationKey(epoch int, cid []byte) []byte {
 func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerSizes {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).(containerSizes)
+		return std.Deserialize(data.([]byte)).(containerSizes)
 	}
 
 	return containerSizes{

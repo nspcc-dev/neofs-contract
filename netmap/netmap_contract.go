@@ -2,10 +2,10 @@ package netmapcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -387,7 +387,7 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 func getIRNodes(ctx storage.Context) []common.IRNode {
 	data := storage.Get(ctx, innerRingKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]common.IRNode)
+		return std.Deserialize(data.([]byte)).([]common.IRNode)
 	}
 
 	return []common.IRNode{}
@@ -396,7 +396,7 @@ func getIRNodes(ctx storage.Context) []common.IRNode {
 func getNetmapNodes(ctx storage.Context) []netmapNode {
 	data := storage.Get(ctx, netmapKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]netmapNode)
+		return std.Deserialize(data.([]byte)).([]netmapNode)
 	}
 
 	return []netmapNode{}
@@ -405,7 +405,7 @@ func getNetmapNodes(ctx storage.Context) []netmapNode {
 func getSnapshot(ctx storage.Context, key string) []storageNode {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]storageNode)
+		return std.Deserialize(data.([]byte)).([]storageNode)
 	}
 
 	return []storageNode{}
@@ -449,9 +449,9 @@ func multiaddress(n []common.IRNode, committee bool) []byte {
 
 	result = append(result, []byte{0x41, 0x13, 0x8D, 0xEF, 0xAF}...) // NeoCryptoCheckMultisigWithECDsaSecp256r1
 
-	shaHash := crypto.SHA256(result)
+	shaHash := crypto.Sha256(result)
 
-	return crypto.RIPEMD160(shaHash)
+	return crypto.Ripemd160(shaHash)
 }
 
 func insertSort(nodes []common.IRNode) []common.IRNode {

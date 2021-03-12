@@ -2,9 +2,9 @@ package common
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/binary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 )
@@ -98,7 +98,7 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 func getBallots(ctx storage.Context) []Ballot {
 	data := storage.Get(ctx, voteKey)
 	if data != nil {
-		return binary.Deserialize(data.([]byte)).([]Ballot)
+		return std.Deserialize(data.([]byte)).([]Ballot)
 	}
 
 	return []Ballot{}
@@ -116,5 +116,5 @@ func InvokeID(args []interface{}, prefix []byte) []byte {
 		prefix = append(prefix, arg...)
 	}
 
-	return crypto.SHA256(prefix)
+	return crypto.Sha256(prefix)
 }
