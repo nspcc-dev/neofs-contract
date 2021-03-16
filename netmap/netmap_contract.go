@@ -445,9 +445,7 @@ func multiaddress(n []common.IRNode, committee bool) []byte {
 	ln := 0x10 + uint8(len(sortedNodes))
 	result = append(result, ln) // n value = 7
 
-	result = append(result, 0x0B) // PUSHNULL
-
-	result = append(result, []byte{0x41, 0x13, 0x8D, 0xEF, 0xAF}...) // NeoCryptoCheckMultisigWithECDsaSecp256r1
+	result = append(result, []byte{0x41, 0x7B, 0xCE, 0x6C, 0xA5}...) // Neo.Crypto.CheckMultisig
 
 	shaHash := crypto.Sha256(result)
 
