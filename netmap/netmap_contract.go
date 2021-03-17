@@ -39,6 +39,10 @@ const (
 	snapshot0Key  = "snapshotCurrent"
 	snapshot1Key  = "snapshotPrevious"
 	snapshotEpoch = "snapshotEpoch"
+
+	containerContractKey = "containerScriptHash"
+	balanceContractKey   = "balanceScriptHash"
+	cleanupEpochMethod   = "newEpoch"
 )
 
 const (
@@ -53,11 +57,15 @@ var (
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
-func Init(owner interop.Hash160, keys []interop.PublicKey) {
+func Init(owner, addrBalance, addrContainer interop.Hash160, keys []interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
+	}
+
+	if len(addrBalance) != 20 || len(addrContainer) != 20 {
+		panic("init: incorrect length of contract script hash")
 	}
 
 	var irList []common.IRNode
@@ -78,6 +86,9 @@ func Init(owner interop.Hash160, keys []interop.PublicKey) {
 	common.SetSerialized(ctx, netmapKey, []netmapNode{})
 	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
 	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
+
+	storage.Put(ctx, balanceContractKey, addrBalance)
+	storage.Put(ctx, containerContractKey, addrContainer)
 
 	runtime.Log("netmap contract initialized")
 }
@@ -217,6 +228,9 @@ func NewEpoch(epochNum int) bool {
 
 	// put netmap into actual snapshot
 	common.SetSerialized(ctx, snapshot0Key, dataOnlineState)
+
+	// make clean up routines in other contracts
+	cleanup(ctx, epochNum)
 
 	runtime.Notify("NewEpoch", epochNum)
 
@@ -438,4 +452,12 @@ func multiaddress(n []common.IRNode, committee bool) []byte {
 	}
 
 	return contract.CreateMultisigAccount(threshold, keys)
+}
+
+func cleanup(ctx storage.Context, epoch int) {
+	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
+	contract.Call(balanceContractAddr, cleanupEpochMethod, contract.All, epoch)
+
+	containerContractAddr := storage.Get(ctx, containerContractKey).(interop.Hash160)
+	contract.Call(containerContractAddr, cleanupEpochMethod, contract.All, epoch)
 }
