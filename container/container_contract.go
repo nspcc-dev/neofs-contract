@@ -331,12 +331,12 @@ func ListContainerSizes(epoch int) [][]byte {
 	return result
 }
 
-func ProcessEpoch(epochNum int) {
+func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
-		panic("processEpoch: this method must be invoked from inner ring")
+		panic("newEpoch: this method must be invoked from inner ring")
 	}
 
 	candidates := keysToDelete(ctx, epochNum)

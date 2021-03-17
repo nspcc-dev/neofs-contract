@@ -168,7 +168,7 @@ func NewEpoch(epochNum int) bool {
 
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
-		panic("epochNum: this method must be invoked from inner ring")
+		panic("newEpoch: this method must be invoked from inner ring")
 	}
 
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
