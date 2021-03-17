@@ -112,8 +112,8 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	}
 
 	from := walletToScriptHash(ownerID)
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).([]byte)
-	balanceContractAddr := storage.Get(ctx, balanceContractKey).([]byte)
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
 
 	// todo: check if new container with unique container id
@@ -154,7 +154,7 @@ func Delete(containerID, signature []byte) bool {
 	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
 	if !runtime.CheckWitness(multiaddr) {
 		// check provided key
-		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).([]byte)
+		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
 
 		if !verifySignature(containerID, signature, keys) {
