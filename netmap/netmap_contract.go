@@ -2,8 +2,8 @@ package netmapcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -431,52 +431,11 @@ func multiaddress(n []common.IRNode, committee bool) []byte {
 		threshold = len(n)/2 + 1
 	}
 
-	var result = []byte{0x10 + uint8(threshold)} // m value =  5
-
-	sortedNodes := insertSort(n)
-
-	for _, node := range sortedNodes {
+	keys := []interop.PublicKey{}
+	for _, node := range n {
 		key := node.PublicKey
-
-		result = append(result, []byte{0x0C, 0x21}...) // 33 byte array
-		result = append(result, key...)                // public key
+		keys = append(keys, key)
 	}
 
-	ln := 0x10 + uint8(len(sortedNodes))
-	result = append(result, ln) // n value = 7
-
-	result = append(result, []byte{0x41, 0x7B, 0xCE, 0x6C, 0xA5}...) // Neo.Crypto.CheckMultisig
-
-	shaHash := crypto.Sha256(result)
-
-	return crypto.Ripemd160(shaHash)
-}
-
-func insertSort(nodes []common.IRNode) []common.IRNode {
-	for i := 1; i < len(nodes); i++ {
-		v := nodes[i]
-		j := i - 1
-		for j >= 0 && more(nodes[j], v) {
-			nodes[j+1] = nodes[j]
-			j--
-		}
-		nodes[j+1] = v
-	}
-
-	return nodes
-}
-
-func more(a, b common.IRNode) bool {
-	keyA := a.PublicKey
-	keyB := b.PublicKey
-
-	for i := 1; i < len(keyA); i++ { // start from 1 because we sort based on Xcoord of public key
-		if keyA[i] == keyB[i] {
-			continue
-		}
-
-		return keyA[i] > keyB[i]
-	}
-
-	return false
+	return contract.CreateMultisigAccount(threshold, keys)
 }
