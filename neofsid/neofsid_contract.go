@@ -2,7 +2,6 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -154,29 +153,4 @@ func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	}
 
 	return UserInfo{Keys: [][]byte{}}
-}
-
-func invokeIDKeys(owner []byte, keys [][]byte, prefix []byte) []byte {
-	prefix = append(prefix, owner...)
-	for i := range keys {
-		prefix = append(prefix, keys[i]...)
-	}
-
-	return crypto.Sha256(prefix)
-}
-
-func fromKnownContract(caller []byte) bool {
-	ctx := storage.GetReadOnlyContext()
-
-	containerContractAddr := storage.Get(ctx, containerContractKey).([]byte)
-	if common.BytesEqual(caller, containerContractAddr) {
-		return true
-	}
-
-	return false
-}
-
-func irList() []common.IRNode {
-	ctx := storage.GetReadOnlyContext()
-	return common.InnerRingListViaStorage(ctx, netmapContractKey)
 }
