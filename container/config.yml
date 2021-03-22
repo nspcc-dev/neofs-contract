@@ -1,5 +1,5 @@
 name: "NeoFS Container"
-safemethods: ["get", "owner", "list", "eacl", "getContainerSize", "listContainerSizes", "startContainerEstimation", "stopContainerEstimation", "version"]
+safemethods: ["get", "owner", "list", "eacl", "getContainerSize", "listContainerSizes", "version"]
 events:
   - name: containerPut
     parameters:
