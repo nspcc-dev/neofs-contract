@@ -25,6 +25,7 @@ Sidechain contracts:
 - container
 - neofsid
 - netmap
+- proxy
 - reputation
 
 # Getting started 
@@ -33,7 +34,7 @@ Sidechain contracts:
 
 To compile smart contracts you need:
 
--   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.92.0
+-   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.94.0
 
 ## Compilation
 
@@ -43,12 +44,13 @@ corresponding directories.
 
 ```
 $ make all
-neo-go contract compile -i alphabet/alphabet_contract.go -c alphabet/config.yml -m alphabet/config.json
-neo-go contract compile -i audit/audit_contract.go -c audit/config.yml -m audit/config.json
-neo-go contract compile -i balance/balance_contract.go -c balance/config.yml -m balance/config.json
-neo-go contract compile -i container/container_contract.go -c container/config.yml -m container/config.json
-neo-go contract compile -i neofsid/neofsid_contract.go -c neofsid/config.yml -m neofsid/config.json
-neo-go contract compile -i netmap/netmap_contract.go -c netmap/config.yml -m netmap/config.json
+neo-go contract compile -i alphabet/alphabet_contract.go -c alphabet/config.yml -m alphabet/config.json                
+neo-go contract compile -i audit/audit_contract.go -c audit/config.yml -m audit/config.json                                  
+neo-go contract compile -i balance/balance_contract.go -c balance/config.yml -m balance/config.json                  
+neo-go contract compile -i container/container_contract.go -c container/config.yml -m container/config.json      
+neo-go contract compile -i neofsid/neofsid_contract.go -c neofsid/config.yml -m neofsid/config.json                   
+neo-go contract compile -i netmap/netmap_contract.go -c netmap/config.yml -m netmap/config.json                   
+neo-go contract compile -i proxy/proxy_contract.go -c proxy/config.yml -m proxy/config.json    
 neo-go contract compile -i reputation/reputation_contract.go -c reputation/config.yml -m reputation/config.json
 neo-go contract compile -i neofs/neofs_contract.go -c neofs/config.yml -m neofs/config.json
 ```
