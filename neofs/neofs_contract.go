@@ -88,8 +88,8 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 
 	var irList []common.IRNode
 
-	if len(args) < 3 {
-		panic("neofs: at least three inner ring keys must be provided")
+	if len(args) == 0 {
+		panic("neofs: at least one inner ring key must be provided")
 	}
 
 	for i := 0; i < len(args); i++ {
