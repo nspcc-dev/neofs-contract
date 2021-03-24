@@ -120,7 +120,7 @@ func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("transferX: this method must be invoked from inner ring")
 	}
@@ -139,7 +139,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("lock: this method must be invoked from inner ring")
 	}
@@ -166,7 +166,7 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 func NewEpoch(epochNum int) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("newEpoch: this method must be invoked from inner ring")
 	}
@@ -195,7 +195,7 @@ func NewEpoch(epochNum int) bool {
 func Mint(to interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("mint: this method must be invoked from inner ring")
 	}
@@ -217,7 +217,7 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 func Burn(from interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("burn: this method must be invoked from inner ring")
 	}
