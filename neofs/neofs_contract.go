@@ -143,7 +143,21 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(key) {
-		panic("irCandidateRemove: you should be the owner of the public key")
+		alphabet := getNodes(ctx, alphabetKey)
+		threshold := len(alphabet)/3*2 + 1
+
+		nodeKey := common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("irCandidateRemove: invoked by non alphabet node")
+		}
+
+		id := append(key, []byte("delete")...)
+		hashID := crypto.Sha256(id)
+
+		n := common.Vote(ctx, hashID, nodeKey)
+		if n < threshold {
+			return true
+		}
 	}
 
 	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
