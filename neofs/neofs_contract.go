@@ -14,12 +14,11 @@ package smart_contract
 	- Unbind
 
 	Inner ring list related methods:
-	- InnerRingList
+	- AlphabetList
 	- InnerRingCandidates
-	- IsInnerRing
 	- InnerRingCandidateAdd
 	- InnerRingCandidateRemove
-	- InnerRingUpdate
+	- AlphabetUpdate
 
 	Config methods:
 	- Config
@@ -61,12 +60,11 @@ const (
 
 	version = 3
 
-	innerRingKey     = "innerring"
+	alphabetKey      = "alphabet"
 	candidatesKey    = "candidates"
 	cashedChequesKey = "cheques"
 
-	publicKeySize    = 33
-	minInnerRingSize = 3
+	publicKeySize = 33
 
 	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
 
@@ -78,7 +76,7 @@ var (
 	configPrefix = []byte("config")
 )
 
-// Init set up initial inner ring node keys.
+// Init set up initial alphabet node keys.
 func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
@@ -89,7 +87,7 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	var irList []common.IRNode
 
 	if len(args) == 0 {
-		panic("neofs: at least one inner ring key must be provided")
+		panic("neofs: at least one alphabet key must be provided")
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -101,7 +99,7 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	}
 
 	// initialize all storage slices
-	common.SetSerialized(ctx, innerRingKey, irList)
+	common.SetSerialized(ctx, alphabetKey, irList)
 	common.InitVote(ctx)
 	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 	common.SetSerialized(ctx, cashedChequesKey, []cheque{})
@@ -128,16 +126,16 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-// InnerRingList returns array of inner ring node keys.
-func InnerRingList() []common.IRNode {
+// AlphabetList returns array of alphabet node keys.
+func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	return getInnerRingNodes(ctx, innerRingKey)
+	return getNodes(ctx, alphabetKey)
 }
 
 // InnerRingCandidates returns array of inner ring candidate node keys.
 func InnerRingCandidates() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	return getInnerRingNodes(ctx, candidatesKey)
+	return getNodes(ctx, candidatesKey)
 }
 
 // InnerRingCandidateRemove removes key from the list of inner ring candidates.
@@ -149,7 +147,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 	}
 
 	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
-	candidates := getInnerRingNodes(ctx, candidatesKey)
+	candidates := getNodes(ctx, candidatesKey)
 
 	for i := range candidates {
 		c := candidates[i]
@@ -174,7 +172,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) bool {
 	}
 
 	c := common.IRNode{PublicKey: key}
-	candidates := getInnerRingNodes(ctx, candidatesKey)
+	candidates := getNodes(ctx, candidatesKey)
 
 	list, ok := addNode(candidates, c)
 	if !ok {
@@ -273,15 +271,15 @@ func Withdraw(user []byte, amount int) bool {
 // locked in NeoFS balance contract.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 	ctx := storage.GetContext()
-	irList := getInnerRingNodes(ctx, innerRingKey)
-	threshold := len(irList)/3*2 + 1
+	alphabet := getNodes(ctx, alphabetKey)
+	threshold := len(alphabet)/3*2 + 1
 
 	cashedCheques := getCashedCheques(ctx)
 	hashID := crypto.Sha256(id)
 
-	irKey := common.InnerRingInvoker(irList)
-	if len(irKey) == 0 {
-		panic("cheque: invoked by non inner ring node")
+	key := common.InnerRingInvoker(alphabet)
+	if len(key) == 0 {
+		panic("cheque: invoked by non alphabet node")
 	}
 
 	c := cheque{id: id}
@@ -291,7 +289,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 		panic("cheque: non unique id")
 	}
 
-	n := common.Vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, key)
 	if n >= threshold {
 		common.RemoveVotes(ctx, hashID)
 
@@ -347,21 +345,21 @@ func Unbind(user []byte, keys []interop.PublicKey) bool {
 	return true
 }
 
-// InnerRingUpdate updates list of inner ring nodes with provided list of
+// AlphabetUpdate updates list of alphabet nodes with provided list of
 // public keys.
-func InnerRingUpdate(chequeID []byte, args []interop.PublicKey) bool {
+func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
-	if len(args) < minInnerRingSize {
-		panic("irUpdate: bad arguments")
+	if len(args) == 0 {
+		panic("alphabetUpdate: bad arguments")
 	}
 
-	irList := getInnerRingNodes(ctx, innerRingKey)
-	threshold := len(irList)/3*2 + 1
+	alphabet := getNodes(ctx, alphabetKey)
+	threshold := len(alphabet)/3*2 + 1
 
-	irKey := common.InnerRingInvoker(irList)
-	if len(irKey) == 0 {
-		panic("innerRingUpdate: invoked by non inner ring node")
+	key := common.InnerRingInvoker(alphabet)
+	if len(key) == 0 {
+		panic("innerRingUpdate: invoked by non alphabet node")
 	}
 
 	c := cheque{id: chequeID}
@@ -373,74 +371,33 @@ func InnerRingUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		panic("irUpdate: non unique chequeID")
 	}
 
-	oldNodes := 0
-	candidates := getInnerRingNodes(ctx, candidatesKey)
-	newIR := []common.IRNode{}
+	newAlphabet := []common.IRNode{}
 
-loop:
 	for i := 0; i < len(args); i++ {
-		key := args[i]
-		if len(key) != publicKeySize {
-			panic("irUpdate: invalid public key in inner ring list")
+		pubKey := args[i]
+		if len(pubKey) != publicKeySize {
+			panic("alphabetUpdate: invalid public key in alphabet list")
 		}
 
-		// find key in actual inner ring list
-		for j := 0; j < len(irList); j++ {
-			n := irList[j]
-			if common.BytesEqual(n.PublicKey, key) {
-				newIR = append(newIR, n)
-				oldNodes++
-
-				continue loop
-			}
-		}
-
-		// find key in candidates list
-		candidates, newIR, ok = rmNodeByKey(candidates, newIR, key)
-		if !ok {
-			panic("irUpdate: unknown public key in inner ring list")
-		}
-	}
-
-	if oldNodes < len(newIR)*2/3+1 {
-		panic("irUpdate: inner ring change rate must not be more than 1/3 ")
+		newAlphabet = append(newAlphabet, common.IRNode{
+			PublicKey: pubKey,
+		})
 	}
 
 	hashID := crypto.Sha256(chequeID)
 
-	n := common.Vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, key)
 	if n >= threshold {
 		common.RemoveVotes(ctx, hashID)
 
-		common.SetSerialized(ctx, candidatesKey, candidates)
-		common.SetSerialized(ctx, innerRingKey, newIR)
+		common.SetSerialized(ctx, alphabetKey, newAlphabet)
 		common.SetSerialized(ctx, cashedChequesKey, chequesList)
 
-		runtime.Notify("InnerRingUpdate", c.id, newIR)
-		runtime.Log("irUpdate: inner ring list has been updated")
+		runtime.Notify("AlphabetUpdate", c.id, newAlphabet)
+		runtime.Log("alphabetUpdate: alphabet list has been updated")
 	}
 
 	return true
-}
-
-// IsInnerRing returns 'true' if key is inside of inner ring list.
-func IsInnerRing(key []byte) bool {
-	ctx := storage.GetReadOnlyContext()
-
-	if len(key) != publicKeySize {
-		panic("isInnerRing: incorrect public key")
-	}
-
-	irList := getInnerRingNodes(ctx, innerRingKey)
-	for i := range irList {
-		node := irList[i]
-
-		if common.BytesEqual(node.PublicKey, key) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // Config returns value of NeoFS configuration with provided key.
@@ -453,13 +410,13 @@ func Config(key []byte) interface{} {
 func SetConfig(id, key, val []byte) bool {
 	ctx := storage.GetContext()
 
-	// check if it is inner ring invocation
-	irList := getInnerRingNodes(ctx, innerRingKey)
-	threshold := len(irList)/3*2 + 1
+	// check if it is alphabet invocation
+	alphabet := getNodes(ctx, alphabetKey)
+	threshold := len(alphabet)/3*2 + 1
 
-	irKey := common.InnerRingInvoker(irList)
-	if len(irKey) == 0 {
-		panic("setConfig: invoked by non inner ring node")
+	nodeKey := common.InnerRingInvoker(alphabet)
+	if len(nodeKey) == 0 {
+		panic("setConfig: invoked by non alphabet node")
 	}
 
 	// check unique id of the operation
@@ -474,7 +431,7 @@ func SetConfig(id, key, val []byte) bool {
 	// vote for new configuration value
 	hashID := crypto.Sha256(id)
 
-	n := common.Vote(ctx, hashID, irKey)
+	n := common.Vote(ctx, hashID, nodeKey)
 	if n >= threshold {
 		common.RemoveVotes(ctx, hashID)
 
@@ -539,8 +496,8 @@ func Version() int {
 	return version
 }
 
-// getInnerRingNodes returns deserialized slice of inner ring nodes from storage.
-func getInnerRingNodes(ctx storage.Context, key string) []common.IRNode {
+// getNodes returns deserialized slice of nodes from storage.
+func getNodes(ctx storage.Context, key string) []common.IRNode {
 	data := storage.Get(ctx, key)
 	if data != nil {
 		return std.Deserialize(data.([]byte)).([]common.IRNode)
@@ -549,7 +506,7 @@ func getInnerRingNodes(ctx storage.Context, key string) []common.IRNode {
 	return []common.IRNode{}
 }
 
-// getInnerRingNodes returns deserialized slice of used cheques.
+// getCashedCheques returns deserialized slice of used cheques.
 func getCashedCheques(ctx storage.Context) []cheque {
 	data := storage.Get(ctx, cashedChequesKey)
 	if data != nil {
