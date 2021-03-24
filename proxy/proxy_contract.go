@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -54,11 +55,11 @@ func Migrate(script []byte, manifest []byte) bool {
 }
 
 func Verify() bool {
-	ctx := storage.GetReadOnlyContext()
-	sig := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	alphabet := neo.GetCommittee()
+	sig := common.Multiaddress(alphabet, false)
 
 	if !runtime.CheckWitness(sig) {
-		sig = common.CommitteeMultiAddressViaStorage(ctx, netmapContractKey)
+		sig = common.Multiaddress(alphabet, true)
 		return runtime.CheckWitness(sig)
 	}
 
