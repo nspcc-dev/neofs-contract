@@ -73,10 +73,6 @@ func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-func irList(ctx storage.Context) []common.IRNode {
-	return common.InnerRingListViaStorage(ctx, netmapKey)
-}
-
 func currentEpoch(ctx storage.Context) int {
 	netmapContractAddr := storage.Get(ctx, netmapKey).(interop.Hash160)
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
@@ -109,8 +105,8 @@ func checkPermission(ir []common.IRNode) bool {
 func Emit() bool {
 	ctx := storage.GetReadOnlyContext()
 
-	innerRingKeys := irList(ctx)
-	if !checkPermission(innerRingKeys) {
+	alphabet := common.AlphabetNodes()
+	if !checkPermission(alphabet) {
 		panic("invalid invoker")
 	}
 
@@ -130,10 +126,11 @@ func Emit() bool {
 	gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
 	runtime.Log("utility token has been emitted to proxy contract")
 
-	gasPerNode := gasBalance / 2 * 7 / 8 / len(innerRingKeys)
+	innerRing := common.InnerRingNodes()
+	gasPerNode := gasBalance / 2 * 7 / 8 / len(innerRing)
 
 	if gasPerNode != 0 {
-		for _, node := range innerRingKeys {
+		for _, node := range innerRing {
 			address := contract.CreateStandardAccount(node.PublicKey)
 			gas.Transfer(contractHash, address, gasPerNode, nil)
 		}
@@ -149,7 +146,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	index := index(ctx)
 	name := name(ctx)
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("invalid invoker")
 	}
