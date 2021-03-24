@@ -73,7 +73,7 @@ func Migrate(script []byte, manifest []byte) bool {
 
 func Put(rawAuditResult []byte) bool {
 	ctx := storage.GetContext()
-	innerRing := common.InnerRingListViaStorage(ctx, netmapContractKey)
+	innerRing := common.InnerRingNodes()
 
 	hdr := newAuditHeader(rawAuditResult)
 	presented := false
