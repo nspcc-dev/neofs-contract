@@ -33,7 +33,6 @@ const (
 	version = 1
 
 	netmapKey     = "netmap"
-	innerRingKey  = "innerring"
 	configuredKey = "initconfig"
 
 	snapshot0Key  = "snapshotCurrent"
@@ -57,7 +56,7 @@ var (
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
-func Init(owner, addrBalance, addrContainer interop.Hash160, keys []interop.PublicKey) {
+func Init(owner, addrBalance, addrContainer interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -68,16 +67,7 @@ func Init(owner, addrBalance, addrContainer interop.Hash160, keys []interop.Publ
 		panic("init: incorrect length of contract script hash")
 	}
 
-	var irList []common.IRNode
-
-	for i := 0; i < len(keys); i++ {
-		key := keys[i]
-		irList = append(irList, common.IRNode{PublicKey: key})
-	}
-
 	storage.Put(ctx, common.OwnerKey, owner)
-
-	common.SetSerialized(ctx, innerRingKey, irList)
 
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotEpoch, 0)
@@ -107,46 +97,10 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func InnerRingList() []common.IRNode {
-	ctx := storage.GetReadOnlyContext()
-	return getIRNodes(ctx)
-}
-
-func Multiaddress() []byte {
-	ctx := storage.GetReadOnlyContext()
-	return multiaddress(getIRNodes(ctx), false)
-}
-
-func Committee() []byte {
-	ctx := storage.GetReadOnlyContext()
-	return multiaddress(getIRNodes(ctx), true)
-}
-
-func UpdateInnerRing(keys []interop.PublicKey) bool {
-	ctx := storage.GetContext()
-
-	multiaddr := Multiaddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("updateInnerRing: this method must be invoked by inner ring nodes")
-	}
-
-	var irList []common.IRNode
-
-	for i := 0; i < len(keys); i++ {
-		key := keys[i]
-		irList = append(irList, common.IRNode{PublicKey: key})
-	}
-
-	runtime.Log("updateInnerRing: inner ring list updated")
-	common.SetSerialized(ctx, innerRingKey, irList)
-
-	return true
-}
-
 func AddPeer(nodeInfo []byte) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := Multiaddress()
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
@@ -179,7 +133,7 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 
 	ctx := storage.GetContext()
 
-	multiaddr := Multiaddress()
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		if !runtime.CheckWitness(publicKey) {
 			panic("updateState: witness check failed")
@@ -205,7 +159,7 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 func NewEpoch(epochNum int) bool {
 	ctx := storage.GetContext()
 
-	multiaddr := Multiaddress()
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("newEpoch: this method must be invoked by inner ring nodes")
 	}
@@ -276,7 +230,7 @@ func Config(key []byte) interface{} {
 }
 
 func SetConfig(id, key, val []byte) bool {
-	multiaddr := Multiaddress()
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("setConfig: invoked by non inner ring node")
 	}
@@ -398,15 +352,6 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 	return result
 }
 
-func getIRNodes(ctx storage.Context) []common.IRNode {
-	data := storage.Get(ctx, innerRingKey)
-	if data != nil {
-		return std.Deserialize(data.([]byte)).([]common.IRNode)
-	}
-
-	return []common.IRNode{}
-}
-
 func getNetmapNodes(ctx storage.Context) []netmapNode {
 	data := storage.Get(ctx, netmapKey)
 	if data != nil {
@@ -437,21 +382,6 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storageKey := append(configPrefix, postfix...)
 
 	storage.Put(ctx, storageKey, val)
-}
-
-func multiaddress(n []common.IRNode, committee bool) []byte {
-	threshold := len(n)/3*2 + 1
-	if committee {
-		threshold = len(n)/2 + 1
-	}
-
-	keys := []interop.PublicKey{}
-	for _, node := range n {
-		key := node.PublicKey
-		keys = append(keys, key)
-	}
-
-	return contract.CreateMultisigAccount(threshold, keys)
 }
 
 func cleanup(ctx storage.Context, epoch int) {
