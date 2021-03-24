@@ -61,7 +61,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) bool {
 
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("addKey: invocation from non inner ring node")
 	}
@@ -98,7 +98,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) bool {
 
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("removeKey: invocation from non inner ring node")
 	}
