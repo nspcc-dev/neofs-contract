@@ -96,7 +96,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
@@ -118,9 +118,9 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 	// todo: check if new container with unique container id
 
-	innerRing := common.InnerRingList(netmapContractAddr)
-	for i := 0; i < len(innerRing); i++ {
-		node := innerRing[i]
+	alphabet := common.AlphabetNodes()
+	for i := 0; i < len(alphabet); i++ {
+		node := alphabet[i]
 		to := contract.CreateStandardAccount(node.PublicKey)
 
 		tx := contract.Call(balanceContractAddr, "transferX",
@@ -151,7 +151,7 @@ func Delete(containerID, signature []byte) bool {
 		panic("delete: container does not exist")
 	}
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
@@ -334,7 +334,7 @@ func ListContainerSizes(epoch int) [][]byte {
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("newEpoch: this method must be invoked from inner ring")
 	}
@@ -346,9 +346,7 @@ func NewEpoch(epochNum int) {
 }
 
 func StartContainerEstimation(epoch int) bool {
-	ctx := storage.GetReadOnlyContext()
-
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("startEstimation: only inner ring nodes can invoke this")
 	}
@@ -360,9 +358,7 @@ func StartContainerEstimation(epoch int) bool {
 }
 
 func StopContainerEstimation(epoch int) bool {
-	ctx := storage.GetReadOnlyContext()
-
-	multiaddr := common.InnerRingMultiAddressViaStorage(ctx, netmapContractKey)
+	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("stopEstimation: only inner ring nodes can invoke this")
 	}
