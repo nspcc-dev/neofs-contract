@@ -144,7 +144,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 
 	if !runtime.CheckWitness(key) {
 		alphabet := getNodes(ctx, alphabetKey)
-		threshold := len(alphabet)/3*2 + 1
+		threshold := len(alphabet)*2/3 + 1
 
 		nodeKey := common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
@@ -286,7 +286,7 @@ func Withdraw(user []byte, amount int) bool {
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 	ctx := storage.GetContext()
 	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)/3*2 + 1
+	threshold := len(alphabet)*2/3 + 1
 
 	cashedCheques := getCashedCheques(ctx)
 	hashID := crypto.Sha256(id)
@@ -369,7 +369,7 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 	}
 
 	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)/3*2 + 1
+	threshold := len(alphabet)*2/3 + 1
 
 	key := common.InnerRingInvoker(alphabet)
 	if len(key) == 0 {
@@ -426,7 +426,7 @@ func SetConfig(id, key, val []byte) bool {
 
 	// check if it is alphabet invocation
 	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)/3*2 + 1
+	threshold := len(alphabet)*2/3 + 1
 
 	nodeKey := common.InnerRingInvoker(alphabet)
 	if len(nodeKey) == 0 {

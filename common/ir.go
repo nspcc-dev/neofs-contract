@@ -48,7 +48,7 @@ func AlphabetAddress() []byte {
 // Multiaddress returns default multi signature account address for N keys.
 // If committee set to true, then it is `M = N/2+1` committee account.
 func Multiaddress(n []interop.PublicKey, committee bool) []byte {
-	threshold := len(n)/3*2 + 1
+	threshold := len(n)*2/3 + 1
 	if committee {
 		threshold = len(n)/2 + 1
 	}
