@@ -36,23 +36,16 @@ func (a auditHeader) ID() []byte {
 
 const (
 	version = 1
-
-	netmapContractKey = "netmapScriptHash"
 )
 
-func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
+func Init(owner interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
 
-	if len(addrNetmap) != 20 {
-		panic("init: incorrect length of contract script hash")
-	}
-
 	storage.Put(ctx, common.OwnerKey, owner)
-	storage.Put(ctx, netmapContractKey, addrNetmap)
 
 	runtime.Log("audit contract initialized")
 }
@@ -145,7 +138,6 @@ func list(it iterator.Iterator) [][]byte {
 	var result [][]byte
 
 	ignore := [][]byte{
-		[]byte(netmapContractKey),
 		[]byte(common.OwnerKey),
 	}
 
