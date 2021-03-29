@@ -2,35 +2,21 @@ package reputationcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
-const version = 1
-
 const (
-	peerIDSize   = 46 // NeoFS PeerIDSize
-	trustValSize = 8  // float64
-
-	trustStructSize = 0 +
-		peerIDSize + // manager ID
-		peerIDSize + // trusted ID
-		trustValSize // trust value
+	version = 1
 )
-
-var (
-	trustJournalPrefix = []byte("trustJournal")
-
-	ctx storage.Context
-)
-
-func init() {
-	ctx = storage.GetContext()
-}
 
 func Init(owner interop.Hash160) {
+	ctx := storage.GetContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
@@ -41,6 +27,8 @@ func Init(owner interop.Hash160) {
 }
 
 func Migrate(script []byte, manifest []byte) bool {
+	ctx := storage.GetReadOnlyContext()
+
 	if !common.HasUpdateAccess(ctx) {
 		runtime.Log("only owner can update contract")
 		return false
@@ -52,47 +40,73 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func Put(manager, epoch, typ []byte, newTrustList [][]byte) bool {
-	if !runtime.CheckWitness(manager) {
-		panic("put: incorrect manager key")
+func Put(epoch int, peerID []byte, value []byte) {
+	ctx := storage.GetContext()
+
+	multiaddr := common.AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		runtime.Notify("reputationPut", epoch, peerID, value)
+		return
 	}
 
-	for i := 0; i < len(newTrustList); i++ {
-		trustData := newTrustList[i]
+	id := storageID(epoch, peerID)
 
-		if len(trustData) != trustStructSize {
-			panic("list: invalid trust value")
-		}
-	}
+	reputationValues := GetByID(id)
+	reputationValues = append(reputationValues, value)
 
-	// todo: consider using notification for inner ring node
-
-	// todo: limit size of the trust journal:
-	//       history will be stored in chain (args or notifies)
-	//       contract storage will be used as a cache if needed
-	key := append(trustJournalPrefix, append(epoch, typ...)...)
-
-	trustList := common.GetList(ctx, key)
-
-	// fixme: with neo3.0 it is kinda unnecessary
-	if len(trustList) == 0 {
-		// if journal slice is not initialized, then `append` will throw
-		trustList = newTrustList
-	} else {
-		for i := 0; i < len(newTrustList); i++ {
-			trustList = append(trustList, newTrustList[i])
-		}
-	}
-
-	common.SetSerialized(ctx, key, trustList)
-
-	runtime.Log("trust list was successfully updated")
-
-	return true
+	rawValues := std.Serialize(reputationValues)
+	storage.Put(ctx, id, rawValues)
 }
 
-func List(epoch, typ []byte) [][]byte {
-	key := append(trustJournalPrefix, append(epoch, typ...)...)
+func Get(epoch int, peerID []byte) [][]byte {
+	id := storageID(epoch, peerID)
+	return GetByID(id)
+}
 
-	return common.GetList(ctx, key)
+func GetByID(id []byte) [][]byte {
+	ctx := storage.GetReadOnlyContext()
+
+	data := storage.Get(ctx, id)
+	if data == nil {
+		return [][]byte{}
+	}
+
+	return std.Deserialize(data.([]byte)).([][]byte)
+}
+
+// ListByEpoch returns list of IDs that may be used to get reputation data
+// via GetByID method.
+func ListByEpoch(epoch int) [][]byte {
+	ctx := storage.GetReadOnlyContext()
+	it := storage.Find(ctx, epoch, storage.KeysOnly)
+
+	var result [][]byte
+
+	ignore := [][]byte{
+		[]byte(common.OwnerKey),
+	}
+
+loop:
+	for iterator.Next(it) {
+		key := iterator.Value(it).([]byte) // iterator MUST BE `storage.KeysOnly`
+		for _, ignoreKey := range ignore {
+			if common.BytesEqual(key, ignoreKey) {
+				continue loop
+			}
+		}
+
+		result = append(result, key)
+	}
+
+	return result
+}
+
+func Version() int {
+	return version
+}
+
+func storageID(epoch int, peerID []byte) []byte {
+	var buf interface{} = epoch
+
+	return append(buf.([]byte), peerID...)
 }
