@@ -37,9 +37,6 @@ const (
 	decimals    = 12
 	circulation = "MainnetGAS"
 	version     = 1
-
-	netmapContractKey    = "netmapScriptHash"
-	containerContractKey = "containerScriptHash"
 )
 
 var (
@@ -62,20 +59,14 @@ func init() {
 	token = CreateToken()
 }
 
-func Init(owner, addrNetmap, addrContainer interop.Hash160) {
+func Init(owner interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
 
-	if len(addrNetmap) != 20 || len(addrContainer) != 20 {
-		panic("init: incorrect length of contract script hash")
-	}
-
 	storage.Put(ctx, common.OwnerKey, owner)
-	storage.Put(ctx, netmapContractKey, addrNetmap)
-	storage.Put(ctx, containerContractKey, addrContainer)
 
 	runtime.Log("balance contract initialized")
 }
