@@ -12,8 +12,6 @@ import (
 
 const (
 	version = 1
-
-	netmapContractKey = "netmapScriptHash"
 )
 
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
@@ -23,19 +21,14 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(owner, addrNetmap interop.Hash160) {
+func Init(owner interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
 	}
 
-	if len(addrNetmap) != 20 {
-		panic("init: incorrect length of contract script hash")
-	}
-
 	storage.Put(ctx, common.OwnerKey, owner)
-	storage.Put(ctx, netmapContractKey, addrNetmap)
 
 	runtime.Log("proxy contract initialized")
 }
