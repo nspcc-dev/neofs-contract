@@ -229,7 +229,7 @@ func Config(key []byte) interface{} {
 	return getConfig(ctx, key)
 }
 
-func SetConfig(id, key, val []byte) bool {
+func SetConfig(key, val []byte) bool {
 	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("setConfig: invoked by non inner ring node")
