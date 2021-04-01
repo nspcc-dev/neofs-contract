@@ -78,7 +78,8 @@ func GetByID(id []byte) [][]byte {
 // via GetByID method.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
-	it := storage.Find(ctx, epoch, storage.KeysOnly)
+	var buf interface{} = epoch
+	it := storage.Find(ctx, buf.([]byte), storage.KeysOnly)
 
 	var result [][]byte
 
