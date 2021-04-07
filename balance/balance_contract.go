@@ -136,7 +136,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	return result
 }
 
-func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
+func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
 	ctx := storage.GetContext()
 
 	multiaddr := common.AlphabetAddress()
@@ -151,14 +151,16 @@ func Lock(txID []byte, from, to interop.Hash160, amount, until int) bool {
 	}
 	common.SetSerialized(ctx, to, lockAccount)
 
-	result := token.transfer(ctx, from, to, amount, true, lockTransferMsg)
+	details := common.LockTransferDetails(txDetails)
+
+	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
 		// consider using `return false` to remove votes
 		panic("lock: can't lock funds")
 	}
 
 	runtime.Log("lock: created lock account")
-	runtime.Notify("Lock", txID, from, to, amount, until)
+	runtime.Notify("Lock", txDetails, from, to, amount, until)
 
 	return true
 }
@@ -184,21 +186,24 @@ func NewEpoch(epochNum int) bool {
 		}
 
 		if epochNum >= acc.Until {
+			details := common.UnlockTransferDetails(epochNum)
 			// return assets back to the parent
-			token.transfer(ctx, addr, acc.Parent, acc.Balance, true, unlockTransferMsg)
+			token.transfer(ctx, addr, acc.Parent, acc.Balance, true, details)
 		}
 	}
 
 	return true
 }
 
-func Mint(to interop.Hash160, amount int, details []byte) bool {
+func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
 	ctx := storage.GetContext()
 
 	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("mint: this method must be invoked from inner ring")
 	}
+
+	details := common.MintTransferDetails(txDetails)
 
 	ok := token.transfer(ctx, nil, to, amount, true, details)
 	if !ok {
@@ -214,13 +219,15 @@ func Mint(to interop.Hash160, amount int, details []byte) bool {
 	return true
 }
 
-func Burn(from interop.Hash160, amount int, details []byte) bool {
+func Burn(from interop.Hash160, amount int, txDetails []byte) bool {
 	ctx := storage.GetContext()
 
 	multiaddr := common.AlphabetAddress()
 	if !runtime.CheckWitness(multiaddr) {
 		panic("burn: this method must be invoked from inner ring")
 	}
+
+	details := common.BurnTransferDetails(txDetails)
 
 	ok := token.transfer(ctx, from, nil, amount, true, details)
 	if !ok {
