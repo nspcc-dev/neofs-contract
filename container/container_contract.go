@@ -50,8 +50,7 @@ const (
 )
 
 var (
-	containerFeeTransferMsg = []byte("container creation fee")
-	eACLPrefix              = []byte("eACL")
+	eACLPrefix = []byte("eACL")
 )
 
 func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
@@ -111,10 +110,11 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		return true
 	}
 
-	from := walletToScriptHash(ownerID)
+	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
+	details := common.ContainerFeeTransferDetails(containerID)
 
 	// todo: check if new container with unique container id
 
@@ -128,7 +128,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 			from,
 			to,
 			containerFee,
-			containerFeeTransferMsg, // consider add container id to the message
+			details,
 		)
 		if !tx.(bool) {
 			panic("put: can't transfer assets for container creation")
@@ -454,10 +454,6 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
 }
 
-func walletToScriptHash(wallet []byte) []byte {
-	return wallet[1 : len(wallet)-4]
-}
-
 func verifySignature(msg []byte, sig interop.Signature, keys []interop.PublicKey) bool {
 	for i := range keys {
 		key := keys[i]
@@ -495,7 +491,7 @@ func isSignedByOwnerKey(msg []byte, sig interop.Signature, owner []byte, key int
 }
 
 func isOwnerFromKey(owner []byte, key interop.PublicKey) bool {
-	ownerSH := walletToScriptHash(owner)
+	ownerSH := common.WalletToScriptHash(owner)
 	keySH := contract.CreateStandardAccount(key)
 
 	return common.BytesEqual(ownerSH, keySH)
