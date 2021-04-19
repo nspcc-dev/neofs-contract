@@ -44,10 +44,6 @@ import (
 )
 
 type (
-	cheque struct {
-		id []byte
-	}
-
 	record struct {
 		key []byte
 		val []byte
@@ -102,7 +98,6 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	common.SetSerialized(ctx, alphabetKey, irList)
 	common.InitVote(ctx)
 	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
-	common.SetSerialized(ctx, cashedChequesKey, []cheque{})
 
 	storage.Put(ctx, common.OwnerKey, owner)
 
@@ -288,7 +283,6 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 	alphabet := getNodes(ctx, alphabetKey)
 	threshold := len(alphabet)*2/3 + 1
 
-	cashedCheques := getCashedCheques(ctx)
 	hashID := crypto.Sha256(id)
 
 	key := common.InnerRingInvoker(alphabet)
@@ -296,17 +290,9 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 		panic("cheque: invoked by non alphabet node")
 	}
 
-	c := cheque{id: id}
-
-	list, ok := addCheque(cashedCheques, c)
-	if !ok {
-		panic("cheque: non unique id")
-	}
-
 	n := common.Vote(ctx, hashID, key)
 	if n >= threshold {
 		common.RemoveVotes(ctx, hashID)
-
 		from := runtime.GetExecutingScriptHash()
 
 		transferred := gas.Transfer(from, user, amount, nil)
@@ -315,8 +301,6 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 		}
 
 		runtime.Log("cheque: funds have been transferred")
-
-		common.SetSerialized(ctx, cashedChequesKey, list)
 		runtime.Notify("Cheque", id, user, amount, lockAcc)
 	}
 
@@ -376,15 +360,6 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		panic("innerRingUpdate: invoked by non alphabet node")
 	}
 
-	c := cheque{id: chequeID}
-
-	cashedCheques := getCashedCheques(ctx)
-
-	chequesList, ok := addCheque(cashedCheques, c)
-	if !ok {
-		panic("irUpdate: non unique chequeID")
-	}
-
 	newAlphabet := []common.IRNode{}
 
 	for i := 0; i < len(args); i++ {
@@ -405,9 +380,8 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		common.RemoveVotes(ctx, hashID)
 
 		common.SetSerialized(ctx, alphabetKey, newAlphabet)
-		common.SetSerialized(ctx, cashedChequesKey, chequesList)
 
-		runtime.Notify("AlphabetUpdate", c.id, newAlphabet)
+		runtime.Notify("AlphabetUpdate", chequeID, newAlphabet)
 		runtime.Log("alphabetUpdate: alphabet list has been updated")
 	}
 
@@ -433,15 +407,6 @@ func SetConfig(id, key, val []byte) bool {
 		panic("setConfig: invoked by non alphabet node")
 	}
 
-	// check unique id of the operation
-	c := cheque{id: id}
-	cashedCheques := getCashedCheques(ctx)
-
-	chequesList, ok := addCheque(cashedCheques, c)
-	if !ok {
-		panic("setConfig: non unique id")
-	}
-
 	// vote for new configuration value
 	hashID := crypto.Sha256(id)
 
@@ -450,7 +415,6 @@ func SetConfig(id, key, val []byte) bool {
 		common.RemoveVotes(ctx, hashID)
 
 		setConfig(ctx, key, val)
-		common.SetSerialized(ctx, cashedChequesKey, chequesList)
 
 		runtime.Notify("SetConfig", id, key, val)
 		runtime.Log("setConfig: configuration has been updated")
@@ -520,16 +484,6 @@ func getNodes(ctx storage.Context, key string) []common.IRNode {
 	return []common.IRNode{}
 }
 
-// getCashedCheques returns deserialized slice of used cheques.
-func getCashedCheques(ctx storage.Context) []cheque {
-	data := storage.Get(ctx, cashedChequesKey)
-	if data != nil {
-		return std.Deserialize(data.([]byte)).([]cheque)
-	}
-
-	return []cheque{}
-}
-
 // getConfig returns installed neofs configuration value or nil if it is not set.
 func getConfig(ctx storage.Context, key interface{}) interface{} {
 	postfix := key.([]byte)
@@ -544,20 +498,6 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storageKey := append(configPrefix, postfix...)
 
 	storage.Put(ctx, storageKey, val)
-}
-
-// addCheque returns slice of cheques with appended cheque 'c' and bool flag
-// that set to false if cheque 'c' is already presented in the slice 'lst'.
-func addCheque(lst []cheque, c cheque) ([]cheque, bool) {
-	for i := 0; i < len(lst); i++ {
-		if common.BytesEqual(c.id, lst[i].id) {
-			return nil, false
-		}
-	}
-
-	lst = append(lst, c)
-
-	return lst, true
 }
 
 // addNode returns slice of nodes with appended node 'n' and bool flag
