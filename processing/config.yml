@@ -1,0 +1,2 @@
+name: "NeoFS Multi Signature Processing"
+safemethods: ["verify", "version"]

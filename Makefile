@@ -10,7 +10,7 @@ sidechain: alphabet morph
 
 alphabet_sc = alphabet
 morph_sc = audit balance container neofsid netmap proxy reputation
-mainnet_sc = neofs
+mainnet_sc = neofs processing
 
 define sc_template
 $(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
