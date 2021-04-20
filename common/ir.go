@@ -6,23 +6,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/roles"
-	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 )
 
 type IRNode struct {
 	PublicKey interop.PublicKey
-}
-
-// InnerRingInvoker returns public key of inner ring node that invoked contract.
-func InnerRingInvoker(ir []IRNode) interop.PublicKey {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
-		if runtime.CheckWitness(node.PublicKey) {
-			return node.PublicKey
-		}
-	}
-
-	return nil
 }
 
 // InnerRingNodes return list of inner ring nodes from state validator role
