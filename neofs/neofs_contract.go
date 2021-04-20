@@ -53,11 +53,14 @@ type (
 
 const (
 	candidateFeeConfigKey = "InnerRingCandidateFee"
+	withdrawFeeConfigKey  = "WithdrawFee"
 
 	version = 3
 
 	alphabetKey   = "alphabet"
 	candidatesKey = "candidates"
+
+	processingContractKey = "processingScriptHash"
 
 	publicKeySize = 33
 
@@ -72,7 +75,7 @@ var (
 )
 
 // Init set up initial alphabet node keys.
-func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
+func Init(owner, addrProc interop.Hash160, args []interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -83,6 +86,10 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 
 	if len(args) == 0 {
 		panic("neofs: at least one alphabet key must be provided")
+	}
+
+	if len(addrProc) != 20 {
+		panic("neofs: incorrect length of contract script hash")
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -98,6 +105,7 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 
 	storage.Put(ctx, common.OwnerKey, owner)
+	storage.Put(ctx, processingContractKey, addrProc)
 
 	runtime.Log("neofs: contract initialized")
 
@@ -246,7 +254,7 @@ func Deposit(from interop.Hash160, amount int, rcv interop.Hash160) bool {
 }
 
 // Withdraw initialize gas asset withdraw from NeoFS balance.
-func Withdraw(user []byte, amount int) bool {
+func Withdraw(user interop.Hash160, amount int) bool {
 	if !runtime.CheckWitness(user) {
 		panic("withdraw: you should be the owner of the wallet")
 	}
@@ -259,9 +267,20 @@ func Withdraw(user []byte, amount int) bool {
 		panic("withdraw: out of max amount limit")
 	}
 
-	amount = amount * 100000000
+	// transfer fee to proxy contract to pay cheque invocation
+	ctx := storage.GetContext()
+	fee := getConfig(ctx, withdrawFeeConfigKey).(int)
+	processingAddr := storage.Get(ctx, processingContractKey).(interop.Hash160)
 
+	transferred := gas.Transfer(user, processingAddr, fee, []byte{})
+	if !transferred {
+		panic("withdraw: failed to transfer withdraw fee, aborting")
+	}
+
+	// notify alphabet nodes
+	amount = amount * 100000000
 	tx := runtime.GetScriptContainer()
+
 	runtime.Notify("Withdraw", user, amount, tx.Hash)
 
 	return true
