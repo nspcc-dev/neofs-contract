@@ -15,6 +15,7 @@ package smart_contract
 
 	Inner ring list related methods:
 	- AlphabetList
+	- AlphabetAddress
 	- InnerRingCandidates
 	- InnerRingCandidateAdd
 	- InnerRingCandidateRemove
@@ -26,6 +27,7 @@ package smart_contract
 	- SetConfig
 
 	Other utility methods:
+	- Migrate
 	- Version
 	- Cheque
 */
@@ -125,6 +127,12 @@ func Migrate(script []byte, manifest []byte) bool {
 func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
 	return getNodes(ctx, alphabetKey)
+}
+
+// AlphabetAddress returns 2\3n+1 multi signature address of alphabet nodes.
+func AlphabetAddress() interop.Hash160 {
+	ctx := storage.GetReadOnlyContext()
+	return multiaddress(getNodes(ctx, alphabetKey))
 }
 
 // InnerRingCandidates returns array of inner ring candidate node keys.
@@ -533,4 +541,18 @@ func rmNodeByKey(lst, add []common.IRNode, k []byte) ([]common.IRNode, []common.
 	}
 
 	return newLst, add, flag
+}
+
+// multiaddress returns multi signature address from list of IRNode structures
+// with m = 2/3n+1.
+func multiaddress(n []common.IRNode) []byte {
+	threshold := len(n)*2/3 + 1
+
+	keys := []interop.PublicKey{}
+	for _, node := range n {
+		key := node.PublicKey
+		keys = append(keys, key)
+	}
+
+	return contract.CreateMultisigAccount(threshold, keys)
 }
