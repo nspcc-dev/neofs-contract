@@ -19,7 +19,7 @@ const (
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) {
-		panic("onNEP17Payment: alphabet contract accepts GAS only")
+		panic("onNEP17Payment: proxy contract accepts GAS only")
 	}
 }
 
