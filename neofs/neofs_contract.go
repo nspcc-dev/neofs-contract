@@ -36,7 +36,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -98,7 +97,6 @@ func Init(owner interop.PublicKey, args []interop.PublicKey) bool {
 
 	// initialize all storage slices
 	common.SetSerialized(ctx, alphabetKey, irList)
-	common.InitVote(ctx)
 	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 
 	storage.Put(ctx, common.OwnerKey, owner)
@@ -145,22 +143,9 @@ func InnerRingCandidates() []common.IRNode {
 func InnerRingCandidateRemove(key interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
-	if !runtime.CheckWitness(key) {
-		alphabet := getNodes(ctx, alphabetKey)
-		threshold := len(alphabet)*2/3 + 1
-
-		nodeKey := common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("irCandidateRemove: invoked by non alphabet node")
-		}
-
-		id := append(key, []byte("delete")...)
-		hashID := crypto.Sha256(id)
-
-		n := common.Vote(ctx, hashID, nodeKey)
-		if n < threshold {
-			return true
-		}
+	multiaddr := AlphabetAddress()
+	if !runtime.CheckWitness(key) && !runtime.CheckWitness(multiaddr) {
+		panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
 	}
 
 	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
@@ -185,7 +170,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(key) {
-		panic("irCandidateAdd: you should be the owner of the public key")
+		panic("irCandidateAdd: this method must be invoked by candidate")
 	}
 
 	c := common.IRNode{PublicKey: key}
@@ -287,30 +272,20 @@ func Withdraw(user []byte, amount int) bool {
 // Cheque sends gas assets back to the user if they were successfully
 // locked in NeoFS balance contract.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
-	ctx := storage.GetContext()
-	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)*2/3 + 1
-
-	hashID := crypto.Sha256(id)
-
-	key := common.InnerRingInvoker(alphabet)
-	if len(key) == 0 {
-		panic("cheque: invoked by non alphabet node")
+	multiaddr := AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		panic("cheque: this method must be invoked by alphabet")
 	}
 
-	n := common.Vote(ctx, hashID, key)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashID)
-		from := runtime.GetExecutingScriptHash()
+	from := runtime.GetExecutingScriptHash()
 
-		transferred := gas.Transfer(from, user, amount, nil)
-		if !transferred {
-			panic("cheque: failed to transfer funds, aborting")
-		}
-
-		runtime.Log("cheque: funds have been transferred")
-		runtime.Notify("Cheque", id, user, amount, lockAcc)
+	transferred := gas.Transfer(from, user, amount, nil)
+	if !transferred {
+		panic("cheque: failed to transfer funds, aborting")
 	}
+
+	runtime.Log("cheque: funds have been transferred")
+	runtime.Notify("Cheque", id, user, amount, lockAcc)
 
 	return true
 }
@@ -360,12 +335,9 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		panic("alphabetUpdate: bad arguments")
 	}
 
-	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)*2/3 + 1
-
-	key := common.InnerRingInvoker(alphabet)
-	if len(key) == 0 {
-		panic("innerRingUpdate: invoked by non alphabet node")
+	multiaddr := AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		panic("alphabetUpdate: this method must be invoked by alphabet")
 	}
 
 	newAlphabet := []common.IRNode{}
@@ -381,17 +353,10 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		})
 	}
 
-	hashID := crypto.Sha256(chequeID)
+	common.SetSerialized(ctx, alphabetKey, newAlphabet)
 
-	n := common.Vote(ctx, hashID, key)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashID)
-
-		common.SetSerialized(ctx, alphabetKey, newAlphabet)
-
-		runtime.Notify("AlphabetUpdate", chequeID, newAlphabet)
-		runtime.Log("alphabetUpdate: alphabet list has been updated")
-	}
+	runtime.Notify("AlphabetUpdate", chequeID, newAlphabet)
+	runtime.Log("alphabetUpdate: alphabet list has been updated")
 
 	return true
 }
@@ -406,27 +371,15 @@ func Config(key []byte) interface{} {
 func SetConfig(id, key, val []byte) bool {
 	ctx := storage.GetContext()
 
-	// check if it is alphabet invocation
-	alphabet := getNodes(ctx, alphabetKey)
-	threshold := len(alphabet)*2/3 + 1
-
-	nodeKey := common.InnerRingInvoker(alphabet)
-	if len(nodeKey) == 0 {
-		panic("setConfig: invoked by non alphabet node")
+	multiaddr := AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		panic("setConfig: this method must be invoked by alphabet")
 	}
 
-	// vote for new configuration value
-	hashID := crypto.Sha256(id)
+	setConfig(ctx, key, val)
 
-	n := common.Vote(ctx, hashID, nodeKey)
-	if n >= threshold {
-		common.RemoveVotes(ctx, hashID)
-
-		setConfig(ctx, key, val)
-
-		runtime.Notify("SetConfig", id, key, val)
-		runtime.Log("setConfig: configuration has been updated")
-	}
+	runtime.Notify("SetConfig", id, key, val)
+	runtime.Log("setConfig: configuration has been updated")
 
 	return true
 }
