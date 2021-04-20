@@ -1,5 +1,5 @@
 name: "NeoFS"
-safemethods: ["alphabetList", "innerRingCandidates", "config", "listConfig", "version"]
+safemethods: ["alphabetList", "alphabetAddress", "innerRingCandidates", "config", "listConfig", "version"]
 events:
   - name: Deposit
     parameters:
