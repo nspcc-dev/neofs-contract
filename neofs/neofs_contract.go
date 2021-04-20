@@ -52,14 +52,12 @@ type (
 )
 
 const (
-	defaultCandidateFee   = 100 * 1_0000_0000 // 100 Fixed8 Gas
 	candidateFeeConfigKey = "InnerRingCandidateFee"
 
 	version = 3
 
-	alphabetKey      = "alphabet"
-	candidatesKey    = "candidates"
-	cashedChequesKey = "cheques"
+	alphabetKey   = "alphabet"
+	candidatesKey = "candidates"
 
 	publicKeySize = 33
 
@@ -416,8 +414,6 @@ func InitConfig(args [][]byte) bool {
 		panic("initConfig: bad arguments")
 	}
 
-	setConfig(ctx, candidateFeeConfigKey, defaultCandidateFee)
-
 	for i := 0; i < ln/2; i++ {
 		key := args[i*2]
 		val := args[i*2+1]
@@ -473,27 +469,6 @@ func addNode(lst []common.IRNode, n common.IRNode) ([]common.IRNode, bool) {
 	lst = append(lst, n)
 
 	return lst, true
-}
-
-// rmNodeByKey returns slice of nodes without node with key 'k',
-// slices of nodes 'add' with node with key 'k' and bool flag,
-// that set to false if node with a key 'k' does not exists in the slice 'lst'.
-func rmNodeByKey(lst, add []common.IRNode, k []byte) ([]common.IRNode, []common.IRNode, bool) {
-	var (
-		flag   bool
-		newLst = []common.IRNode{} // it is explicit declaration of empty slice, not nil
-	)
-
-	for i := 0; i < len(lst); i++ {
-		if common.BytesEqual(k, lst[i].PublicKey) {
-			add = append(add, lst[i])
-			flag = true
-		} else {
-			newLst = append(newLst, lst[i])
-		}
-	}
-
-	return newLst, add, flag
 }
 
 // multiaddress returns multi signature address from list of IRNode structures
