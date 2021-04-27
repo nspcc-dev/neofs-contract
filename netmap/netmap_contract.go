@@ -35,6 +35,7 @@ const (
 	netmapKey         = "netmap"
 	configuredKey     = "initconfig"
 	notaryDisabledKey = "notary"
+	innerRingKey      = "innerring"
 
 	snapshot0Key  = "snapshotCurrent"
 	snapshot1Key  = "snapshotPrevious"
@@ -58,7 +59,7 @@ var (
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
-func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160) {
+func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160, keys []interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -85,6 +86,14 @@ func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160
 	// initialize the way to collect signatures
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 	if notaryDisabled {
+		var irList []common.IRNode
+
+		for i := 0; i < len(keys); i++ {
+			key := keys[i]
+			irList = append(irList, common.IRNode{PublicKey: key})
+		}
+
+		common.SetSerialized(ctx, innerRingKey, irList)
 		common.InitVote(ctx)
 	}
 
@@ -101,6 +110,32 @@ func Migrate(script []byte, manifest []byte) bool {
 
 	management.Update(script, manifest)
 	runtime.Log("netmap contract updated")
+
+	return true
+}
+
+func InnerRingList() []common.IRNode {
+	ctx := storage.GetReadOnlyContext()
+	return getIRNodes(ctx)
+}
+
+func UpdateInnerRing(keys []interop.PublicKey) bool {
+	ctx := storage.GetContext()
+
+	multiaddr := common.AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		panic("updateInnerRing: this method must be invoked by alpahbet nodes")
+	}
+
+	var irList []common.IRNode
+
+	for i := 0; i < len(keys); i++ {
+		key := keys[i]
+		irList = append(irList, common.IRNode{PublicKey: key})
+	}
+
+	runtime.Log("updateInnerRing: inner ring list updated")
+	common.SetSerialized(ctx, innerRingKey, irList)
 
 	return true
 }
@@ -398,4 +433,13 @@ func cleanup(ctx storage.Context, epoch int) {
 
 	containerContractAddr := storage.Get(ctx, containerContractKey).(interop.Hash160)
 	contract.Call(containerContractAddr, cleanupEpochMethod, contract.All, epoch)
+}
+
+func getIRNodes(ctx storage.Context) []common.IRNode {
+	data := storage.Get(ctx, innerRingKey)
+	if data != nil {
+		return std.Deserialize(data.([]byte)).([]common.IRNode)
+	}
+
+	return []common.IRNode{}
 }
