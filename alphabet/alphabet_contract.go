@@ -19,6 +19,8 @@ const (
 	totalKey = "threshold"
 	nameKey  = "name"
 
+	notaryDisabledKey = "notary"
+
 	version = 1
 )
 
@@ -30,7 +32,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name string, index, total int) {
+func Init(notaryDisabled bool, owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name string, index, total int) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -47,6 +49,12 @@ func Init(owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name str
 	storage.Put(ctx, nameKey, name)
 	storage.Put(ctx, indexKey, index)
 	storage.Put(ctx, totalKey, total)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log(name + " contract initialized")
 }

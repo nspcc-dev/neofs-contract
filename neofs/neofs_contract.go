@@ -57,8 +57,9 @@ const (
 
 	version = 3
 
-	alphabetKey   = "alphabet"
-	candidatesKey = "candidates"
+	alphabetKey       = "alphabet"
+	candidatesKey     = "candidates"
+	notaryDisabledKey = "notary"
 
 	processingContractKey = "processingScriptHash"
 
@@ -75,7 +76,7 @@ var (
 )
 
 // Init set up initial alphabet node keys.
-func Init(owner, addrProc interop.Hash160, args []interop.PublicKey) bool {
+func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.PublicKey) bool {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -106,6 +107,12 @@ func Init(owner, addrProc interop.Hash160, args []interop.PublicKey) bool {
 
 	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, processingContractKey, addrProc)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log("neofs: contract initialized")
 

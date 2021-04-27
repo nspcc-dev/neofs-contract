@@ -41,7 +41,9 @@ const (
 	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
-	containerFeeKey    = "ContainerFee"
+	notaryDisabledKey  = "notary"
+
+	containerFeeKey = "ContainerFee"
 
 	containerIDSize = 32 // SHA256 size
 
@@ -53,7 +55,7 @@ var (
 	eACLPrefix = []byte("eACL")
 )
 
-func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
+func Init(notaryDisabled bool, owner, addrNetmap, addrBalance, addrID interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -68,6 +70,12 @@ func Init(owner, addrNetmap, addrBalance, addrID interop.Hash160) {
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, balanceContractKey, addrBalance)
 	storage.Put(ctx, neofsIDContractKey, addrID)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log("container contract initialized")
 }

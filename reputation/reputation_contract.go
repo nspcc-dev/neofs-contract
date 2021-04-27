@@ -11,10 +11,12 @@ import (
 )
 
 const (
+	notaryDisabledKey = "notary"
+
 	version = 1
 )
 
-func Init(owner interop.Hash160) {
+func Init(notaryDisabled bool, owner interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -22,6 +24,12 @@ func Init(owner interop.Hash160) {
 	}
 
 	storage.Put(ctx, common.OwnerKey, owner)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log("reputation contract initialized")
 }
