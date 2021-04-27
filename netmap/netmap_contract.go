@@ -32,8 +32,9 @@ type (
 const (
 	version = 1
 
-	netmapKey     = "netmap"
-	configuredKey = "initconfig"
+	netmapKey         = "netmap"
+	configuredKey     = "initconfig"
+	notaryDisabledKey = "notary"
 
 	snapshot0Key  = "snapshotCurrent"
 	snapshot1Key  = "snapshotPrevious"
@@ -41,7 +42,8 @@ const (
 
 	containerContractKey = "containerScriptHash"
 	balanceContractKey   = "balanceScriptHash"
-	cleanupEpochMethod   = "newEpoch"
+
+	cleanupEpochMethod = "newEpoch"
 )
 
 const (
@@ -56,7 +58,7 @@ var (
 
 // Init function sets up initial list of inner ring public keys and should
 // be invoked once at neofs infrastructure setup.
-func Init(owner, addrBalance, addrContainer interop.Hash160) {
+func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -79,6 +81,12 @@ func Init(owner, addrBalance, addrContainer interop.Hash160) {
 
 	storage.Put(ctx, balanceContractKey, addrBalance)
 	storage.Put(ctx, containerContractKey, addrContainer)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log("netmap contract initialized")
 }

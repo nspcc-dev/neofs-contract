@@ -20,9 +20,10 @@ const (
 
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
+	notaryDisabledKey    = "notary"
 )
 
-func Init(owner, addrNetmap, addrContainer interop.Hash160) {
+func Init(notaryDisabled bool, owner, addrNetmap, addrContainer interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -36,6 +37,12 @@ func Init(owner, addrNetmap, addrContainer interop.Hash160) {
 	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, containerContractKey, addrContainer)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		common.InitVote(ctx)
+	}
 
 	runtime.Log("neofsid contract initialized")
 }

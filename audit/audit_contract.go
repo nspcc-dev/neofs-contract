@@ -38,9 +38,11 @@ const (
 	version = 1
 
 	netmapContractKey = "netmapScriptHash"
+
+	notaryDisabledKey = "notary"
 )
 
-func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
+func Init(notaryDisabled bool, owner interop.Hash160, addrNetmap interop.Hash160) {
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -53,6 +55,9 @@ func Init(owner interop.Hash160, addrNetmap interop.Hash160) {
 
 	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapContractKey, addrNetmap)
+
+	// initialize the way to collect signatures
+	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 
 	runtime.Log("audit contract initialized")
 }
