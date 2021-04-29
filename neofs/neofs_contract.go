@@ -36,6 +36,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -155,10 +156,28 @@ func InnerRingCandidates() []common.IRNode {
 // InnerRingCandidateRemove removes key from the list of inner ring candidates.
 func InnerRingCandidateRemove(key interop.PublicKey) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := AlphabetAddress()
-	if !runtime.CheckWitness(key) && !runtime.CheckWitness(multiaddr) {
-		panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	keyOwner := runtime.CheckWitness(key)
+
+	if !keyOwner {
+		if notaryDisabled {
+			alphabet = getNodes(ctx, alphabetKey)
+			nodeKey = common.InnerRingInvoker(alphabet)
+			if len(nodeKey) == 0 {
+				panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
+			}
+		} else {
+			multiaddr := AlphabetAddress()
+			if !runtime.CheckWitness(multiaddr) {
+				panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
+			}
+		}
 	}
 
 	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
@@ -171,6 +190,19 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 		} else {
 			runtime.Log("irCandidateRemove: candidate has been removed")
 		}
+	}
+
+	if notaryDisabled && !keyOwner {
+		threshold := len(alphabet)*2/3 + 1
+		id := append(key, []byte("delete")...)
+		hashID := crypto.Sha256(id)
+
+		n := common.Vote(ctx, hashID, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, hashID)
 	}
 
 	common.SetSerialized(ctx, candidatesKey, nodes)
@@ -274,14 +306,29 @@ func Withdraw(user interop.Hash160, amount int) bool {
 		panic("withdraw: out of max amount limit")
 	}
 
-	// transfer fee to proxy contract to pay cheque invocation
 	ctx := storage.GetContext()
-	fee := getConfig(ctx, withdrawFeeConfigKey).(int)
-	processingAddr := storage.Get(ctx, processingContractKey).(interop.Hash160)
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	transferred := gas.Transfer(user, processingAddr, fee, []byte{})
-	if !transferred {
-		panic("withdraw: failed to transfer withdraw fee, aborting")
+	// transfer fee to proxy contract to pay cheque invocation
+	fee := getConfig(ctx, withdrawFeeConfigKey).(int)
+
+	if notaryDisabled {
+		alphabet := getNodes(ctx, alphabetKey)
+		for _, node := range alphabet {
+			processingAddr := contract.CreateStandardAccount(node.PublicKey)
+
+			transferred := gas.Transfer(user, processingAddr, fee, []byte{})
+			if !transferred {
+				panic("withdraw: failed to transfer withdraw fee, aborting")
+			}
+		}
+	} else {
+		processingAddr := storage.Get(ctx, processingContractKey).(interop.Hash160)
+
+		transferred := gas.Transfer(user, processingAddr, fee, []byte{})
+		if !transferred {
+			panic("withdraw: failed to transfer withdraw fee, aborting")
+		}
 	}
 
 	// notify alphabet nodes
@@ -296,12 +343,39 @@ func Withdraw(user interop.Hash160, amount int) bool {
 // Cheque sends gas assets back to the user if they were successfully
 // locked in NeoFS balance contract.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
-	multiaddr := AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("cheque: this method must be invoked by alphabet")
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = getNodes(ctx, alphabetKey)
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("cheque: this method must be invoked by alphabet")
+		}
+	} else {
+		multiaddr := AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("cheque: this method must be invoked by alphabet")
+		}
 	}
 
 	from := runtime.GetExecutingScriptHash()
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
 
 	transferred := gas.Transfer(from, user, amount, nil)
 	if !transferred {
@@ -352,16 +426,30 @@ func Unbind(user []byte, keys []interop.PublicKey) bool {
 
 // AlphabetUpdate updates list of alphabet nodes with provided list of
 // public keys.
-func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
+func AlphabetUpdate(id []byte, args []interop.PublicKey) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	if len(args) == 0 {
 		panic("alphabetUpdate: bad arguments")
 	}
 
-	multiaddr := AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("alphabetUpdate: this method must be invoked by alphabet")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = getNodes(ctx, alphabetKey)
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("alphabetUpdate: this method must be invoked by alphabet")
+		}
+	} else {
+		multiaddr := AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("alphabetUpdate: this method must be invoked by alphabet")
+		}
 	}
 
 	newAlphabet := []common.IRNode{}
@@ -377,9 +465,20 @@ func AlphabetUpdate(chequeID []byte, args []interop.PublicKey) bool {
 		})
 	}
 
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	common.SetSerialized(ctx, alphabetKey, newAlphabet)
 
-	runtime.Notify("AlphabetUpdate", chequeID, newAlphabet)
+	runtime.Notify("AlphabetUpdate", id, newAlphabet)
 	runtime.Log("alphabetUpdate: alphabet list has been updated")
 
 	return true
@@ -394,10 +493,35 @@ func Config(key []byte) interface{} {
 // SetConfig key-value pair as a NeoFS runtime configuration value.
 func SetConfig(id, key, val []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("setConfig: this method must be invoked by alphabet")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = getNodes(ctx, alphabetKey)
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(key) == 0 {
+			panic("setConfig: this method must be invoked by alphabet")
+		}
+	} else {
+		multiaddr := AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("setConfig: this method must be invoked by alphabet")
+		}
+	}
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
 	}
 
 	setConfig(ctx, key, val)
