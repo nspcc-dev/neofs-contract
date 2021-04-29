@@ -3,6 +3,7 @@ package alphabetcontract
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
@@ -112,6 +113,7 @@ func checkPermission(ir []common.IRNode) bool {
 
 func Emit() bool {
 	ctx := storage.GetReadOnlyContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	alphabet := common.AlphabetNodes()
 	if !checkPermission(alphabet) {
@@ -134,7 +136,15 @@ func Emit() bool {
 	gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
 	runtime.Log("utility token has been emitted to proxy contract")
 
-	innerRing := common.InnerRingNodes()
+	var innerRing []common.IRNode
+
+	if notaryDisabled {
+		netmapContract := storage.Get(ctx, netmapKey).(interop.Hash160)
+		innerRing = common.InnerRingNodesFromNetmap(netmapContract)
+	} else {
+		innerRing = common.InnerRingNodes()
+	}
+
 	gasPerNode := gasBalance / 2 * 7 / 8 / len(innerRing)
 
 	if gasPerNode != 0 {
@@ -150,13 +160,27 @@ func Emit() bool {
 }
 
 func Vote(epoch int, candidates []interop.PublicKey) {
-	ctx := storage.GetReadOnlyContext()
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 	index := index(ctx)
 	name := name(ctx)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("invalid invoker")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("invalid invoker")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("invalid invoker")
+		}
 	}
 
 	curEpoch := currentEpoch(ctx)
@@ -167,6 +191,18 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	candidate := candidates[index%len(candidates)]
 	address := runtime.GetExecutingScriptHash()
 
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := voteID(epoch, candidates)
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	ok := neo.Vote(address, candidate)
 	if ok {
 		runtime.Log(name + ": successfully voted for validator")
@@ -175,6 +211,21 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	}
 
 	return
+}
+
+func voteID(epoch interface{}, args []interop.PublicKey) []byte {
+	var (
+		result     []byte
+		epochBytes = epoch.([]byte)
+	)
+
+	result = append(result, epochBytes...)
+
+	for i := range args {
+		result = append(result, args[i]...)
+	}
+
+	return crypto.Sha256(result)
 }
 
 func Name() string {
