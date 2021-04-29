@@ -126,10 +126,43 @@ func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 
 func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("transferX: this method must be invoked from inner ring")
+	var ( // for invocation collection without notary
+		alphabet     []common.IRNode
+		nodeKey      []byte
+		inderectCall bool
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("transferX: this method must be invoked from inner ring")
+		}
+
+		inderectCall = common.FromKnownContract(
+			ctx,
+			runtime.GetCallingScriptHash(),
+			containerContractKey,
+		)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("transferX: this method must be invoked from inner ring")
+		}
+	}
+
+	if notaryDisabled && !inderectCall {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{from, to, amount}, []byte("transfer"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
 	}
 
 	result := token.transfer(ctx, from, to, amount, true, details)
@@ -145,20 +178,47 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 
 func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("lock: this method must be invoked from inner ring")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("lock: this method must be invoked from inner ring")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("lock: this method must be invoked from inner ring")
+		}
 	}
+
+	details := common.LockTransferDetails(txDetails)
 
 	lockAccount := Account{
 		Balance: 0,
 		Until:   until,
 		Parent:  from,
 	}
-	common.SetSerialized(ctx, to, lockAccount)
 
-	details := common.LockTransferDetails(txDetails)
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{txDetails}, []byte("lock"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
+	common.SetSerialized(ctx, to, lockAccount)
 
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
@@ -174,10 +234,22 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
 
 func NewEpoch(epochNum int) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("newEpoch: this method must be invoked from inner ring")
+	if notaryDisabled {
+		indirectCall := common.FromKnownContract(
+			ctx,
+			runtime.GetCallingScriptHash(),
+			netmapContractKey,
+		)
+		if !indirectCall {
+			panic("newEpoch: this method must be invoked from inner ring")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("newEpoch: this method must be invoked from inner ring")
+		}
 	}
 
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
@@ -204,13 +276,39 @@ func NewEpoch(epochNum int) bool {
 
 func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("mint: this method must be invoked from inner ring")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("mint: this method must be invoked from inner ring")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("mint: this method must be invoked from inner ring")
+		}
 	}
 
 	details := common.MintTransferDetails(txDetails)
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{txDetails}, []byte("mint"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
 
 	ok := token.transfer(ctx, nil, to, amount, true, details)
 	if !ok {
@@ -228,13 +326,39 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
 
 func Burn(from interop.Hash160, amount int, txDetails []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("burn: this method must be invoked from inner ring")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("burn: this method must be invoked from inner ring")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("burn: this method must be invoked from inner ring")
+		}
 	}
 
 	details := common.BurnTransferDetails(txDetails)
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{txDetails}, []byte("burn"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
 
 	ok := token.transfer(ctx, from, nil, amount, true, details)
 	if !ok {
