@@ -2,6 +2,7 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -67,10 +68,31 @@ func AddKey(owner []byte, keys []interop.PublicKey) bool {
 	}
 
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("addKey: invocation from non inner ring node")
+	var ( // for invocation collection without notary
+		alphabet     []common.IRNode
+		nodeKey      []byte
+		inderectCall bool
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("addKey: invocation from non inner ring node")
+		}
+
+		inderectCall = common.FromKnownContract(
+			ctx,
+			runtime.GetCallingScriptHash(),
+			containerContractKey,
+		)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("addKey: invocation from non inner ring node")
+		}
 	}
 
 	info := getUserInfo(ctx, owner)
@@ -92,6 +114,18 @@ addLoop:
 		info.Keys = append(info.Keys, pubKey)
 	}
 
+	if notaryDisabled && !inderectCall {
+		threshold := len(alphabet)*2/3 + 1
+		id := invokeIDKeys(owner, keys, []byte("add"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	common.SetSerialized(ctx, owner, info)
 	runtime.Log("addKey: key bound to the owner")
 
@@ -104,10 +138,24 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) bool {
 	}
 
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("removeKey: invocation from non inner ring node")
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("removeKey: invocation from non inner ring node")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("removeKey: invocation from non inner ring node")
+		}
 	}
 
 	info := getUserInfo(ctx, owner)
@@ -132,6 +180,19 @@ rmLoop:
 	}
 
 	info.Keys = leftKeys
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := invokeIDKeys(owner, keys, []byte("remove"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	common.SetSerialized(ctx, owner, info)
 
 	return true
@@ -160,4 +221,13 @@ func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	}
 
 	return UserInfo{Keys: [][]byte{}}
+}
+
+func invokeIDKeys(owner []byte, keys []interop.PublicKey, prefix []byte) []byte {
+	prefix = append(prefix, owner...)
+	for i := range keys {
+		prefix = append(prefix, keys[i]...)
+	}
+
+	return crypto.Sha256(prefix)
 }
