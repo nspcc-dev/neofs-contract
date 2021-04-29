@@ -96,6 +96,7 @@ func Migrate(script []byte, manifest []byte) bool {
 
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	offset := int(container[1])
 	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
@@ -103,8 +104,21 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
+	var ( // for invocation collection without notary
+		alphabet     = common.AlphabetNodes()
+		nodeKey      []byte
+		alphabetCall bool
+	)
+
+	if notaryDisabled {
+		nodeKey = common.InnerRingInvoker(alphabet)
+		alphabetCall = len(nodeKey) != 0
+	} else {
+		multiaddr := common.AlphabetAddress()
+		alphabetCall = runtime.CheckWitness(multiaddr)
+	}
+
+	if !alphabetCall {
 		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
 			// check keys from NeoFSID
 			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
@@ -126,7 +140,18 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 	// todo: check if new container with unique container id
 
-	alphabet := common.AlphabetNodes()
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	for i := 0; i < len(alphabet); i++ {
 		node := alphabet[i]
 		to := contract.CreateStandardAccount(node.PublicKey)
@@ -153,14 +178,29 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 func Delete(containerID, signature []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
 		panic("delete: container does not exist")
 	}
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
+	var ( // for invocation collection without notary
+		alphabet     []common.IRNode
+		nodeKey      []byte
+		alphabetCall bool
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		alphabetCall = len(nodeKey) != 0
+	} else {
+		multiaddr := common.AlphabetAddress()
+		alphabetCall = runtime.CheckWitness(multiaddr)
+	}
+
+	if !alphabetCall {
 		// check provided key
 		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
@@ -171,6 +211,18 @@ func Delete(containerID, signature []byte) bool {
 
 		runtime.Notify("containerDelete", containerID, signature)
 		return true
+	}
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{containerID, signature}, []byte("delete"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
 	}
 
 	removeContainer(ctx, containerID, ownerID)
@@ -341,10 +393,22 @@ func ListContainerSizes(epoch int) [][]byte {
 
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("newEpoch: this method must be invoked from inner ring")
+	if notaryDisabled {
+		indirectCall := common.FromKnownContract(
+			ctx,
+			runtime.GetCallingScriptHash(),
+			netmapContractKey,
+		)
+		if !indirectCall {
+			panic("newEpoch: this method must be invoked from inner ring")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("newEpoch: this method must be invoked from inner ring")
+		}
 	}
 
 	candidates := keysToDelete(ctx, epochNum)
@@ -354,9 +418,37 @@ func NewEpoch(epochNum int) {
 }
 
 func StartContainerEstimation(epoch int) bool {
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("startEstimation: only inner ring nodes can invoke this")
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("startEstimation: only inner ring nodes can invoke this")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("startEstimation: only inner ring nodes can invoke this")
+		}
+	}
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{epoch}, []byte("startEstimation"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
 	}
 
 	runtime.Notify("StartEstimation", epoch)
@@ -366,9 +458,37 @@ func StartContainerEstimation(epoch int) bool {
 }
 
 func StopContainerEstimation(epoch int) bool {
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("stopEstimation: only inner ring nodes can invoke this")
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+
+	var ( // for invocation collection without notary
+		alphabet []common.IRNode
+		nodeKey  []byte
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			panic("stopEstimation: only inner ring nodes can invoke this")
+		}
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("stopEstimation: only inner ring nodes can invoke this")
+		}
+	}
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{epoch}, []byte("stopEstimation"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
 	}
 
 	runtime.Notify("StopEstimation", epoch)
