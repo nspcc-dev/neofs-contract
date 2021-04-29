@@ -78,7 +78,16 @@ func Migrate(script []byte, manifest []byte) bool {
 
 func Put(rawAuditResult []byte) bool {
 	ctx := storage.GetContext()
-	innerRing := common.InnerRingNodes()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+
+	var innerRing []common.IRNode
+
+	if notaryDisabled {
+		netmapContract := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+		innerRing = common.InnerRingNodesFromNetmap(netmapContract)
+	} else {
+		innerRing = common.InnerRingNodes()
+	}
 
 	hdr := newAuditHeader(rawAuditResult)
 	presented := false
@@ -153,6 +162,7 @@ func list(it iterator.Iterator) [][]byte {
 	ignore := [][]byte{
 		[]byte(netmapContractKey),
 		[]byte(common.OwnerKey),
+		[]byte(notaryDisabledKey),
 	}
 
 loop:
