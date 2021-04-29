@@ -50,9 +50,24 @@ func Migrate(script []byte, manifest []byte) bool {
 
 func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
+	var ( // for invocation collection without notary
+		alphabet     []common.IRNode
+		nodeKey      []byte
+		alphabetCall bool
+	)
+
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		alphabetCall = len(nodeKey) != 0
+	} else {
+		multiaddr := common.AlphabetAddress()
+		alphabetCall = runtime.CheckWitness(multiaddr)
+	}
+
+	if !alphabetCall {
 		runtime.Notify("reputationPut", epoch, peerID, value)
 		return
 	}
@@ -63,6 +78,18 @@ func Put(epoch int, peerID []byte, value []byte) {
 	reputationValues = append(reputationValues, value)
 
 	rawValues := std.Serialize(reputationValues)
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	storage.Put(ctx, id, rawValues)
 }
 
@@ -93,6 +120,7 @@ func ListByEpoch(epoch int) [][]byte {
 
 	ignore := [][]byte{
 		[]byte(common.OwnerKey),
+		[]byte(notaryDisabledKey),
 	}
 
 loop:
