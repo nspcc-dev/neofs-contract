@@ -58,6 +58,9 @@ func Init(notaryDisabled bool, owner interop.Hash160, addrNetmap interop.Hash160
 
 	// initialize the way to collect signatures
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
+	if notaryDisabled {
+		runtime.Log("audit contract notary disabled")
+	}
 
 	runtime.Log("audit contract initialized")
 }

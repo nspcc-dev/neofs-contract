@@ -29,6 +29,7 @@ func Init(notaryDisabled bool, owner interop.Hash160) {
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 	if notaryDisabled {
 		common.InitVote(ctx)
+		runtime.Log("reputation contract notary disabled")
 	}
 
 	runtime.Log("reputation contract initialized")

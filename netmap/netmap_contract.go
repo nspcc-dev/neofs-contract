@@ -96,6 +96,7 @@ func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160
 
 		common.SetSerialized(ctx, innerRingKey, irList)
 		common.InitVote(ctx)
+		runtime.Log("netmap contract notary disabled")
 	}
 
 	runtime.Log("netmap contract initialized")

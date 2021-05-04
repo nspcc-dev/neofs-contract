@@ -75,6 +75,7 @@ func Init(notaryDisabled bool, owner, addrNetmap, addrBalance, addrID interop.Ha
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 	if notaryDisabled {
 		common.InitVote(ctx)
+		runtime.Log("container contract notary disabled")
 	}
 
 	runtime.Log("container contract initialized")
