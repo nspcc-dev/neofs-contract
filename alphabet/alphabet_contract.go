@@ -55,6 +55,7 @@ func Init(notaryDisabled bool, owner interop.Hash160, addrNetmap, addrProxy inte
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 	if notaryDisabled {
 		common.InitVote(ctx)
+		runtime.Log(name + " notary disabled")
 	}
 
 	runtime.Log(name + " contract initialized")

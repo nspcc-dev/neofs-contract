@@ -113,6 +113,7 @@ func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.P
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
 	if notaryDisabled {
 		common.InitVote(ctx)
+		runtime.Log("neofs contract notary disabled")
 	}
 
 	runtime.Log("neofs: contract initialized")
