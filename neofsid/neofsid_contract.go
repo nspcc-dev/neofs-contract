@@ -80,7 +80,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) bool {
 	var ( // for invocation collection without notary
 		alphabet     []common.IRNode
 		nodeKey      []byte
-		inderectCall bool
+		indirectCall bool
 	)
 
 	if notaryDisabled {
@@ -90,7 +90,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) bool {
 			panic("addKey: invocation from non inner ring node")
 		}
 
-		inderectCall = common.FromKnownContract(
+		indirectCall = common.FromKnownContract(
 			ctx,
 			runtime.GetCallingScriptHash(),
 			containerContractKey,
@@ -121,7 +121,7 @@ addLoop:
 		info.Keys = append(info.Keys, pubKey)
 	}
 
-	if notaryDisabled && !inderectCall {
+	if notaryDisabled && !indirectCall {
 		threshold := len(alphabet)*2/3 + 1
 		id := invokeIDKeys(owner, keys, []byte("add"))
 

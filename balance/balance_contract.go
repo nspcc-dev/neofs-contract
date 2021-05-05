@@ -138,7 +138,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	var ( // for invocation collection without notary
 		alphabet     []common.IRNode
 		nodeKey      []byte
-		inderectCall bool
+		indirectCall bool
 	)
 
 	if notaryDisabled {
@@ -148,7 +148,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 			panic("transferX: this method must be invoked from inner ring")
 		}
 
-		inderectCall = common.FromKnownContract(
+		indirectCall = common.FromKnownContract(
 			ctx,
 			runtime.GetCallingScriptHash(),
 			containerContractKey,
@@ -160,7 +160,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 		}
 	}
 
-	if notaryDisabled && !inderectCall {
+	if notaryDisabled && !indirectCall {
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{from, to, amount}, []byte("transfer"))
 
