@@ -133,7 +133,7 @@ func InvokeID(args []interface{}, prefix []byte) []byte {
    - it is indirect invocation from other smart-contract.
 
    However there is a possible attack, when malicious inner ring node creates
-   malicious smart-contract in morph chain to do inderect call.
+   malicious smart-contract in morph chain to do indirect call.
 
    MaliciousIR  -(1 invoke)-> [ Malicious Contract ] -(1 invoke) -> [ Balance Contract ]
 
