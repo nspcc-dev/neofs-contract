@@ -276,8 +276,9 @@ func List(owner []byte) [][]byte {
 	return list
 }
 
-func SetEACL(eACL, signature []byte) bool {
+func SetEACL(eACL, signature, publicKey []byte) bool {
 	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	// get container ID
 	offset := int(eACL[1])
@@ -289,19 +290,46 @@ func SetEACL(eACL, signature []byte) bool {
 		panic("setEACL: container does not exists")
 	}
 
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
-	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
+	var ( // for invocation collection without notary
+		alphabet     []common.IRNode
+		nodeKey      []byte
+		alphabetCall bool
+	)
 
-	if !verifySignature(eACL, signature, keys) {
-		panic("setEACL: invalid eACL signature")
+	if notaryDisabled {
+		alphabet = common.AlphabetNodes()
+		nodeKey = common.InnerRingInvoker(alphabet)
+		alphabetCall = len(nodeKey) != 0
+	} else {
+		multiaddr := common.AlphabetAddress()
+		alphabetCall = runtime.CheckWitness(multiaddr)
+	}
+
+	if !alphabetCall {
+		runtime.Notify("setEACL", eACL, signature, publicKey)
+		return true
 	}
 
 	rule := extendedACL{
 		val: eACL,
 		sig: signature,
+		pub: publicKey,
 	}
 
 	key := append(eACLPrefix, containerID...)
+
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{eACL}, []byte("setEACL"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return true
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
 	common.SetSerialized(ctx, key, rule)
 
 	runtime.Log("setEACL: success")

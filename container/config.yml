@@ -15,6 +15,14 @@ events:
         type: ByteArray
       - name: signature
         type: ByteArray
+  - name: setEACL
+    parameters:
+      - name: eACL
+        type: ByteArray
+      - name: signature
+        type: ByteArray
+      - name: publicKey
+        type: ByteArray
   - name: StartEstimation
     parameters:
       - name: epoch
