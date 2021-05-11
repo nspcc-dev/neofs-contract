@@ -127,16 +127,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	}
 
 	if !alphabetCall {
-		if !isSignedByOwnerKey(container, signature, ownerID, publicKey) {
-			// check keys from NeoFSID
-			keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
-			if !verifySignature(container, signature, keys) {
-				panic("put: invalid owner signature")
-			}
-		}
-
 		runtime.Notify("containerPut", container, signature, publicKey)
-
 		return true
 	}
 
@@ -209,14 +200,6 @@ func Delete(containerID, signature []byte) bool {
 	}
 
 	if !alphabetCall {
-		// check provided key
-		neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
-		keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
-
-		if !verifySignature(containerID, signature, keys) {
-			panic("delete: invalid owner signature")
-		}
-
 		runtime.Notify("containerDelete", containerID, signature)
 		return true
 	}
@@ -342,30 +325,10 @@ func EACL(containerID []byte) extendedACL {
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
-		panic("getEACL: container does not exists")
+		panic("eACL: container does not exists")
 	}
 
-	eacl := getEACL(ctx, containerID)
-
-	if len(eacl.sig) == 0 {
-		return eacl
-	}
-
-	// attach corresponding public key if it was not revoked from neofs id
-
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
-	keys := contract.Call(neofsIDContractAddr, "key", contract.ReadOnly, ownerID).([]interop.PublicKey)
-
-	for i := range keys {
-		key := keys[i]
-		if crypto.VerifyWithECDsa(eacl.val, key, eacl.sig, crypto.Secp256r1) {
-			eacl.pub = key
-
-			break
-		}
-	}
-
-	return eacl
+	return getEACL(ctx, containerID)
 }
 
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) bool {
@@ -618,17 +581,6 @@ func getEACL(ctx storage.Context, cid []byte) extendedACL {
 	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
 }
 
-func verifySignature(msg []byte, sig interop.Signature, keys []interop.PublicKey) bool {
-	for i := range keys {
-		key := keys[i]
-		if crypto.VerifyWithECDsa(msg, key, sig, crypto.Secp256r1) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func getOwnerByID(ctx storage.Context, id []byte) []byte {
 	owners := common.GetList(ctx, ownersKey)
 	for i := 0; i < len(owners); i++ {
@@ -644,21 +596,6 @@ func getOwnerByID(ctx storage.Context, id []byte) []byte {
 	}
 
 	return nil
-}
-
-func isSignedByOwnerKey(msg []byte, sig interop.Signature, owner []byte, key interop.PublicKey) bool {
-	if !isOwnerFromKey(owner, key) {
-		return false
-	}
-
-	return crypto.VerifyWithECDsa(msg, key, sig, crypto.Secp256r1)
-}
-
-func isOwnerFromKey(owner []byte, key interop.PublicKey) bool {
-	ownerSH := common.WalletToScriptHash(owner)
-	keySH := contract.CreateStandardAccount(key)
-
-	return common.BytesEqual(ownerSH, keySH)
 }
 
 func estimationKey(epoch int, cid []byte) []byte {
