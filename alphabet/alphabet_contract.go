@@ -33,7 +33,16 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(notaryDisabled bool, owner interop.Hash160, addrNetmap, addrProxy interop.Hash160, name string, index, total int) {
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	notaryDisabled := args[0].(bool)
+	owner := args[1].(interop.Hash160)
+	addrNetmap := args[2].(interop.Hash160)
+	addrProxy := args[3].(interop.Hash160)
+	name := args[4].(string)
+	index := args[5].(int)
+	total := args[6].(int)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {

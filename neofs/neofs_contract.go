@@ -76,8 +76,14 @@ var (
 	configPrefix = []byte("config")
 )
 
-// Init set up initial alphabet node keys.
-func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.PublicKey) bool {
+// _deploy sets up initial alphabet node keys.
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	notaryDisabled := args[0].(bool)
+	owner := args[1].(interop.Hash160)
+	addrProc := args[2].(interop.Hash160)
+	keys := args[3].([]interop.PublicKey)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -86,7 +92,7 @@ func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.P
 
 	var irList []common.IRNode
 
-	if len(args) == 0 {
+	if len(keys) == 0 {
 		panic("neofs: at least one alphabet key must be provided")
 	}
 
@@ -94,8 +100,8 @@ func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.P
 		panic("neofs: incorrect length of contract script hash")
 	}
 
-	for i := 0; i < len(args); i++ {
-		pub := args[i]
+	for i := 0; i < len(keys); i++ {
+		pub := keys[i]
 		if len(pub) != publicKeySize {
 			panic("neofs: incorrect public key length")
 		}
@@ -117,8 +123,6 @@ func Init(notaryDisabled bool, owner, addrProc interop.Hash160, args []interop.P
 	}
 
 	runtime.Log("neofs: contract initialized")
-
-	return true
 }
 
 // Migrate updates smart contract execution script and manifest.

@@ -24,7 +24,13 @@ const (
 	notaryDisabledKey    = "notary"
 )
 
-func Init(notaryDisabled bool, owner, addrNetmap, addrContainer interop.Hash160) {
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	notaryDisabled := args[0].(bool)
+	owner := args[1].(interop.Hash160)
+	addrNetmap := args[2].(interop.Hash160)
+	addrContainer := args[3].(interop.Hash160)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
