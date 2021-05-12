@@ -55,7 +55,14 @@ var (
 	eACLPrefix = []byte("eACL")
 )
 
-func Init(notaryDisabled bool, owner, addrNetmap, addrBalance, addrID interop.Hash160) {
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	notaryDisabled := args[0].(bool)
+	owner := args[1].(interop.Hash160)
+	addrNetmap := args[2].(interop.Hash160)
+	addrBalance := args[3].(interop.Hash160)
+	addrID := args[4].(interop.Hash160)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {

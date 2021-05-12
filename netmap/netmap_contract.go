@@ -58,9 +58,15 @@ var (
 	configPrefix = []byte("config")
 )
 
-// Init function sets up initial list of inner ring public keys and should
-// be invoked once at neofs infrastructure setup.
-func Init(notaryDisabled bool, owner, addrBalance, addrContainer interop.Hash160, keys []interop.PublicKey) {
+// _deploy function sets up initial list of inner ring public keys.
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	notaryDisabled := args[0].(bool)
+	owner := args[1].(interop.Hash160)
+	addrBalance := args[2].(interop.Hash160)
+	addrContainer := args[3].(interop.Hash160)
+	keys := args[4].([]interop.PublicKey)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {

@@ -23,7 +23,11 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(owner, addrNetmap interop.Hash160) {
+func _deploy(data interface{}, isUpdate bool) {
+	args := data.([]interface{})
+	owner := args[0].(interop.Hash160)
+	addrNetmap := args[1].(interop.Hash160)
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {

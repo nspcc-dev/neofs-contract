@@ -25,7 +25,11 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func Init(owner, addrNeoFS interop.Hash160) {
+func _deploy(data interface{}, isUpdate bool) {
+	arr := data.([]interop.Hash160)
+	owner := arr[0]
+	addrNeoFS := arr[1]
+
 	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
