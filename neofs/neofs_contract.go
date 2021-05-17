@@ -8,7 +8,6 @@ package smart_contract
 	- InitConfig
 
 	User related methods:
-	- Deposit
 	- Withdraw
 	- Bind
 	- Unbind
@@ -67,6 +66,7 @@ const (
 	publicKeySize = 33
 
 	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
+	maxBalanceAmountGAS = maxBalanceAmount * 1_0000_0000
 
 	// hardcoded value to ignore deposit notification in onReceive
 	ignoreDepositNotification = "\x57\x0b"
@@ -253,6 +253,12 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 		return
 	}
 
+	if amount <= 0 {
+		panic("onNEP17Payment: amount must be positive")
+	} else if maxBalanceAmountGAS < amount {
+		panic("onNEP17Payment: out of max amount limit")
+	}
+
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
 		panic("onNEP17Payment: only GAS can be accepted for deposit")
@@ -270,31 +276,6 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 
 	tx := runtime.GetScriptContainer()
 	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
-}
-
-// Deposit gas assets to this script-hash address in NeoFS balance contract.
-func Deposit(from interop.Hash160, amount int, rcv interop.Hash160) bool {
-	if !runtime.CheckWitness(from) {
-		panic("deposit: you should be the owner of the wallet")
-	}
-
-	if amount > maxBalanceAmount {
-		panic("deposit: out of max amount limit")
-	}
-
-	if amount <= 0 {
-		return false
-	}
-	amount = amount * 100000000
-
-	to := runtime.GetExecutingScriptHash()
-
-	transferred := gas.Transfer(from, to, amount, rcv)
-	if !transferred {
-		panic("deposit: failed to transfer funds, aborting")
-	}
-
-	return true
 }
 
 // Withdraw initialize gas asset withdraw from NeoFS balance.
