@@ -43,12 +43,7 @@ const (
 	notaryDisabledKey    = "notary"
 )
 
-var (
-	lockTransferMsg   = []byte("lock assets to withdraw")
-	unlockTransferMsg = []byte("asset lock expired")
-
-	token Token
-)
+var token Token
 
 // CreateToken initializes the Token Interface for the Smart Contract to operate with.
 func CreateToken() Token {

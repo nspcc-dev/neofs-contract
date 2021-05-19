@@ -105,10 +105,6 @@ func index(ctx storage.Context) int {
 	return storage.Get(ctx, indexKey).(int)
 }
 
-func total(ctx storage.Context) int {
-	return storage.Get(ctx, totalKey).(int)
-}
-
 func checkPermission(ir []common.IRNode) bool {
 	ctx := storage.GetReadOnlyContext()
 	index := index(ctx) // read from contract memory
