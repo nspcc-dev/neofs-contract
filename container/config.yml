@@ -9,11 +9,15 @@ events:
         type: ByteArray
       - name: publicKey
         type: ByteArray
+      - name: token
+        type: ByteArray
   - name: containerDelete
     parameters:
       - name: containerID
         type: ByteArray
       - name: signature
+        type: ByteArray
+      - name: token
         type: ByteArray
   - name: setEACL
     parameters:
@@ -22,6 +26,8 @@ events:
       - name: signature
         type: ByteArray
       - name: publicKey
+        type: ByteArray
+      - name: token
         type: ByteArray
   - name: StartEstimation
     parameters:
