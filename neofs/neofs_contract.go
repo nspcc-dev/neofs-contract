@@ -159,7 +159,7 @@ func InnerRingCandidates() []common.IRNode {
 }
 
 // InnerRingCandidateRemove removes key from the list of inner ring candidates.
-func InnerRingCandidateRemove(key interop.PublicKey) bool {
+func InnerRingCandidateRemove(key interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -204,19 +204,17 @@ func InnerRingCandidateRemove(key interop.PublicKey) bool {
 
 		n := common.Vote(ctx, hashID, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, hashID)
 	}
 
 	common.SetSerialized(ctx, candidatesKey, nodes)
-
-	return true
 }
 
 // InnerRingCandidateAdd adds key to the list of inner ring candidates.
-func InnerRingCandidateAdd(key interop.PublicKey) bool {
+func InnerRingCandidateAdd(key interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(key) {
@@ -242,8 +240,6 @@ func InnerRingCandidateAdd(key interop.PublicKey) bool {
 
 	runtime.Log("irCandidateAdd: candidate has been added")
 	common.SetSerialized(ctx, candidatesKey, list)
-
-	return true
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
@@ -279,7 +275,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 // Withdraw initialize gas asset withdraw from NeoFS balance.
-func Withdraw(user interop.Hash160, amount int) bool {
+func Withdraw(user interop.Hash160, amount int) {
 	if !runtime.CheckWitness(user) {
 		panic("withdraw: you should be the owner of the wallet")
 	}
@@ -322,13 +318,11 @@ func Withdraw(user interop.Hash160, amount int) bool {
 	tx := runtime.GetScriptContainer()
 
 	runtime.Notify("Withdraw", user, amount, tx.Hash)
-
-	return true
 }
 
 // Cheque sends gas assets back to the user if they were successfully
 // locked in NeoFS balance contract.
-func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
+func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -357,7 +351,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -370,12 +364,10 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) bool {
 
 	runtime.Log("cheque: funds have been transferred")
 	runtime.Notify("Cheque", id, user, amount, lockAcc)
-
-	return true
 }
 
 // Bind public key with user's account to use it in NeoFS requests.
-func Bind(user []byte, keys []interop.PublicKey) bool {
+func Bind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("binding: you should be the owner of the wallet")
 	}
@@ -388,12 +380,10 @@ func Bind(user []byte, keys []interop.PublicKey) bool {
 	}
 
 	runtime.Notify("Bind", user, keys)
-
-	return true
 }
 
 // Unbind public key from user's account
-func Unbind(user []byte, keys []interop.PublicKey) bool {
+func Unbind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("unbinding: you should be the owner of the wallet")
 	}
@@ -406,13 +396,11 @@ func Unbind(user []byte, keys []interop.PublicKey) bool {
 	}
 
 	runtime.Notify("Unbind", user, keys)
-
-	return true
 }
 
 // AlphabetUpdate updates list of alphabet nodes with provided list of
 // public keys.
-func AlphabetUpdate(id []byte, args []interop.PublicKey) bool {
+func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -456,7 +444,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -466,8 +454,6 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) bool {
 
 	runtime.Notify("AlphabetUpdate", id, newAlphabet)
 	runtime.Log("alphabetUpdate: alphabet list has been updated")
-
-	return true
 }
 
 // Config returns value of NeoFS configuration with provided key.
@@ -477,7 +463,7 @@ func Config(key []byte) interface{} {
 }
 
 // SetConfig key-value pair as a NeoFS runtime configuration value.
-func SetConfig(id, key, val []byte) bool {
+func SetConfig(id, key, val []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -504,7 +490,7 @@ func SetConfig(id, key, val []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -514,8 +500,6 @@ func SetConfig(id, key, val []byte) bool {
 
 	runtime.Notify("SetConfig", id, key, val)
 	runtime.Log("setConfig: configuration has been updated")
-
-	return true
 }
 
 // ListConfig returns array of all key-value pairs of NeoFS configuration.
@@ -538,7 +522,7 @@ func ListConfig() []record {
 }
 
 // InitConfig set up initial NeoFS key-value configuration.
-func InitConfig(args [][]byte) bool {
+func InitConfig(args [][]byte) {
 	ctx := storage.GetContext()
 
 	if getConfig(ctx, candidateFeeConfigKey) != nil {
@@ -558,8 +542,6 @@ func InitConfig(args [][]byte) bool {
 	}
 
 	runtime.Log("neofs: config has been installed")
-
-	return true
 }
 
 // Version of contract.

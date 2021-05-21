@@ -110,7 +110,7 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) bool {
+func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -142,7 +142,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 	if !alphabetCall {
 		runtime.Notify("containerPut", container, signature, publicKey, token)
-		return true
+		return
 	}
 
 	from := common.WalletToScriptHash(ownerID)
@@ -159,7 +159,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -169,16 +169,13 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		node := alphabet[i]
 		to := contract.CreateStandardAccount(node.PublicKey)
 
-		tx := contract.Call(balanceContractAddr, "transferX",
+		contract.Call(balanceContractAddr, "transferX",
 			contract.All,
 			from,
 			to,
 			containerFee,
 			details,
 		)
-		if !tx.(bool) {
-			panic("put: can't transfer assets for container creation")
-		}
 	}
 
 	addContainer(ctx, containerID, ownerID, cnr)
@@ -188,11 +185,9 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	}
 
 	runtime.Log("put: added new container")
-
-	return true
 }
 
-func Delete(containerID []byte, signature interop.Signature, token []byte) bool {
+func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -218,7 +213,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) bool 
 
 	if !alphabetCall {
 		runtime.Notify("containerDelete", containerID, signature, token)
-		return true
+		return
 	}
 
 	if notaryDisabled {
@@ -227,7 +222,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) bool 
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -235,8 +230,6 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) bool 
 
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("delete: remove container")
-
-	return true
 }
 
 func Get(containerID []byte) Container {
@@ -276,7 +269,7 @@ func List(owner []byte) [][]byte {
 	return list
 }
 
-func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) bool {
+func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -307,7 +300,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	if !alphabetCall {
 		runtime.Notify("setEACL", eACL, signature, publicKey, token)
-		return true
+		return
 	}
 
 	rule := ExtendedACL{
@@ -325,7 +318,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -334,8 +327,6 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	common.SetSerialized(ctx, key, rule)
 
 	runtime.Log("setEACL: success")
-
-	return true
 }
 
 func EACL(containerID []byte) ExtendedACL {
@@ -349,7 +340,7 @@ func EACL(containerID []byte) ExtendedACL {
 	return getEACL(ctx, containerID)
 }
 
-func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) bool {
+func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(pubKey) {
@@ -367,7 +358,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	for i := range s.estimations {
 		est := s.estimations[i]
 		if common.BytesEqual(est.from, pubKey) {
-			return false
+			panic("invalid estimation")
 		}
 	}
 
@@ -379,8 +370,6 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	storage.Put(ctx, key, std.Serialize(s))
 
 	runtime.Log("container: saved container size estimation")
-
-	return true
 }
 
 func GetContainerSize(id []byte) containerSizes {
@@ -434,7 +423,7 @@ func NewEpoch(epochNum int) {
 	}
 }
 
-func StartContainerEstimation(epoch int) bool {
+func StartContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -462,7 +451,7 @@ func StartContainerEstimation(epoch int) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -470,11 +459,9 @@ func StartContainerEstimation(epoch int) bool {
 
 	runtime.Notify("StartEstimation", epoch)
 	runtime.Log("startEstimation: notification has been produced")
-
-	return true
 }
 
-func StopContainerEstimation(epoch int) bool {
+func StopContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -502,7 +489,7 @@ func StopContainerEstimation(epoch int) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -510,8 +497,6 @@ func StopContainerEstimation(epoch int) bool {
 
 	runtime.Notify("StopEstimation", epoch)
 	runtime.Log("stopEstimation: notification has been produced")
-
-	return true
 }
 
 func Version() int {

@@ -69,7 +69,7 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func AddKey(owner []byte, keys []interop.PublicKey) bool {
+func AddKey(owner []byte, keys []interop.PublicKey) {
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
 	}
@@ -127,7 +127,7 @@ addLoop:
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -135,11 +135,9 @@ addLoop:
 
 	common.SetSerialized(ctx, owner, info)
 	runtime.Log("addKey: key bound to the owner")
-
-	return true
 }
 
-func RemoveKey(owner []byte, keys []interop.PublicKey) bool {
+func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	if len(owner) != 25 {
 		panic("removeKey: incorrect owner")
 	}
@@ -194,15 +192,13 @@ rmLoop:
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
 	}
 
 	common.SetSerialized(ctx, owner, info)
-
-	return true
 }
 
 func Key(owner []byte) [][]byte {
