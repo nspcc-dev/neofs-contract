@@ -17,10 +17,18 @@ type (
 		info []byte
 	}
 
-	extendedACL struct {
-		val []byte
-		sig []byte
-		pub interop.PublicKey
+	Container struct {
+		value []byte
+		sig   interop.Signature
+		pub   interop.PublicKey
+		token []byte
+	}
+
+	ExtendedACL struct {
+		value []byte
+		sig   interop.Signature
+		pub   interop.PublicKey
+		token []byte
 	}
 
 	estimation struct {
@@ -102,7 +110,7 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey) bool {
+func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) bool {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -111,6 +119,12 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	ownerID := container[offset : offset+25] // offset + size of owner
 	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
+	cnr := Container{
+		value: container,
+		sig:   signature,
+		pub:   publicKey,
+		token: token,
+	}
 
 	var ( // for invocation collection without notary
 		alphabet     = common.AlphabetNodes()
@@ -127,7 +141,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	}
 
 	if !alphabetCall {
-		runtime.Notify("containerPut", container, signature, publicKey)
+		runtime.Notify("containerPut", container, signature, publicKey, token)
 		return true
 	}
 
@@ -167,15 +181,18 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		}
 	}
 
-	addContainer(ctx, containerID, ownerID, container)
-	contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
+	addContainer(ctx, containerID, ownerID, cnr)
+
+	if len(token) == 0 { // if container created directly without session
+		contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
+	}
 
 	runtime.Log("put: added new container")
 
 	return true
 }
 
-func Delete(containerID, signature []byte) bool {
+func Delete(containerID []byte, signature interop.Signature, token []byte) bool {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -200,7 +217,7 @@ func Delete(containerID, signature []byte) bool {
 	}
 
 	if !alphabetCall {
-		runtime.Notify("containerDelete", containerID, signature)
+		runtime.Notify("containerDelete", containerID, signature, token)
 		return true
 	}
 
@@ -222,9 +239,9 @@ func Delete(containerID, signature []byte) bool {
 	return true
 }
 
-func Get(containerID []byte) []byte {
+func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
-	return storage.Get(ctx, containerID).([]byte)
+	return getContainer(ctx, containerID)
 }
 
 func Owner(containerID []byte) []byte {
@@ -259,7 +276,7 @@ func List(owner []byte) [][]byte {
 	return list
 }
 
-func SetEACL(eACL, signature, publicKey []byte) bool {
+func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) bool {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -289,14 +306,15 @@ func SetEACL(eACL, signature, publicKey []byte) bool {
 	}
 
 	if !alphabetCall {
-		runtime.Notify("setEACL", eACL, signature, publicKey)
+		runtime.Notify("setEACL", eACL, signature, publicKey, token)
 		return true
 	}
 
-	rule := extendedACL{
-		val: eACL,
-		sig: signature,
-		pub: publicKey,
+	rule := ExtendedACL{
+		value: eACL,
+		sig:   signature,
+		pub:   publicKey,
+		token: token,
 	}
 
 	key := append(eACLPrefix, containerID...)
@@ -320,7 +338,7 @@ func SetEACL(eACL, signature, publicKey []byte) bool {
 	return true
 }
 
-func EACL(containerID []byte) extendedACL {
+func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
 
 	ownerID := getOwnerByID(ctx, containerID)
@@ -500,10 +518,10 @@ func Version() int {
 	return version
 }
 
-func addContainer(ctx storage.Context, id []byte, owner []byte, container []byte) {
+func addContainer(ctx storage.Context, id, owner []byte, container Container) {
 	addOrAppend(ctx, ownersKey, owner)
 	addOrAppend(ctx, owner, id)
-	storage.Put(ctx, id, container)
+	common.SetSerialized(ctx, id, container)
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
@@ -571,14 +589,23 @@ func getAllContainers(ctx storage.Context) [][]byte {
 	return list
 }
 
-func getEACL(ctx storage.Context, cid []byte) extendedACL {
+func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 	key := append(eACLPrefix, cid...)
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return std.Deserialize(data.([]byte)).(extendedACL)
+		return std.Deserialize(data.([]byte)).(ExtendedACL)
 	}
 
-	return extendedACL{val: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}}
+	return ExtendedACL{value: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}, token: []byte{}}
+}
+
+func getContainer(ctx storage.Context, cid []byte) Container {
+	data := storage.Get(ctx, cid)
+	if data != nil {
+		return std.Deserialize(data.([]byte)).(Container)
+	}
+
+	return Container{value: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}, token: []byte{}}
 }
 
 func getOwnerByID(ctx storage.Context, id []byte) []byte {
