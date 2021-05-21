@@ -117,7 +117,7 @@ func checkPermission(ir []common.IRNode) bool {
 	return runtime.CheckWitness(node.PublicKey)
 }
 
-func Emit() bool {
+func Emit() {
 	ctx := storage.GetReadOnlyContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -135,8 +135,7 @@ func Emit() bool {
 
 	proxyGas := gasBalance / 2
 	if proxyGas == 0 {
-		runtime.Log("no gas to emit")
-		return false
+		panic("no gas to emit")
 	}
 
 	gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
@@ -161,8 +160,6 @@ func Emit() bool {
 
 		runtime.Log("utility token has been emitted to inner ring nodes")
 	}
-
-	return true
 }
 
 func Vote(epoch int, candidates []interop.PublicKey) {

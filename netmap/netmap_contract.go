@@ -127,7 +127,7 @@ func InnerRingList() []common.IRNode {
 	return getIRNodes(ctx)
 }
 
-func UpdateInnerRing(keys []interop.PublicKey) bool {
+func UpdateInnerRing(keys []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -162,7 +162,7 @@ func UpdateInnerRing(keys []interop.PublicKey) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -170,11 +170,9 @@ func UpdateInnerRing(keys []interop.PublicKey) bool {
 
 	runtime.Log("updateInnerRing: inner ring list updated")
 	common.SetSerialized(ctx, innerRingKey, irList)
-
-	return true
 }
 
-func AddPeer(nodeInfo []byte) bool {
+func AddPeer(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -199,7 +197,7 @@ func AddPeer(nodeInfo []byte) bool {
 			panic("addPeer: witness check failed")
 		}
 		runtime.Notify("AddPeer", nodeInfo)
-		return true
+		return
 	}
 
 	candidate := storageNode{
@@ -215,7 +213,7 @@ func AddPeer(nodeInfo []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -227,11 +225,9 @@ func AddPeer(nodeInfo []byte) bool {
 		common.SetSerialized(ctx, netmapKey, nm)
 		runtime.Log("addPeer: add storage node to the network map")
 	}
-
-	return true
 }
 
-func UpdateState(state int, publicKey interop.PublicKey) bool {
+func UpdateState(state int, publicKey interop.PublicKey) {
 	if len(publicKey) != 33 {
 		panic("updateState: incorrect public key")
 	}
@@ -261,7 +257,7 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 
 		runtime.Notify("UpdateState", state, publicKey)
 
-		return true
+		return
 	}
 
 	if notaryDisabled {
@@ -270,7 +266,7 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -284,11 +280,9 @@ func UpdateState(state int, publicKey interop.PublicKey) bool {
 	default:
 		panic("updateState: unsupported state")
 	}
-
-	return true
 }
 
-func NewEpoch(epochNum int) bool {
+func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -316,7 +310,7 @@ func NewEpoch(epochNum int) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -324,7 +318,7 @@ func NewEpoch(epochNum int) bool {
 
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
 	if epochNum <= currentEpoch {
-		return false // ignore invocations with invalid epoch
+		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
 
 	data0snapshot := getSnapshot(ctx, snapshot0Key)
@@ -345,8 +339,6 @@ func NewEpoch(epochNum int) bool {
 	cleanup(ctx, epochNum)
 
 	runtime.Notify("NewEpoch", epochNum)
-
-	return true
 }
 
 func Epoch() int {
@@ -387,7 +379,7 @@ func Config(key []byte) interface{} {
 	return getConfig(ctx, key)
 }
 
-func SetConfig(id, key, val []byte) bool {
+func SetConfig(id, key, val []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -414,7 +406,7 @@ func SetConfig(id, key, val []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -423,11 +415,9 @@ func SetConfig(id, key, val []byte) bool {
 	setConfig(ctx, key, val)
 
 	runtime.Log("setConfig: configuration has been updated")
-
-	return true
 }
 
-func InitConfig(args [][]byte) bool {
+func InitConfig(args [][]byte) {
 	ctx := storage.GetContext()
 
 	if storage.Get(ctx, configuredKey) != nil {
@@ -448,8 +438,6 @@ func InitConfig(args [][]byte) bool {
 
 	storage.Put(ctx, configuredKey, true)
 	runtime.Log("netmap: config has been installed")
-
-	return true
 }
 
 func ListConfig() []record {

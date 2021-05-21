@@ -84,7 +84,7 @@ func Migrate(script []byte, manifest []byte) bool {
 	return true
 }
 
-func Put(rawAuditResult []byte) bool {
+func Put(rawAuditResult []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -116,8 +116,6 @@ func Put(rawAuditResult []byte) bool {
 	storage.Put(ctx, hdr.ID(), rawAuditResult)
 
 	runtime.Log("audit: result has been saved")
-
-	return true
 }
 
 func Get(id []byte) []byte {

@@ -126,7 +126,7 @@ func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 	return token.transfer(ctx, from, to, amount, false, nil)
 }
 
-func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
+func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -161,24 +161,21 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
 	}
 
 	result := token.transfer(ctx, from, to, amount, true, details)
-	if result {
-		runtime.Log("transferX: success")
-	} else {
-		// consider panic there
-		runtime.Log("transferX: fail")
+	if !result {
+		panic("transferX: fail")
 	}
 
-	return result
+	runtime.Log("transferX: success")
 }
 
-func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
+func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -214,7 +211,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -230,11 +227,9 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) bool {
 
 	runtime.Log("lock: created lock account")
 	runtime.Notify("Lock", txDetails, from, to, amount, until)
-
-	return true
 }
 
-func NewEpoch(epochNum int) bool {
+func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -272,11 +267,9 @@ func NewEpoch(epochNum int) bool {
 			token.transfer(ctx, addr, acc.Parent, acc.Balance, true, details)
 		}
 	}
-
-	return true
 }
 
-func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
+func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -306,7 +299,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -322,11 +315,9 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) bool {
 	storage.Put(ctx, token.CirculationKey, supply)
 	runtime.Log("mint: assets were minted")
 	runtime.Notify("Mint", to, amount)
-
-	return true
 }
 
-func Burn(from interop.Hash160, amount int, txDetails []byte) bool {
+func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -356,7 +347,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) bool {
 
 		n := common.Vote(ctx, id, nodeKey)
 		if n < threshold {
-			return true
+			return
 		}
 
 		common.RemoveVotes(ctx, id)
@@ -376,8 +367,6 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) bool {
 	storage.Put(ctx, token.CirculationKey, supply)
 	runtime.Log("burn: assets were burned")
 	runtime.Notify("Burn", from, amount)
-
-	return true
 }
 
 func Version() int {
