@@ -351,6 +351,13 @@ func Netmap() []storageNode {
 	return getSnapshot(ctx, snapshot0Key)
 }
 
+// NetmapCandidates returns all node candidates for next epoch and their
+// status codes.
+func NetmapCandidates() []netmapNode {
+	ctx := storage.GetReadOnlyContext()
+	return getNetmapNodes(ctx)
+}
+
 func Snapshot(diff int) []storageNode {
 	var key string
 
