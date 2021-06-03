@@ -59,6 +59,10 @@ func init() {
 }
 
 func _deploy(data interface{}, isUpdate bool) {
+	if isUpdate {
+		return
+	}
+
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
 	owner := args[1].(interop.Hash160)
@@ -89,7 +93,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("balance contract initialized")
 }
 
-func Migrate(script []byte, manifest []byte) bool {
+func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
 	if !common.HasUpdateAccess(ctx) {
@@ -97,7 +101,7 @@ func Migrate(script []byte, manifest []byte) bool {
 		return false
 	}
 
-	management.Update(script, manifest)
+	management.UpdateWithData(script, manifest, data)
 	runtime.Log("balance contract updated")
 
 	return true
