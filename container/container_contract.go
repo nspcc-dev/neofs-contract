@@ -108,7 +108,7 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 		return false
 	}
 
-	management.UpdateWithData(script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
 	runtime.Log("container contract updated")
 
 	return true
