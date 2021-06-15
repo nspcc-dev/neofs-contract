@@ -144,17 +144,20 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		alphabetCall = runtime.CheckWitness(multiaddr)
 	}
 
-	if !alphabetCall {
-		runtime.Notify("containerPut", container, signature, publicKey, token)
-		return
-	}
-
 	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
+	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
 	details := common.ContainerFeeTransferDetails(containerID)
 
+	if !alphabetCall {
+		if balance < containerFee*len(alphabet) {
+			panic("insufficient balance to create container")
+		}
+		runtime.Notify("containerPut", container, signature, publicKey, token)
+		return
+	}
 	// todo: check if new container with unique container id
 
 	if notaryDisabled {
