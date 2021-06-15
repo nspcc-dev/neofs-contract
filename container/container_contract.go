@@ -67,7 +67,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		migrateContainerAndEACLStructures(ctx) // from v0.8.0 to v0.9.0
 		return
 	}
 
@@ -99,34 +98,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	runtime.Log("container contract initialized")
-}
-
-func migrateContainerAndEACLStructures(ctx storage.Context) {
-	eACLKeyLength := containerIDSize + len(eACLPrefix)
-
-	it := storage.Find(ctx, []byte{}, storage.None)
-	for iterator.Next(it) {
-		pair := iterator.Value(it).([]interface{})
-		key := pair[0].([]byte)
-
-		switch len(key) {
-		case containerIDSize: // migrate containers
-			val := pair[1].([]byte)
-			newContainer := Container{value: val}
-
-			common.SetSerialized(ctx, key, newContainer)
-		case eACLKeyLength: // migrate eACLs
-			val := pair[1].([]byte)
-			eacl := std.Deserialize(val).(ExtendedACL)
-			newEACL := ExtendedACL{
-				value: eacl.value,
-				sig:   eacl.sig,
-				pub:   eacl.pub,
-			}
-
-			common.SetSerialized(ctx, key, newEACL)
-		}
-	}
 }
 
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
