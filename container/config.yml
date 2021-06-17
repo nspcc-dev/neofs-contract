@@ -6,9 +6,9 @@ events:
       - name: container
         type: ByteArray
       - name: signature
-        type: ByteArray
+        type: Signature
       - name: publicKey
-        type: ByteArray
+        type: PublicKey
       - name: token
         type: ByteArray
   - name: containerDelete
@@ -16,7 +16,7 @@ events:
       - name: containerID
         type: ByteArray
       - name: signature
-        type: ByteArray
+        type: Signature
       - name: token
         type: ByteArray
   - name: setEACL
@@ -24,9 +24,9 @@ events:
       - name: eACL
         type: ByteArray
       - name: signature
-        type: ByteArray
+        type: Signature
       - name: publicKey
-        type: ByteArray
+        type: PublicKey
       - name: token
         type: ByteArray
   - name: StartEstimation

@@ -10,7 +10,7 @@ events:
       - name: state
         type: Integer
       - name: publicKey
-        type: ByteArray
+        type: PublicKey
   - name: NewEpoch
     parameters:
       - name: epoch

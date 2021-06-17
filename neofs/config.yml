@@ -14,7 +14,7 @@ events:
   - name: Withdraw
     parameters:
       - name: user
-        type: ByteArray
+        type: Hash160
       - name: amount
         type: Integer
       - name: txHash
@@ -24,7 +24,7 @@ events:
       - name: id
         type: ByteArray
       - name: user
-        type: ByteArray
+        type: Hash160
       - name: amount
         type: Integer
       - name: lockAccount
