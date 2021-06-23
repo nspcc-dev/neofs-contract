@@ -1,6 +1,18 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.9.1] - 2021-06-24 
+
+### Fixed
+- Notification parameter types in container, neofs and netmap manifests (#94).
+- Method permissions in manifests (#96).
+
+### Added
+- Balance check before notification at `container.Put` method.
+
+### Removed
+- v0.8.0 to v0.9.0 migration code.
+
 ## [0.9.0] - 2021-06-03 - Seongmodo (석모도, 席毛島)
 
 Session token support in container contract.
@@ -143,6 +155,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.9.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.6.0...v0.7.0
