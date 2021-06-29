@@ -55,7 +55,8 @@ const (
 )
 
 var (
-	configPrefix = []byte("config")
+	configPrefix    = []byte("config")
+	candidatePrefix = []byte("candidate")
 )
 
 // _deploy function sets up initial list of inner ring public keys.
@@ -208,8 +209,6 @@ func AddPeer(nodeInfo []byte) {
 		info: nodeInfo,
 	}
 
-	nm := addToNetmap(ctx, candidate)
-
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		rawCandidate := std.Serialize(candidate)
@@ -223,12 +222,7 @@ func AddPeer(nodeInfo []byte) {
 		common.RemoveVotes(ctx, id)
 	}
 
-	if nm == nil {
-		runtime.Log("addPeer: storage node already in the netmap")
-	} else {
-		common.SetSerialized(ctx, netmapKey, nm)
-		runtime.Log("addPeer: add storage node to the network map")
-	}
+	addToNetmap(ctx, candidate)
 }
 
 func UpdateState(state int, publicKey interop.PublicKey) {
@@ -278,9 +272,8 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 
 	switch nodeState(state) {
 	case offlineState:
-		newNetmap := removeFromNetmap(ctx, publicKey)
+		removeFromNetmap(ctx, publicKey)
 		runtime.Log("updateState: remove storage node from the network map")
-		common.SetSerialized(ctx, netmapKey, newNetmap)
 	default:
 		panic("updateState: unsupported state")
 	}
@@ -473,49 +466,29 @@ func Version() int {
 	return version
 }
 
-func addToNetmap(ctx storage.Context, n storageNode) []netmapNode {
+func addToNetmap(ctx storage.Context, n storageNode) {
 	var (
 		newNode    = n.info
 		newNodeKey = newNode[2:35]
+		storageKey = append(candidatePrefix, newNodeKey...)
 
-		netmap = getNetmapNodes(ctx)
-		node   = netmapNode{
+		node = netmapNode{
 			node:  n,
 			state: onlineState,
 		}
 	)
 
-	for i := range netmap {
-		netmapNode := netmap[i].node.info
-		netmapNodeKey := netmapNode[2:35]
-
-		if common.BytesEqual(newNodeKey, netmapNodeKey) {
-			return nil
-		}
+	data := storage.Get(ctx, storageKey)
+	if data != nil {
+		return
 	}
 
-	netmap = append(netmap, node)
-
-	return netmap
+	storage.Put(ctx, storageKey, std.Serialize(node))
 }
 
-func removeFromNetmap(ctx storage.Context, key interop.PublicKey) []netmapNode {
-	var (
-		netmap    = getNetmapNodes(ctx)
-		newNetmap = []netmapNode{}
-	)
-
-	for i := 0; i < len(netmap); i++ {
-		item := netmap[i]
-		node := item.node.info
-		publicKey := node[2:35] // offset:2, len:33
-
-		if !common.BytesEqual(publicKey, key) {
-			newNetmap = append(newNetmap, item)
-		}
-	}
-
-	return newNetmap
+func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
+	storageKey := append(candidatePrefix, key...)
+	storage.Delete(ctx, storageKey)
 }
 
 func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
@@ -535,12 +508,16 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 }
 
 func getNetmapNodes(ctx storage.Context) []netmapNode {
-	data := storage.Get(ctx, netmapKey)
-	if data != nil {
-		return std.Deserialize(data.([]byte)).([]netmapNode)
+	result := []netmapNode{}
+
+	it := storage.Find(ctx, candidatePrefix, storage.ValuesOnly)
+	for iterator.Next(it) {
+		rawNode := iterator.Value(it).([]byte)
+		node := std.Deserialize(rawNode).(netmapNode)
+		result = append(result, node)
 	}
 
-	return []netmapNode{}
+	return result
 }
 
 func getSnapshot(ctx storage.Context, key string) []storageNode {
