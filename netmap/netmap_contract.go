@@ -33,7 +33,6 @@ type (
 const (
 	version = 1
 
-	netmapKey         = "netmap"
 	configuredKey     = "initconfig"
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
@@ -61,7 +60,10 @@ var (
 
 // _deploy function sets up initial list of inner ring public keys.
 func _deploy(data interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
+
 	if isUpdate {
+		migrateNetmapCandidates(ctx) // from v0.9.1 to v0.9.2
 		return
 	}
 
@@ -71,8 +73,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	addrBalance := args[2].(interop.Hash160)
 	addrContainer := args[3].(interop.Hash160)
 	keys := args[4].([]interop.PublicKey)
-
-	ctx := storage.GetContext()
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
@@ -87,8 +87,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotEpoch, 0)
 
-	// simplified: this used for const sysfee in AddPeer method
-	common.SetSerialized(ctx, netmapKey, []netmapNode{})
 	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
 	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
 
@@ -111,6 +109,24 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	runtime.Log("netmap contract initialized")
+}
+
+func migrateNetmapCandidates(ctx storage.Context) {
+	const netmapKey = "netmap"
+
+	data := storage.Get(ctx, netmapKey)
+	if data == nil {
+		return
+	}
+
+	candidates := std.Deserialize(data.([]byte)).([]netmapNode)
+
+	for i := range candidates {
+		candidate := candidates[i]
+		addToNetmap(ctx, candidate.node)
+	}
+
+	storage.Delete(ctx, netmapKey)
 }
 
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
