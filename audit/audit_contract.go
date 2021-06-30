@@ -2,6 +2,7 @@ package auditcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
@@ -82,7 +83,7 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 		return false
 	}
 
-	management.UpdateWithData(script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
 	runtime.Log("audit contract updated")
 
 	return true

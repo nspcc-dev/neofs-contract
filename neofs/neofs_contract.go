@@ -65,7 +65,7 @@ const (
 
 	publicKeySize = 33
 
-	maxBalanceAmount = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
+	maxBalanceAmount    = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
 	maxBalanceAmountGAS = maxBalanceAmount * 1_0000_0000
 
 	// hardcoded value to ignore deposit notification in onReceive
@@ -138,7 +138,7 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 		return false
 	}
 
-	management.UpdateWithData(script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
 	runtime.Log("neofs contract updated")
 
 	return true
