@@ -67,7 +67,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		migrateContainerLists(ctx) // from v0.9.1 to v0.9.2
+		migrateContainerLists(ctx)    // from v0.9.1 to v0.9.2
+		migrateEstimationStorage(ctx) // from v0.9.1 to v0.9.2
 		return
 	}
 
@@ -116,6 +117,18 @@ func migrateContainerLists(ctx storage.Context) {
 	}
 
 	storage.Delete(ctx, ownersKey)
+}
+
+func migrateEstimationStorage(ctx storage.Context) {
+	// In fact, this method does not migrate estimation storage because this data
+	// is valid only for one epoch. Migration routine will be quite complex, so
+	// it makes sense to clean all remaining estimations and wait for new one.
+
+	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
+	for iterator.Next(it) {
+		key := iterator.Value(it).([]byte)
+		storage.Delete(ctx, key)
+	}
 }
 
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
