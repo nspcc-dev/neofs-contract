@@ -43,8 +43,7 @@ type (
 )
 
 const (
-	version   = 1
-	ownersKey = "ownersList"
+	version = 1
 
 	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
@@ -118,9 +117,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	offset := int(container[1])
-	offset = 2 + offset + 4                  // version prefix + version size + owner prefix
-	ownerID := container[offset : offset+25] // offset + size of owner
+	ownerID := ownerFromBinaryContainer(container)
 	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 	cnr := Container{
@@ -258,19 +255,10 @@ func List(owner []byte) [][]byte {
 
 	var list [][]byte
 
-	owners := common.GetList(ctx, ownersKey)
-	for i := 0; i < len(owners); i++ {
-		ownerID := owners[i]
-		if len(owner) != 0 && !common.BytesEqual(owner, ownerID) {
-			continue
-		}
-
-		containers := common.GetList(ctx, ownerID)
-
-		for j := 0; j < len(containers); j++ {
-			container := containers[j]
-			list = append(list, container)
-		}
+	it := storage.Find(ctx, owner, storage.ValuesOnly)
+	for iterator.Next(it) {
+		id := iterator.Value(it).([]byte)
+		list = append(list, id)
 	}
 
 	return list
@@ -511,60 +499,17 @@ func Version() int {
 }
 
 func addContainer(ctx storage.Context, id, owner []byte, container Container) {
-	addOrAppend(ctx, ownersKey, owner)
-	addOrAppend(ctx, owner, id)
+	containerListKey := append(owner, id...)
+	storage.Put(ctx, containerListKey, id)
+
 	common.SetSerialized(ctx, id, container)
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
-	n := remove(ctx, owner, id)
-
-	// if it was last container, remove owner from the list of owners
-	if n == 0 {
-		_ = remove(ctx, ownersKey, owner)
-	}
+	containerListKey := append(owner, id...)
+	storage.Delete(ctx, containerListKey)
 
 	storage.Delete(ctx, id)
-}
-
-func addOrAppend(ctx storage.Context, key interface{}, value []byte) {
-	list := common.GetList(ctx, key)
-	for i := 0; i < len(list); i++ {
-		if common.BytesEqual(list[i], value) {
-			return
-		}
-	}
-
-	if len(list) == 0 {
-		list = [][]byte{value}
-	} else {
-		list = append(list, value)
-	}
-
-	common.SetSerialized(ctx, key, list)
-}
-
-// remove returns amount of left elements in the list
-func remove(ctx storage.Context, key interface{}, value []byte) int {
-	var (
-		list    = common.GetList(ctx, key)
-		newList = [][]byte{}
-	)
-
-	for i := 0; i < len(list); i++ {
-		if !common.BytesEqual(list[i], value) {
-			newList = append(newList, list[i])
-		}
-	}
-
-	ln := len(newList)
-	if ln == 0 {
-		storage.Delete(ctx, key)
-	} else {
-		common.SetSerialized(ctx, key, newList)
-	}
-
-	return ln
 }
 
 func getAllContainers(ctx storage.Context) [][]byte {
@@ -600,21 +545,15 @@ func getContainer(ctx storage.Context, cid []byte) Container {
 	return Container{value: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}, token: []byte{}}
 }
 
-func getOwnerByID(ctx storage.Context, id []byte) []byte {
-	owners := common.GetList(ctx, ownersKey)
-	for i := 0; i < len(owners); i++ {
-		ownerID := owners[i]
-		containers := common.GetList(ctx, ownerID)
+func getOwnerByID(ctx storage.Context, cid []byte) []byte {
+	container := getContainer(ctx, cid)
+	return ownerFromBinaryContainer(container.value)
+}
 
-		for j := 0; j < len(containers); j++ {
-			container := containers[j]
-			if common.BytesEqual(container, id) {
-				return ownerID
-			}
-		}
-	}
-
-	return nil
+func ownerFromBinaryContainer(container []byte) []byte {
+	offset := int(container[1])
+	offset = 2 + offset + 4              // version prefix + version size + owner prefix
+	return container[offset : offset+25] // offset + size of owner
 }
 
 func estimationKey(epoch int, cid []byte) []byte {
