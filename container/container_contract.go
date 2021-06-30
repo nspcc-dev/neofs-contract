@@ -66,6 +66,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
+		migrateContainerLists(ctx) // from v0.9.1 to v0.9.2
 		return
 	}
 
@@ -97,6 +98,23 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	runtime.Log("container contract initialized")
+}
+
+func migrateContainerLists(ctx storage.Context) {
+	const ownersKey = "ownersList"
+
+	containers := getAllContainers(ctx)
+	for i := range containers {
+		containerID := containers[i]
+		ownerID := getOwnerByID(ctx, containerID)
+
+		containerListKey := append(ownerID, containerID...)
+		storage.Put(ctx, containerListKey, containerID)
+
+		storage.Delete(ctx, ownerID)
+	}
+
+	storage.Delete(ctx, ownersKey)
 }
 
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
