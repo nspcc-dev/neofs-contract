@@ -2,6 +2,7 @@ package neofsidcontract
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
+	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -67,7 +68,7 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 		return false
 	}
 
-	management.UpdateWithData(script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
 	runtime.Log("neofsid contract updated")
 
 	return true
