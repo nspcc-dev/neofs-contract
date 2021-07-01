@@ -1,6 +1,20 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.9.2] - 2021-07-01
+
+### Fixed
+- Execution of multiple `container.Put`, `container.Delete`, 
+  `container.PutContainerSize` and `netmap.AddPeer` invocations now possible
+  in the single block (#100, #102).
+  
+### Added
+- Target NeoFS API version in README.md.
+
+### Changed
+- Notary enabled images for neofs-dev-env do not contain predefined network
+  map anymore.
+
 ## [0.9.1] - 2021-06-24 
 
 ### Fixed
@@ -155,7 +169,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[0.9.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.0...v0.9.1
+[0.9.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.6.0...v0.7.0
