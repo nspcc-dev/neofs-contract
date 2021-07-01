@@ -65,6 +65,12 @@ $ NEOGO=/home/user/neo-go/bin/neo-go make all
 
 Remove compiled files with `make clean` or `make mr_proper` command.
 
+# NeoFS API compatibility
+
+|neofs-contract version|supported NeoFS API versions|
+|:------------------:|:--------------------------:|
+|v0.9.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)|
+
 
 # License
 
