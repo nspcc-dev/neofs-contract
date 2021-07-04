@@ -1,4 +1,4 @@
-package netmapcontract
+package netmap
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

@@ -1,4 +1,4 @@
-package proxycontract
+package proxy
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

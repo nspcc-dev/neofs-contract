@@ -1,4 +1,4 @@
-package neofsidcontract
+package neofsid
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

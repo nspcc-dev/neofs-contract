@@ -1,4 +1,4 @@
-package processingcontract
+package processing
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

@@ -1,4 +1,4 @@
-package balancecontract
+package balance
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

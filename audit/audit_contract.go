@@ -1,4 +1,4 @@
-package auditcontract
+package audit
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

@@ -1,4 +1,4 @@
-package alphabetcontract
+package alphabet
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
