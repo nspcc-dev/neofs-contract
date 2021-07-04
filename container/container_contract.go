@@ -1,4 +1,4 @@
-package containercontract
+package container
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

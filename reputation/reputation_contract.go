@@ -1,4 +1,4 @@
-package reputationcontract
+package reputation
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"

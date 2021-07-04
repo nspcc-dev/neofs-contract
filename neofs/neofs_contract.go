@@ -1,4 +1,4 @@
-package smart_contract
+package neofs
 
 /*
 	NeoFS Smart Contract for NEO3.0.
