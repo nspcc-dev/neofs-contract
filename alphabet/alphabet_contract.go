@@ -25,7 +25,8 @@ const (
 	version = 1
 )
 
-// OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO contracts.
+// OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO
+// contracts.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) && !common.BytesEqual(caller, []byte(neo.Hash)) {
@@ -74,6 +75,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log(name + " contract initialized")
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -88,10 +91,12 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// GAS returns amount of side chain GAS stored in contract account.
 func Gas() int {
 	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
+// NEO returns amount of side chain NEO stored in contract account.
 func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
@@ -121,6 +126,16 @@ func checkPermission(ir []common.IRNode) bool {
 	return runtime.CheckWitness(node.PublicKey)
 }
 
+// Emit method produces side chain GAS and distributes it among Inner Ring nodes
+// and proxy contract. Can be invoked only by Alphabet node of the Inner Ring.
+//
+// To produce GAS, alphabet contract transfers all available NEO from contract
+// account to itself. If notary enabled, then 50% of the GAS in the contract account
+// transferred to proxy contract. 43.75% of the GAS are equally distributed
+// among all Inner Ring nodes. Remaining 6.25% of the GAS stays in the contract.
+//
+// If notary disabled, then 87.5% of the GAS are equally distributed among all
+// Inner Ring nodes. Remaining 12.5% of the GAS stays in the contract.
 func Emit() {
 	ctx := storage.GetReadOnlyContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -171,6 +186,13 @@ func Emit() {
 	}
 }
 
+// Vote method votes for side chain committee. Requires multisignature from
+// Alphabet nodes of the Inner Ring.
+//
+// This method is used when governance changes list of Alphabet nodes of the
+// Inner Ring. Alphabet nodes share keys with side chain validators, therefore
+// it is required to change them as well. To do that NEO holders, which are
+// alphabet contracts, should vote for new committee.
 func Vote(epoch int, candidates []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -240,11 +262,13 @@ func voteID(epoch interface{}, args []interop.PublicKey) []byte {
 	return crypto.Sha256(result)
 }
 
+// Name returns Glagolitic name of the contract.
 func Name() string {
 	ctx := storage.GetReadOnlyContext()
 	return name(ctx)
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
