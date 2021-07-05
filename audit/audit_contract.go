@@ -75,6 +75,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("audit contract initialized")
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -89,6 +91,12 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// Put method stores stable marshalled `DataAuditResult` structure. Can be
+// invoked only by Inner Ring nodes.
+//
+// Inner Ring nodes perform audit of the containers and produce `DataAuditResult`
+// structures. They are being stored in audit contract and used for settlements
+// in later epochs.
 func Put(rawAuditResult []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -123,11 +131,16 @@ func Put(rawAuditResult []byte) {
 	runtime.Log("audit: result has been saved")
 }
 
+// Get method returns stable marshaled DataAuditResult structure.
+//
+// ID of the DataAuditResult can be obtained from listing methods.
 func Get(id []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, id).([]byte)
 }
 
+// List method returns list of all available DataAuditResult IDs from
+// contract storage.
 func List() [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
@@ -135,6 +148,8 @@ func List() [][]byte {
 	return list(it)
 }
 
+// ListByEpoch method returns list of DataAuditResult IDs generated in
+// specified epoch.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	var buf interface{} = epoch
@@ -143,6 +158,8 @@ func ListByEpoch(epoch int) [][]byte {
 	return list(it)
 }
 
+// ListByCID method returns list of DataAuditResult IDs generated in
+// specified epoch for specified container.
 func ListByCID(epoch int, cid []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -154,6 +171,8 @@ func ListByCID(epoch int, cid []byte) [][]byte {
 	return list(it)
 }
 
+// ListByNode method returns list of DataAuditResult IDs generated in
+// specified epoch for specified container by specified Inner Ring node.
 func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	hdr := auditHeader{
@@ -191,6 +210,7 @@ loop:
 	return result
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
