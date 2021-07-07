@@ -17,6 +17,7 @@ const (
 	netmapContractKey = "netmapScriptHash"
 )
 
+// OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) {
@@ -49,6 +50,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("proxy contract initialized")
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -63,6 +66,8 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// Verify method returns true if transaction contains valid multi signature of
+// Alphabet nodes of the Inner Ring.
 func Verify() bool {
 	alphabet := neo.GetCommittee()
 	sig := common.Multiaddress(alphabet, false)
@@ -75,6 +80,7 @@ func Verify() bool {
 	return true
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
