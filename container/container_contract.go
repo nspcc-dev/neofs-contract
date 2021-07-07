@@ -131,6 +131,8 @@ func migrateEstimationStorage(ctx storage.Context) {
 	}
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -145,6 +147,14 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// Put method creates new container if it was invoked by Alphabet nodes
+// of the Inner Ring. Otherwise it produces containerPut notification.
+//
+// Container should be stable marshaled Container structure from API.
+// Signature is a RFC6979 signature of Container.
+// PublicKey contains public key of the signer.
+// Token is optional and should be stable marshaled SessionToken structure from
+// API.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -223,6 +233,13 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	runtime.Log("put: added new container")
 }
 
+// Delete method removes container from contract storage if it was
+// invoked by Alphabet nodes of the Inner Ring. Otherwise it produces
+// containerDelete notification.
+//
+// Signature is a RFC6979 signature of container ID.
+// Token is optional and should be stable marshaled SessionToken structure from
+// API.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -268,16 +285,21 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	runtime.Log("delete: remove container")
 }
 
+// Get method returns structure that contains stable marshaled Container structure,
+// signature, public key of the container creator and stable marshaled SessionToken
+// structure if it was provided.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	return getContainer(ctx, containerID)
 }
 
+// Owner method returns 25 byte Owner ID of the container.
 func Owner(containerID []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
 	return getOwnerByID(ctx, containerID)
 }
 
+// List method returns list of all container IDs owned by specified owner.
 func List(owner []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -296,6 +318,15 @@ func List(owner []byte) [][]byte {
 	return list
 }
 
+// SetEACL method sets new extended ACL table related to the contract
+// if it was invoked by Alphabet nodes of the Inner Ring. Otherwise it produces
+// setEACL notification.
+//
+// EACL should be stable marshaled EACLTable structure from API.
+// Signature is a RFC6979 signature of Container.
+// PublicKey contains public key of the signer.
+// Token is optional and should be stable marshaled SessionToken structure from
+// API.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -356,6 +387,9 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	runtime.Log("setEACL: success")
 }
 
+// EACL method returns structure that contains stable marshaled EACLTable structure,
+// signature, public key of the extended ACL setter and stable marshaled SessionToken
+// structure if it was provided.
 func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
 
@@ -367,6 +401,9 @@ func EACL(containerID []byte) ExtendedACL {
 	return getEACL(ctx, containerID)
 }
 
+// PutContainerSize method saves container size estimation in contract
+// memory. Can be invoked only by Storage nodes from the network map. Method
+// checks witness based on the provided public key of the Storage node.
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
@@ -390,6 +427,13 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	runtime.Log("container: saved container size estimation")
 }
 
+// GetContainerSize method returns container ID and slice of container
+// estimations. Container estimation includes public key of the Storage Node
+// that registered  estimation and value of estimation.
+//
+// Use ID obtained from ListContainerSizes method. Estimations are removed
+// from contract storage every epoch, see NewEpoch method, therefore method
+// can return different results in different epochs.
 func GetContainerSize(id []byte) containerSizes {
 	ctx := storage.GetReadOnlyContext()
 
@@ -401,6 +445,8 @@ func GetContainerSize(id []byte) containerSizes {
 	return getContainerSizeEstimation(ctx, id, cid)
 }
 
+// ListContainerSizes method returns IDs of container size estimations
+// that has been registered for specified epoch.
 func ListContainerSizes(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -431,6 +477,8 @@ func ListContainerSizes(epoch int) [][]byte {
 	return result
 }
 
+// NewEpoch method removes all container size estimations from epoch older than
+// epochNum + 3. Can be invoked only by NewEpoch method of the Netmap contract.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -457,6 +505,8 @@ func NewEpoch(epochNum int) {
 	}
 }
 
+// StartContainerEstimation method produces StartEstimation notification.
+// Can be invoked only by Alphabet nodes of the Inner Ring.
 func StartContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -495,6 +545,8 @@ func StartContainerEstimation(epoch int) {
 	runtime.Log("startEstimation: notification has been produced")
 }
 
+// StopContainerEstimation method produces StopEstimation notification.
+// Can be invoked only by Alphabet nodes of the Inner Ring.
 func StopContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -533,6 +585,7 @@ func StopContainerEstimation(epoch int) {
 	runtime.Log("stopEstimation: notification has been produced")
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
