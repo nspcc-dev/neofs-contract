@@ -60,6 +60,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("neofsid contract initialized")
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -74,6 +76,11 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// AddKey binds list of provided public keys to OwnerID. Can be invoked only by
+// Alphabet nodes.
+//
+// This method panics if OwnerID is not 25 byte or public key is not 33 byte long.
+// If key is already bound, ignores it.
 func AddKey(owner []byte, keys []interop.PublicKey) {
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
@@ -142,6 +149,11 @@ addLoop:
 	runtime.Log("addKey: key bound to the owner")
 }
 
+// RemoveKey unbinds provided public keys from OwnerID. Can be invoked only by
+// Alphabet nodes.
+//
+// This method panics if OwnerID is not 25 byte or public key is not 33 byte long.
+// If key is already unbound, ignores it.
 func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	if len(owner) != 25 {
 		panic("removeKey: incorrect owner")
@@ -206,6 +218,9 @@ rmLoop:
 	common.SetSerialized(ctx, owner, info)
 }
 
+// Key method returns list of 33-byte public keys bound with OwnerID.
+//
+// This method panics if owner is not 25 byte long.
 func Key(owner []byte) [][]byte {
 	if len(owner) != 25 {
 		panic("key: incorrect owner")
@@ -218,6 +233,7 @@ func Key(owner []byte) [][]byte {
 	return info.Keys
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
