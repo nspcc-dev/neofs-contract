@@ -135,15 +135,20 @@ func Emit() {
 	neo.Transfer(contractHash, contractHash, neo.BalanceOf(contractHash), nil)
 
 	gasBalance := gas.BalanceOf(contractHash)
-	proxyAddr := storage.Get(ctx, proxyKey).(interop.Hash160)
 
-	proxyGas := gasBalance / 2
-	if proxyGas == 0 {
-		panic("no gas to emit")
+	if !notaryDisabled {
+		proxyAddr := storage.Get(ctx, proxyKey).(interop.Hash160)
+
+		proxyGas := gasBalance / 2
+		if proxyGas == 0 {
+			panic("no gas to emit")
+		}
+
+		gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
+		gasBalance -= proxyGas
+
+		runtime.Log("utility token has been emitted to proxy contract")
 	}
-
-	gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
-	runtime.Log("utility token has been emitted to proxy contract")
 
 	var innerRing []common.IRNode
 
@@ -154,7 +159,7 @@ func Emit() {
 		innerRing = common.InnerRingNodes()
 	}
 
-	gasPerNode := gasBalance / 2 * 7 / 8 / len(innerRing)
+	gasPerNode := gasBalance * 7 / 8 / len(innerRing)
 
 	if gasPerNode != 0 {
 		for _, node := range innerRing {
