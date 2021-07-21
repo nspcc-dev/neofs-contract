@@ -53,7 +53,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		panic("only owner can reinitialize contract")
 	}
 
-	if len(addrNetmap) != 20 || len(addrProxy) != 20 {
+	if len(addrNetmap) != 20 || !notaryDisabled && len(addrProxy) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
