@@ -5,6 +5,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -37,9 +38,10 @@ const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
 
-	snapshot0Key  = "snapshotCurrent"
-	snapshot1Key  = "snapshotPrevious"
-	snapshotEpoch = "snapshotEpoch"
+	snapshot0Key     = "snapshotCurrent"
+	snapshot1Key     = "snapshotPrevious"
+	snapshotEpoch    = "snapshotEpoch"
+	snapshotBlockKey = "snapshotBlock"
 
 	containerContractKey = "containerScriptHash"
 	balanceContractKey   = "balanceScriptHash"
@@ -86,6 +88,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotEpoch, 0)
+	storage.Put(ctx, snapshotBlockKey, 0)
 
 	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
 	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
@@ -341,6 +344,7 @@ func NewEpoch(epochNum int) {
 
 	// todo: check if provided epoch number is bigger than current
 	storage.Put(ctx, snapshotEpoch, epochNum)
+	storage.Put(ctx, snapshotBlockKey, ledger.CurrentIndex())
 
 	// put actual snapshot into previous snapshot
 	common.SetSerialized(ctx, snapshot1Key, data0snapshot)
@@ -357,6 +361,11 @@ func NewEpoch(epochNum int) {
 func Epoch() int {
 	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, snapshotEpoch).(int)
+}
+
+func LastEpochBlock() int {
+	ctx := storage.GetReadOnlyContext()
+	return storage.Get(ctx, snapshotBlockKey).(int)
 }
 
 func Netmap() []storageNode {
