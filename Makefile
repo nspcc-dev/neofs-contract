@@ -14,7 +14,7 @@ mainnet_sc = neofs processing
 
 define sc_template
 $(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
-	$(NEOGO) contract compile -i $(2)$(1)/$(1)_contract.go -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json
+	$(NEOGO) contract compile -i $(2)$(1) -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json
 
 $(if $(2),$(2)$(1)/$(1)_contract.go: alphabet/alphabet.go alphabet/alphabet.tpl
 	go run alphabet/alphabet.go
