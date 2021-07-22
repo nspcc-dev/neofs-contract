@@ -1,6 +1,24 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.10.0] - 2021-07-23 - Wando (완도, 莞島)
+
+### Fixed
+- Alphabet contract does not emit GAS to proxy contract and does not check
+  proxy contract script hash length at deploy stage if notary disabled (#106)
+
+### Added
+- Netmap contract stores block height when last epoch was applied and provides
+  `LastEpochBlock` method to get it (#110)
+- NNS contract (#108)  
+- Enhanced documentation for autodoc tools (#105)
+
+### Changed
+- Update neo-go to v0.96.0
+
+### Removed
+- v0.9.1 to v0.9.2 migration code (#104)
+
 ## [0.9.2] - 2021-07-01
 
 ### Fixed
@@ -169,6 +187,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.10.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.8.0...v0.9.0
