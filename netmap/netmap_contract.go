@@ -65,7 +65,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		migrateNetmapCandidates(ctx) // from v0.9.1 to v0.9.2
 		return
 	}
 
@@ -112,24 +111,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	runtime.Log("netmap contract initialized")
-}
-
-func migrateNetmapCandidates(ctx storage.Context) {
-	const netmapKey = "netmap"
-
-	data := storage.Get(ctx, netmapKey)
-	if data == nil {
-		return
-	}
-
-	candidates := std.Deserialize(data.([]byte)).([]netmapNode)
-
-	for i := range candidates {
-		candidate := candidates[i]
-		addToNetmap(ctx, candidate.node)
-	}
-
-	storage.Delete(ctx, netmapKey)
 }
 
 // Migrate method updates contract source code and manifest. Can be invoked
