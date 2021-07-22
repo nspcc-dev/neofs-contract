@@ -67,8 +67,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		migrateContainerLists(ctx)    // from v0.9.1 to v0.9.2
-		migrateEstimationStorage(ctx) // from v0.9.1 to v0.9.2
 		return
 	}
 
@@ -100,35 +98,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	runtime.Log("container contract initialized")
-}
-
-func migrateContainerLists(ctx storage.Context) {
-	const ownersKey = "ownersList"
-
-	containers := getAllContainers(ctx)
-	for i := range containers {
-		containerID := containers[i]
-		ownerID := getOwnerByID(ctx, containerID)
-
-		containerListKey := append(ownerID, containerID...)
-		storage.Put(ctx, containerListKey, containerID)
-
-		storage.Delete(ctx, ownerID)
-	}
-
-	storage.Delete(ctx, ownersKey)
-}
-
-func migrateEstimationStorage(ctx storage.Context) {
-	// In fact, this method does not migrate estimation storage because this data
-	// is valid only for one epoch. Migration routine will be quite complex, so
-	// it makes sense to clean all remaining estimations and wait for new one.
-
-	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
-	for iterator.Next(it) {
-		key := iterator.Value(it).([]byte)
-		storage.Delete(ctx, key)
-	}
 }
 
 // Migrate method updates contract source code and manifest. Can be invoked
