@@ -132,6 +132,8 @@ func migrateNetmapCandidates(ctx storage.Context) {
 	storage.Delete(ctx, netmapKey)
 }
 
+// Migrate method updates contract source code and manifest. Can be invoked
+// only by contract owner.
 func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
@@ -146,11 +148,21 @@ func Migrate(script []byte, manifest []byte, data interface{}) bool {
 	return true
 }
 
+// InnerRingList method returns slice of structures that contains public key of
+// Inner Ring node. Should be used only in notary disabled environment.
+//
+// If notary enabled, then look to NeoFSAlphabet role in native RoleManagement
+// contract of the side chain.
 func InnerRingList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
 	return getIRNodes(ctx)
 }
 
+// UpdateInnerRing method updates list of Inner Ring node keys. Should be used
+// only in notary disabled environment. Can be invoked only by Alphabet nodes.
+//
+// If notary enabled, then update NeoFSAlphabet role in native RoleManagement
+// contract of the side chain. Use notary service to collect multi signature.
 func UpdateInnerRing(keys []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -196,6 +208,12 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	common.SetSerialized(ctx, innerRingKey, irList)
 }
 
+// AddPeer method adds new candidate to the next network map if it was invoked
+// by Alphabet node. If it was invoked by node candidate, it produces AddPeer
+// notification. Otherwise method throws panic.
+//
+// NodeInfo argument contains stable marshaled version of netmap.NodeInfo
+// structure.
 func AddPeer(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -244,6 +262,14 @@ func AddPeer(nodeInfo []byte) {
 	addToNetmap(ctx, candidate)
 }
 
+// UpdateState method updates state of node from the network map candidate list
+// if it was invoked by Alphabet node. If it was invoked by public key owner,
+// then it produces UpdateState notification. Otherwise method throws panic.
+//
+// State argument defines node state. The only supported state now is (2) --
+// offline state. Node is removed from network map candidate list.
+//
+// Method panics when invoked with unsupported states.
 func UpdateState(state int, publicKey interop.PublicKey) {
 	if len(publicKey) != 33 {
 		panic("updateState: incorrect public key")
@@ -298,6 +324,15 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	}
 }
 
+// NewEpoch method changes epoch number up to provided epochNum argument. Can
+// be invoked only by Alphabet nodes. If provided epoch number is less or equal
+// current epoch number, method throws panic.
+//
+// When epoch number updated, contract sets storage node candidates as current
+// network map. Also contract invokes NewEpoch method on Balance and Container
+// contracts.
+//
+// Produces NewEpoch notification.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -358,28 +393,40 @@ func NewEpoch(epochNum int) {
 	runtime.Notify("NewEpoch", epochNum)
 }
 
+// Epoch method returns current epoch number.
 func Epoch() int {
 	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, snapshotEpoch).(int)
 }
 
+// LastEpochBlock method returns block number when current epoch was applied.
 func LastEpochBlock() int {
 	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, snapshotBlockKey).(int)
 }
 
+// Netmap method returns list of structures that contain byte array of stable
+// marshalled netmap.NodeInfo structure. These structure contain Storage nodes
+// of current epoch.
 func Netmap() []storageNode {
 	ctx := storage.GetReadOnlyContext()
 	return getSnapshot(ctx, snapshot0Key)
 }
 
-// NetmapCandidates returns all node candidates for next epoch and their
-// status codes.
+// Snapshot method returns list of structures that contain node state
+// and byte array of stable marshalled netmap.NodeInfo structure.
+// These structure contain Storage node candidates for next epoch.
 func NetmapCandidates() []netmapNode {
 	ctx := storage.GetReadOnlyContext()
 	return getNetmapNodes(ctx)
 }
 
+// Snapshot method returns list of structures that contain node state
+// (online: 1) and byte array of stable marshalled netmap.NodeInfo structure.
+// These structure contain Storage nodes of specified epoch.
+//
+// Netmap contract contains only two recent network map snapshot: current and
+// previous epoch. For diff bigger than 1 or less than 0 method throws panic.
 func Snapshot(diff int) []storageNode {
 	var key string
 
@@ -396,6 +443,12 @@ func Snapshot(diff int) []storageNode {
 	return getSnapshot(ctx, key)
 }
 
+// SnapshotByEpoch method returns list of structures that contain node state
+// (online: 1) and byte array of stable marshalled netmap.NodeInfo structure.
+// These structure contain Storage nodes of specified epoch.
+//
+// Netmap contract contains only two recent network map snapshot: current and
+// previous epoch. For all others epoch method throws panic.
 func SnapshotByEpoch(epoch int) []storageNode {
 	ctx := storage.GetReadOnlyContext()
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
@@ -403,11 +456,15 @@ func SnapshotByEpoch(epoch int) []storageNode {
 	return Snapshot(currentEpoch - epoch)
 }
 
+// Config returns configuration value of NeoFS configuration. If key does
+// not exists, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
 
+// SetConfig key-value pair as a NeoFS runtime configuration value. Can be invoked
+// only by Alphabet nodes.
 func SetConfig(id, key, val []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -446,6 +503,11 @@ func SetConfig(id, key, val []byte) {
 	runtime.Log("setConfig: configuration has been updated")
 }
 
+// InitConfig method sets up initial key-value configuration pair. Can be invoked
+// only once.
+//
+// Arguments should contain even number of byte arrays. First byte array is a
+// configuration key and the second is configuration value.
 func InitConfig(args [][]byte) {
 	ctx := storage.GetContext()
 
@@ -469,6 +531,8 @@ func InitConfig(args [][]byte) {
 	runtime.Log("netmap: config has been installed")
 }
 
+// ListConfig returns array of structures that contain key and value of all
+// NeoFS configuration records. Key and value are both byte arrays.
 func ListConfig() []record {
 	ctx := storage.GetReadOnlyContext()
 
@@ -487,6 +551,7 @@ func ListConfig() []record {
 	return config
 }
 
+// Version returns version of the contract.
 func Version() int {
 	return version
 }
