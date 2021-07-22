@@ -6,11 +6,12 @@ NEOGO?=neo-go
 .PHONY: all build sidechain
 build: all
 all: sidechain mainnet
-sidechain: alphabet morph
+sidechain: alphabet morph nns
 
 alphabet_sc = alphabet
 morph_sc = audit balance container neofsid netmap proxy reputation
 mainnet_sc = neofs processing
+nns_sc = nns
 
 define sc_template
 $(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
@@ -24,10 +25,12 @@ endef
 $(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc))))
 $(foreach sc,$(morph_sc),$(eval $(call sc_template,$(sc))))
 $(foreach sc,$(mainnet_sc),$(eval $(call sc_template,$(sc))))
+$(foreach sc,$(nns_sc),$(eval $(call sc_template,$(sc))))
 
 alphabet: $(foreach sc,$(alphabet_sc),$(sc)/$(sc)_contract.nef)
 morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
 mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
+nns: $(foreach sc,$(nns_sc),$(sc)/$(sc)_contract.nef)
 
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
