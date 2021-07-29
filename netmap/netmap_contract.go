@@ -32,8 +32,6 @@ type (
 )
 
 const (
-	version = 1
-
 	configuredKey     = "initconfig"
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
@@ -534,7 +532,7 @@ func ListConfig() []record {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 func addToNetmap(ctx storage.Context, n storageNode) {

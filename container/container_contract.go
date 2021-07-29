@@ -43,8 +43,6 @@ type (
 )
 
 const (
-	version = 1
-
 	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
@@ -556,7 +554,7 @@ func StopContainerEstimation(epoch int) {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 func addContainer(ctx storage.Context, id, owner []byte, container Container) {

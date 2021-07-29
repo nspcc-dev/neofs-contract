@@ -21,8 +21,6 @@ const (
 	nameKey  = "name"
 
 	notaryDisabledKey = "notary"
-
-	version = 1
 )
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO
@@ -270,5 +268,5 @@ func Name() string {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }

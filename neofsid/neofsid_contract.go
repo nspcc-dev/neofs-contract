@@ -18,8 +18,6 @@ type (
 )
 
 const (
-	version = 1
-
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
 	notaryDisabledKey    = "notary"
@@ -235,7 +233,7 @@ func Key(owner []byte) [][]byte {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 func getUserInfo(ctx storage.Context, key interface{}) UserInfo {

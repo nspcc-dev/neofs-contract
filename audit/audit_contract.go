@@ -36,8 +36,6 @@ func (a auditHeader) ID() []byte {
 }
 
 const (
-	version = 1
-
 	netmapContractKey = "netmapScriptHash"
 
 	notaryDisabledKey = "notary"
@@ -212,7 +210,7 @@ loop:
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 // readNext reads length from first byte and then reads data (max 127 bytes).

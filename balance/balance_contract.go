@@ -38,7 +38,6 @@ const (
 	symbol      = "NEOFS"
 	decimals    = 12
 	circulation = "MainnetGAS"
-	version     = 1
 
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
@@ -431,7 +430,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 // getSupply gets the token totalSupply value from VM storage.
