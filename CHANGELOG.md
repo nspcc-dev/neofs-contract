@@ -1,6 +1,15 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.10.1] - 2021-07-29
+
+### Changed
+- `Version` method returns encoded semver value (#98)
+
+### Removed
+- `InitConfig` methods from neofs and netmap contracts. Network configuration
+  now provided as contract deploy parameter. (#115)
+
 ## [0.10.0] - 2021-07-23 - Wando (완도, 莞島)
 
 ### Fixed
@@ -187,6 +196,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.10.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.0...v0.9.1
