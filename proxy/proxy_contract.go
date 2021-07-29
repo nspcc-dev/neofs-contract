@@ -12,8 +12,6 @@ import (
 )
 
 const (
-	version = 1
-
 	netmapContractKey = "netmapScriptHash"
 )
 
@@ -82,5 +80,5 @@ func Verify() bool {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }

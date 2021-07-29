@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	version = 1
-
 	neofsContractKey = "neofsScriptHash"
 
 	multiaddrMethod = "alphabetAddress"
@@ -79,5 +77,5 @@ func Verify() bool {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }

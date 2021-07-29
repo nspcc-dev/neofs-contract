@@ -24,8 +24,6 @@ const (
 	candidateFeeConfigKey = "InnerRingCandidateFee"
 	withdrawFeeConfigKey  = "WithdrawFee"
 
-	version = 3
-
 	alphabetKey       = "alphabet"
 	candidatesKey     = "candidates"
 	notaryDisabledKey = "notary"
@@ -560,7 +558,7 @@ func InitConfig(args [][]byte) {
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 // getNodes returns deserialized slice of nodes from storage.

@@ -13,8 +13,6 @@ import (
 
 const (
 	notaryDisabledKey = "notary"
-
-	version = 1
 )
 
 func _deploy(data interface{}, isUpdate bool) {
@@ -162,7 +160,7 @@ loop:
 
 // Version returns version of the contract.
 func Version() int {
-	return version
+	return common.Version
 }
 
 func storageID(epoch int, peerID []byte) []byte {
