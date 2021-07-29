@@ -32,7 +32,6 @@ type (
 )
 
 const (
-	configuredKey     = "initconfig"
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
 
@@ -72,6 +71,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	addrBalance := args[2].(interop.Hash160)
 	addrContainer := args[3].(interop.Hash160)
 	keys := args[4].([]interop.PublicKey)
+	config := args[5].([][]byte)
 
 	if !common.HasUpdateAccess(ctx) {
 		panic("only owner can reinitialize contract")
@@ -106,6 +106,18 @@ func _deploy(data interface{}, isUpdate bool) {
 		common.SetSerialized(ctx, innerRingKey, irList)
 		common.InitVote(ctx)
 		runtime.Log("netmap contract notary disabled")
+	}
+
+	ln := len(config)
+	if ln%2 != 0 {
+		panic("init: bad configuration")
+	}
+
+	for i := 0; i < ln/2; i++ {
+		key := config[i*2]
+		val := config[i*2+1]
+
+		setConfig(ctx, key, val)
 	}
 
 	runtime.Log("netmap contract initialized")
@@ -480,34 +492,6 @@ func SetConfig(id, key, val []byte) {
 	setConfig(ctx, key, val)
 
 	runtime.Log("setConfig: configuration has been updated")
-}
-
-// InitConfig method sets up initial key-value configuration pair. Can be invoked
-// only once.
-//
-// Arguments should contain even number of byte arrays. First byte array is a
-// configuration key and the second is configuration value.
-func InitConfig(args [][]byte) {
-	ctx := storage.GetContext()
-
-	if storage.Get(ctx, configuredKey) != nil {
-		panic("netmap: configuration already installed")
-	}
-
-	ln := len(args)
-	if ln%2 != 0 {
-		panic("initConfig: bad arguments")
-	}
-
-	for i := 0; i < ln/2; i++ {
-		key := args[i*2]
-		val := args[i*2+1]
-
-		setConfig(ctx, key, val)
-	}
-
-	storage.Put(ctx, configuredKey, true)
-	runtime.Log("netmap: config has been installed")
 }
 
 // ListConfig returns array of structures that contain key and value of all
