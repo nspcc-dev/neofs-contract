@@ -2,6 +2,7 @@
 
 SHELL=bash
 NEOGO?=neo-go
+VERSION?=$(shell git describe --tags)
 
 .PHONY: all build sidechain
 build: all
@@ -40,3 +41,8 @@ mr_proper: clean
 	for sc in $(alphabet_sc); do\
 	  rm -rf alphabet/$$sc; \
 	done
+
+archive: build
+	@tar --transform "s|^./|neofs-contract-$(VERSION)/|" \
+		-czf neofs-contract-$(VERSION).tar.gz \
+		$(shell find . -name '*.nef' -o -name 'config.json')
