@@ -76,7 +76,12 @@ type RecordState struct {
 // Update updates NameService contract.
 func Update(nef []byte, manifest string) {
 	checkCommittee()
-	management.Update(nef, []byte(manifest))
+	// Calculating keys and serializing requires calling
+	// std and crypto contracts. This can be helpful on update
+	// thus we provide `AllowCall` to management.Update.
+	// management.Update(nef, []byte(manifest))
+	contract.Call(interop.Hash160(management.Hash), "update",
+		contract.All, nef, manifest)
 }
 
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
