@@ -67,21 +67,14 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
-	owner := args[1].(interop.Hash160)
-	addrBalance := args[2].(interop.Hash160)
-	addrContainer := args[3].(interop.Hash160)
-	keys := args[4].([]interop.PublicKey)
-	config := args[5].([][]byte)
-
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can reinitialize contract")
-	}
+	addrBalance := args[1].(interop.Hash160)
+	addrContainer := args[2].(interop.Hash160)
+	keys := args[3].([]interop.PublicKey)
+	config := args[4].([][]byte)
 
 	if len(addrBalance) != 20 || len(addrContainer) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
-
-	storage.Put(ctx, common.OwnerKey, owner)
 
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotEpoch, 0)
@@ -124,12 +117,10 @@ func _deploy(data interface{}, isUpdate bool) {
 }
 
 // Update method updates contract source code and manifest. Can be invoked
-// only by contract owner.
+// only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
-	ctx := storage.GetReadOnlyContext()
-
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can update contract")
+	if !common.HasUpdateAccess() {
+		panic("only committee can update contract")
 	}
 
 	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
