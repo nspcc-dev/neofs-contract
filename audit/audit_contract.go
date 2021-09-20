@@ -48,20 +48,14 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
-	owner := args[1].(interop.Hash160)
-	addrNetmap := args[2].(interop.Hash160)
+	addrNetmap := args[1].(interop.Hash160)
 
 	ctx := storage.GetContext()
-
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can reinitialize contract")
-	}
 
 	if len(addrNetmap) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 
 	// initialize the way to collect signatures
@@ -74,12 +68,10 @@ func _deploy(data interface{}, isUpdate bool) {
 }
 
 // Update method updates contract source code and manifest. Can be invoked
-// only by contract owner.
+// only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
-	ctx := storage.GetReadOnlyContext()
-
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can update contract")
+	if !common.HasUpdateAccess() {
+		panic("only committee can update contract")
 	}
 
 	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
@@ -186,7 +178,6 @@ func list(it iterator.Iterator) [][]byte {
 
 	ignore := [][]byte{
 		[]byte(netmapContractKey),
-		[]byte(common.OwnerKey),
 		[]byte(notaryDisabledKey),
 	}
 

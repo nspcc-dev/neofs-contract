@@ -4,7 +4,9 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/roles"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -30,32 +32,28 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	arr := data.([]interop.Hash160)
-	owner := arr[0]
-	addrNeoFS := arr[1]
+	addrNeoFS := arr[0]
 
 	ctx := storage.GetContext()
-
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can reinitialize contract")
-	}
 
 	if len(addrNeoFS) != 20 {
 		panic("init: incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, common.OwnerKey, owner)
 	storage.Put(ctx, neofsContractKey, addrNeoFS)
 
 	runtime.Log("processing contract initialized")
 }
 
 // Update method updates contract source code and manifest. Can be invoked
-// only by contract owner.
+// only by side chain committee.
 func Update(script []byte, manifest []byte, data interface{}) {
-	ctx := storage.GetReadOnlyContext()
+	blockHeight := ledger.CurrentIndex()
+	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight))
+	alphabetCommittee := common.Multiaddress(alphabetKeys, true)
 
-	if !common.HasUpdateAccess(ctx) {
-		panic("only owner can update contract")
+	if !runtime.CheckWitness(alphabetCommittee) {
+		panic("only side chain committee can update contract")
 	}
 
 	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
