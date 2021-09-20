@@ -606,6 +606,10 @@ func getContainer(ctx storage.Context, cid []byte) Container {
 
 func getOwnerByID(ctx storage.Context, cid []byte) []byte {
 	container := getContainer(ctx, cid)
+	if len(container.value) == 0 {
+		return nil
+	}
+
 	return ownerFromBinaryContainer(container.value)
 }
 
