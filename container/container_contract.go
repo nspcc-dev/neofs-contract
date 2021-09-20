@@ -80,7 +80,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if len(addrNetmap) != 20 || len(addrBalance) != 20 || len(addrID) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, common.OwnerKey, owner)
@@ -305,7 +305,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
-		panic("setEACL: container does not exists")
+		panic("container does not exist")
 	}
 
 	var ( // for invocation collection without notary
@@ -362,7 +362,7 @@ func EACL(containerID []byte) ExtendedACL {
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
-		panic("eACL: container does not exists")
+		panic("container does not exist")
 	}
 
 	return getEACL(ctx, containerID)
@@ -375,11 +375,11 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(pubKey) {
-		panic("container: invalid witness for size estimation")
+		panic("invalid witness of container size estimation")
 	}
 
 	if !isStorageNode(ctx, pubKey) {
-		panic("container: only storage nodes can save size estimations")
+		panic("putContainerSize method must be invoked by storage node from network map")
 	}
 
 	key := estimationKey(epoch, cid, pubKey)
@@ -457,12 +457,12 @@ func NewEpoch(epochNum int) {
 			netmapContractKey,
 		)
 		if !indirectCall {
-			panic("newEpoch: this method must be invoked from inner ring")
+			panic("newEpoch method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("newEpoch: this method must be invoked from inner ring")
+			panic("newEpoch method must be invoked by inner ring")
 		}
 	}
 
@@ -487,12 +487,12 @@ func StartContainerEstimation(epoch int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("startEstimation: only inner ring nodes can invoke this")
+			panic("startContainerEstimation method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("startEstimation: only inner ring nodes can invoke this")
+			panic("startContainerEstimation method must be invoked by inner ring")
 		}
 	}
 
@@ -527,12 +527,12 @@ func StopContainerEstimation(epoch int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("stopEstimation: only inner ring nodes can invoke this")
+			panic("stopContainerEstimation method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("stopEstimation: only inner ring nodes can invoke this")
+			panic("stopContainerEstimation method must be invoked by inner ring")
 		}
 	}
 
