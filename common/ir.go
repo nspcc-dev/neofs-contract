@@ -55,6 +55,12 @@ func AlphabetAddress() []byte {
 	return Multiaddress(alphabet, false)
 }
 
+// CommitteeAddress returns multi address of committee.
+func CommitteeAddress() []byte {
+	committee := neo.GetCommittee()
+	return Multiaddress(committee, true)
+}
+
 // Multiaddress returns default multi signature account address for N keys.
 // If committee set to true, then it is `M = N/2+1` committee account.
 func Multiaddress(n []interop.PublicKey, committee bool) []byte {
@@ -63,12 +69,7 @@ func Multiaddress(n []interop.PublicKey, committee bool) []byte {
 		threshold = len(n)/2 + 1
 	}
 
-	keys := []interop.PublicKey{}
-	for _, key := range n {
-		keys = append(keys, key)
-	}
-
-	return contract.CreateMultisigAccount(threshold, keys)
+	return contract.CreateMultisigAccount(threshold, n)
 }
 
 func keysToNodes(list []interop.PublicKey) []IRNode {
