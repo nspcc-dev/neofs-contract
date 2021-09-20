@@ -213,7 +213,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if len(ownerID) == 0 {
-		panic("delete: container does not exist")
+		return
 	}
 
 	var ( // for invocation collection without notary
