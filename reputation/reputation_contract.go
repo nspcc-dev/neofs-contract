@@ -44,18 +44,15 @@ func _deploy(data interface{}, isUpdate bool) {
 
 // Update method updates contract source code and manifest. Can be invoked
 // only by contract owner.
-func Update(script []byte, manifest []byte, data interface{}) bool {
+func Update(script []byte, manifest []byte, data interface{}) {
 	ctx := storage.GetReadOnlyContext()
 
 	if !common.HasUpdateAccess(ctx) {
-		runtime.Log("only owner can update contract")
-		return false
+		panic("only owner can update contract")
 	}
 
 	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
 	runtime.Log("reputation contract updated")
-
-	return true
 }
 
 // Put method saves DataAuditResult in contract storage. Can be invoked only by
