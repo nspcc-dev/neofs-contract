@@ -98,9 +98,9 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("container contract initialized")
 }
 
-// Migrate method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. Can be invoked
 // only by contract owner.
-func Migrate(script []byte, manifest []byte, data interface{}) bool {
+func Update(script []byte, manifest []byte, data interface{}) bool {
 	ctx := storage.GetReadOnlyContext()
 
 	if !common.HasUpdateAccess(ctx) {
