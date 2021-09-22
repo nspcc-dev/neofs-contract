@@ -1,6 +1,26 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.11.0] - 2021-09-22 - Mungapdo (문갑도, 文甲島)
+
+Contract owners are removed, now side chain committee is in charge of contract
+update routine.
+
+### Fixed
+- Container contract does not throw PICKITEM panic when trying access 
+  non-existent container, instead panics with user-friendly message (#121)
+
+### Changed
+- NNS contract has been updated to the latest version from Neo upstream (#123)
+- Container contract does not throw panic on deleting non-existent container
+  (#121)
+- Migrate methods renamed to Update (#128)
+- Contracts now throw panic if update routine fails (#130)
+- Side chain committee is able to update contracts (#107) 
+
+### Removed
+- Contract owner arguments at deploy stage (#107)
+
 ## [0.10.1] - 2021-07-29
 
 ### Changed
@@ -196,6 +216,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.11.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.1...v0.9.2
