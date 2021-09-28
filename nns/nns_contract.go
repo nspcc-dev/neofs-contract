@@ -62,8 +62,8 @@ const (
 const (
 	// defaultRegisterPrice is the default price for new domain registration.
 	defaultRegisterPrice = 10_0000_0000
-	// millisecondsInYear is amount of milliseconds per year.
-	millisecondsInYear = 365 * 24 * 3600 * 1000
+	// millisecondsInSecond is amount of milliseconds per second.
+	millisecondsInSecond = 1000
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -242,7 +242,7 @@ func IsAvailable(name string) bool {
 }
 
 // Register registers new domain with the specified owner and name if it's available.
-func Register(name string, owner interop.Hash160) bool {
+func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
 	fragments := splitAndCheck(name, false)
 	if fragments == nil {
 		panic("invalid domain name format")
@@ -277,23 +277,24 @@ func Register(name string, owner interop.Hash160) bool {
 	ns := NameState{
 		Owner:      owner,
 		Name:       name,
-		Expiration: runtime.GetTime() + millisecondsInYear,
+		Expiration: runtime.GetTime() + expire*millisecondsInSecond,
 	}
 	putNameStateWithKey(ctx, tokenKey, ns)
+	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
 	updateBalance(ctx, []byte(name), owner, +1)
 	postTransfer(oldOwner, owner, []byte(name), nil)
 	return true
 }
 
 // Renew increases domain expiration date.
-func Renew(name string) int {
+func Renew(name string, expire int) int {
 	if len(name) > maxDomainNameLength {
 		panic("invalid domain name format")
 	}
 	runtime.BurnGas(GetPrice())
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
-	ns.Expiration += millisecondsInYear
+	ns.Expiration += expire * millisecondsInSecond
 	putNameState(ctx, ns)
 	return ns.Expiration
 }
@@ -486,6 +487,25 @@ func putRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 		Name: name,
 		Type: typ,
 		Data: record,
+	}
+	recBytes := std.Serialize(rs)
+	storage.Put(ctx, recordKey, recBytes)
+}
+
+// putSoaRecord stores soa domain record.
+func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
+	tokenId := []byte(tokenIDFromName(name))
+	recordKey := getRecordKey(tokenId, name, SOA)
+	recordKey = append(recordKey, 0, 0, 0, 0) // emulate first 4 bytes of tx hash
+	rs := RecordState{
+		Name: name,
+		Type: SOA,
+		Data: name + " " + email + " " +
+			std.Itoa(runtime.GetTime(), 10) + " " +
+			std.Itoa(refresh, 10) + " " +
+			std.Itoa(retry, 10) + " " +
+			std.Itoa(expire, 10) + " " +
+			std.Itoa(ttl, 10),
 	}
 	recBytes := std.Serialize(rs)
 	storage.Put(ctx, recordKey, recBytes)
