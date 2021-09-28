@@ -9,7 +9,7 @@ const (
 	A RecordType = 1
 	// CNAME represents canonical name record type.
 	CNAME RecordType = 5
-	// SOA represents start of a zone of authority record type.
+	// SOA represents start of authority record type.
 	SOA RecordType = 6
 	// TXT represents text record type.
 	TXT RecordType = 16
