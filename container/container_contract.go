@@ -48,6 +48,7 @@ const (
 	netmapContractKey  = "netmapScriptHash"
 	nnsContractKey     = "nnsScriptHash"
 	nnsRootKey         = "nnsRoot"
+	nnsHasAliasKey     = "nnsHasAlias"
 	notaryDisabledKey  = "notary"
 
 	containerFeeKey = "ContainerFee"
@@ -234,6 +235,9 @@ func PutNamed(container []byte, signature interop.Signature,
 		}
 		contract.Call(nnsContractAddr, "addRecord", contract.All,
 			domain, 16 /* TXT */, std.Base58Encode(containerID))
+
+		key := append([]byte(nnsHasAliasKey), containerID...)
+		storage.Put(ctx, key, domain)
 	}
 
 	if len(token) == 0 { // if container created directly without session
@@ -309,6 +313,19 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		common.RemoveVotes(ctx, id)
 	}
 
+	key := append([]byte(nnsHasAliasKey), containerID...)
+	domain := storage.Get(ctx, key).(string)
+	if len(domain) != 0 {
+		storage.Delete(ctx, key)
+		// We should do `getRecord` first because NNS record could be deleted
+		// by other means (expiration, manual) thus leading to failing `deleteRecord`
+		// and inability to delete container. We should also check that we own the record in case.
+		nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
+		if res != nil && std.Base58Encode(containerID) == string(res.([]interface{})[0].(string)) {
+			contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
+		}
+	}
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("delete: remove container")
 }
