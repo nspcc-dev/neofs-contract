@@ -46,6 +46,8 @@ const (
 	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
+	nnsContractKey     = "nnsScriptHash"
+	nnsRootKey         = "nnsRoot"
 	notaryDisabledKey  = "notary"
 
 	containerFeeKey = "ContainerFee"
@@ -61,6 +63,10 @@ var (
 	eACLPrefix = []byte("eACL")
 )
 
+// OnNEP11Payment is needed for registration with contract as owner to work.
+func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
+}
+
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
@@ -73,6 +79,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	addrNetmap := args[1].(interop.Hash160)
 	addrBalance := args[2].(interop.Hash160)
 	addrID := args[3].(interop.Hash160)
+	addrNNS := args[4].(interop.Hash160)
+	nnsRoot := args[5].(string)
 
 	if len(addrNetmap) != 20 || len(addrBalance) != 20 || len(addrID) != 20 {
 		panic("incorrect length of contract script hash")
@@ -81,6 +89,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, balanceContractKey, addrBalance)
 	storage.Put(ctx, neofsIDContractKey, addrID)
+	storage.Put(ctx, nnsContractKey, addrNNS)
+	storage.Put(ctx, nnsRootKey, nnsRoot)
 
 	// initialize the way to collect signatures
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
@@ -88,6 +98,9 @@ func _deploy(data interface{}, isUpdate bool) {
 		common.InitVote(ctx)
 		runtime.Log("container contract notary disabled")
 	}
+
+	// add NNS root for container alias domains
+	contract.Call(addrNNS, "addRoot", contract.All, nnsRoot)
 
 	runtime.Log("container contract initialized")
 }
@@ -112,6 +125,14 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // Token is optional and should be stable marshaled SessionToken structure from
 // API.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
+	PutNamed(container, signature, publicKey, token, "", "")
+}
+
+// PutNamed is similar to put but also sets a TXT record in nns contract.
+// Note that zone must exist.
+func PutNamed(container []byte, signature interop.Signature,
+	publicKey interop.PublicKey, token []byte,
+	name, zone string) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -123,6 +144,20 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 		sig:   signature,
 		pub:   publicKey,
 		token: token,
+	}
+
+	var (
+		needRegister    bool
+		nnsContractAddr interop.Hash160
+		domain          string
+	)
+	if name != "" {
+		if zone == "" {
+			zone = storage.Get(ctx, nnsRootKey).(string)
+		}
+		nnsContractAddr = storage.Get(ctx, nnsContractKey).(interop.Hash160)
+		domain = name + "." + zone
+		needRegister = checkNiceNameAvailable(nnsContractAddr, domain)
 	}
 
 	var ( // for invocation collection without notary
@@ -182,11 +217,48 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 	addContainer(ctx, containerID, ownerID, cnr)
 
+	if name != "" {
+		if needRegister {
+			const (
+				defaultRefresh = 3600   // 1 hour
+				defaultRetry   = 600    // 10 min
+				defaultExpire  = 604800 // 1 week
+				defaultTTL     = 3600   // 1 hour
+			)
+			res := contract.Call(nnsContractAddr, "register", contract.All,
+				domain, runtime.GetExecutingScriptHash(), "ops@nspcc.ru",
+				defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool)
+			if !res {
+				panic("can't register the domain " + domain)
+			}
+		}
+		contract.Call(nnsContractAddr, "addRecord", contract.All,
+			domain, 16 /* TXT */, std.Base58Encode(containerID))
+	}
+
 	if len(token) == 0 { // if container created directly without session
 		contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
 	}
 
 	runtime.Log("put: added new container")
+}
+
+// checkNiceNameAvailable checks if nice name is available for the container.
+// It panics if the name is taken. Returned value specifies if new domain registration is needed.
+func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool {
+	isAvail := contract.Call(nnsContractAddr, "isAvailable",
+		contract.ReadStates|contract.AllowCall, domain).(bool)
+	if isAvail {
+		return true
+	}
+
+	res := contract.Call(nnsContractAddr, "getRecords",
+		contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
+	if res != nil {
+		panic("name is already taken")
+	}
+
+	return false
 }
 
 // Delete method removes container from contract storage if it was

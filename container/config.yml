@@ -1,7 +1,8 @@
 name: "NeoFS Container"
 safemethods: ["get", "owner", "list", "eACL", "getContainerSize", "listContainerSizes", "version"]
 permissions:
-  - methods: ["update", "addKey", "transferX"]
+  - methods: ["update", "addKey", "transferX",
+               "addRoot", "register", "addRecord"]
 events:
   - name: containerPut
     parameters:
