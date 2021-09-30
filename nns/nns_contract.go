@@ -87,19 +87,6 @@ func Update(nef []byte, manifest string) {
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
-		ctx := storage.GetContext()
-		it := storage.Find(ctx, []byte{prefixRecord}, storage.None)
-		for iterator.Next(it) {
-			val := iterator.Value(it).([]interface{})
-			key := val[0].(string)
-			oldRec := val[1].(string)
-			newRec := []byte{0x41, 3} // struct with 3 fields
-			newRec = append(newRec, 0x28, 0) // empty name
-			newRec = append(newRec, 0x21, 1, byte(TXT)) // 1-byte integer
-			newRec = append(newRec, 0x28, byte(len(oldRec))) // 1-byte len (40)
-			newRec = append(newRec, oldRec...)
-			storage.Put(ctx, key, newRec)
-		}
 		return
 	}
 	ctx := storage.GetContext()
