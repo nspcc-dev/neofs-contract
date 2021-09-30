@@ -88,6 +88,32 @@ func Update(nef []byte, manifest string) {
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		ctx := storage.GetContext()
+		it := storage.Find(ctx, []byte{prefixRecord}, storage.DeserializeValues)
+		for iterator.Next(it) {
+			oldRec := iterator.Value(it).(struct {
+				key string
+				rec RecordState
+			})
+			newRec := RecordState{
+				Name: oldRec.rec.Name,
+				Type: oldRec.rec.Type,
+				Data: oldRec.rec.Data,
+				ID:   0,
+			}
+			newKey := append([]byte(oldRec.key), newRec.ID)
+			rec := std.Serialize(newRec)
+			storage.Put(ctx, newKey, rec)
+			storage.Delete(ctx, oldRec.key)
+		}
+
+		maxExpire := 1<<31 - 1
+		domains := storage.Find(ctx, []byte{prefixName}, storage.ValuesOnly|storage.DeserializeValues)
+		for iterator.Next(domains) {
+			ns := iterator.Value(domains).(NameState)
+			putSoaRecord(ctx, ns.Name, "ops@nspcc.ru", 86400, 7200, maxExpire, 3600)
+		}
+
 		return
 	}
 	ctx := storage.GetContext()
