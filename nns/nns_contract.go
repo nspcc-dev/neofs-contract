@@ -637,13 +637,6 @@ func getIdRecordKey(tokenId []byte, name string, typ RecordType, id byte) []byte
 	return append(recordKey, byte(typ), id)
 }
 
-// addUniqueBytesToRecordKey add to key 4 unique bytes to allow store several records with the same type.
-func addUniqueBytesToRecordKey(recordKey []byte) []byte {
-	tx := runtime.GetScriptContainer()
-	bb := []byte(tx.Hash)
-	return append(recordKey, bb[:4]...)
-}
-
 // isValid returns true if the provided address is a valid Uint160.
 func isValid(address interop.Hash160) bool {
 	return address != nil && len(address) == 20
