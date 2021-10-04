@@ -65,14 +65,21 @@ func TestNNSRegister(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
+	accTop := NewAccount(t, bc)
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
-		"com", CommitteeAcc.Contract.ScriptHash(),
+	tx := PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, accTop}, h, "register",
+		"com", accTop.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
 	acc := NewAccount(t, bc)
 	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "register",
+		"testdomain.com", acc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "not witnessed by admin")
+
+	tx = PrepareInvoke(t, bc, []*wallet.Account{accTop, acc}, h, "register",
 		"testdomain.com", acc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	b := AddBlockCheckHalt(t, bc, tx)

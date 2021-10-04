@@ -136,7 +136,7 @@ func TestContainerPut(t *testing.T) {
 			c.id = sha256.Sum256(c.value)
 
 			t.Run("bad domain owner", func(t *testing.T) {
-				tx = PrepareInvoke(t, bc, acc, nnsHash, "register",
+				tx = PrepareInvoke(t, bc, []*wallet.Account{acc, CommitteeAcc}, nnsHash, "register",
 					"baddomain.neofs", acc.Contract.ScriptHash(),
 					"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 				AddBlockCheckHalt(t, bc, tx)
