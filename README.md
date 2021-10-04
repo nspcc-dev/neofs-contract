@@ -67,6 +67,14 @@ $ NEOGO=/home/user/neo-go/bin/neo-go make all
 
 Remove compiled files with `make clean` or `make mr_proper` command.
 
+# Testing
+Smartcontract tests reside in `tests/` directory. To execute test suite
+after applying changes simply run `make test`.
+```
+$ make test
+ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
+```
+
 # NeoFS API compatibility
 
 |neofs-contract version|supported NeoFS API versions|
