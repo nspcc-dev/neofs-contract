@@ -2,4 +2,4 @@ module github.com/nspcc-dev/neofs-contract
 
 go 1.14
 
-require github.com/nspcc-dev/neo-go v0.96.0
+require github.com/nspcc-dev/neo-go v0.97.2
