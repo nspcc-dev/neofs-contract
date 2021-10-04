@@ -64,6 +64,12 @@ const (
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
+
+	// default SOA record field values
+	defaultRefresh = 3600   // 1 hour
+	defaultRetry   = 600    // 10 min
+	defaultExpire  = 604800 // 1 week
+	defaultTTL     = 3600   // 1 hour
 )
 
 var (
@@ -114,14 +120,18 @@ func _deploy(data interface{}, isUpdate bool) {
 }
 
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
-	iter := contract.Call(addrNNS, "roots", contract.ReadStates).(iterator.Iterator)
-	for iterator.Next(iter) {
-		if iterator.Value(iter).(string) == nnsRoot {
-			runtime.Log("NNS root is already registered: " + nnsRoot)
-			return
-		}
+	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
+		"container").(bool)
+	if !isAvail {
+		return
 	}
-	contract.Call(addrNNS, "addRoot", contract.All, nnsRoot)
+
+	res := contract.Call(addrNNS, "register", contract.All,
+		nnsRoot, common.CommitteeAddress(), "ops@nspcc.ru",
+		defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool)
+	if !res {
+		panic("can't register NNS TLD")
+	}
 }
 
 // Update method updates contract source code and manifest. Can be invoked
@@ -237,12 +247,6 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	if name != "" {
 		if needRegister {
-			const (
-				defaultRefresh = 3600   // 1 hour
-				defaultRetry   = 600    // 10 min
-				defaultExpire  = 604800 // 1 week
-				defaultTTL     = 3600   // 1 hour
-			)
 			res := contract.Call(nnsContractAddr, "register", contract.All,
 				domain, runtime.GetExecutingScriptHash(), "ops@nspcc.ru",
 				defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool)

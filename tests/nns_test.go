@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,37 +30,48 @@ func TestNNSGeneric(t *testing.T) {
 	CheckTestInvoke(t, bc, tx, 0)
 }
 
-func TestNNSAddRoot(t *testing.T) {
+func TestNNSRegisterTLD(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "0com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"0com", CommitteeAcc.Contract.ScriptHash(),
+		"email@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlock(t, bc, tx)
-	CheckFault(t, bc, tx.Hash(), "invalid root format")
+	CheckFault(t, bc, tx.Hash(), "invalid domain name format")
 
 	acc := NewAccount(t, bc)
-	tx = PrepareInvoke(t, bc, acc, h, "addRoot", "com")
+	tx = PrepareInvoke(t, bc, acc, h, "register",
+		"com", acc.Contract.ScriptHash(),
+		"email@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlock(t, bc, tx)
 	CheckFault(t, bc, tx.Hash(), "not witnessed by committee")
 
-	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"email@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlock(t, bc, tx)
 	CheckHalt(t, bc, tx.Hash())
 
-	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"email@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlock(t, bc, tx)
-	CheckFault(t, bc, tx.Hash(), "root already exists")
+	CheckFault(t, bc, tx.Hash(), "TLD already exists")
 }
 
 func TestNNSRegister(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
 	acc := NewAccount(t, bc)
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "register",
 		"testdomain.com", acc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -97,10 +109,12 @@ func TestNNSUpdateSOA(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
 		"testdomain.com", CommitteeAcc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -124,10 +138,12 @@ func TestNNSGetAllRecords(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
 		"testdomain.com", CommitteeAcc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -173,10 +189,12 @@ func TestNNSSetAdmin(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
 		"testdomain.com", CommitteeAcc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -198,15 +216,51 @@ func TestNNSSetAdmin(t *testing.T) {
 	AddBlockCheckHalt(t, bc, tx)
 }
 
+func TestNNSIsAvailable(t *testing.T) {
+	bc := NewChain(t)
+	h := DeployContract(t, bc, nnsPath, nil)
+
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "isAvailable", "com")
+	CheckTestInvoke(t, bc, tx, true)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "isAvailable", "domain.com")
+	_, err := TestInvoke(bc, tx)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "TLD not found"))
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "isAvailable", "com")
+	CheckTestInvoke(t, bc, tx, false)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "isAvailable", "domain.com")
+	CheckTestInvoke(t, bc, tx, true)
+
+	acc := NewAccount(t, bc)
+	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "register",
+		"domain.com", acc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "isAvailable", "domain.com")
+	CheckTestInvoke(t, bc, tx, false)
+}
+
 func TestNNSRenew(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addRoot", "com")
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	AddBlockCheckHalt(t, bc, tx)
 
 	acc := NewAccount(t, bc)
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "register",
 		"testdomain.com", acc.Contract.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
