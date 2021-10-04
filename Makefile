@@ -4,7 +4,7 @@ SHELL=bash
 NEOGO?=neo-go
 VERSION?=$(shell git describe --tags)
 
-.PHONY: all build sidechain
+.PHONY: all build sidechain test
 build: all
 all: sidechain mainnet
 sidechain: alphabet morph nns
@@ -32,6 +32,9 @@ alphabet: $(foreach sc,$(alphabet_sc),$(sc)/$(sc)_contract.nef)
 morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
 mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
 nns: $(foreach sc,$(nns_sc),$(sc)/$(sc)_contract.nef)
+
+test:
+	@go test ./tests/...
 
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
