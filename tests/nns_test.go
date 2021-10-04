@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
@@ -15,6 +16,8 @@ import (
 )
 
 const nnsPath = "../nns"
+
+const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 
 func TestNNSGeneric(t *testing.T) {
 	bc := NewChain(t)
@@ -192,6 +195,36 @@ func TestNNSGetAllRecords(t *testing.T) {
 	require.False(t, iter.Next())
 }
 
+func TestExpiration(t *testing.T) {
+	bc := NewChain(t)
+	h := DeployContract(t, bc, nnsPath, nil)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	b := AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"testdomain.com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlockCheckHalt(t, bc, tx)
+
+	addCustomBlock(t, bc, func(curr *block.Block) {
+		curr.Timestamp = b.Timestamp + uint64(msPerYear) - 1
+	})
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "getAllRecords", "testdomain.com")
+	_, err := TestInvoke(bc, tx)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "parent domain has expired"))
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "ownerOf", "testdomain.com")
+	_, err = TestInvoke(bc, tx)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "parent domain has expired"), err.Error())
+}
+
 func TestNNSSetAdmin(t *testing.T) {
 	bc := NewChain(t)
 	h := DeployContract(t, bc, nnsPath, nil)
@@ -275,8 +308,6 @@ func TestNNSRenew(t *testing.T) {
 
 	tx = PrepareInvoke(t, bc, acc, h, "renew", "testdomain.com")
 	AddBlockCheckHalt(t, bc, tx)
-
-	const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 
 	tx = PrepareInvoke(t, bc, acc, h, "properties", "testdomain.com")
 	CheckTestInvoke(t, bc, tx, stackitem.NewMapWithValue([]stackitem.MapElement{

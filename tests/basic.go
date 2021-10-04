@@ -211,6 +211,10 @@ func addNetworkFee(bc *core.Blockchain, tx *transaction.Transaction, sender *wal
 
 // AddBlock creates a new block from provided transactions and adds it on bc.
 func AddBlock(t *testing.T, bc *core.Blockchain, txs ...*transaction.Transaction) *block.Block {
+	return addCustomBlock(t, bc, nil, txs...)
+}
+
+func addCustomBlock(t *testing.T, bc *core.Blockchain, blockFunc func(*block.Block), txs ...*transaction.Transaction) *block.Block {
 	lastBlock, err := bc.GetBlock(bc.GetHeaderHash(int(bc.BlockHeight())))
 	require.NoError(t, err)
 	b := &block.Block{
@@ -226,6 +230,9 @@ func AddBlock(t *testing.T, bc *core.Blockchain, txs ...*transaction.Transaction
 	b.PrevHash = lastBlock.Hash()
 	b.Index = bc.BlockHeight() + 1
 	b.RebuildMerkleRoot()
+	if blockFunc != nil {
+		blockFunc(b)
+	}
 
 	sign := CommitteeAcc.PrivateKey().SignHashable(uint32(netmode.UnitTestNet), b)
 	b.Script.InvocationScript = append([]byte{byte(opcode.PUSHDATA1), 64}, sign...)
