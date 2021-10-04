@@ -4,7 +4,8 @@ SHELL=bash
 NEOGO?=neo-go
 VERSION?=$(shell git describe --tags)
 
-.PHONY: all build sidechain test
+.PHONY: all build clean test
+.PHONY: alphabet mainnet morph nns sidechain
 build: all
 all: sidechain mainnet
 sidechain: alphabet morph nns
