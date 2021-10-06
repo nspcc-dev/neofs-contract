@@ -3,26 +3,20 @@ package tests
 import (
 	"encoding/hex"
 	"encoding/json"
-	"path"
 	"strings"
 	"testing"
 
-	"github.com/nspcc-dev/neo-go/cli/smartcontract"
-	"github.com/nspcc-dev/neo-go/pkg/compiler"
 	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core"
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/fee"
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
-	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/callflag"
-	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
-	"github.com/nspcc-dev/neo-go/pkg/smartcontract/nef"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -164,34 +158,13 @@ func CheckFault(t *testing.T, bc *core.Blockchain, h util.Uint256, s string) {
 
 // newDeployTx returns new deployment tx for contract.
 func newDeployTx(t *testing.T, bc *core.Blockchain, ctrPath string, data interface{}) (*transaction.Transaction, util.Uint160) {
-	// nef.NewFile() cares about version a lot.
-	config.Version = "0.90.0-test"
-
-	avm, di, err := compiler.CompileWithDebugInfo(ctrPath, nil)
+	c, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), ctrPath)
 	require.NoError(t, err)
 
-	ne, err := nef.NewFile(avm)
+	rawManifest, err := json.Marshal(c.Manifest)
 	require.NoError(t, err)
 
-	conf, err := smartcontract.ParseContractConfig(path.Join(ctrPath, "config.yml"))
-	require.NoError(t, err)
-
-	o := &compiler.Options{}
-	o.Name = conf.Name
-	o.ContractEvents = conf.Events
-	o.ContractSupportedStandards = conf.SupportedStandards
-	o.Permissions = make([]manifest.Permission, len(conf.Permissions))
-	for i := range conf.Permissions {
-		o.Permissions[i] = manifest.Permission(conf.Permissions[i])
-	}
-	o.SafeMethods = conf.SafeMethods
-	m, err := compiler.CreateManifest(di, o)
-	require.NoError(t, err)
-
-	rawManifest, err := json.Marshal(m)
-	require.NoError(t, err)
-
-	neb, err := ne.Bytes()
+	neb, err := c.NEF.Bytes()
 	require.NoError(t, err)
 
 	buf := io.NewBufBinWriter()
@@ -204,9 +177,7 @@ func newDeployTx(t *testing.T, bc *core.Blockchain, ctrPath string, data interfa
 	tx.Signers = []transaction.Signer{{Account: CommitteeAcc.Contract.ScriptHash()}}
 	require.NoError(t, addNetworkFee(bc, tx, CommitteeAcc))
 	require.NoError(t, CommitteeAcc.SignTx(netmode.UnitTestNet, tx))
-
-	h := state.CreateContractHash(tx.Sender(), ne.Checksum, m.Name)
-	return tx, h
+	return tx, c.Hash
 }
 
 func addSystemFee(bc *core.Blockchain, tx *transaction.Transaction) error {
