@@ -174,7 +174,10 @@ func newDeployTx(t *testing.T, bc *core.Blockchain, ctrPath string, data interfa
 	tx := transaction.New(buf.Bytes(), 100*native.GASFactor)
 	tx.Nonce = nonce()
 	tx.ValidUntilBlock = bc.BlockHeight() + 1
-	tx.Signers = []transaction.Signer{{Account: CommitteeAcc.Contract.ScriptHash()}}
+	tx.Signers = []transaction.Signer{{
+		Account: CommitteeAcc.Contract.ScriptHash(),
+		Scopes:  transaction.Global,
+	}}
 	require.NoError(t, addNetworkFee(bc, tx, CommitteeAcc))
 	require.NoError(t, CommitteeAcc.SignTx(netmode.UnitTestNet, tx))
 	return tx, c.Hash
