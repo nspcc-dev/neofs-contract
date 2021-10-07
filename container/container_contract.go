@@ -71,10 +71,6 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
-	if isUpdate {
-		return
-	}
-
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
 	addrNetmap := args[1].(interop.Hash160)
@@ -82,6 +78,11 @@ func _deploy(data interface{}, isUpdate bool) {
 	addrID := args[3].(interop.Hash160)
 	addrNNS := args[4].(interop.Hash160)
 	nnsRoot := args[5].(string)
+
+	if isUpdate {
+		registerNiceNameTLD(addrNNS, nnsRoot)
+		return
+	}
 
 	if len(addrNetmap) != 20 || len(addrBalance) != 20 || len(addrID) != 20 {
 		panic("incorrect length of contract script hash")
@@ -101,9 +102,20 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	// add NNS root for container alias domains
-	contract.Call(addrNNS, "addRoot", contract.All, nnsRoot)
+	registerNiceNameTLD(addrNNS, nnsRoot)
 
 	runtime.Log("container contract initialized")
+}
+
+func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
+	iter := contract.Call(addrNNS, "roots", contract.ReadStates).(iterator.Iterator)
+	for iterator.Next(iter) {
+		if iterator.Value(iter).(string) == nnsRoot {
+			runtime.Log("NNS root is already registered: " + nnsRoot)
+			return
+		}
+	}
+	contract.Call(addrNNS, "addRoot", contract.All, nnsRoot)
 }
 
 // Update method updates contract source code and manifest. Can be invoked
