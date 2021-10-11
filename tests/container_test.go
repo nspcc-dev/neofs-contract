@@ -2,6 +2,7 @@ package tests
 
 import (
 	"crypto/sha256"
+	"strings"
 	"testing"
 
 	"github.com/mr-tron/base58"
@@ -185,11 +186,62 @@ func TestContainerDelete(t *testing.T) {
 	AddBlockCheckHalt(t, bc, tx)
 
 	tx = PrepareInvoke(t, bc, acc, h, "get", c.id[:])
+	_, err := TestInvoke(bc, tx)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), container.NotFoundError))
+}
+
+func TestContainerOwner(t *testing.T) {
+	bc := NewChain(t)
+	h, balanceHash := prepareContainerContract(t, bc)
+
+	acc := NewAccount(t, bc)
+	balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+	c := dummyContainer(acc)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", c.value, c.sig, c.pub, c.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	t.Run("missing container", func(t *testing.T) {
+		id := c.id
+		id[0] ^= 0xFF
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "owner", id[:])
+		_, err := TestInvoke(bc, tx)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), container.NotFoundError))
+	})
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "owner", c.id[:])
+	owner, _ := base58.Decode(acc.Address)
+	CheckTestInvoke(t, bc, tx, stackitem.NewBuffer(owner))
+}
+
+func TestContainerGet(t *testing.T) {
+	bc := NewChain(t)
+	h, balanceHash := prepareContainerContract(t, bc)
+
+	acc := NewAccount(t, bc)
+	balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+	c := dummyContainer(acc)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", c.value, c.sig, c.pub, c.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	t.Run("missing container", func(t *testing.T) {
+		id := c.id
+		id[0] ^= 0xFF
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "get", id[:])
+		_, err := TestInvoke(bc, tx)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), container.NotFoundError))
+	})
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "get", c.id[:])
 	CheckTestInvoke(t, bc, tx, stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
+		stackitem.NewByteArray(c.value),
+		stackitem.NewByteArray(c.sig),
+		stackitem.NewByteArray(c.pub),
+		stackitem.NewByteArray(c.token),
 	}))
 }
 
@@ -221,6 +273,16 @@ func TestContainerSetEACL(t *testing.T) {
 	c := dummyContainer(acc)
 	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", c.value, c.sig, c.pub, c.token)
 	AddBlockCheckHalt(t, bc, tx)
+
+	t.Run("missing container", func(t *testing.T) {
+		id := c.id
+		id[0] ^= 0xFF
+		e := dummyEACL(id)
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "setEACL", e.value, e.sig, e.pub, e.token)
+		_, err := TestInvoke(bc, tx)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), container.NotFoundError))
+	})
 
 	e := dummyEACL(c.id)
 	tx = PrepareInvoke(t, bc, acc, h, "setEACL", e.value, e.sig, e.pub, e.token)

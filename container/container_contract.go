@@ -61,6 +61,9 @@ const (
 	estimateKeyPrefix   = "cnr"
 	estimatePostfixSize = 10
 	cleanupDelta        = 3
+
+	// NotFoundError is returned if container is missing.
+	NotFoundError = "container does not exist"
 )
 
 var (
@@ -292,13 +295,15 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 // Signature is a RFC6979 signature of container ID.
 // Token is optional and should be stable marshaled SessionToken structure from
 // API.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	ownerID := getOwnerByID(ctx, containerID)
-	if len(ownerID) == 0 {
-		return
+	if ownerID == nil {
+		panic(NotFoundError)
 	}
 
 	if notaryDisabled {
@@ -345,15 +350,27 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 // Get method returns structure that contains stable marshaled Container structure,
 // signature, public key of the container creator and stable marshaled SessionToken
 // structure if it was provided.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
-	return getContainer(ctx, containerID)
+	cnt := getContainer(ctx, containerID)
+	if len(cnt.value) == 0 {
+		panic(NotFoundError)
+	}
+	return cnt
 }
 
 // Owner method returns 25 byte Owner ID of the container.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func Owner(containerID []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
-	return getOwnerByID(ctx, containerID)
+	owner := getOwnerByID(ctx, containerID)
+	if owner == nil {
+		panic(NotFoundError)
+	}
+	return owner
 }
 
 // List method returns list of all container IDs owned by specified owner.
@@ -384,6 +401,8 @@ func List(owner []byte) [][]byte {
 // PublicKey contains public key of the signer.
 // Token is optional and should be stable marshaled SessionToken structure from
 // API.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -394,8 +413,8 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	containerID := eACL[offset : offset+32]
 
 	ownerID := getOwnerByID(ctx, containerID)
-	if len(ownerID) == 0 {
-		panic("container does not exist")
+	if ownerID == nil {
+		panic(NotFoundError)
 	}
 
 	if notaryDisabled {
@@ -439,12 +458,14 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 // EACL method returns structure that contains stable marshaled EACLTable structure,
 // signature, public key of the extended ACL setter and stable marshaled SessionToken
 // structure if it was provided.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
 
 	ownerID := getOwnerByID(ctx, containerID)
-	if len(ownerID) == 0 {
-		panic("container does not exist")
+	if ownerID == nil {
+		panic(NotFoundError)
 	}
 
 	return getEACL(ctx, containerID)
@@ -453,8 +474,14 @@ func EACL(containerID []byte) ExtendedACL {
 // PutContainerSize method saves container size estimation in contract
 // memory. Can be invoked only by Storage nodes from the network map. Method
 // checks witness based on the provided public key of the Storage node.
+//
+// If a container doesn't exist it panics with NotFoundError.
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
 	ctx := storage.GetContext()
+
+	if getOwnerByID(ctx, cid) == nil {
+		panic(NotFoundError)
+	}
 
 	if !runtime.CheckWitness(pubKey) {
 		panic("invalid witness of container size estimation")
