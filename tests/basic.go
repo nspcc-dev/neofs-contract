@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -263,4 +264,10 @@ func TestInvoke(bc *core.Blockchain, tx *transaction.Transaction) (*vm.VM, error
 	v.LoadWithFlags(tx.Script, callflag.All)
 	err = v.Run()
 	return v, err
+}
+
+func randomBytes(n int) []byte {
+	a := make([]byte, n)
+	rand.Read(a)
+	return a
 }

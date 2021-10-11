@@ -49,19 +49,33 @@ func setContainerOwner(c []byte, owner *wallet.Account) {
 	copy(c[7:], owner.Contract.ScriptHash().BytesBE())
 }
 
+type testContainer struct {
+	id                     [32]byte
+	value, sig, pub, token []byte
+}
+
+func dummyContainer(owner *wallet.Account) testContainer {
+	value := randomBytes(100)
+	value[1] = 0 // zero offset
+	setContainerOwner(value, owner)
+
+	return testContainer{
+		id:    sha256.Sum256(value),
+		value: value,
+		sig:   randomBytes(64),
+		pub:   randomBytes(33),
+		token: randomBytes(42),
+	}
+}
+
 func TestContainerPut(t *testing.T) {
 	bc := NewChain(t)
 	h, balanceHash := prepareContainerContract(t, bc)
 
 	acc := NewAccount(t, bc)
-	dummySig := make([]byte, 64)
-	dummyPub := make([]byte, 33)
-	dummyToken := make([]byte, 100)
-	container := make([]byte, 100)
-	setContainerOwner(container, acc)
-	containerID := sha256.Sum256(container)
+	c := dummyContainer(acc)
 
-	putArgs := []interface{}{container, dummySig, dummyPub, dummyToken}
+	putArgs := []interface{}{c.value, c.sig, c.pub, c.token}
 	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", putArgs...)
 	AddBlock(t, bc, tx)
 	CheckFault(t, bc, tx.Hash(), "insufficient balance to create container")
@@ -80,24 +94,24 @@ func TestContainerPut(t *testing.T) {
 
 		balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
 
-		putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "mycnt", ""}
+		putArgs := []interface{}{c.value, c.sig, c.pub, c.token, "mycnt", ""}
 		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
 		AddBlockCheckHalt(t, bc, tx)
 
 		tx = PrepareInvoke(t, bc, acc, nnsHash, "resolve", "mycnt.neofs", int64(nns.TXT))
 		CheckTestInvoke(t, bc, tx, stackitem.NewArray([]stackitem.Item{
-			stackitem.NewByteArray([]byte(base58.Encode(containerID[:]))),
+			stackitem.NewByteArray([]byte(base58.Encode(c.id[:]))),
 		}))
 
-		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", containerID[:], dummySig, dummyToken)
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", c.id[:], c.sig, c.token)
 		AddBlockCheckHalt(t, bc, tx)
 
 		tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "resolve", "mycnt.neofs", int64(nns.TXT))
 		CheckTestInvoke(t, bc, tx, stackitem.Null{})
 
 		t.Run("register in advance", func(t *testing.T) {
-			container[len(container)-1] = 10
-			containerID = sha256.Sum256(container)
+			c.value[len(c.value)-1] = 10
+			c.id = sha256.Sum256(c.value)
 
 			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "register",
 				"second.neofs", CommitteeAcc.Contract.ScriptHash(),
@@ -106,13 +120,13 @@ func TestContainerPut(t *testing.T) {
 
 			balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
 
-			putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "second", "neofs"}
-			tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
+			putArgs := []interface{}{c.value, c.sig, c.pub, c.token, "second", "neofs"}
+			tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "putNamed", putArgs...)
 			AddBlockCheckHalt(t, bc, tx)
 
 			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "resolve", "second.neofs", int64(nns.TXT))
 			CheckTestInvoke(t, bc, tx, stackitem.NewArray([]stackitem.Item{
-				stackitem.NewByteArray([]byte(base58.Encode(containerID[:]))),
+				stackitem.NewByteArray([]byte(base58.Encode(c.id[:]))),
 			}))
 		})
 	})
