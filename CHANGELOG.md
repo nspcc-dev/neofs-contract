@@ -1,6 +1,22 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.12.0] - 2021-10-15 - Udo (우도, 牛島)
+
+NNS update with native container names in container contract.
+
+### Fixed
+- Safe methods list in reputation contract manifest (#144)
+
+### Added
+- SOA record type support in NNS (#125)
+- Test framework for N3 contracts written in go (#137)
+- Unit tests for container and NNS contracts (#135, #137)
+- `PutNamed` method in container contract that registers domain in NNS (#135)
+
+### Changed
+- NNS contract supports multiple records of the same type (#125)
+
 ## [0.11.0] - 2021-09-22 - Mungapdo (문갑도, 文甲島)
 
 Contract owners are removed, now side chain committee is in charge of contract
@@ -216,6 +232,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.12.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.9.2...v0.10.0

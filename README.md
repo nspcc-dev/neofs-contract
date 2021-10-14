@@ -82,6 +82,7 @@ ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 |v0.9.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)|
 |v0.10.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)|
 |v0.11.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0), [v2.9.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.9.0)|
+|v0.12.x|[v2.10.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.10.0)|
 
 
 # License
