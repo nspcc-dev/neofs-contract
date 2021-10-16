@@ -191,6 +191,7 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 // by Alphabet node. If it was invoked by node candidate, it produces AddPeer
 // notification. Otherwise method throws panic.
 //
+// If the candidate already exists, it's info is updated.
 // NodeInfo argument contains stable marshaled version of netmap.NodeInfo
 // structure.
 func AddPeer(nodeInfo []byte) {
@@ -518,11 +519,6 @@ func addToNetmap(ctx storage.Context, n storageNode) {
 			state: onlineState,
 		}
 	)
-
-	data := storage.Get(ctx, storageKey)
-	if data != nil {
-		return
-	}
 
 	storage.Put(ctx, storageKey, std.Serialize(node))
 }

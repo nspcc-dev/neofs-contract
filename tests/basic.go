@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/fee"
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -137,13 +138,14 @@ func DeployContract(t *testing.T, bc *core.Blockchain, path string, data interfa
 }
 
 // CheckHalt checks that transaction persisted with HALT state.
-func CheckHalt(t *testing.T, bc *core.Blockchain, h util.Uint256, stack ...stackitem.Item) {
+func CheckHalt(t *testing.T, bc *core.Blockchain, h util.Uint256, stack ...stackitem.Item) *state.AppExecResult {
 	aer, err := bc.GetAppExecResults(h, trigger.Application)
 	require.NoError(t, err)
 	require.Equal(t, vm.HaltState, aer[0].VMState, aer[0].FaultException)
 	if len(stack) != 0 {
 		require.Equal(t, stack, aer[0].Stack)
 	}
+	return &aer[0]
 }
 
 // CheckFault checks that transaction persisted with FAULT state.
