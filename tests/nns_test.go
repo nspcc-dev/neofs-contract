@@ -315,3 +315,34 @@ func TestNNSRenew(t *testing.T) {
 		{stackitem.Make("expiration"), stackitem.Make(b.Timestamp + 2*uint64(msPerYear))},
 	}))
 }
+
+func TestNNSResolve(t *testing.T) {
+	bc := NewChain(t)
+	h := DeployContract(t, bc, nnsPath, nil)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "register",
+		"test.com", CommitteeAcc.Contract.ScriptHash(),
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "addRecord",
+		"test.com", int64(nns.TXT), "expected result")
+	AddBlockCheckHalt(t, bc, tx)
+
+	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "resolve", "test.com", int64(nns.TXT))
+	CheckTestInvoke(t, bc, tx, records)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "resolve", "test.com.", int64(nns.TXT))
+	CheckTestInvoke(t, bc, tx, records)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "resolve", "test.com..", int64(nns.TXT))
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "invalid domain name format")
+}
