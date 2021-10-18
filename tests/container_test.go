@@ -113,6 +113,18 @@ func TestContainerPut(t *testing.T) {
 			c.value[len(c.value)-1] = 10
 			c.id = sha256.Sum256(c.value)
 
+			t.Run("bad domain owner", func(t *testing.T) {
+				tx = PrepareInvoke(t, bc, acc, nnsHash, "register",
+					"baddomain.neofs", acc.Contract.ScriptHash(),
+					"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
+				AddBlockCheckHalt(t, bc, tx)
+
+				putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "baddomain", "neofs"}
+				tx = PrepareInvoke(t, bc, acc, h, "putNamed", putArgs...)
+				AddBlock(t, bc, tx)
+				CheckFault(t, bc, tx.Hash(), "committee must own registered domain")
+			})
+
 			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "register",
 				"second.neofs", CommitteeAcc.Contract.ScriptHash(),
 				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
