@@ -15,6 +15,8 @@ import (
 
 const containerPath = "../container"
 
+const containerFee = 0_0100_0000
+
 func deployContainerContract(t *testing.T, bc *core.Blockchain, addrNetmap, addrBalance, addrNNS util.Uint160) util.Uint160 {
 	args := make([]interface{}, 6)
 	args[0] = int64(0)
@@ -26,7 +28,7 @@ func deployContainerContract(t *testing.T, bc *core.Blockchain, addrNetmap, addr
 	return DeployContract(t, bc, containerPath, args)
 }
 
-func prepareContainerContract(t *testing.T, bc *core.Blockchain) util.Uint160 {
+func prepareContainerContract(t *testing.T, bc *core.Blockchain) (util.Uint160, util.Uint160) {
 	addrNNS := DeployContract(t, bc, nnsPath, nil)
 
 	ctrNetmap, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), netmapPath)
@@ -38,9 +40,9 @@ func prepareContainerContract(t *testing.T, bc *core.Blockchain) util.Uint160 {
 	ctrContainer, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), containerPath)
 	require.NoError(t, err)
 
-	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, "ContainerFee", []byte{})
-	deployBalanceContract(t, bc, ctrNetmap.Hash, ctrContainer.Hash)
-	return deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS)
+	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, "ContainerFee", int64(containerFee))
+	balHash := deployBalanceContract(t, bc, ctrNetmap.Hash, ctrContainer.Hash)
+	return deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS), balHash
 }
 
 func setContainerOwner(c []byte, owner *wallet.Account) {
@@ -49,7 +51,7 @@ func setContainerOwner(c []byte, owner *wallet.Account) {
 
 func TestContainerPut(t *testing.T) {
 	bc := NewChain(t)
-	h := prepareContainerContract(t, bc)
+	h, balanceHash := prepareContainerContract(t, bc)
 
 	acc := NewAccount(t, bc)
 	dummySig := make([]byte, 64)
@@ -59,17 +61,30 @@ func TestContainerPut(t *testing.T) {
 	setContainerOwner(container, acc)
 	containerID := sha256.Sum256(container)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", container, dummySig, dummyPub, dummyToken)
+	putArgs := []interface{}{container, dummySig, dummyPub, dummyToken}
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", putArgs...)
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "insufficient balance to create container")
+
+	balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+	tx = PrepareInvoke(t, bc, acc, h, "put", putArgs...)
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "alphabet witness check failed")
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "put", putArgs...)
 	AddBlockCheckHalt(t, bc, tx)
 
 	t.Run("with nice names", func(t *testing.T) {
 		nnsHash := contracts[nnsPath].Hash
 
-		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed",
-			container, dummySig, dummyPub, dummyToken, "mycnt", "")
+		balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+		putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "mycnt", ""}
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
 		AddBlockCheckHalt(t, bc, tx)
 
-		tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "resolve", "mycnt.neofs", int64(nns.TXT))
+		tx = PrepareInvoke(t, bc, acc, nnsHash, "resolve", "mycnt.neofs", int64(nns.TXT))
 		CheckTestInvoke(t, bc, tx, stackitem.NewArray([]stackitem.Item{
 			stackitem.NewByteArray([]byte(base58.Encode(containerID[:]))),
 		}))
@@ -84,13 +99,15 @@ func TestContainerPut(t *testing.T) {
 			container[len(container)-1] = 10
 			containerID = sha256.Sum256(container)
 
-			tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, nnsHash, "register",
-				"second.neofs", acc.Contract.ScriptHash(),
+			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "register",
+				"second.neofs", CommitteeAcc.Contract.ScriptHash(),
 				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 			AddBlockCheckHalt(t, bc, tx)
 
-			tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "putNamed",
-				container, dummySig, dummyPub, dummyToken, "second", "neofs")
+			balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+			putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "second", "neofs"}
+			tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
 			AddBlockCheckHalt(t, bc, tx)
 
 			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "resolve", "second.neofs", int64(nns.TXT))
