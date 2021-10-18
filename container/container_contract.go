@@ -263,6 +263,12 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 		return true
 	}
 
+	owner := contract.Call(nnsContractAddr, "ownerOf",
+		contract.ReadStates|contract.AllowCall, domain).(string)
+	if string(owner) != string(common.CommitteeAddress()) {
+		panic("committee must own registered domain")
+	}
+
 	res := contract.Call(nnsContractAddr, "getRecords",
 		contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
 	if res != nil {
