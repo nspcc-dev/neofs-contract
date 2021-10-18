@@ -173,37 +173,24 @@ func PutNamed(container []byte, signature interop.Signature,
 		needRegister = checkNiceNameAvailable(nnsContractAddr, domain)
 	}
 
-	var ( // for invocation collection without notary
-		alphabet     = common.AlphabetNodes()
-		nodeKey      []byte
-		alphabetCall bool
-	)
-
-	if notaryDisabled {
-		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
-	} else {
-		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
-
+	alphabet := common.AlphabetNodes()
 	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
 	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
-	details := common.ContainerFeeTransferDetails(containerID)
 
-	if !alphabetCall {
-		if balance < containerFee*len(alphabet) {
-			panic("insufficient balance to create container")
-		}
-		runtime.Notify("containerPut", container, signature, publicKey, token)
-		return
+	if balance < containerFee*len(alphabet) {
+		panic("insufficient balance to create container")
 	}
-	// todo: check if new container with unique container id
 
 	if notaryDisabled {
+		nodeKey := common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			runtime.Notify("containerPut", container, signature, publicKey, token)
+			return
+		}
+
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
 
@@ -213,7 +200,15 @@ func PutNamed(container []byte, signature interop.Signature,
 		}
 
 		common.RemoveVotes(ctx, id)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("put: alphabet witness check failed")
+		}
 	}
+	// todo: check if new container with unique container id
+
+	details := common.ContainerFeeTransferDetails(containerID)
 
 	for i := 0; i < len(alphabet); i++ {
 		node := alphabet[i]
