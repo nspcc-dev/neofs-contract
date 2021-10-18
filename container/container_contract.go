@@ -51,7 +51,8 @@ const (
 	nnsHasAliasKey     = "nnsHasAlias"
 	notaryDisabledKey  = "notary"
 
-	containerFeeKey = "ContainerFee"
+	// RegistrationFeeKey is a key in netmap config which contains fee for container registration.
+	RegistrationFeeKey = "ContainerFee"
 
 	containerIDSize = 32 // SHA256 size
 
@@ -177,7 +178,7 @@ func PutNamed(container []byte, signature interop.Signature,
 	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
-	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, containerFeeKey).(int)
+	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, RegistrationFeeKey).(int)
 	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
 
 	if balance < containerFee*len(alphabet) {

@@ -9,6 +9,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
+	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/nspcc-dev/neofs-contract/nns"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +41,7 @@ func prepareContainerContract(t *testing.T, bc *core.Blockchain) (util.Uint160, 
 	ctrContainer, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), containerPath)
 	require.NoError(t, err)
 
-	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, "ContainerFee", int64(containerFee))
+	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, container.RegistrationFeeKey, int64(containerFee))
 	balHash := deployBalanceContract(t, bc, ctrNetmap.Hash, ctrContainer.Hash)
 	return deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS), balHash
 }
@@ -119,8 +120,8 @@ func TestContainerPut(t *testing.T) {
 					"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 				AddBlockCheckHalt(t, bc, tx)
 
-				putArgs := []interface{}{container, dummySig, dummyPub, dummyToken, "baddomain", "neofs"}
-				tx = PrepareInvoke(t, bc, acc, h, "putNamed", putArgs...)
+				tx = PrepareInvoke(t, bc, acc, h, "putNamed",
+					c.value, c.sig, c.pub, c.token, "baddomain", "neofs")
 				AddBlock(t, bc, tx)
 				CheckFault(t, bc, tx.Hash(), "committee must own registered domain")
 			})
