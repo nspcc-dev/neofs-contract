@@ -53,6 +53,8 @@ const (
 
 	// RegistrationFeeKey is a key in netmap config which contains fee for container registration.
 	RegistrationFeeKey = "ContainerFee"
+	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
+	AliasFeeKey = "ContainerAliasFee"
 
 	containerIDSize = 32 // SHA256 size
 
@@ -180,6 +182,10 @@ func PutNamed(container []byte, signature interop.Signature,
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, RegistrationFeeKey).(int)
 	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
+	if name != "" {
+		aliasFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, AliasFeeKey).(int)
+		containerFee += aliasFee
+	}
 
 	if balance < containerFee*len(alphabet) {
 		panic("insufficient balance to create container")
