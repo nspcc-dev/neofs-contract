@@ -16,7 +16,10 @@ import (
 
 const containerPath = "../container"
 
-const containerFee = 0_0100_0000
+const (
+	containerFee      = 0_0100_0000
+	containerAliasFee = 0_0050_0000
+)
 
 func deployContainerContract(t *testing.T, bc *core.Blockchain, addrNetmap, addrBalance, addrNNS util.Uint160) util.Uint160 {
 	args := make([]interface{}, 6)
@@ -41,7 +44,9 @@ func prepareContainerContract(t *testing.T, bc *core.Blockchain) (util.Uint160, 
 	ctrContainer, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), containerPath)
 	require.NoError(t, err)
 
-	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, container.RegistrationFeeKey, int64(containerFee))
+	deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash,
+		container.RegistrationFeeKey, int64(containerFee),
+		container.AliasFeeKey, int64(containerAliasFee))
 	balHash := deployBalanceContract(t, bc, ctrNetmap.Hash, ctrContainer.Hash)
 	return deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS), balHash
 }
@@ -96,6 +101,14 @@ func TestContainerPut(t *testing.T) {
 		balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
 
 		putArgs := []interface{}{c.value, c.sig, c.pub, c.token, "mycnt", ""}
+		t.Run("no fee for alias", func(t *testing.T) {
+			tx = PrepareInvoke(t, bc, acc, h, "putNamed", putArgs...)
+			AddBlock(t, bc, tx)
+			CheckFault(t, bc, tx.Hash(), "insufficient balance to create container")
+		})
+
+		balanceMint(t, bc, acc, balanceHash, containerAliasFee*1, []byte{})
+
 		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
 		AddBlockCheckHalt(t, bc, tx)
 
@@ -131,7 +144,7 @@ func TestContainerPut(t *testing.T) {
 				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 			AddBlockCheckHalt(t, bc, tx)
 
-			balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+			balanceMint(t, bc, acc, balanceHash, (containerFee+containerAliasFee)*1, []byte{})
 
 			putArgs := []interface{}{c.value, c.sig, c.pub, c.token, "second", "neofs"}
 			tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "putNamed", putArgs...)
