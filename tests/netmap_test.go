@@ -68,46 +68,29 @@ func TestAddPeer(t *testing.T) {
 	acc := NewAccount(t, bc)
 	dummyInfo := dummyNodeInfo(acc)
 
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "addPeer", dummyInfo)
+	acc1 := NewAccount(t, bc)
+	tx := PrepareInvoke(t, bc, acc1, h, "addPeer", dummyInfo)
 	AddBlock(t, bc, tx)
-	CheckFault(t, bc, tx.Hash(), "addPeer: witness check failed")
+	CheckFault(t, bc, tx.Hash(), "witness check failed")
 
 	tx = PrepareInvoke(t, bc, acc, h, "addPeer", dummyInfo)
 	AddBlock(t, bc, tx)
-	CheckFault(t, bc, tx.Hash(), "addPeer: alphabet witness check failed")
-
-	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "addPeer", dummyInfo)
-	AddBlockCheckHalt(t, bc, tx)
-
-	tx = PrepareInvoke(t, bc, acc, h, "netmapCandidates")
-	AddBlock(t, bc, tx)
-
-	checkNode := func(t *testing.T, info []byte, state int64, actual stackitem.Item) {
-		// Actual is netmap.netmapNode.
-		require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-			stackitem.NewStruct([]stackitem.Item{
-				stackitem.NewByteArray(dummyInfo),
-			}),
-			stackitem.NewBigInteger(big.NewInt(state)),
-		}), actual)
-	}
 
 	aer := CheckHalt(t, bc, tx.Hash())
-	nodes, _ := aer.Stack[0].Value().([]stackitem.Item)
-	require.Equal(t, 1, len(nodes))
-	checkNode(t, dummyInfo, 1, nodes[0])
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "AddPeer", aer.Events[0].Name)
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo)}),
+		aer.Events[0].Item)
 
 	dummyInfo[0] ^= 0xFF
-	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "addPeer", dummyInfo)
-	AddBlockCheckHalt(t, bc, tx)
-
-	tx = PrepareInvoke(t, bc, acc, h, "netmapCandidates")
+	tx = PrepareInvoke(t, bc, acc, h, "addPeer", dummyInfo)
 	AddBlock(t, bc, tx)
 
 	aer = CheckHalt(t, bc, tx.Hash())
-	nodes, _ = aer.Stack[0].Value().([]stackitem.Item)
-	require.Equal(t, 1, len(nodes))
-	checkNode(t, dummyInfo, 1, nodes[0])
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "AddPeer", aer.Events[0].Name)
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo)}),
+		aer.Events[0].Item)
 }
 
 func TestUpdateState(t *testing.T) {
