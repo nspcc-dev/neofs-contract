@@ -85,7 +85,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if len(addrBalance) != 20 || len(addrContainer) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("_deploy: incorrect length of contract script hash")
 	}
 
 	// epoch number is a little endian int, it doesn't need to be serialized
