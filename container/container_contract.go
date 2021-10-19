@@ -295,27 +295,14 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		return
 	}
 
-	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
-		nodeKey      []byte
-		alphabetCall bool
-	)
-
 	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
-	} else {
-		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
+		alphabet := common.AlphabetNodes()
+		nodeKey := common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			runtime.Notify("containerDelete", containerID, signature, token)
+			return
+		}
 
-	if !alphabetCall {
-		runtime.Notify("containerDelete", containerID, signature, token)
-		return
-	}
-
-	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{containerID, signature}, []byte("delete"))
 
@@ -325,6 +312,11 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		}
 
 		common.RemoveVotes(ctx, id)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("delete: alphabet witness check failed")
+		}
 	}
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
