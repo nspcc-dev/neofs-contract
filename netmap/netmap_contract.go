@@ -199,27 +199,30 @@ func AddPeer(nodeInfo []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
-		nodeKey      []byte
-		alphabetCall bool
+		alphabet []common.IRNode
+		nodeKey  []byte
 	)
+
+	publicKey := nodeInfo[2:35] // offset:2, len:33
 
 	if notaryDisabled {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
+		if len(nodeKey) == 0 {
+			if !runtime.CheckWitness(publicKey) {
+				panic("addPeer: witness check failed")
+			}
+			runtime.Notify("AddPeer", nodeInfo)
+			return
+		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
-
-	if !alphabetCall {
-		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
 			panic("addPeer: witness check failed")
 		}
-		runtime.Notify("AddPeer", nodeInfo)
-		return
+		if !runtime.CheckWitness(multiaddr) {
+			panic("addPeer: alphabet witness check failed")
+		}
 	}
 
 	candidate := storageNode{
