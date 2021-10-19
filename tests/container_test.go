@@ -172,3 +172,49 @@ func TestContainerDelete(t *testing.T) {
 		stackitem.NewBuffer([]byte{}),
 	}))
 }
+
+type eacl struct {
+	value []byte
+	sig   []byte
+	pub   []byte
+	token []byte
+}
+
+func dummyEACL(containerID [32]byte) eacl {
+	e := make([]byte, 50)
+	copy(e[6:], containerID[:])
+	return eacl{
+		value: e,
+		sig:   randomBytes(64),
+		pub:   randomBytes(33),
+		token: randomBytes(42),
+	}
+}
+
+func TestContainerSetEACL(t *testing.T) {
+	bc := NewChain(t)
+	h, balanceHash := prepareContainerContract(t, bc)
+
+	acc := NewAccount(t, bc)
+	balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+
+	c := dummyContainer(acc)
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put", c.value, c.sig, c.pub, c.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	e := dummyEACL(c.id)
+	tx = PrepareInvoke(t, bc, acc, h, "setEACL", e.value, e.sig, e.pub, e.token)
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "setEACL: alphabet witness check failed")
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "setEACL", e.value, e.sig, e.pub, e.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "eACL", c.id[:])
+	CheckTestInvoke(t, bc, tx, stackitem.NewStruct([]stackitem.Item{
+		stackitem.NewByteArray(e.value),
+		stackitem.NewByteArray(e.sig),
+		stackitem.NewByteArray(e.pub),
+		stackitem.NewByteArray(e.token),
+	}))
+}

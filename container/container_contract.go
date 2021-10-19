@@ -392,24 +392,28 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 		panic("container does not exist")
 	}
 
-	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
-		nodeKey      []byte
-		alphabetCall bool
-	)
-
 	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
+		alphabet := common.AlphabetNodes()
+		nodeKey := common.InnerRingInvoker(alphabet)
+		if len(nodeKey) == 0 {
+			runtime.Notify("setEACL", eACL, signature, publicKey, token)
+			return
+		}
+
+		threshold := len(alphabet)*2/3 + 1
+		id := common.InvokeID([]interface{}{eACL}, []byte("setEACL"))
+
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return
+		}
+
+		common.RemoveVotes(ctx, id)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
-
-	if !alphabetCall {
-		runtime.Notify("setEACL", eACL, signature, publicKey, token)
-		return
+		if !runtime.CheckWitness(multiaddr) {
+			panic("setEACL: alphabet witness check failed")
+		}
 	}
 
 	rule := ExtendedACL{
@@ -420,18 +424,6 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	}
 
 	key := append(eACLPrefix, containerID...)
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{eACL}, []byte("setEACL"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
 
 	common.SetSerialized(ctx, key, rule)
 
