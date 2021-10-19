@@ -144,3 +144,31 @@ func TestContainerPut(t *testing.T) {
 		})
 	})
 }
+
+func TestContainerDelete(t *testing.T) {
+	bc := NewChain(t)
+	h, balanceHash := prepareContainerContract(t, bc)
+
+	acc := NewAccount(t, bc)
+	c := dummyContainer(acc)
+
+	balanceMint(t, bc, acc, balanceHash, containerFee*1, []byte{})
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "put",
+		c.value, c.sig, c.pub, c.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, acc, h, "delete", c.id[:], c.sig, c.token)
+	AddBlock(t, bc, tx)
+	CheckFault(t, bc, tx.Hash(), "delete: alphabet witness check failed")
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", c.id[:], c.sig, c.token)
+	AddBlockCheckHalt(t, bc, tx)
+
+	tx = PrepareInvoke(t, bc, acc, h, "get", c.id[:])
+	CheckTestInvoke(t, bc, tx, stackitem.NewStruct([]stackitem.Item{
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+	}))
+}
