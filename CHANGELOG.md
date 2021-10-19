@@ -1,6 +1,19 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.12.1] - 2021-10-19
+
+### Fixed
+- Sanity checks for notary enabled environment in container contract (#149)
+
+### Added
+- NeoFS global configuration parameter `ContainerAliasFee`. This parameter
+  used as additional fee for container registration with nice name alias (#148).
+
+### Changed
+- `netmap.AddPeer` method can update `NodeInfo` structures (#146)
+- `netmap.Update` allows to redefine any key-value pair of global config (#151)
+
 ## [0.12.0] - 2021-10-15 - Udo (우도, 牛島)
 
 NNS update with native container names in container contract.
@@ -232,6 +245,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.12.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.10.0...v0.10.1
