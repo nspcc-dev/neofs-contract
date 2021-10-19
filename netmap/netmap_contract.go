@@ -61,16 +61,28 @@ var (
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
-	if isUpdate {
-		return
-	}
-
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
 	addrBalance := args[1].(interop.Hash160)
 	addrContainer := args[2].(interop.Hash160)
 	keys := args[3].([]interop.PublicKey)
 	config := args[4].([][]byte)
+
+	ln := len(config)
+	if ln%2 != 0 {
+		panic("_deploy: bad configuration")
+	}
+
+	for i := 0; i < ln/2; i++ {
+		key := config[i*2]
+		val := config[i*2+1]
+
+		setConfig(ctx, key, val)
+	}
+
+	if isUpdate {
+		return
+	}
 
 	if len(addrBalance) != 20 || len(addrContainer) != 20 {
 		panic("init: incorrect length of contract script hash")
@@ -99,18 +111,6 @@ func _deploy(data interface{}, isUpdate bool) {
 		common.SetSerialized(ctx, innerRingKey, irList)
 		common.InitVote(ctx)
 		runtime.Log("netmap contract notary disabled")
-	}
-
-	ln := len(config)
-	if ln%2 != 0 {
-		panic("init: bad configuration")
-	}
-
-	for i := 0; i < ln/2; i++ {
-		key := config[i*2]
-		val := config[i*2+1]
-
-		setConfig(ctx, key, val)
 	}
 
 	runtime.Log("netmap contract initialized")
