@@ -262,31 +262,21 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
-		nodeKey      []byte
-		alphabetCall bool
+		alphabet []common.IRNode
+		nodeKey  []byte
 	)
 
 	if notaryDisabled {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
-	} else {
-		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
-
-	if !alphabetCall {
-		if !runtime.CheckWitness(publicKey) {
-			panic("updateState: witness check failed")
+		if len(nodeKey) == 0 {
+			if !runtime.CheckWitness(publicKey) {
+				panic("updateState: witness check failed")
+			}
+			runtime.Notify("UpdateState", state, publicKey)
+			return
 		}
 
-		runtime.Notify("UpdateState", state, publicKey)
-
-		return
-	}
-
-	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{state, publicKey}, []byte("update"))
 
@@ -296,6 +286,14 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		}
 
 		common.RemoveVotes(ctx, id)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(publicKey) {
+			panic("updateState: witness check failed")
+		}
+		if !runtime.CheckWitness(multiaddr) {
+			panic("updateState: alphabet witness check failed")
+		}
 	}
 
 	switch nodeState(state) {
