@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core"
+	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
+	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +26,7 @@ func deployNetmapContract(t *testing.T, bc *core.Blockchain, addrBalance, addrCo
 	return DeployContract(t, bc, netmapPath, args)
 }
 
-func prepareNetmapContract(t *testing.T, bc *core.Blockchain) util.Uint160 {
+func prepareNetmapContract(t *testing.T, bc *core.Blockchain, config ...interface{}) util.Uint160 {
 	addrNNS := DeployContract(t, bc, nnsPath, nil)
 
 	ctrNetmap, err := ContractInfo(CommitteeAcc.Contract.ScriptHash(), netmapPath)
@@ -38,7 +40,18 @@ func prepareNetmapContract(t *testing.T, bc *core.Blockchain) util.Uint160 {
 
 	deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS)
 	deployBalanceContract(t, bc, ctrNetmap.Hash, ctrContainer.Hash)
-	return deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, "ContainerFee", []byte{})
+	return deployNetmapContract(t, bc, ctrBalance.Hash, ctrContainer.Hash, config...)
+}
+
+func TestDeploySetConfig(t *testing.T) {
+	bc := NewChain(t)
+	h := prepareNetmapContract(t, bc, "SomeKey", "TheValue", container.AliasFeeKey, int64(123))
+
+	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "config", "SomeKey")
+	CheckTestInvoke(t, bc, tx, "TheValue")
+
+	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "config", container.AliasFeeKey)
+	CheckTestInvoke(t, bc, tx, bigint.ToBytes(big.NewInt(123)))
 }
 
 func dummyNodeInfo(acc *wallet.Account) []byte {
