@@ -51,8 +51,9 @@ func prepareContainerContract(t *testing.T, bc *core.Blockchain) (util.Uint160, 
 	return deployContainerContract(t, bc, ctrNetmap.Hash, ctrBalance.Hash, addrNNS), balHash
 }
 
-func setContainerOwner(c []byte, owner *wallet.Account) {
-	copy(c[7:], owner.Contract.ScriptHash().BytesBE())
+func setContainerOwner(c []byte, acc *wallet.Account) {
+	owner, _ := base58.Decode(acc.Address)
+	copy(c[6:], owner)
 }
 
 type testContainer struct {
