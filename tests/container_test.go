@@ -117,6 +117,12 @@ func TestContainerPut(t *testing.T) {
 			stackitem.NewByteArray([]byte(base58.Encode(c.id[:]))),
 		}))
 
+		t.Run("name is already taken", func(t *testing.T) {
+			tx = PrepareInvoke(t, bc, CommitteeAcc, h, "putNamed", putArgs...)
+			AddBlock(t, bc, tx)
+			CheckFault(t, bc, tx.Hash(), "name is already taken")
+		})
+
 		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", c.id[:], c.sig, c.token)
 		AddBlockCheckHalt(t, bc, tx)
 
@@ -136,7 +142,7 @@ func TestContainerPut(t *testing.T) {
 				tx = PrepareInvoke(t, bc, acc, h, "putNamed",
 					c.value, c.sig, c.pub, c.token, "baddomain", "neofs")
 				AddBlock(t, bc, tx)
-				CheckFault(t, bc, tx.Hash(), "committee must own registered domain")
+				CheckFault(t, bc, tx.Hash(), "committee or container contract must own registered domain")
 			})
 
 			tx = PrepareInvoke(t, bc, CommitteeAcc, nnsHash, "register",
