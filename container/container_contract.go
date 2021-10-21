@@ -272,8 +272,8 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 
 	owner := contract.Call(nnsContractAddr, "ownerOf",
 		contract.ReadStates|contract.AllowCall, domain).(string)
-	if string(owner) != string(common.CommitteeAddress()) {
-		panic("committee must own registered domain")
+	if owner != string(common.CommitteeAddress()) && owner != string(runtime.GetExecutingScriptHash()) {
+		panic("committee or container contract must own registered domain")
 	}
 
 	res := contract.Call(nnsContractAddr, "getRecords",
