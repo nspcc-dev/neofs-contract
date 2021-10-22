@@ -19,6 +19,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
+	"github.com/nspcc-dev/neofs-contract/common"
 )
 
 // Prefixes used for contract data storage.
@@ -129,6 +130,11 @@ func Symbol() string {
 // Decimals returns NeoNameService decimals.
 func Decimals() int {
 	return 0
+}
+
+// Version returns version of the contract.
+func Version() int {
+	return common.Version
 }
 
 // TotalSupply returns overall number of domains minted by the NeoNameService contract.
