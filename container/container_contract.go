@@ -303,7 +303,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if ownerID == nil {
-		panic(NotFoundError)
+		return
 	}
 
 	if notaryDisabled {

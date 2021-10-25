@@ -185,6 +185,13 @@ func TestContainerDelete(t *testing.T) {
 	tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", c.id[:], c.sig, c.token)
 	AddBlockCheckHalt(t, bc, tx)
 
+	t.Run("missing container", func(t *testing.T) {
+		id := c.id
+		id[0] ^= 0xFF
+		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "delete", id[:], c.sig, c.token)
+		AddBlockCheckHalt(t, bc, tx)
+	})
+
 	tx = PrepareInvoke(t, bc, acc, h, "get", c.id[:])
 	_, err := TestInvoke(bc, tx)
 	require.Error(t, err)
