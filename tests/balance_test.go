@@ -1,24 +1,28 @@
 package tests
 
 import (
+	"path"
 	"testing"
 
-	"github.com/nspcc-dev/neo-go/pkg/core"
+	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/wallet"
+	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
 const balancePath = "../balance"
 
-func deployBalanceContract(t *testing.T, bc *core.Blockchain, addrNetmap, addrContainer util.Uint160) util.Uint160 {
+func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
+	c := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
+
 	args := make([]interface{}, 3)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrContainer
-	return DeployContract(t, bc, balancePath, args)
+
+	e.DeployContract(t, c, args)
+	return c.Hash
 }
 
-func balanceMint(t *testing.T, bc *core.Blockchain, acc *wallet.Account, h util.Uint160, amount int64, details []byte) {
-	tx := PrepareInvoke(t, bc, CommitteeAcc, h, "mint", acc.Contract.ScriptHash(), amount, details)
-	AddBlockCheckHalt(t, bc, tx)
+func balanceMint(t *testing.T, c *neotest.ContractInvoker, acc neotest.Signer, amount int64, details []byte) {
+	c.Invoke(t, stackitem.Null{}, "mint", acc.ScriptHash(), amount, details)
 }
