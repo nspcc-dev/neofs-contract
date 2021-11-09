@@ -141,7 +141,8 @@ func Update(script []byte, manifest []byte, data interface{}) {
 		panic("only committee can update contract")
 	}
 
-	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update",
+		contract.All, script, manifest, common.AppendVersion(data))
 	runtime.Log("container contract updated")
 }
 

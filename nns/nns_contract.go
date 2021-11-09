@@ -83,7 +83,7 @@ func Update(nef []byte, manifest string) {
 	// thus we provide `AllowCall` to management.Update.
 	// management.Update(nef, []byte(manifest))
 	contract.Call(interop.Hash160(management.Hash), "update",
-		contract.All, nef, manifest)
+		contract.All, nef, manifest, common.AppendVersion(nil))
 }
 
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
