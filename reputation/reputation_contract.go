@@ -3,6 +3,7 @@ package reputation
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -12,18 +13,38 @@ import (
 )
 
 const (
-	notaryDisabledKey = "notary"
+	notaryDisabledKey     = "notary"
+	reputationValuePrefix = 'r'
+	reputationCountPrefix = 'c'
 )
 
 func _deploy(data interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
+
 	if isUpdate {
+		// Storage migration.
+		it := storage.Find(ctx, []byte{}, storage.None)
+		for iterator.Next(it) {
+			kv := iterator.Value(it).([][]byte)
+			if string(kv[0]) == notaryDisabledKey {
+				continue
+			}
+
+			rawValues := std.Deserialize(kv[1]).([][]byte)
+			key := getReputationKey(reputationCountPrefix, kv[0])
+			storage.Put(ctx, key, len(rawValues))
+
+			key[0] = reputationValuePrefix
+			for i := range rawValues {
+				newKey := append(key, convert.ToBytes(i)...)
+				storage.Put(ctx, newKey, rawValues[i])
+			}
+		}
 		return
 	}
 
 	args := data.([]interface{})
 	notaryDisabled := args[0].(bool)
-
-	ctx := storage.GetContext()
 
 	// initialize the way to collect signatures
 	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
@@ -77,11 +98,19 @@ func Put(epoch int, peerID []byte, value []byte) {
 	}
 
 	id := storageID(epoch, peerID)
+	key := getReputationKey(reputationCountPrefix, id)
 
-	reputationValues := GetByID(id)
-	reputationValues = append(reputationValues, value)
+	rawCnt := storage.Get(ctx, key)
+	cnt := 0
+	if rawCnt != nil {
+		cnt = rawCnt.(int)
+	}
+	cnt++
+	storage.Put(ctx, key, cnt)
 
-	rawValues := std.Serialize(reputationValues)
+	key[0] = reputationValuePrefix
+	key = append(key, convert.ToBytes(cnt)...)
+	storage.Put(ctx, key, value)
 
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
@@ -93,8 +122,6 @@ func Put(epoch int, peerID []byte, value []byte) {
 
 		common.RemoveVotes(ctx, id)
 	}
-
-	storage.Put(ctx, id, rawValues)
 }
 
 // Get method returns list of all stable marshaled DataAuditResult structures
@@ -109,37 +136,31 @@ func Get(epoch int, peerID []byte) [][]byte {
 func GetByID(id []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
-	data := storage.Get(ctx, id)
-	if data == nil {
-		return [][]byte{}
-	}
+	var data [][]byte
 
-	return std.Deserialize(data.([]byte)).([][]byte)
+	it := storage.Find(ctx, getReputationKey(reputationValuePrefix, id), storage.ValuesOnly)
+	for iterator.Next(it) {
+		data = append(data, iterator.Value(it).([]byte))
+	}
+	return data
+}
+
+func getReputationKey(prefix byte, id []byte) []byte {
+	return append([]byte{prefix}, id...)
 }
 
 // ListByEpoch returns list of IDs that may be used to get reputation data
 // with GetByID method.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
-	var buf interface{} = epoch
-	it := storage.Find(ctx, buf.([]byte), storage.KeysOnly)
+	key := getReputationKey(reputationCountPrefix, convert.ToBytes(epoch))
+	it := storage.Find(ctx, key, storage.KeysOnly)
 
 	var result [][]byte
 
-	ignore := [][]byte{
-		[]byte(notaryDisabledKey),
-	}
-
-loop:
 	for iterator.Next(it) {
 		key := iterator.Value(it).([]byte) // iterator MUST BE `storage.KeysOnly`
-		for _, ignoreKey := range ignore {
-			if common.BytesEqual(key, ignoreKey) {
-				continue loop
-			}
-		}
-
-		result = append(result, key)
+		result = append(result, key[1:])
 	}
 
 	return result
