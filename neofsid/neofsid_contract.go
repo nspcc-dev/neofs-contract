@@ -3,6 +3,7 @@ package neofsid
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -21,10 +22,25 @@ const (
 	netmapContractKey    = "netmapScriptHash"
 	containerContractKey = "containerScriptHash"
 	notaryDisabledKey    = "notary"
+	ownerKeysPrefix      = 'o'
 )
 
 func _deploy(data interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
+
 	if isUpdate {
+		it := storage.Find(ctx, []byte{}, storage.None)
+		for iterator.Next(it) {
+			kv := iterator.Value(it).([][]byte)
+			if len(kv[0]) == 25 {
+				info := std.Deserialize(kv[1]).(UserInfo)
+				key := append([]byte{ownerKeysPrefix}, kv[0]...)
+				for i := range info.Keys {
+					storage.Put(ctx, append(key, info.Keys[i]...), []byte{1})
+				}
+				storage.Delete(ctx, kv[0])
+			}
+		}
 		return
 	}
 
@@ -32,8 +48,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	notaryDisabled := args[0].(bool)
 	addrNetmap := args[1].(interop.Hash160)
 	addrContainer := args[2].(interop.Hash160)
-
-	ctx := storage.GetContext()
 
 	if len(addrNetmap) != 20 || len(addrContainer) != 20 {
 		panic("init: incorrect length of contract script hash")
@@ -101,23 +115,16 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		}
 	}
 
-	info := getUserInfo(ctx, owner)
-
-addLoop:
-	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i]
-		if len(pubKey) != 33 {
+	for i := range keys {
+		if len(keys[i]) != 33 {
 			panic("addKey: incorrect public key")
 		}
+	}
 
-		for j := range info.Keys {
-			key := info.Keys[j]
-			if common.BytesEqual(key, pubKey) {
-				continue addLoop
-			}
-		}
-
-		info.Keys = append(info.Keys, pubKey)
+	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
+	for i := range keys {
+		stKey := append(ownerKey, keys[i]...)
+		storage.Put(ctx, stKey, []byte{1})
 	}
 
 	if notaryDisabled && !indirectCall {
@@ -132,7 +139,6 @@ addLoop:
 		common.RemoveVotes(ctx, id)
 	}
 
-	common.SetSerialized(ctx, owner, info)
 	runtime.Log("addKey: key bound to the owner")
 }
 
@@ -167,28 +173,17 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		}
 	}
 
-	info := getUserInfo(ctx, owner)
-	var leftKeys [][]byte
-
-rmLoop:
-	for i := range info.Keys {
-		key := info.Keys[i]
-
-		for j := 0; j < len(keys); j++ {
-			pubKey := keys[j]
-			if len(pubKey) != 33 {
-				panic("removeKey: incorrect public key")
-			}
-
-			if common.BytesEqual(key, pubKey) {
-				continue rmLoop
-			}
+	for i := range keys {
+		if len(keys[i]) != 33 {
+			panic("addKey: incorrect public key")
 		}
-
-		leftKeys = append(leftKeys, key)
 	}
 
-	info.Keys = leftKeys
+	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
+	for i := range keys {
+		stKey := append(ownerKey, keys[i]...)
+		storage.Delete(ctx, stKey)
+	}
 
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
@@ -201,8 +196,6 @@ rmLoop:
 
 		common.RemoveVotes(ctx, id)
 	}
-
-	common.SetSerialized(ctx, owner, info)
 }
 
 // Key method returns list of 33-byte public keys bound with OwnerID.
@@ -215,7 +208,8 @@ func Key(owner []byte) [][]byte {
 
 	ctx := storage.GetReadOnlyContext()
 
-	info := getUserInfo(ctx, owner)
+	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
+	info := getUserInfo(ctx, ownerKey)
 
 	return info.Keys
 }
@@ -226,12 +220,14 @@ func Version() int {
 }
 
 func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
-	data := storage.Get(ctx, key)
-	if data != nil {
-		return std.Deserialize(data.([]byte)).(UserInfo)
+	it := storage.Find(ctx, key, storage.KeysOnly|storage.RemovePrefix)
+	pubs := [][]byte{}
+	for iterator.Next(it) {
+		pub := iterator.Value(it).([]byte)
+		pubs = append(pubs, pub)
 	}
 
-	return UserInfo{Keys: [][]byte{}}
+	return UserInfo{Keys: pubs}
 }
 
 func invokeIDKeys(owner []byte, keys []interop.PublicKey, prefix []byte) []byte {
