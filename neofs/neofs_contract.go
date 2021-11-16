@@ -23,7 +23,8 @@ type (
 )
 
 const (
-	candidateFeeConfigKey = "InnerRingCandidateFee"
+	// CandidateFeeConfigKey contains fee for a candidate registration.
+	CandidateFeeConfigKey = "InnerRingCandidateFee"
 	withdrawFeeConfigKey  = "WithdrawFee"
 
 	alphabetKey       = "alphabet"
@@ -48,6 +49,14 @@ var (
 // _deploy sets up initial alphabet node keys.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		ctx := storage.GetContext()
+		nodes := getNodes(ctx, candidatesKey)
+		storage.Delete(ctx, candidatesKey)
+
+		for i := range nodes {
+			key := append([]byte(candidatesKey), nodes[i].PublicKey...)
+			storage.Put(ctx, key, []byte{1})
+		}
 		return
 	}
 
@@ -79,7 +88,6 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	// initialize all storage slices
 	common.SetSerialized(ctx, alphabetKey, irList)
-	common.SetSerialized(ctx, candidatesKey, []common.IRNode{})
 
 	storage.Put(ctx, processingContractKey, addrProc)
 
@@ -137,7 +145,14 @@ func AlphabetAddress() interop.Hash160 {
 // candidate node key.
 func InnerRingCandidates() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	return getNodes(ctx, candidatesKey)
+	nodes := []common.IRNode{}
+
+	it := storage.Find(ctx, candidatesKey, storage.KeysOnly|storage.RemovePrefix)
+	for iterator.Next(it) {
+		pub := iterator.Value(it).([]byte)
+		nodes = append(nodes, common.IRNode{PublicKey: pub})
+	}
+	return nodes
 }
 
 // InnerRingCandidateRemove removes key from the list of Inner Ring candidates.
@@ -170,18 +185,6 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 		}
 	}
 
-	nodes := []common.IRNode{} // it is explicit declaration of empty slice, not nil
-	candidates := getNodes(ctx, candidatesKey)
-
-	for i := range candidates {
-		c := candidates[i]
-		if !common.BytesEqual(c.PublicKey, key) {
-			nodes = append(nodes, c)
-		} else {
-			runtime.Log("candidate has been removed")
-		}
-	}
-
 	if notaryDisabled && !keyOwner {
 		threshold := len(alphabet)*2/3 + 1
 		id := append(key, []byte("delete")...)
@@ -195,7 +198,12 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 		common.RemoveVotes(ctx, hashID)
 	}
 
-	common.SetSerialized(ctx, candidatesKey, nodes)
+	prefix := []byte(candidatesKey)
+	stKey := append(prefix, key...)
+	if storage.Get(ctx, stKey) != nil {
+		storage.Delete(ctx, stKey)
+		runtime.Log("candidate has been removed")
+	}
 }
 
 // InnerRingCandidateAdd adds key to the list of Inner Ring candidates.
@@ -208,25 +216,22 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 
 	common.CheckWitness(key)
 
-	c := common.IRNode{PublicKey: key}
-	candidates := getNodes(ctx, candidatesKey)
-
-	list, ok := addNode(candidates, c)
-	if !ok {
+	stKey := append([]byte(candidatesKey), key...)
+	if storage.Get(ctx, stKey) != nil {
 		panic("candidate already in the list")
 	}
 
 	from := contract.CreateStandardAccount(key)
 	to := runtime.GetExecutingScriptHash()
-	fee := getConfig(ctx, candidateFeeConfigKey).(int)
+	fee := getConfig(ctx, CandidateFeeConfigKey).(int)
 
 	transferred := gas.Transfer(from, to, fee, []byte(ignoreDepositNotification))
 	if !transferred {
 		panic("failed to transfer funds, aborting")
 	}
 
+	storage.Put(ctx, stKey, []byte{1})
 	runtime.Log("candidate has been added")
-	common.SetSerialized(ctx, candidatesKey, list)
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
@@ -557,20 +562,6 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storageKey := append(configPrefix, postfix...)
 
 	storage.Put(ctx, storageKey, val)
-}
-
-// addNode returns slice of nodes with appended node 'n' and bool flag
-// that set to false if node 'n' is already presented in the slice 'lst'.
-func addNode(lst []common.IRNode, n common.IRNode) ([]common.IRNode, bool) {
-	for i := 0; i < len(lst); i++ {
-		if common.BytesEqual(n.PublicKey, lst[i].PublicKey) {
-			return nil, false
-		}
-	}
-
-	lst = append(lst, n)
-
-	return lst, true
 }
 
 // multiaddress returns multi signature address from list of IRNode structures
