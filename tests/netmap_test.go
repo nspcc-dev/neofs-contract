@@ -92,34 +92,25 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestUpdateState(t *testing.T) {
-	bc := NewChain(t)
-	h := prepareNetmapContract(t, bc)
+	e := newNetmapInvoker(t)
 
-	acc := NewAccount(t, bc)
+	acc := e.NewAccount(t)
+	cAcc := e.WithSigners(acc)
+	cBoth := e.WithSigners(e.Committee, acc)
 	dummyInfo := dummyNodeInfo(acc)
 
-	tx := PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h, "addPeer", dummyInfo)
-	AddBlockCheckHalt(t, bc, tx)
+	cBoth.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo)
+
+	pub, ok := vm.ParseSignatureContract(acc.Script())
+	require.True(t, ok)
 
 	t.Run("missing witness", func(t *testing.T) {
-		tx = PrepareInvoke(t, bc, acc, h, "updateState", int64(2), acc.PrivateKey().PublicKey().Bytes())
-		AddBlock(t, bc, tx)
-		CheckFault(t, bc, tx.Hash(), "updateState: alphabet witness check failed")
-
-		tx = PrepareInvoke(t, bc, CommitteeAcc, h, "updateState", int64(2), acc.PrivateKey().PublicKey().Bytes())
-		AddBlock(t, bc, tx)
-		CheckFault(t, bc, tx.Hash(), "updateState: witness check failed")
+		cAcc.InvokeFail(t, "updateState: alphabet witness check failed",
+			"updateState", int64(2), pub)
+		e.InvokeFail(t, "updateState: witness check failed",
+			"updateState", int64(2), pub)
 	})
 
-	tx = PrepareInvoke(t, bc, []*wallet.Account{CommitteeAcc, acc}, h,
-		"updateState", int64(2), acc.PrivateKey().PublicKey().Bytes())
-	AddBlockCheckHalt(t, bc, tx)
-
-	tx = PrepareInvoke(t, bc, acc, h, "netmapCandidates")
-	AddBlock(t, bc, tx)
-
-	aer := CheckHalt(t, bc, tx.Hash())
-	nodes, ok := aer.Stack[0].Value().([]stackitem.Item)
-	require.True(t, ok)
-	require.Equal(t, 0, len(nodes))
+	cBoth.Invoke(t, stackitem.Null{}, "updateState", int64(2), pub)
+	cAcc.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "netmapCandidates")
 }
