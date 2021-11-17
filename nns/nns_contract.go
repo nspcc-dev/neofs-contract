@@ -584,9 +584,14 @@ func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
 	var id byte
-	records := storage.Find(ctx, recordsKey, storage.KeysOnly)
+	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
 		id++
+
+		r := iterator.Value(records).(RecordState)
+		if r.Name == name && r.Type == typ && r.Data == data {
+			panic("record already exists")
+		}
 	}
 
 	if typ == CNAME && id != 0 {

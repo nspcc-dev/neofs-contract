@@ -95,6 +95,8 @@ func TestNNSRegister(t *testing.T) {
 	cAcc := c.WithSigners(acc)
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
 		"testdomain.com", int64(nns.TXT), "first TXT record")
+	cAcc.InvokeFail(t, "record already exists", "addRecord",
+		"testdomain.com", int64(nns.TXT), "first TXT record")
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
 		"testdomain.com", int64(nns.TXT), "second TXT record")
 
