@@ -11,7 +11,7 @@ all: sidechain mainnet
 sidechain: alphabet morph nns
 
 alphabet_sc = alphabet
-morph_sc = audit balance container neofsid netmap proxy reputation
+morph_sc = audit balance container neofsid netmap proxy reputation subnet
 mainnet_sc = neofs processing
 nns_sc = nns
 

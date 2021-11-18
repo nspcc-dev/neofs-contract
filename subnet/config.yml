@@ -1,0 +1,4 @@
+name: "NeoFS Subnet"
+safemethods: ["version"]
+permissions:
+  - methods: ["update"]
