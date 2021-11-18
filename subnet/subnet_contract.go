@@ -100,6 +100,26 @@ func Get(id []byte) []byte {
 	return raw.([]byte)
 }
 
+// Delete deletes subnet with the specified id.
+func Delete(id []byte) {
+	ctx := storage.GetContext()
+	key := append([]byte{ownerPrefix}, id...)
+	raw := storage.Get(ctx, key)
+	if raw == nil {
+		panic("delete:" + ErrNotExist)
+	}
+
+	owner := raw.([]byte)
+	if !runtime.CheckWitness(owner) {
+		panic("delete: owner witness check failed")
+	}
+
+	storage.Delete(ctx, key)
+
+	key[0] = infoPrefix
+	storage.Delete(ctx, key)
+}
+
 // Update method updates contract source code and manifest. Can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {

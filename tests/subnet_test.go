@@ -57,3 +57,26 @@ func TestSubnet_Put(t *testing.T) {
 	cAcc.Invoke(t, stackitem.NewBuffer(info), "get", id)
 	cBoth.InvokeFail(t, subnet.ErrAlreadyExists, "put", id, pub, info)
 }
+
+func TestSubnet_Delete(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	acc := e.NewAccount(t)
+	pub, ok := vm.ParseSignatureContract(acc.Script())
+	require.True(t, ok)
+
+	id := make([]byte, 4)
+	binary.LittleEndian.PutUint32(id, 123)
+	info := randomBytes(10)
+
+	cBoth := e.WithSigners(e.Committee, acc)
+	cBoth.Invoke(t, stackitem.Null{}, "put", id, pub, info)
+
+	e.InvokeFail(t, "witness check failed", "delete", id)
+
+	cAcc := e.WithSigners(acc)
+	cAcc.InvokeFail(t, subnet.ErrNotExist, "delete", []byte{1, 1, 1, 1})
+	cAcc.Invoke(t, stackitem.Null{}, "delete", id)
+	cAcc.InvokeFail(t, subnet.ErrNotExist, "get", id)
+	cAcc.InvokeFail(t, subnet.ErrNotExist, "delete", id)
+}
