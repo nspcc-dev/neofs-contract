@@ -272,7 +272,7 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 
 // Register registers new domain with the specified owner and name if it's available.
 func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
-	fragments := splitAndCheck(name, false)
+	fragments := splitAndCheck(name, true)
 	if fragments == nil {
 		panic("invalid domain name format")
 	}
@@ -292,9 +292,9 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 			panic("TLD not found")
 		}
 		if parentExpired(ctx, 1, fragments) {
-			panic("one of the parent domains has expired")
+			panic("one of the parent domains is not registered")
 		}
-		parentKey := getTokenKey([]byte(fragments[1]))
+		parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
 		nsBytes := storage.Get(ctx, append([]byte{prefixName}, parentKey...))
 		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 		ns.checkAdmin()
@@ -851,11 +851,23 @@ func tokenIDFromName(name string) string {
 	if fragments == nil {
 		panic("invalid domain name format")
 	}
-	l := len(fragments)
-	if l == 1 {
-		return name
+
+	ctx := storage.GetReadOnlyContext()
+	sum := 0
+	l := len(fragments) - 1
+	for i := 0; i < l; i++ {
+		tokenKey := getTokenKey([]byte(name[sum:]))
+		nameKey := append([]byte{prefixName}, tokenKey...)
+		nsBytes := storage.Get(ctx, nameKey)
+		if nsBytes != nil {
+			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+			if runtime.GetTime() < ns.Expiration {
+				return name[sum:]
+			}
+		}
+		sum += len(fragments[i]) + 1
 	}
-	return name[len(name)-(len(fragments[l-1])+len(fragments[l-2])+1):]
+	return name
 }
 
 // resolve resolves provided name using record with the specified type and given
