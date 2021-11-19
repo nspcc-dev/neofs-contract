@@ -134,6 +134,49 @@ func TestTLDRecord(t *testing.T) {
 	c.Invoke(t, result, "resolve", "com", int64(nns.A))
 }
 
+func TestNNSRegisterMulti(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	newArgs := func(domain string, account neotest.Signer) []interface{} {
+		return []interface{}{
+			domain, account.ScriptHash(), "doesnt@matter.com",
+			int64(101), int64(102), int64(103), int64(104),
+		}
+	}
+	acc := c.NewAccount(t)
+	cBoth := c.WithSigners(c.Committee, acc)
+	args := newArgs("neo.com", acc)
+	cBoth.Invoke(t, true, "register", args...)
+
+	c1 := c.WithSigners(acc)
+	t.Run("parent domain is missing", func(t *testing.T) {
+		msg := "one of the parent domains is not registered"
+		args[0] = "testnet.fs.neo.com"
+		c1.InvokeFail(t, msg, "register", args...)
+	})
+
+	args[0] = "fs.neo.com"
+	c1.Invoke(t, true, "register", args...)
+
+	args[0] = "testnet.fs.neo.com"
+	c1.Invoke(t, true, "register", args...)
+
+	acc2 := c.NewAccount(t)
+	c2 := c.WithSigners(c.Committee, acc2)
+	args = newArgs("mainnet.fs.neo.com", acc2)
+	c2.InvokeFail(t, "not witnessed by admin", "register", args...)
+
+	c2 = c.WithSigners(acc, acc2)
+	c2.Invoke(t, true, "register", args...)
+
+	c2 = c.WithSigners(acc2)
+	c2.Invoke(t, stackitem.Null{}, "addRecord",
+		"cdn.mainnet.fs.neo.com", int64(nns.A), "166.15.14.13")
+	result := stackitem.NewArray([]stackitem.Item{
+		stackitem.NewByteArray([]byte("166.15.14.13"))})
+	c2.Invoke(t, result, "resolve", "cdn.mainnet.fs.neo.com", int64(nns.A))
+}
+
 func TestNNSUpdateSOA(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
