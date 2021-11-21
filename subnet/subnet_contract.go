@@ -38,6 +38,17 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, []byte{notaryDisabledKey}, args.notaryDisabled)
 }
 
+// Update method updates contract source code and manifest. Can be invoked
+// only by committee.
+func Update(script []byte, manifest []byte, data interface{}) {
+	if !common.HasUpdateAccess() {
+		panic("only committee can update contract")
+	}
+
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
+	runtime.Log("subnet contract updated")
+}
+
 // Put creates new subnet with the specified owner and info.
 func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 	if len(id) != 4 {
@@ -118,17 +129,6 @@ func Delete(id []byte) {
 
 	key[0] = infoPrefix
 	storage.Delete(ctx, key)
-}
-
-// Update method updates contract source code and manifest. Can be invoked
-// only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
-	if !common.HasUpdateAccess() {
-		panic("only committee can update contract")
-	}
-
-	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
-	runtime.Log("subnet contract updated")
 }
 
 // Version returns version of the contract.
