@@ -3,9 +3,11 @@ package subnet
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -14,12 +16,18 @@ const (
 	ErrInvalidSubnetID = "invalid subnet ID"
 	// ErrInvalidOwner is thrown when owner has invalid format.
 	ErrInvalidOwner = "invalid owner"
+	// ErrInvalidAdmin is thrown when admin has invalid format.
+	ErrInvalidAdmin = "invalid administrator"
 	// ErrAlreadyExists is thrown when id already exists.
 	ErrAlreadyExists = "subnet id already exists"
 	// ErrNotExist is thrown when id doesn't exist.
 	ErrNotExist = "subnet id doesn't exist"
 
 	ownerPrefix       = 'o'
+	nodeAdminPrefix   = 'a'
+	clientAdminPrefix = 'm'
+	nodePrefix        = 'n'
+	user              = 'u'
 	infoPrefix        = 'i'
 	notaryDisabledKey = 'z'
 )
@@ -129,6 +137,40 @@ func Delete(id []byte) {
 
 	key[0] = infoPrefix
 	storage.Delete(ctx, key)
+}
+
+// AddNodeAdmin adds new node administrator to the specified subnetwork.
+func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
+	if len(adminKey) != interop.PublicKeyCompressedLen {
+		panic("addNodeAdmin: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("addNodeAdmin: " + ErrNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		panic("addNodeAdmin: owner witness check failed")
+	}
+
+	stKey[0] = nodeAdminPrefix
+	prefixLen := len(stKey)
+
+	iter := storage.Find(ctx, stKey, storage.KeysOnly)
+	for iterator.Next(iter) {
+		key := iterator.Value(iter).([]byte)
+		if util.Equals(string(key[prefixLen:]), string(adminKey)) {
+			panic("addNodeAdmin: node admin has already been added")
+		}
+	}
+
+	storage.Put(ctx, append(stKey, adminKey...), []byte{1})
 }
 
 // Version returns version of the contract.

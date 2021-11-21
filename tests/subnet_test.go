@@ -80,3 +80,38 @@ func TestSubnet_Delete(t *testing.T) {
 	cAcc.InvokeFail(t, subnet.ErrNotExist, "get", id)
 	cAcc.InvokeFail(t, subnet.ErrNotExist, "delete", id)
 }
+
+func TestSubnet_AddNodeAdmin(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	owner := e.NewAccount(t)
+	pub, ok := vm.ParseSignatureContract(owner.Script())
+	require.True(t, ok)
+
+	id := make([]byte, 4)
+	binary.LittleEndian.PutUint32(id, 123)
+	info := randomBytes(10)
+
+	cBoth := e.WithSigners(e.Committee, owner)
+	cBoth.Invoke(t, stackitem.Null{}, "put", id, pub, info)
+
+	adm := e.NewAccount(t)
+	admPub, ok := vm.ParseSignatureContract(adm.Script())
+	require.True(t, ok)
+
+	const (
+		method       = "addNodeAdmin"
+		errSeparator = ": "
+	)
+
+	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, admPub[1:])
+	e.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0}, admPub)
+
+	cAdm := e.WithSigners(adm)
+	cAdm.InvokeFail(t, method+errSeparator+"owner witness check failed", method, id, admPub)
+
+	cOwner := e.WithSigners(owner)
+	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
+
+	cOwner.InvokeFail(t, method+errSeparator+"node admin has already been added", method, id, admPub)
+}
