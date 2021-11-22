@@ -24,6 +24,8 @@ const (
 	ErrSubNotExist = "subnet id doesn't exist"
 	// ErrNodeAdmNotExist is thrown when node admin is not found.
 	ErrNodeAdmNotExist = "node admin not found"
+	// ErrAccessDenied is thrown when operation is denied for caller.
+	ErrAccessDenied = "access denied"
 
 	errCheckWitnessFailed = "owner witness check failed"
 
@@ -166,14 +168,9 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	}
 
 	stKey[0] = nodeAdminPrefix
-	prefixLen := len(stKey)
 
-	iter := storage.Find(ctx, stKey, storage.KeysOnly)
-	for iterator.Next(iter) {
-		key := iterator.Value(iter).([]byte)
-		if util.Equals(string(key[prefixLen:]), string(adminKey)) {
-			panic("addNodeAdmin: node admin has already been added")
-		}
+	if keyInList(ctx, adminKey, stKey) {
+		panic("addNodeAdmin: node admin has already been added")
 	}
 
 	storage.Put(ctx, append(stKey, adminKey...), []byte{1})
@@ -210,7 +207,68 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	storage.Delete(ctx, stNodeAdmKey)
 }
 
+// AddNode adds node to the specified subnetwork.
+// Must be called by subnet's owner or node administrator
+// only.
+func AddNode(subnetID []byte, node interop.PublicKey) {
+	if len(node) != interop.PublicKeyCompressedLen {
+		panic("addNode: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+	prefixLen := len(stKey)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("addNode: " + ErrSubNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		var hasAccess bool
+
+		stKey[0] = nodeAdminPrefix
+
+		iter := storage.Find(ctx, stKey, storage.KeysOnly)
+		for iterator.Next(iter) {
+			key := iterator.Value(iter).([]byte)
+			if runtime.CheckWitness(key[prefixLen:]) {
+				hasAccess = true
+				break
+			}
+		}
+
+		if !hasAccess {
+			panic("addNode: " + ErrAccessDenied)
+		}
+	}
+
+	stKey[0] = nodePrefix
+
+	if keyInList(ctx, node, stKey) {
+		panic("addNode: node has already been added")
+	}
+
+	storage.Put(ctx, append(stKey, node...), []byte{1})
+}
+
 // Version returns version of the contract.
 func Version() int {
 	return common.Version
+}
+
+func keyInList(ctx storage.Context, searchedKey interop.PublicKey, prefix []byte) bool {
+	prefixLen := len(prefix)
+
+	iter := storage.Find(ctx, prefix, storage.KeysOnly)
+	for iterator.Next(iter) {
+		key := iterator.Value(iter).([]byte)
+		if util.Equals(string(key[prefixLen:]), string(searchedKey)) {
+			return true
+		}
+	}
+
+	return false
 }
