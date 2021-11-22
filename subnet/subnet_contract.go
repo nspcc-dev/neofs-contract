@@ -80,7 +80,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 			if !runtime.CheckWitness(ownerKey) {
 				panic("put: witness check failed")
 			}
-			runtime.Notify("SubnetPut", ownerKey, info)
+			runtime.Notify("SubnetPut", id, ownerKey, info)
 			return
 		}
 
@@ -137,6 +137,8 @@ func Delete(id []byte) {
 
 	key[0] = infoPrefix
 	storage.Delete(ctx, key)
+
+	runtime.Notify("SubnetDelete", id)
 }
 
 // AddNodeAdmin adds new node administrator to the specified subnetwork.
