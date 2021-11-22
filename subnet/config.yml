@@ -15,3 +15,9 @@ events:
     parameters:
         - name: id
           type: ByteArray
+  - name: NodeRemove
+    parameters:
+        - name: subnetID
+          type: ByteArray
+        - name: node
+          type: PublicKey
