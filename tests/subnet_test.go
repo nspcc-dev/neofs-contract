@@ -136,7 +136,7 @@ func TestSubnet_AddNode(t *testing.T) {
 	const method = "addNode"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
 
 	cOwn.Invoke(t, stackitem.Null{}, method, id, nodePub)
 	cOwn.InvokeFail(t, method+errSeparator+"node has already been added", method, id, nodePub)
@@ -158,7 +158,7 @@ func TestSubnet_RemoveNode(t *testing.T) {
 	const method = "removeNode"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNodeNotExist, method, id, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
@@ -168,6 +168,25 @@ func TestSubnet_RemoveNode(t *testing.T) {
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNodeAdmin", id, admPub)
 	cAdm.InvokeFail(t, method+errSeparator+subnet.ErrNodeNotExist, method, id, nodePub)
+}
+
+func TestSubnet_NodeAllowed(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	node := e.NewAccount(t)
+	nodePub, ok := vm.ParseSignatureContract(node.Script())
+	require.True(t, ok)
+
+	const method = "nodeAllowed"
+
+	cOwn := e.WithSigners(owner)
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.Invoke(t, stackitem.NewBool(false), method, id, nodePub)
+
+	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
+	cOwn.Invoke(t, stackitem.NewBool(true), method, id, nodePub)
 }
 
 func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {
