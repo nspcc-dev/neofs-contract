@@ -124,6 +124,24 @@ func TestSubnet_RemoveNodeAdmin(t *testing.T) {
 	cOwner.InvokeFail(t, method+errSeparator+subnet.ErrNodeAdmNotExist, method, id, admPub)
 }
 
+func TestSubnet_AddNode(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	node := e.NewAccount(t)
+	nodePub, ok := vm.ParseSignatureContract(node.Script())
+	require.True(t, ok)
+
+	const method = "addNode"
+
+	cOwn := e.WithSigners(owner)
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, nodePub[1:])
+
+	cOwn.Invoke(t, stackitem.Null{}, method, id, nodePub)
+	cOwn.InvokeFail(t, method+errSeparator+"node has already been added", method, id, nodePub)
+}
+
 func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {
 	var (
 		ok  bool
