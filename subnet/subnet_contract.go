@@ -7,7 +7,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -18,6 +17,8 @@ const (
 	ErrInvalidOwner = "invalid owner"
 	// ErrInvalidAdmin is thrown when admin has invalid format.
 	ErrInvalidAdmin = "invalid administrator"
+	// ErrInvalidNode is thrown when node has invalid format.
+	ErrInvalidNode = "invalid node key"
 	// ErrAlreadyExists is thrown when id already exists.
 	ErrAlreadyExists = "subnet id already exists"
 	// ErrSubNotExist is thrown when id doesn't exist.
@@ -214,7 +215,7 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 // only.
 func AddNode(subnetID []byte, node interop.PublicKey) {
 	if len(node) != interop.PublicKeyCompressedLen {
-		panic("addNode: " + ErrInvalidAdmin)
+		panic("addNode: " + ErrInvalidNode)
 	}
 
 	ctx := storage.GetContext()
@@ -261,7 +262,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 // only.
 func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	if len(node) != interop.PublicKeyCompressedLen {
-		panic("removeNode: " + ErrInvalidAdmin)
+		panic("removeNode: " + ErrInvalidNode)
 	}
 
 	ctx := storage.GetContext()
@@ -305,6 +306,27 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	runtime.Notify("NodeRemove", subnetID, node)
 }
 
+// NodeAllowed checks if node is included in the
+// specified subnet or not.
+func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
+	if len(node) != interop.PublicKeyCompressedLen {
+		panic("nodeAllowed: " + ErrInvalidNode)
+	}
+
+	ctx := storage.GetReadOnlyContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("nodeAllowed: " + ErrSubNotExist)
+	}
+
+	stKey[0] = nodePrefix
+
+	return storage.Get(ctx, append(stKey, node...)) != nil
+}
+
 // Version returns version of the contract.
 func Version() int {
 	return common.Version
@@ -316,7 +338,7 @@ func keyInList(ctx storage.Context, searchedKey interop.PublicKey, prefix []byte
 	iter := storage.Find(ctx, prefix, storage.KeysOnly)
 	for iterator.Next(iter) {
 		key := iterator.Value(iter).([]byte)
-		if util.Equals(string(key[prefixLen:]), string(searchedKey)) {
+		if common.BytesEqual(key[prefixLen:], searchedKey) {
 			return true
 		}
 	}
