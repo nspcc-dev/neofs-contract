@@ -20,8 +20,12 @@ const (
 	ErrInvalidAdmin = "invalid administrator"
 	// ErrAlreadyExists is thrown when id already exists.
 	ErrAlreadyExists = "subnet id already exists"
-	// ErrNotExist is thrown when id doesn't exist.
-	ErrNotExist = "subnet id doesn't exist"
+	// ErrSubNotExist is thrown when id doesn't exist.
+	ErrSubNotExist = "subnet id doesn't exist"
+	// ErrNodeAdmNotExist is thrown when node admin is not found.
+	ErrNodeAdmNotExist = "node admin not found"
+
+	errCheckWitnessFailed = "owner witness check failed"
 
 	ownerPrefix       = 'o'
 	nodeAdminPrefix   = 'a'
@@ -94,7 +98,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 		common.RemoveVotes(ctx, id)
 	} else {
 		if !runtime.CheckWitness(ownerKey) {
-			panic("put: owner witness check failed")
+			panic("put: " + errCheckWitnessFailed)
 		}
 
 		multiaddr := common.AlphabetAddress()
@@ -110,11 +114,11 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 
 // Get returns info about subnet with the specified id.
 func Get(id []byte) []byte {
-	ctx := storage.GetContext()
+	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{infoPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("get: " + ErrNotExist)
+		panic("get: " + ErrSubNotExist)
 	}
 	return raw.([]byte)
 }
@@ -125,12 +129,12 @@ func Delete(id []byte) {
 	key := append([]byte{ownerPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("delete:" + ErrNotExist)
+		panic("delete:" + ErrSubNotExist)
 	}
 
 	owner := raw.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("delete: owner witness check failed")
+		panic("delete: " + errCheckWitnessFailed)
 	}
 
 	storage.Delete(ctx, key)
@@ -153,12 +157,12 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addNodeAdmin: " + ErrNotExist)
+		panic("addNodeAdmin: " + ErrSubNotExist)
 	}
 
 	owner := rawOwner.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("addNodeAdmin: owner witness check failed")
+		panic("addNodeAdmin: " + errCheckWitnessFailed)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -173,6 +177,37 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	}
 
 	storage.Put(ctx, append(stKey, adminKey...), []byte{1})
+}
+
+// RemoveNodeAdmin removes node administrator from the specified subnetwork.
+// Must be called by subnet owner only.
+func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
+	if len(adminKey) != interop.PublicKeyCompressedLen {
+		panic("removeNodeAdmin: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stOwnerKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stOwnerKey)
+	if rawOwner == nil {
+		panic("removeNodeAdmin: " + ErrSubNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		panic("removeNodeAdmin: " + errCheckWitnessFailed)
+	}
+
+	stOwnerKey[0] = nodeAdminPrefix
+	stNodeAdmKey := append(stOwnerKey, adminKey...)
+
+	if storage.Get(ctx, stNodeAdmKey) == nil {
+		panic("removeNodeAdmin: " + ErrNodeAdmNotExist)
+	}
+
+	storage.Delete(ctx, stNodeAdmKey)
 }
 
 // Version returns version of the contract.

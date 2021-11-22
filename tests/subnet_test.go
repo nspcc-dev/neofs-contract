@@ -14,7 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const subnetPath = "../subnet"
+const (
+	subnetPath = "../subnet"
+
+	errSeparator = ": "
+)
 
 func deploySubnetContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, subnetPath, path.Join(subnetPath, "config.yml"))
@@ -61,51 +65,30 @@ func TestSubnet_Put(t *testing.T) {
 func TestSubnet_Delete(t *testing.T) {
 	e := newSubnetInvoker(t)
 
-	acc := e.NewAccount(t)
-	pub, ok := vm.ParseSignatureContract(acc.Script())
-	require.True(t, ok)
-
-	id := make([]byte, 4)
-	binary.LittleEndian.PutUint32(id, 123)
-	info := randomBytes(10)
-
-	cBoth := e.WithSigners(e.Committee, acc)
-	cBoth.Invoke(t, stackitem.Null{}, "put", id, pub, info)
+	id, owner := createSubnet(t, e)
 
 	e.InvokeFail(t, "witness check failed", "delete", id)
 
-	cAcc := e.WithSigners(acc)
-	cAcc.InvokeFail(t, subnet.ErrNotExist, "delete", []byte{1, 1, 1, 1})
+	cAcc := e.WithSigners(owner)
+	cAcc.InvokeFail(t, subnet.ErrSubNotExist, "delete", []byte{1, 1, 1, 1})
 	cAcc.Invoke(t, stackitem.Null{}, "delete", id)
-	cAcc.InvokeFail(t, subnet.ErrNotExist, "get", id)
-	cAcc.InvokeFail(t, subnet.ErrNotExist, "delete", id)
+	cAcc.InvokeFail(t, subnet.ErrSubNotExist, "get", id)
+	cAcc.InvokeFail(t, subnet.ErrSubNotExist, "delete", id)
 }
 
 func TestSubnet_AddNodeAdmin(t *testing.T) {
 	e := newSubnetInvoker(t)
 
-	owner := e.NewAccount(t)
-	pub, ok := vm.ParseSignatureContract(owner.Script())
-	require.True(t, ok)
-
-	id := make([]byte, 4)
-	binary.LittleEndian.PutUint32(id, 123)
-	info := randomBytes(10)
-
-	cBoth := e.WithSigners(e.Committee, owner)
-	cBoth.Invoke(t, stackitem.Null{}, "put", id, pub, info)
+	id, owner := createSubnet(t, e)
 
 	adm := e.NewAccount(t)
 	admPub, ok := vm.ParseSignatureContract(adm.Script())
 	require.True(t, ok)
 
-	const (
-		method       = "addNodeAdmin"
-		errSeparator = ": "
-	)
+	const method = "addNodeAdmin"
 
 	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, admPub[1:])
-	e.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0}, admPub)
+	e.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, admPub)
 
 	cAdm := e.WithSigners(adm)
 	cAdm.InvokeFail(t, method+errSeparator+"owner witness check failed", method, id, admPub)
@@ -114,4 +97,49 @@ func TestSubnet_AddNodeAdmin(t *testing.T) {
 	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
 
 	cOwner.InvokeFail(t, method+errSeparator+"node admin has already been added", method, id, admPub)
+}
+
+func TestSubnet_RemoveNodeAdmin(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	adm := e.NewAccount(t)
+	admPub, ok := vm.ParseSignatureContract(adm.Script())
+	require.True(t, ok)
+
+	const method = "removeNodeAdmin"
+
+	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, admPub[1:])
+	e.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, admPub)
+
+	cAdm := e.WithSigners(adm)
+	cAdm.InvokeFail(t, method+errSeparator+"owner witness check failed", method, id, admPub)
+
+	cOwner := e.WithSigners(owner)
+
+	cOwner.InvokeFail(t, method+errSeparator+subnet.ErrNodeAdmNotExist, method, id, admPub)
+	cOwner.Invoke(t, stackitem.Null{}, "addNodeAdmin", id, admPub)
+	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
+	cOwner.InvokeFail(t, method+errSeparator+subnet.ErrNodeAdmNotExist, method, id, admPub)
+}
+
+func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {
+	var (
+		ok  bool
+		pub []byte
+	)
+
+	owner = e.NewAccount(t)
+	pub, ok = vm.ParseSignatureContract(owner.Script())
+	require.True(t, ok)
+
+	id = make([]byte, 4)
+	binary.LittleEndian.PutUint32(id, 123)
+	info := randomBytes(10)
+
+	cBoth := e.WithSigners(e.Committee, owner)
+	cBoth.Invoke(t, stackitem.Null{}, "put", id, pub, info)
+
+	return
 }
