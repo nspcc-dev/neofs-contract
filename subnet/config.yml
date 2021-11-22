@@ -5,8 +5,13 @@ permissions:
 events:
   - name: SubnetPut
     parameters:
+      - name: id
+        type: ByteArray
       - name: ownerKey
         type: PublicKey
       - name: info
         type: ByteArray
-
+  - name: SubnetDelete
+    parameters:
+        - name: id
+          type: ByteArray
