@@ -24,6 +24,8 @@ const (
 	ErrSubNotExist = "subnet id doesn't exist"
 	// ErrNodeAdmNotExist is thrown when node admin is not found.
 	ErrNodeAdmNotExist = "node admin not found"
+	// ErrNodeNotExist is thrown when node is not found.
+	ErrNodeNotExist = "node not found"
 	// ErrAccessDenied is thrown when operation is denied for caller.
 	ErrAccessDenied = "access denied"
 
@@ -252,6 +254,55 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 	}
 
 	storage.Put(ctx, append(stKey, node...), []byte{1})
+}
+
+// RemoveNode removes node from the specified subnetwork.
+// Must be called by subnet's owner or node administrator
+// only.
+func RemoveNode(subnetID []byte, node interop.PublicKey) {
+	if len(node) != interop.PublicKeyCompressedLen {
+		panic("removeNode: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+	prefixLen := len(stKey)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("removeNode: " + ErrSubNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		var hasAccess bool
+
+		stKey[0] = nodeAdminPrefix
+
+		iter := storage.Find(ctx, stKey, storage.KeysOnly)
+		for iterator.Next(iter) {
+			key := iterator.Value(iter).([]byte)
+			if runtime.CheckWitness(key[prefixLen:]) {
+				hasAccess = true
+				break
+			}
+		}
+
+		if !hasAccess {
+			panic("removeNode: " + ErrAccessDenied)
+		}
+	}
+
+	stKey[0] = nodePrefix
+
+	if !keyInList(ctx, node, stKey) {
+		panic("removeNode: " + ErrNodeNotExist)
+	}
+
+	storage.Delete(ctx, append(stKey, node...))
+
+	runtime.Notify("NodeRemove", subnetID, node)
 }
 
 // Version returns version of the contract.
