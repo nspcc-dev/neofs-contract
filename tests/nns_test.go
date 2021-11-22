@@ -114,6 +114,15 @@ func TestNNSRegister(t *testing.T) {
 	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.TXT))
 }
 
+func TestTLDRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+	c.Invoke(t, stackitem.Null{}, "addRecord",
+		"com", int64(nns.A), "1.2.3.4")
+
+	result := []stackitem.Item{stackitem.NewByteArray([]byte("1.2.3.4"))}
+	c.Invoke(t, result, "resolve", "com", int64(nns.A))
+}
+
 func TestNNSUpdateSOA(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
