@@ -25,6 +25,8 @@ const (
 	ErrInvalidNode = "invalid node key"
 	// ErrNodeAdmNotExist is thrown when node admin is not found.
 	ErrNodeAdmNotExist = "node admin not found"
+	// ErrClientAdmNotExist is thrown when client admin is not found.
+	ErrClientAdmNotExist = "client admin not found"
 	// ErrNodeNotExist is thrown when node is not found.
 	ErrNodeNotExist = "node not found"
 	// ErrAccessDenied is thrown when operation is denied for caller.
@@ -355,6 +357,38 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 	}
 
 	putKeyInList(ctx, adminPublicKey, stKey)
+}
+
+// RemoveClientAdmin removes client administrator from the
+// specified group in the specified subnetwork.
+// Must be called by owner only.
+func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
+	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
+		panic("removeClientAdmin: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("removeClientAdmin: " + ErrSubNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		panic("removeClientAdmin: " + errCheckWitnessFailed)
+	}
+
+	stKey[0] = clientAdminPrefix
+	stKey = append(stKey, groupID...)
+
+	if !keyInList(ctx, adminPublicKey, stKey) {
+		panic("removeClientAdmin: " + ErrClientAdmNotExist)
+	}
+
+	deleteKeyFromList(ctx, adminPublicKey, stKey)
 }
 
 // Version returns version of the contract.
