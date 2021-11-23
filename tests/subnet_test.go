@@ -285,6 +285,25 @@ func TestSubnet_RemoveUser(t *testing.T) {
 	cAdm.InvokeFail(t, method+errSeparator+subnet.ErrUserNotExist, method, id, groupId, user)
 }
 
+func TestSubnet_UserAllowed(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	groupId := randomBytes(4)
+
+	user := randomBytes(27)
+
+	const method = "userAllowed"
+
+	cOwn := e.WithSigners(owner)
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, user)
+
+	cOwn.Invoke(t, stackitem.NewBool(false), method, id, user)
+	cOwn.Invoke(t, stackitem.Null{}, "addUser", id, groupId, user)
+	cOwn.Invoke(t, stackitem.NewBool(true), method, id, user)
+}
+
 func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {
 	var (
 		ok  bool

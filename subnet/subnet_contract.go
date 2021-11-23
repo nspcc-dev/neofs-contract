@@ -442,6 +442,32 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	deleteKeyFromList(ctx, userID, stKey)
 }
 
+const groupIDSize = 4
+
+// UserAllowed returns bool that indicates if node is included in the
+// specified subnet or not.
+func UserAllowed(subnetID []byte, user []byte) bool {
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+	if storage.Get(ctx, stKey) == nil {
+		panic("userAllowed: " + ErrSubNotExist)
+	}
+
+	stKey[0] = userPrefix
+	prefixLen := len(stKey) + groupIDSize
+
+	iter := storage.Find(ctx, stKey, storage.KeysOnly)
+	for iterator.Next(iter) {
+		key := iterator.Value(iter).([]byte)
+		if common.BytesEqual(user, key[prefixLen:]) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Version returns version of the contract.
 func Version() int {
 	return common.Version
