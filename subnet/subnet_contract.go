@@ -21,6 +21,8 @@ const (
 	ErrAlreadyExists = "subnet id already exists"
 	// ErrSubNotExist is thrown when id doesn't exist.
 	ErrSubNotExist = "subnet id doesn't exist"
+	// ErrInvalidUser is thrown when user has invalid format.
+	ErrInvalidUser = "invalid user"
 	// ErrInvalidNode is thrown when node has invalid format.
 	ErrInvalidNode = "invalid node key"
 	// ErrNodeAdmNotExist is thrown when node admin is not found.
@@ -34,13 +36,17 @@ const (
 
 	errCheckWitnessFailed = "owner witness check failed"
 
-	ownerPrefix       = 'o'
 	nodeAdminPrefix   = 'a'
+	infoPrefix        = 'i'
 	clientAdminPrefix = 'm'
 	nodePrefix        = 'n'
-	user              = 'u'
-	infoPrefix        = 'i'
+	ownerPrefix       = 'o'
+	userPrefix        = 'u'
 	notaryDisabledKey = 'z'
+)
+
+const (
+	userIDSize = 27
 )
 
 // _deploy function sets up initial list of inner ring public keys.
@@ -389,6 +395,54 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 	}
 
 	deleteKeyFromList(ctx, adminPublicKey, stKey)
+}
+
+// AddUser adds user to the specified subnetwork and group.
+// Must be called by the owner or the group's admin only.
+func AddUser(subnetID []byte, groupID []byte, userID []byte) {
+	if len(userID) != userIDSize {
+		panic("addUser: " + ErrInvalidUser)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("addUser: " + ErrSubNotExist)
+	}
+
+	stKey = append(stKey, groupID...)
+	prefixLen := len(stKey)
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		var hasAccess bool
+
+		stKey[0] = clientAdminPrefix
+
+		iter := storage.Find(ctx, stKey, storage.KeysOnly)
+		for iterator.Next(iter) {
+			key := iterator.Value(iter).([]byte)
+			if runtime.CheckWitness(key[prefixLen:]) {
+				hasAccess = true
+				break
+			}
+		}
+
+		if !hasAccess {
+			panic("addUser: " + ErrAccessDenied)
+		}
+	}
+
+	stKey[0] = userPrefix
+
+	if keyInList(ctx, userID, stKey) {
+		panic("addUser: user has already been added")
+	}
+
+	putKeyInList(ctx, userID, stKey)
 }
 
 // Version returns version of the contract.
