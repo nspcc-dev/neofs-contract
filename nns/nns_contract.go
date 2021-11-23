@@ -90,33 +90,24 @@ func Update(nef []byte, manifest string) {
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		ctx := storage.GetContext()
-		it := storage.Find(ctx, []byte{prefixRecord}, storage.DeserializeValues)
+		committee := common.CommitteeAddress()
+		it := storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
 		for iterator.Next(it) {
-			oldRec := iterator.Value(it).(struct {
-				key string
-				rec RecordState
-			})
-			newRec := RecordState{
-				Name: oldRec.rec.Name,
-				Type: oldRec.rec.Type,
-				Data: oldRec.rec.Data,
-				ID:   0,
+			name := iterator.Value(it).(string)
+			ns := NameState{
+				Owner:      committee,
+				Name:       name,
+				Expiration: runtime.GetTime() + millisecondsInYear,
 			}
-			newKey := append([]byte(oldRec.key), newRec.ID)
-			rec := std.Serialize(newRec)
-			storage.Put(ctx, newKey, rec)
-			storage.Delete(ctx, oldRec.key)
+			tokenKey := getTokenKey([]byte(name))
+			putNameStateWithKey(ctx, tokenKey, ns)
+			putSoaRecord(ctx, name, "ops@nspcc.ru",
+				3600 /* 1 hour */, 600, /* 10 min */
+				604800 /* 1 week */, 3600 /* 1 hour */)
 		}
-
-		maxExpire := 1<<31 - 1
-		domains := storage.Find(ctx, []byte{prefixName}, storage.ValuesOnly|storage.DeserializeValues)
-		for iterator.Next(domains) {
-			ns := iterator.Value(domains).(NameState)
-			putSoaRecord(ctx, ns.Name, "ops@nspcc.ru", 86400, 7200, maxExpire, 3600)
-		}
-
 		return
 	}
+
 	ctx := storage.GetContext()
 	storage.Put(ctx, []byte{prefixTotalSupply}, 0)
 	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
