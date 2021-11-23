@@ -1,12 +1,13 @@
 #!/usr/bin/make -f
 
 SHELL=bash
-NEOGO?=neo-go
+GOBIN ?= $(shell go env GOPATH)/bin
+NEOGO ?= $(GOBIN)/cli
 VERSION?=$(shell git describe --tags)
 
-.PHONY: all build clean test
+.PHONY: all build clean test neo-go
 .PHONY: alphabet mainnet morph nns sidechain
-build: all
+build: neo-go all
 all: sidechain mainnet
 sidechain: alphabet morph nns
 
@@ -33,6 +34,10 @@ alphabet: $(foreach sc,$(alphabet_sc),$(sc)/$(sc)_contract.nef)
 morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
 mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
 nns: $(foreach sc,$(nns_sc),$(sc)/$(sc)_contract.nef)
+
+neo-go:
+	@go list -f '{{.Path}}/...@{{.Version}}' -m github.com/nspcc-dev/neo-go \
+		| xargs go install -v
 
 test:
 	@go test ./tests/...
