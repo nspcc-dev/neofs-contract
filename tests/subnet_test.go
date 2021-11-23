@@ -137,6 +137,7 @@ func TestSubnet_AddNode(t *testing.T) {
 
 	cOwn := e.WithSigners(owner)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, method, id, nodePub)
 	cOwn.InvokeFail(t, method+errSeparator+"node has already been added", method, id, nodePub)
@@ -159,6 +160,7 @@ func TestSubnet_RemoveNode(t *testing.T) {
 
 	cOwn := e.WithSigners(owner)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, nodePub)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNodeNotExist, method, id, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
@@ -183,10 +185,31 @@ func TestSubnet_NodeAllowed(t *testing.T) {
 
 	cOwn := e.WithSigners(owner)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, nodePub)
 	cOwn.Invoke(t, stackitem.NewBool(false), method, id, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
 	cOwn.Invoke(t, stackitem.NewBool(true), method, id, nodePub)
+}
+
+func TestSubnet_AddClientAdmin(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	adm := e.NewAccount(t)
+	admPub, ok := vm.ParseSignatureContract(adm.Script())
+	require.True(t, ok)
+
+	const method = "addClientAdmin"
+
+	groupId := randomBytes(8)
+
+	cOwn := e.WithSigners(owner)
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, groupId, admPub[1:])
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, groupId, admPub)
+	cOwn.Invoke(t, stackitem.Null{}, method, id, groupId, admPub)
+	cOwn.InvokeFail(t, method+errSeparator+"client admin has already been added", method, id, groupId, admPub)
 }
 
 func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {

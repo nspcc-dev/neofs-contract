@@ -17,12 +17,12 @@ const (
 	ErrInvalidOwner = "invalid owner"
 	// ErrInvalidAdmin is thrown when admin has invalid format.
 	ErrInvalidAdmin = "invalid administrator"
-	// ErrInvalidNode is thrown when node has invalid format.
-	ErrInvalidNode = "invalid node key"
 	// ErrAlreadyExists is thrown when id already exists.
 	ErrAlreadyExists = "subnet id already exists"
 	// ErrSubNotExist is thrown when id doesn't exist.
 	ErrSubNotExist = "subnet id doesn't exist"
+	// ErrInvalidNode is thrown when node has invalid format.
+	ErrInvalidNode = "invalid node key"
 	// ErrNodeAdmNotExist is thrown when node admin is not found.
 	ErrNodeAdmNotExist = "node admin not found"
 	// ErrNodeNotExist is thrown when node is not found.
@@ -176,7 +176,7 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 		panic("addNodeAdmin: node admin has already been added")
 	}
 
-	storage.Put(ctx, append(stKey, adminKey...), []byte{1})
+	putKeyInList(ctx, adminKey, stKey)
 }
 
 // RemoveNodeAdmin removes node administrator from the specified subnetwork.
@@ -188,9 +188,9 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	ctx := storage.GetContext()
 
-	stOwnerKey := append([]byte{ownerPrefix}, subnetID...)
+	stKey := append([]byte{ownerPrefix}, subnetID...)
 
-	rawOwner := storage.Get(ctx, stOwnerKey)
+	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
 		panic("removeNodeAdmin: " + ErrSubNotExist)
 	}
@@ -200,14 +200,13 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 		panic("removeNodeAdmin: " + errCheckWitnessFailed)
 	}
 
-	stOwnerKey[0] = nodeAdminPrefix
-	stNodeAdmKey := append(stOwnerKey, adminKey...)
+	stKey[0] = nodeAdminPrefix
 
-	if storage.Get(ctx, stNodeAdmKey) == nil {
+	if !keyInList(ctx, adminKey, stKey) {
 		panic("removeNodeAdmin: " + ErrNodeAdmNotExist)
 	}
 
-	storage.Delete(ctx, stNodeAdmKey)
+	deleteKeyFromList(ctx, adminKey, stKey)
 }
 
 // AddNode adds node to the specified subnetwork.
@@ -254,7 +253,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 		panic("addNode: node has already been added")
 	}
 
-	storage.Put(ctx, append(stKey, node...), []byte{1})
+	putKeyInList(ctx, node, stKey)
 }
 
 // RemoveNode removes node from the specified subnetwork.
@@ -327,21 +326,50 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 	return storage.Get(ctx, append(stKey, node...)) != nil
 }
 
+// AddClientAdmin adds new client administrator of the specified group in the specified subnetwork.
+// Must be called by owner only.
+func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
+	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
+		panic("addClientAdmin: " + ErrInvalidAdmin)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("addClientAdmin: " + ErrSubNotExist)
+	}
+
+	owner := rawOwner.([]byte)
+	if !runtime.CheckWitness(owner) {
+		panic("addClientAdmin: " + errCheckWitnessFailed)
+	}
+
+	stKey[0] = clientAdminPrefix
+	stKey = append(stKey, groupID...)
+
+	if keyInList(ctx, adminPublicKey, stKey) {
+		panic("addClientAdmin: client admin has already been added")
+	}
+
+	putKeyInList(ctx, adminPublicKey, stKey)
+}
+
 // Version returns version of the contract.
 func Version() int {
 	return common.Version
 }
 
 func keyInList(ctx storage.Context, searchedKey interop.PublicKey, prefix []byte) bool {
-	prefixLen := len(prefix)
+	return storage.Get(ctx, append(prefix, searchedKey...)) != nil
+}
 
-	iter := storage.Find(ctx, prefix, storage.KeysOnly)
-	for iterator.Next(iter) {
-		key := iterator.Value(iter).([]byte)
-		if common.BytesEqual(key[prefixLen:], searchedKey) {
-			return true
-		}
-	}
+func putKeyInList(ctx storage.Context, keyToPut interop.PublicKey, prefix []byte) {
+	storage.Put(ctx, append(prefix, keyToPut...), []byte{1})
+}
 
-	return false
+func deleteKeyFromList(ctx storage.Context, keyToDelete interop.PublicKey, prefix []byte) {
+	storage.Delete(ctx, append(prefix, keyToDelete...))
 }
