@@ -31,6 +31,8 @@ const (
 	ErrClientAdmNotExist = "client admin not found"
 	// ErrNodeNotExist is thrown when node is not found.
 	ErrNodeNotExist = "node not found"
+	// ErrUserNotExist is thrown when user is not found.
+	ErrUserNotExist = "user not found"
 	// ErrAccessDenied is thrown when operation is denied for caller.
 	ErrAccessDenied = "access denied"
 
@@ -228,31 +230,18 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	stKey := append([]byte{ownerPrefix}, subnetID...)
-	prefixLen := len(stKey)
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
 		panic("addNode: " + ErrSubNotExist)
 	}
 
+	stKey[0] = nodeAdminPrefix
+
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		var hasAccess bool
 
-		stKey[0] = nodeAdminPrefix
-
-		iter := storage.Find(ctx, stKey, storage.KeysOnly)
-		for iterator.Next(iter) {
-			key := iterator.Value(iter).([]byte)
-			if runtime.CheckWitness(key[prefixLen:]) {
-				hasAccess = true
-				break
-			}
-		}
-
-		if !hasAccess {
-			panic("addNode: " + ErrAccessDenied)
-		}
+	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
+		panic("addNode: " + ErrAccessDenied)
 	}
 
 	stKey[0] = nodePrefix
@@ -275,31 +264,18 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	stKey := append([]byte{ownerPrefix}, subnetID...)
-	prefixLen := len(stKey)
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
 		panic("removeNode: " + ErrSubNotExist)
 	}
 
+	stKey[0] = nodeAdminPrefix
+
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		var hasAccess bool
 
-		stKey[0] = nodeAdminPrefix
-
-		iter := storage.Find(ctx, stKey, storage.KeysOnly)
-		for iterator.Next(iter) {
-			key := iterator.Value(iter).([]byte)
-			if runtime.CheckWitness(key[prefixLen:]) {
-				hasAccess = true
-				break
-			}
-		}
-
-		if !hasAccess {
-			panic("removeNode: " + ErrAccessDenied)
-		}
+	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
+		panic("removeNode: " + ErrAccessDenied)
 	}
 
 	stKey[0] = nodePrefix
@@ -413,27 +389,13 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 		panic("addUser: " + ErrSubNotExist)
 	}
 
+	stKey[0] = clientAdminPrefix
 	stKey = append(stKey, groupID...)
-	prefixLen := len(stKey)
 
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		var hasAccess bool
 
-		stKey[0] = clientAdminPrefix
-
-		iter := storage.Find(ctx, stKey, storage.KeysOnly)
-		for iterator.Next(iter) {
-			key := iterator.Value(iter).([]byte)
-			if runtime.CheckWitness(key[prefixLen:]) {
-				hasAccess = true
-				break
-			}
-		}
-
-		if !hasAccess {
-			panic("addUser: " + ErrAccessDenied)
-		}
+	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
+		panic("addUser: " + ErrAccessDenied)
 	}
 
 	stKey[0] = userPrefix
@@ -443,6 +405,41 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 	}
 
 	putKeyInList(ctx, userID, stKey)
+}
+
+// RemoveUser removes user from the specified subnetwork and group.
+// Must be called by the owner or the group's admin only.
+func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
+	// V2 format check
+	if len(userID) != userIDSize {
+		panic("addUser: " + ErrInvalidUser)
+	}
+
+	ctx := storage.GetContext()
+
+	stKey := append([]byte{ownerPrefix}, subnetID...)
+
+	rawOwner := storage.Get(ctx, stKey)
+	if rawOwner == nil {
+		panic("removeUser: " + ErrSubNotExist)
+	}
+
+	stKey[0] = clientAdminPrefix
+	stKey = append(stKey, groupID...)
+
+	owner := rawOwner.([]byte)
+
+	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
+		panic("removeUser: " + ErrAccessDenied)
+	}
+
+	stKey[0] = userPrefix
+
+	if !keyInList(ctx, userID, stKey) {
+		panic("removeUser: " + ErrUserNotExist)
+	}
+
+	deleteKeyFromList(ctx, userID, stKey)
 }
 
 // Version returns version of the contract.
@@ -460,4 +457,22 @@ func putKeyInList(ctx storage.Context, keyToPut interop.PublicKey, prefix []byte
 
 func deleteKeyFromList(ctx storage.Context, keyToDelete interop.PublicKey, prefix []byte) {
 	storage.Delete(ctx, append(prefix, keyToDelete...))
+}
+
+func calledByOwnerOrAdmin(ctx storage.Context, owner []byte, adminPrefix []byte) bool {
+	if runtime.CheckWitness(owner) {
+		return true
+	}
+
+	prefixLen := len(adminPrefix)
+
+	iter := storage.Find(ctx, adminPrefix, storage.KeysOnly)
+	for iterator.Next(iter) {
+		key := iterator.Value(iter).([]byte)
+		if runtime.CheckWitness(key[prefixLen:]) {
+			return true
+		}
+	}
+
+	return false
 }

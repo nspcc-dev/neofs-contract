@@ -258,6 +258,33 @@ func TestSubnet_AddUser(t *testing.T) {
 	cOwn.InvokeFail(t, method+errSeparator+"user has already been added", method, id, groupId, user)
 }
 
+func TestSubnet_RemoveUser(t *testing.T) {
+	e := newSubnetInvoker(t)
+
+	id, owner := createSubnet(t, e)
+
+	groupId := randomBytes(8)
+	user := randomBytes(27)
+
+	adm := e.NewAccount(t)
+	admPub, ok := vm.ParseSignatureContract(adm.Script())
+	require.True(t, ok)
+
+	const method = "removeUser"
+
+	cOwn := e.WithSigners(owner)
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrSubNotExist, method, []byte{0, 0, 0, 0}, groupId, user)
+
+	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrUserNotExist, method, id, groupId, user)
+	cOwn.Invoke(t, stackitem.Null{}, "addUser", id, groupId, user)
+	cOwn.Invoke(t, stackitem.Null{}, method, id, groupId, user)
+
+	cAdm := cOwn.WithSigners(adm)
+
+	cOwn.Invoke(t, stackitem.Null{}, "addClientAdmin", id, groupId, admPub)
+	cAdm.InvokeFail(t, method+errSeparator+subnet.ErrUserNotExist, method, id, groupId, user)
+}
+
 func createSubnet(t *testing.T, e *neotest.ContractInvoker) (id []byte, owner neotest.Signer) {
 	var (
 		ok  bool
