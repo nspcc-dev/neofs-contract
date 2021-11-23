@@ -19,8 +19,8 @@ const (
 	ErrInvalidAdmin = "invalid administrator"
 	// ErrAlreadyExists is thrown when id already exists.
 	ErrAlreadyExists = "subnet id already exists"
-	// ErrSubNotExist is thrown when id doesn't exist.
-	ErrSubNotExist = "subnet id doesn't exist"
+	// ErrNotExist is thrown when id doesn't exist.
+	ErrNotExist = "subnet id doesn't exist"
 	// ErrInvalidUser is thrown when user has invalid format.
 	ErrInvalidUser = "invalid user"
 	// ErrInvalidNode is thrown when node has invalid format.
@@ -133,7 +133,7 @@ func Get(id []byte) []byte {
 	key := append([]byte{infoPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("get: " + ErrSubNotExist)
+		panic("get: " + ErrNotExist)
 	}
 	return raw.([]byte)
 }
@@ -144,7 +144,7 @@ func Delete(id []byte) {
 	key := append([]byte{ownerPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("delete:" + ErrSubNotExist)
+		panic("delete:" + ErrNotExist)
 	}
 
 	owner := raw.([]byte)
@@ -172,7 +172,7 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addNodeAdmin: " + ErrSubNotExist)
+		panic("addNodeAdmin: " + ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
@@ -202,7 +202,7 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeNodeAdmin: " + ErrSubNotExist)
+		panic("removeNodeAdmin: " + ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
@@ -233,7 +233,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addNode: " + ErrSubNotExist)
+		panic("addNode: " + ErrNotExist)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -267,7 +267,7 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeNode: " + ErrSubNotExist)
+		panic("removeNode: " + ErrNotExist)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -302,7 +302,7 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("nodeAllowed: " + ErrSubNotExist)
+		panic("nodeAllowed: " + ErrNotExist)
 	}
 
 	stKey[0] = nodePrefix
@@ -323,7 +323,7 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addClientAdmin: " + ErrSubNotExist)
+		panic("addClientAdmin: " + ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
@@ -355,7 +355,7 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeClientAdmin: " + ErrSubNotExist)
+		panic("removeClientAdmin: " + ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
@@ -386,7 +386,7 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addUser: " + ErrSubNotExist)
+		panic("addUser: " + ErrNotExist)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -421,7 +421,7 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeUser: " + ErrSubNotExist)
+		panic("removeUser: " + ErrNotExist)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -451,7 +451,7 @@ func UserAllowed(subnetID []byte, user []byte) bool {
 
 	stKey := append([]byte{ownerPrefix}, subnetID...)
 	if storage.Get(ctx, stKey) == nil {
-		panic("userAllowed: " + ErrSubNotExist)
+		panic("userAllowed: " + ErrNotExist)
 	}
 
 	stKey[0] = userPrefix
