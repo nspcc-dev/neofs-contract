@@ -14,11 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	subnetPath = "../subnet"
-
-	errSeparator = ": "
-)
+const subnetPath = "../subnet"
 
 func deploySubnetContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, subnetPath, path.Join(subnetPath, "config.yml"))
@@ -88,17 +84,17 @@ func TestSubnet_AddNodeAdmin(t *testing.T) {
 
 	const method = "addNodeAdmin"
 
-	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, admPub)
-	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, admPub[1:])
-	e.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
+	e.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, admPub)
+	e.InvokeFail(t, subnet.ErrInvalidAdmin, method, id, admPub[1:])
+	e.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
 
 	cAdm := e.WithSigners(adm)
-	cAdm.InvokeFail(t, method+errSeparator+"owner witness check failed", method, id, admPub)
+	cAdm.InvokeFail(t, "owner witness check failed", method, id, admPub)
 
 	cOwner := e.WithSigners(owner)
 	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
 
-	cOwner.InvokeFail(t, method+errSeparator+"node admin has already been added", method, id, admPub)
+	cOwner.InvokeFail(t, "node admin has already been added", method, id, admPub)
 }
 
 func TestSubnet_RemoveNodeAdmin(t *testing.T) {
@@ -112,19 +108,19 @@ func TestSubnet_RemoveNodeAdmin(t *testing.T) {
 
 	const method = "removeNodeAdmin"
 
-	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, admPub)
-	e.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, admPub[1:])
-	e.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
+	e.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, admPub)
+	e.InvokeFail(t, subnet.ErrInvalidAdmin, method, id, admPub[1:])
+	e.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
 
 	cAdm := e.WithSigners(adm)
-	cAdm.InvokeFail(t, method+errSeparator+"owner witness check failed", method, id, admPub)
+	cAdm.InvokeFail(t, "owner witness check failed", method, id, admPub)
 
 	cOwner := e.WithSigners(owner)
 
-	cOwner.InvokeFail(t, method+errSeparator+subnet.ErrNodeAdmNotExist, method, id, admPub)
+	cOwner.InvokeFail(t, subnet.ErrNodeAdmNotExist, method, id, admPub)
 	cOwner.Invoke(t, stackitem.Null{}, "addNodeAdmin", id, admPub)
 	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
-	cOwner.InvokeFail(t, method+errSeparator+subnet.ErrNodeAdmNotExist, method, id, admPub)
+	cOwner.InvokeFail(t, subnet.ErrNodeAdmNotExist, method, id, admPub)
 }
 
 func TestSubnet_AddNode(t *testing.T) {
@@ -139,12 +135,12 @@ func TestSubnet_AddNode(t *testing.T) {
 	const method = "addNode"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, method, id, nodePub)
-	cOwn.InvokeFail(t, method+errSeparator+"node has already been added", method, id, nodePub)
+	cOwn.InvokeFail(t, "node has already been added", method, id, nodePub)
 }
 
 func TestSubnet_RemoveNode(t *testing.T) {
@@ -163,10 +159,10 @@ func TestSubnet_RemoveNode(t *testing.T) {
 	const method = "removeNode"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNodeNotExist, method, id, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrNodeNotExist, method, id, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
 	cOwn.Invoke(t, stackitem.Null{}, method, id, nodePub)
@@ -174,7 +170,7 @@ func TestSubnet_RemoveNode(t *testing.T) {
 	cAdm := cOwn.WithSigners(adm)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNodeAdmin", id, admPub)
-	cAdm.InvokeFail(t, method+errSeparator+subnet.ErrNodeNotExist, method, id, nodePub)
+	cAdm.InvokeFail(t, subnet.ErrNodeNotExist, method, id, nodePub)
 }
 
 func TestSubnet_NodeAllowed(t *testing.T) {
@@ -189,9 +185,9 @@ func TestSubnet_NodeAllowed(t *testing.T) {
 	const method = "nodeAllowed"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidNode, method, id, nodePub[1:])
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, nodePub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidNode, method, id, nodePub[1:])
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, nodePub)
 	cOwn.Invoke(t, stackitem.NewBool(false), method, id, nodePub)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addNode", id, nodePub)
@@ -212,11 +208,11 @@ func TestSubnet_AddClientAdmin(t *testing.T) {
 	groupId := randomBytes(5)
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, groupId, admPub[1:])
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, admPub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidAdmin, method, id, groupId, admPub[1:])
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, admPub)
 	cOwn.Invoke(t, stackitem.Null{}, method, id, groupId, admPub)
-	cOwn.InvokeFail(t, method+errSeparator+"client admin has already been added", method, id, groupId, admPub)
+	cOwn.InvokeFail(t, "client admin has already been added", method, id, groupId, admPub)
 }
 
 func TestSubnet_RemoveClientAdmin(t *testing.T) {
@@ -233,10 +229,10 @@ func TestSubnet_RemoveClientAdmin(t *testing.T) {
 	groupId := randomBytes(5)
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidAdmin, method, id, groupId, admPub[1:])
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, admPub)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrClientAdmNotExist, method, id, groupId, admPub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
+	cOwn.InvokeFail(t, subnet.ErrInvalidAdmin, method, id, groupId, admPub[1:])
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, admPub)
+	cOwn.InvokeFail(t, subnet.ErrClientAdmNotExist, method, id, groupId, admPub)
 	cOwn.Invoke(t, stackitem.Null{}, "addClientAdmin", id, groupId, admPub)
 	cOwn.Invoke(t, stackitem.Null{}, method, id, groupId, admPub)
 }
@@ -257,14 +253,14 @@ func TestSubnet_AddUser(t *testing.T) {
 	const method = "addUser"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, user)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, user)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, user)
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, user)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addClientAdmin", id, groupId, admPub)
 
 	cAdm := e.WithSigners(adm)
 	cAdm.Invoke(t, stackitem.Null{}, method, id, groupId, user)
-	cOwn.InvokeFail(t, method+errSeparator+"user has already been added", method, id, groupId, user)
+	cOwn.InvokeFail(t, "user has already been added", method, id, groupId, user)
 }
 
 func TestSubnet_RemoveUser(t *testing.T) {
@@ -282,17 +278,17 @@ func TestSubnet_RemoveUser(t *testing.T) {
 	const method = "removeUser"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, user)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, user)
+	cOwn.InvokeFail(t, subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, user)
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, groupId, user)
 
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrUserNotExist, method, id, groupId, user)
+	cOwn.InvokeFail(t, subnet.ErrUserNotExist, method, id, groupId, user)
 	cOwn.Invoke(t, stackitem.Null{}, "addUser", id, groupId, user)
 	cOwn.Invoke(t, stackitem.Null{}, method, id, groupId, user)
 
 	cAdm := cOwn.WithSigners(adm)
 
 	cOwn.Invoke(t, stackitem.Null{}, "addClientAdmin", id, groupId, admPub)
-	cAdm.InvokeFail(t, method+errSeparator+subnet.ErrUserNotExist, method, id, groupId, user)
+	cAdm.InvokeFail(t, subnet.ErrUserNotExist, method, id, groupId, user)
 }
 
 func TestSubnet_UserAllowed(t *testing.T) {
@@ -307,7 +303,7 @@ func TestSubnet_UserAllowed(t *testing.T) {
 	const method = "userAllowed"
 
 	cOwn := e.WithSigners(owner)
-	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, user)
+	cOwn.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, user)
 
 	cOwn.Invoke(t, stackitem.NewBool(false), method, id, user)
 	cOwn.Invoke(t, stackitem.Null{}, "addUser", id, groupId, user)
