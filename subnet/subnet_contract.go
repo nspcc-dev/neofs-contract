@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	// ErrInvalidSubnetID is thrown when subnet id is not a slice of 4 bytes.
+	// ErrInvalidSubnetID is thrown when subnet id is not a slice of 5 bytes.
 	ErrInvalidSubnetID = "invalid subnet ID"
+	// ErrInvalidGroupID is thrown when group id is not a slice of 5 bytes.
+	ErrInvalidGroupID = "invalid group ID"
 	// ErrInvalidOwner is thrown when owner has invalid format.
 	ErrInvalidOwner = "invalid owner"
 	// ErrInvalidAdmin is thrown when admin has invalid format.
@@ -134,6 +136,11 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 
 // Get returns info about subnet with the specified id.
 func Get(id []byte) []byte {
+	// V2 format check
+	if len(id) != subnetIDSize {
+		panic("get: " + ErrInvalidSubnetID)
+	}
+
 	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{infoPrefix}, id...)
 	raw := storage.Get(ctx, key)
@@ -145,6 +152,11 @@ func Get(id []byte) []byte {
 
 // Delete deletes subnet with the specified id.
 func Delete(id []byte) {
+	// V2 format check
+	if len(id) != subnetIDSize {
+		panic("delete: " + ErrInvalidSubnetID)
+	}
+
 	ctx := storage.GetContext()
 	key := append([]byte{ownerPrefix}, id...)
 	raw := storage.Get(ctx, key)
@@ -167,6 +179,11 @@ func Delete(id []byte) {
 
 // AddNodeAdmin adds new node administrator to the specified subnetwork.
 func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("addNodeAdmin: " + ErrInvalidSubnetID)
+	}
+
 	if len(adminKey) != interop.PublicKeyCompressedLen {
 		panic("addNodeAdmin: " + ErrInvalidAdmin)
 	}
@@ -197,6 +214,11 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 // RemoveNodeAdmin removes node administrator from the specified subnetwork.
 // Must be called by subnet owner only.
 func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("removeNodeAdmin: " + ErrInvalidSubnetID)
+	}
+
 	if len(adminKey) != interop.PublicKeyCompressedLen {
 		panic("removeNodeAdmin: " + ErrInvalidAdmin)
 	}
@@ -228,6 +250,11 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 // Must be called by subnet's owner or node administrator
 // only.
 func AddNode(subnetID []byte, node interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("addNode: " + ErrInvalidSubnetID)
+	}
+
 	if len(node) != interop.PublicKeyCompressedLen {
 		panic("addNode: " + ErrInvalidNode)
 	}
@@ -262,6 +289,11 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 // Must be called by subnet's owner or node administrator
 // only.
 func RemoveNode(subnetID []byte, node interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("removeNode: " + ErrInvalidSubnetID)
+	}
+
 	if len(node) != interop.PublicKeyCompressedLen {
 		panic("removeNode: " + ErrInvalidNode)
 	}
@@ -297,6 +329,11 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 // NodeAllowed checks if node is included in the
 // specified subnet or not.
 func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("nodeAllowed: " + ErrInvalidSubnetID)
+	}
+
 	if len(node) != interop.PublicKeyCompressedLen {
 		panic("nodeAllowed: " + ErrInvalidNode)
 	}
@@ -318,6 +355,16 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 // AddClientAdmin adds new client administrator of the specified group in the specified subnetwork.
 // Must be called by owner only.
 func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("addClientAdmin: " + ErrInvalidSubnetID)
+	}
+
+	// V2 format check
+	if len(groupID) != groupIDSize {
+		panic("addClientAdmin: " + ErrInvalidGroupID)
+	}
+
 	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
 		panic("addClientAdmin: " + ErrInvalidAdmin)
 	}
@@ -350,6 +397,16 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 // specified group in the specified subnetwork.
 // Must be called by owner only.
 func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("removeClientAdmin: " + ErrInvalidSubnetID)
+	}
+
+	// V2 format check
+	if len(groupID) != groupIDSize {
+		panic("removeClientAdmin: " + ErrInvalidGroupID)
+	}
+
 	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
 		panic("removeClientAdmin: " + ErrInvalidAdmin)
 	}
@@ -381,8 +438,19 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 // AddUser adds user to the specified subnetwork and group.
 // Must be called by the owner or the group's admin only.
 func AddUser(subnetID []byte, groupID []byte, userID []byte) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("addUser: " + ErrInvalidSubnetID)
+	}
+
+	// V2 format check
 	if len(userID) != userIDSize {
 		panic("addUser: " + ErrInvalidUser)
+	}
+
+	// V2 format check
+	if len(groupID) != groupIDSize {
+		panic("addUser: " + ErrInvalidGroupID)
 	}
 
 	ctx := storage.GetContext()
@@ -415,6 +483,16 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 // RemoveUser removes user from the specified subnetwork and group.
 // Must be called by the owner or the group's admin only.
 func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("removeUser: " + ErrInvalidSubnetID)
+	}
+
+	// V2 format check
+	if len(groupID) != groupIDSize {
+		panic("removeUser: " + ErrInvalidGroupID)
+	}
+
 	// V2 format check
 	if len(userID) != userIDSize {
 		panic("addUser: " + ErrInvalidUser)
@@ -450,6 +528,11 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 // UserAllowed returns bool that indicates if node is included in the
 // specified subnet or not.
 func UserAllowed(subnetID []byte, user []byte) bool {
+	// V2 format check
+	if len(subnetID) != subnetIDSize {
+		panic("userAllowed: " + ErrInvalidSubnetID)
+	}
+
 	ctx := storage.GetContext()
 
 	stKey := append([]byte{ownerPrefix}, subnetID...)

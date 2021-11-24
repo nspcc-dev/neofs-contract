@@ -209,7 +209,7 @@ func TestSubnet_AddClientAdmin(t *testing.T) {
 
 	const method = "addClientAdmin"
 
-	groupId := randomBytes(8)
+	groupId := randomBytes(5)
 
 	cOwn := e.WithSigners(owner)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
@@ -230,7 +230,7 @@ func TestSubnet_RemoveClientAdmin(t *testing.T) {
 
 	const method = "removeClientAdmin"
 
-	groupId := randomBytes(8)
+	groupId := randomBytes(5)
 
 	cOwn := e.WithSigners(owner)
 	cOwn.InvokeFail(t, method+errSeparator+subnet.ErrInvalidSubnetID, method, []byte{0, 0, 0, 0}, groupId, admPub)
@@ -252,7 +252,7 @@ func TestSubnet_AddUser(t *testing.T) {
 
 	user := randomBytes(27)
 
-	groupId := randomBytes(8)
+	groupId := randomBytes(5)
 
 	const method = "addUser"
 
@@ -272,7 +272,7 @@ func TestSubnet_RemoveUser(t *testing.T) {
 
 	id, owner := createSubnet(t, e)
 
-	groupId := randomBytes(8)
+	groupId := randomBytes(5)
 	user := randomBytes(27)
 
 	adm := e.NewAccount(t)
