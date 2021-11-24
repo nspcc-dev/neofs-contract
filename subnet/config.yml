@@ -3,7 +3,7 @@ safemethods: ["version"]
 permissions:
   - methods: ["update"]
 events:
-  - name: SubnetPut
+  - name: Put
     parameters:
       - name: id
         type: ByteArray
@@ -11,11 +11,11 @@ events:
         type: PublicKey
       - name: info
         type: ByteArray
-  - name: SubnetDelete
+  - name: Delete
     parameters:
         - name: id
           type: ByteArray
-  - name: NodeRemove
+  - name: RemoveNode
     parameters:
         - name: subnetID
           type: ByteArray

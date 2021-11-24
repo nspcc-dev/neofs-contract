@@ -52,7 +52,7 @@ const (
 )
 
 const (
-	userIDSize = 27
+	userIDSize   = 27
 	subnetIDSize = 5
 	groupIDSize  = 5
 )
@@ -106,7 +106,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 			if !runtime.CheckWitness(ownerKey) {
 				panic("put: witness check failed")
 			}
-			runtime.Notify("SubnetPut", id, ownerKey, info)
+			runtime.Notify("Put", id, ownerKey, info)
 			return
 		}
 
@@ -174,7 +174,7 @@ func Delete(id []byte) {
 	key[0] = infoPrefix
 	storage.Delete(ctx, key)
 
-	runtime.Notify("SubnetDelete", id)
+	runtime.Notify("Delete", id)
 }
 
 // AddNodeAdmin adds new node administrator to the specified subnetwork.
@@ -323,7 +323,7 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 
 	storage.Delete(ctx, append(stKey, node...))
 
-	runtime.Notify("NodeRemove", subnetID, node)
+	runtime.Notify("RemoveNode", subnetID, node)
 }
 
 // NodeAllowed checks if node is included in the
