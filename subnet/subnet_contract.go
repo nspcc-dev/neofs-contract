@@ -37,7 +37,9 @@ const (
 	ErrAccessDenied = "access denied"
 
 	errCheckWitnessFailed = "owner witness check failed"
+)
 
+const (
 	nodeAdminPrefix   = 'a'
 	infoPrefix        = 'i'
 	clientAdminPrefix = 'm'
@@ -49,6 +51,8 @@ const (
 
 const (
 	userIDSize = 27
+	subnetIDSize = 5
+	groupIDSize  = 5
 )
 
 // _deploy function sets up initial list of inner ring public keys.
@@ -78,7 +82,8 @@ func Update(script []byte, manifest []byte, data interface{}) {
 
 // Put creates new subnet with the specified owner and info.
 func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
-	if len(id) != 4 {
+	// V2 format check
+	if len(id) != subnetIDSize {
 		panic("put: " + ErrInvalidSubnetID)
 	}
 	if len(ownerKey) != interop.PublicKeyCompressedLen {
@@ -441,8 +446,6 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 
 	deleteKeyFromList(ctx, userID, stKey)
 }
-
-const groupIDSize = 4
 
 // UserAllowed returns bool that indicates if node is included in the
 // specified subnet or not.
