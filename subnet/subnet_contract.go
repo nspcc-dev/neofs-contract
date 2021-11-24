@@ -161,7 +161,7 @@ func Delete(id []byte) {
 	key := append([]byte{ownerPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("delete:" + ErrNotExist)
+		return
 	}
 
 	owner := raw.([]byte)
@@ -217,7 +217,7 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	stKey[0] = nodeAdminPrefix
 
 	if keyInList(ctx, adminKey, stKey) {
-		panic("addNodeAdmin: node admin has already been added")
+		return
 	}
 
 	putKeyInList(ctx, adminKey, stKey)
@@ -252,7 +252,7 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	stKey[0] = nodeAdminPrefix
 
 	if !keyInList(ctx, adminKey, stKey) {
-		panic("removeNodeAdmin: " + ErrNodeAdmNotExist)
+		return
 	}
 
 	deleteKeyFromList(ctx, adminKey, stKey)
@@ -291,7 +291,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 	stKey[0] = nodePrefix
 
 	if keyInList(ctx, node, stKey) {
-		panic("addNode: node has already been added")
+		return
 	}
 
 	putKeyInList(ctx, node, stKey)
@@ -330,7 +330,7 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	stKey[0] = nodePrefix
 
 	if !keyInList(ctx, node, stKey) {
-		panic("removeNode: " + ErrNodeNotExist)
+		return
 	}
 
 	storage.Delete(ctx, append(stKey, node...))
@@ -399,7 +399,7 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 	stKey = append(stKey, groupID...)
 
 	if keyInList(ctx, adminPublicKey, stKey) {
-		panic("addClientAdmin: client admin has already been added")
+		return
 	}
 
 	putKeyInList(ctx, adminPublicKey, stKey)
@@ -441,7 +441,7 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 	stKey = append(stKey, groupID...)
 
 	if !keyInList(ctx, adminPublicKey, stKey) {
-		panic("removeClientAdmin: " + ErrClientAdmNotExist)
+		return
 	}
 
 	deleteKeyFromList(ctx, adminPublicKey, stKey)
@@ -486,7 +486,7 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 	stKey[0] = userPrefix
 
 	if keyInList(ctx, userID, stKey) {
-		panic("addUser: user has already been added")
+		return
 	}
 
 	putKeyInList(ctx, userID, stKey)
@@ -531,7 +531,7 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	stKey[0] = userPrefix
 
 	if !keyInList(ctx, userID, stKey) {
-		panic("removeUser: " + ErrUserNotExist)
+		return
 	}
 
 	deleteKeyFromList(ctx, userID, stKey)
