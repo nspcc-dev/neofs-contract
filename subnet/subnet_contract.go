@@ -174,6 +174,18 @@ func Delete(id []byte) {
 	key[0] = infoPrefix
 	storage.Delete(ctx, key)
 
+	key[0] = nodeAdminPrefix
+	deleteByPrefix(ctx, key)
+
+	key[0] = nodePrefix
+	deleteByPrefix(ctx, key)
+
+	key[0] = clientAdminPrefix
+	deleteByPrefix(ctx, key)
+
+	key[0] = userPrefix
+	deleteByPrefix(ctx, key)
+
 	runtime.Notify("Delete", id)
 }
 
@@ -569,6 +581,14 @@ func putKeyInList(ctx storage.Context, keyToPut interop.PublicKey, prefix []byte
 
 func deleteKeyFromList(ctx storage.Context, keyToDelete interop.PublicKey, prefix []byte) {
 	storage.Delete(ctx, append(prefix, keyToDelete...))
+}
+
+func deleteByPrefix(ctx storage.Context, prefix []byte) {
+	iter := storage.Find(ctx, prefix, storage.KeysOnly)
+	for iterator.Next(iter) {
+		k := iterator.Value(iter).([]byte)
+		storage.Delete(ctx, k)
+	}
 }
 
 func calledByOwnerOrAdmin(ctx storage.Context, owner []byte, adminPrefix []byte) bool {
