@@ -687,6 +687,8 @@ func checkCommittee() {
 }
 
 // checkFragment validates root or a part of domain name.
+// 1. Root domain must start with a letter.
+// 2. All other fragments must start and end in a letter or a digit.
 func checkFragment(v string, isRoot bool) bool {
 	maxLength := maxDomainNameFragmentLength
 	if isRoot {
@@ -705,12 +707,12 @@ func checkFragment(v string, isRoot bool) bool {
 			return false
 		}
 	}
-	for i := 1; i < len(v); i++ {
-		if !isAlNum(v[i]) {
+	for i := 1; i < len(v)-1; i++ {
+		if v[i] != '-' && !isAlNum(v[i]) {
 			return false
 		}
 	}
-	return true
+	return isAlNum(v[len(v)-1])
 }
 
 // isAlNum checks whether provided char is a lowercase letter or a number.
