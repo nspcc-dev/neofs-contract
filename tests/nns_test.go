@@ -82,6 +82,17 @@ func TestNNSRegister(t *testing.T) {
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c3 := c.WithSigners(accTop, acc)
+	t.Run("domain names with hyphen", func(t *testing.T) {
+		c3.InvokeFail(t, "invalid domain name format", "register",
+			"-testdomain.com", acc.ScriptHash(),
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c3.InvokeFail(t, "invalid domain name format", "register",
+			"testdomain-.com", acc.ScriptHash(),
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c3.Invoke(t, true, "register",
+			"test-domain.com", acc.ScriptHash(),
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	})
 	c3.Invoke(t, true, "register",
 		"testdomain.com", acc.ScriptHash(),
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
