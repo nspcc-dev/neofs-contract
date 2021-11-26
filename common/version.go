@@ -4,8 +4,8 @@ import "github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 
 const (
 	major = 0
-	minor = 13
-	patch = 0
+	minor = 12
+	patch = 2
 
 	// Versions from which an update should be performed.
 	// These should be used in a group (so prevMinor can be equal to minor if there are
