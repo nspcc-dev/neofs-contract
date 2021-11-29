@@ -43,12 +43,13 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
+	args := data.(struct {
+		notaryDisabled bool
+	})
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		common.InitVote(ctx)
 		runtime.Log("reputation contract notary disabled")
 	}

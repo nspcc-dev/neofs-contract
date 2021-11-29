@@ -31,16 +31,17 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	arr := data.([]interop.Hash160)
-	addrNeoFS := arr[0]
+	args := data.(struct {
+		addrNeoFS interop.Hash160
+	})
 
 	ctx := storage.GetContext()
 
-	if len(addrNeoFS) != 20 {
+	if len(args.addrNeoFS) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, neofsContractKey, addrNeoFS)
+	storage.Put(ctx, neofsContractKey, args.addrNeoFS)
 
 	runtime.Log("processing contract initialized")
 }

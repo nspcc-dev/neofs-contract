@@ -84,40 +84,41 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
-	addrNetmap := args[1].(interop.Hash160)
-	addrBalance := args[2].(interop.Hash160)
-	addrID := args[3].(interop.Hash160)
-	addrNNS := args[4].(interop.Hash160)
-	nnsRoot := args[5].(string)
+	args := data.(struct {
+		notaryDisabled bool
+		addrNetmap     interop.Hash160
+		addrBalance    interop.Hash160
+		addrID         interop.Hash160
+		addrNNS        interop.Hash160
+		nnsRoot        string
+	})
 
 	if isUpdate {
-		storage.Put(ctx, nnsContractKey, addrNNS)
-		storage.Put(ctx, nnsRootKey, nnsRoot)
-		registerNiceNameTLD(addrNNS, nnsRoot)
+		storage.Put(ctx, nnsContractKey, args.addrNNS)
+		storage.Put(ctx, nnsRootKey, args.nnsRoot)
+		registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 		return
 	}
 
-	if len(addrNetmap) != 20 || len(addrBalance) != 20 || len(addrID) != 20 {
+	if len(args.addrNetmap) != 20 || len(args.addrBalance) != 20 || len(args.addrID) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, netmapContractKey, addrNetmap)
-	storage.Put(ctx, balanceContractKey, addrBalance)
-	storage.Put(ctx, neofsIDContractKey, addrID)
-	storage.Put(ctx, nnsContractKey, addrNNS)
-	storage.Put(ctx, nnsRootKey, nnsRoot)
+	storage.Put(ctx, netmapContractKey, args.addrNetmap)
+	storage.Put(ctx, balanceContractKey, args.addrBalance)
+	storage.Put(ctx, neofsIDContractKey, args.addrID)
+	storage.Put(ctx, nnsContractKey, args.addrNNS)
+	storage.Put(ctx, nnsRootKey, args.nnsRoot)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		common.InitVote(ctx)
 		runtime.Log("container contract notary disabled")
 	}
 
 	// add NNS root for container alias domains
-	registerNiceNameTLD(addrNNS, nnsRoot)
+	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 
 	runtime.Log("container contract initialized")
 }

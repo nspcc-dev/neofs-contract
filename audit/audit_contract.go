@@ -47,21 +47,22 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
-	addrNetmap := args[1].(interop.Hash160)
+	args := data.(struct {
+		notaryDisabled bool
+		addrNetmap     interop.Hash160
+	})
 
 	ctx := storage.GetContext()
 
-	if len(addrNetmap) != 20 {
+	if len(args.addrNetmap) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, netmapContractKey, addrNetmap)
+	storage.Put(ctx, netmapContractKey, args.addrNetmap)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		runtime.Log("audit contract notary disabled")
 	}
 

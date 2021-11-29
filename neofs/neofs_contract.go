@@ -60,26 +60,27 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
-	addrProc := args[1].(interop.Hash160)
-	keys := args[2].([]interop.PublicKey)
-	config := args[3].([][]byte)
+	args := data.(struct {
+		notaryDisabled bool
+		addrProc       interop.Hash160
+		keys           []interop.PublicKey
+		config         [][]byte
+	})
 
 	ctx := storage.GetContext()
 
 	var irList []common.IRNode
 
-	if len(keys) == 0 {
+	if len(args.keys) == 0 {
 		panic("at least one alphabet key must be provided")
 	}
 
-	if len(addrProc) != 20 {
+	if len(args.addrProc) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	for i := 0; i < len(keys); i++ {
-		pub := keys[i]
+	for i := 0; i < len(args.keys); i++ {
+		pub := args.keys[i]
 		if len(pub) != publicKeySize {
 			panic("incorrect public key length")
 		}
@@ -89,23 +90,23 @@ func _deploy(data interface{}, isUpdate bool) {
 	// initialize all storage slices
 	common.SetSerialized(ctx, alphabetKey, irList)
 
-	storage.Put(ctx, processingContractKey, addrProc)
+	storage.Put(ctx, processingContractKey, args.addrProc)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		common.InitVote(ctx)
 		runtime.Log("neofs contract notary disabled")
 	}
 
-	ln := len(config)
+	ln := len(args.config)
 	if ln%2 != 0 {
 		panic("bad configuration")
 	}
 
 	for i := 0; i < ln/2; i++ {
-		key := config[i*2]
-		val := config[i*2+1]
+		key := args.config[i*2]
+		val := args.config[i*2+1]
 
 		setConfig(ctx, key, val)
 	}
