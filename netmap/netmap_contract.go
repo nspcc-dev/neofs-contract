@@ -537,10 +537,9 @@ func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
 func getNetmapNodes(ctx storage.Context) []netmapNode {
 	result := []netmapNode{}
 
-	it := storage.Find(ctx, candidatePrefix, storage.ValuesOnly)
+	it := storage.Find(ctx, candidatePrefix, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(it) {
-		rawNode := iterator.Value(it).([]byte)
-		node := std.Deserialize(rawNode).(netmapNode)
+		node := iterator.Value(it).(netmapNode)
 		result = append(result, node)
 	}
 
