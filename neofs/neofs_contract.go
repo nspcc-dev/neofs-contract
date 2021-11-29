@@ -112,9 +112,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight))
 	alphabetCommittee := common.Multiaddress(alphabetKeys, true)
 
-	if !runtime.CheckWitness(alphabetCommittee) {
-		panic("only side chain committee can update contract")
-	}
+	common.CheckAlphabetWitness(alphabetCommittee)
 
 	contract.Call(interop.Hash160(management.Hash), "update",
 		contract.All, script, manifest, common.AppendVersion(data))
@@ -208,9 +206,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 func InnerRingCandidateAdd(key interop.PublicKey) {
 	ctx := storage.GetContext()
 
-	if !runtime.CheckWitness(key) {
-		panic("this method must be invoked by candidate")
-	}
+	common.CheckWitness(key)
 
 	c := common.IRNode{PublicKey: key}
 	candidates := getNodes(ctx, candidatesKey)
@@ -342,9 +338,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 		}
 	} else {
 		multiaddr := AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked by alphabet")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	from := runtime.GetExecutingScriptHash()
@@ -435,9 +429,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 		}
 	} else {
 		multiaddr := AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked by alphabet")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	newAlphabet := []common.IRNode{}
@@ -496,9 +488,7 @@ func SetConfig(id, key, val []byte) {
 		}
 	} else {
 		multiaddr := AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked by alphabet")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled {

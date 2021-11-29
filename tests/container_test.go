@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/nspcc-dev/neofs-contract/nns"
 )
@@ -88,7 +89,7 @@ func TestContainerPut(t *testing.T) {
 	balanceMint(t, cBal, acc, containerFee*1, []byte{})
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "alphabet witness check failed", "put", putArgs...)
+	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
 
 	c.Invoke(t, stackitem.Null{}, "put", putArgs...)
 
@@ -161,7 +162,7 @@ func TestContainerDelete(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "alphabet witness check failed", "delete",
+	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "delete",
 		cnt.id[:], cnt.sig, cnt.token)
 
 	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
@@ -256,7 +257,7 @@ func TestContainerSetEACL(t *testing.T) {
 	e := dummyEACL(cnt.id)
 	setArgs := []interface{}{e.value, e.sig, e.pub, e.token}
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "alphabet witness check failed", "setEACL", setArgs...)
+	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "setEACL", setArgs...)
 
 	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
 

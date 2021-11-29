@@ -225,9 +225,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		common.RemoveVotes(ctx, id)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabet witness check failed")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 	// todo: check if new container with unique container id
 
@@ -332,9 +330,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		common.RemoveVotes(ctx, id)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabet witness check failed")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
@@ -443,9 +439,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 		common.RemoveVotes(ctx, id)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabet witness check failed")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	rule := ExtendedACL{
@@ -490,9 +484,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 		panic(NotFoundError)
 	}
 
-	if !runtime.CheckWitness(pubKey) {
-		panic("invalid witness of container size estimation")
-	}
+	common.CheckWitness(pubKey)
 
 	if !isStorageNode(ctx, pubKey) {
 		panic("method must be invoked by storage node from network map")
@@ -577,9 +569,7 @@ func NewEpoch(epochNum int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("method must be invoked by inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	candidates := keysToDelete(ctx, epochNum)
@@ -607,9 +597,7 @@ func StartContainerEstimation(epoch int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("method must be invoked by inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled {
@@ -647,9 +635,7 @@ func StopContainerEstimation(epoch int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("method must be invoked by inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled {

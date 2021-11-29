@@ -37,8 +37,6 @@ const (
 	ErrUserNotExist = "user not found"
 	// ErrAccessDenied is thrown when operation is denied for caller.
 	ErrAccessDenied = "access denied"
-
-	errCheckWitnessFailed = "owner witness check failed"
 )
 
 const (
@@ -103,9 +101,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 		alphabet := common.AlphabetNodes()
 		nodeKey := common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			if !runtime.CheckWitness(ownerKey) {
-				panic("witness check failed")
-			}
+			common.CheckWitness(ownerKey)
 			runtime.Notify("Put", id, ownerKey, info)
 			return
 		}
@@ -119,14 +115,10 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 
 		common.RemoveVotes(ctx, id)
 	} else {
-		if !runtime.CheckWitness(ownerKey) {
-			panic(errCheckWitnessFailed)
-		}
+		common.CheckOwnerWitness(ownerKey)
 
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabet witness check failed")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	storage.Put(ctx, stKey, ownerKey)
@@ -165,9 +157,7 @@ func Delete(id []byte) {
 	}
 
 	owner := raw.([]byte)
-	if !runtime.CheckWitness(owner) {
-		panic(errCheckWitnessFailed)
-	}
+	common.CheckOwnerWitness(owner)
 
 	storage.Delete(ctx, key)
 
@@ -210,9 +200,7 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	}
 
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		panic(errCheckWitnessFailed)
-	}
+	common.CheckOwnerWitness(owner)
 
 	stKey[0] = nodeAdminPrefix
 
@@ -245,9 +233,7 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	}
 
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		panic(errCheckWitnessFailed)
-	}
+	common.CheckOwnerWitness(owner)
 
 	stKey[0] = nodeAdminPrefix
 
@@ -391,9 +377,7 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 	}
 
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		panic(errCheckWitnessFailed)
-	}
+	common.CheckOwnerWitness(owner)
 
 	stKey[0] = clientAdminPrefix
 	stKey = append(stKey, groupID...)
@@ -433,9 +417,7 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 	}
 
 	owner := rawOwner.([]byte)
-	if !runtime.CheckWitness(owner) {
-		panic(errCheckWitnessFailed)
-	}
+	common.CheckOwnerWitness(owner)
 
 	stKey[0] = clientAdminPrefix
 	stKey = append(stKey, groupID...)

@@ -166,9 +166,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 		)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked from inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled && !indirectCall {
@@ -216,9 +214,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked from inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	details := common.LockTransferDetails(txDetails)
@@ -273,9 +269,7 @@ func NewEpoch(epochNum int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked from inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
@@ -324,9 +318,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked from inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	details := common.MintTransferDetails(txDetails)
@@ -383,9 +375,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked from inner ring")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	details := common.BurnTransferDetails(txDetails)

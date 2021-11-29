@@ -303,9 +303,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	if !isValid(owner) {
 		panic("invalid owner")
 	}
-	if !runtime.CheckWitness(owner) {
-		panic("not witnessed by owner")
-	}
+	common.CheckOwnerWitness(owner)
 	runtime.BurnGas(GetPrice())
 	var (
 		tokenKey = getTokenKey([]byte(name))
@@ -368,9 +366,7 @@ func SetAdmin(name string, admin interop.Hash160) {
 	}
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
-	if !runtime.CheckWitness(ns.Owner) {
-		panic("not witnessed by owner")
-	}
+	common.CheckOwnerWitness(ns.Owner)
 	ns.Admin = admin
 	putNameState(ctx, ns)
 }
