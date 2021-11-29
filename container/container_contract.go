@@ -744,10 +744,9 @@ func estimationKey(epoch int, cid []byte, key interop.PublicKey) []byte {
 func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerSizes {
 	var estimations []estimation
 
-	it := storage.Find(ctx, key, storage.ValuesOnly)
+	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(it) {
-		rawEstimation := iterator.Value(it).([]byte)
-		est := std.Deserialize(rawEstimation).(estimation)
+		est := iterator.Value(it).(estimation)
 		estimations = append(estimations, est)
 	}
 
