@@ -71,7 +71,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	ctx := storage.GetContext()
 
-	if len(args.addrNetmap) != 20 || len(args.addrContainer) != 20 {
+	if len(args.addrNetmap) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
@@ -276,7 +276,7 @@ func NewEpoch(epochNum int) {
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 	for iterator.Next(it) {
 		addr := iterator.Value(it).(interop.Hash160) // it MUST BE `storage.KeysOnly`
-		if len(addr) != 20 {
+		if len(addr) != interop.Hash160Len {
 			continue
 		}
 
@@ -465,7 +465,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 	)
 
 	if !innerRing {
-		if len(to) != 20 || !isUsableAddress(from) {
+		if len(to) != interop.Hash160Len || !isUsableAddress(from) {
 			runtime.Log("bad script hashes")
 			return emptyAcc, false
 		}

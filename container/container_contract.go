@@ -100,7 +100,9 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	if len(args.addrNetmap) != 20 || len(args.addrBalance) != 20 || len(args.addrID) != 20 {
+	if len(args.addrNetmap) != interop.Hash160Len ||
+		len(args.addrBalance) != interop.Hash160Len ||
+		len(args.addrID) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
