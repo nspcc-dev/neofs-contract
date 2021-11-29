@@ -47,6 +47,7 @@ const (
 )
 
 const (
+	// V2 format
 	_ nodeState = iota
 	onlineState
 	offlineState
@@ -215,6 +216,7 @@ func AddPeer(nodeInfo []byte) {
 	}
 
 	if !alphabetCall {
+		// V2 format
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
 			panic("addPeer: witness check failed")

@@ -32,6 +32,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
 			kv := iterator.Value(it).([][]byte)
+			// V2 format
 			if len(kv[0]) == 25 {
 				info := std.Deserialize(kv[1]).(UserInfo)
 				key := append([]byte{ownerKeysPrefix}, kv[0]...)
@@ -84,6 +85,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // This method panics if OwnerID is not 25 byte or public key is not 33 byte long.
 // If key is already bound, ignores it.
 func AddKey(owner []byte, keys []interop.PublicKey) {
+	// V2 format
 	if len(owner) != 25 {
 		panic("addKey: incorrect owner")
 	}
@@ -149,6 +151,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 // This method panics if OwnerID is not 25 byte or public key is not 33 byte long.
 // If key is already unbound, ignores it.
 func RemoveKey(owner []byte, keys []interop.PublicKey) {
+	// V2 format
 	if len(owner) != 25 {
 		panic("removeKey: incorrect owner")
 	}
@@ -203,6 +206,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 //
 // This method panics if owner is not 25 byte long.
 func Key(owner []byte) [][]byte {
+	// V2 format
 	if len(owner) != 25 {
 		panic("key: incorrect owner")
 	}

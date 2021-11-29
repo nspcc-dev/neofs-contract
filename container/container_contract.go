@@ -56,6 +56,7 @@ const (
 	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
 	AliasFeeKey = "ContainerAliasFee"
 
+	// V2 format
 	containerIDSize = 32 // SHA256 size
 
 	estimateKeyPrefix   = "cnr"
@@ -414,6 +415,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
+	// V2 format
 	// get container ID
 	offset := int(eACL[1])
 	offset = 2 + offset + 4
@@ -520,6 +522,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 func GetContainerSize(id []byte) containerSizes {
 	ctx := storage.GetReadOnlyContext()
 
+	// V2 format
 	// this `id` expected to be from `ListContainerSizes`
 	// therefore it is not contains postfix, we ignore it in the cut.
 	ln := len(id)
@@ -693,6 +696,7 @@ func getAllContainers(ctx storage.Context) [][]byte {
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 	for iterator.Next(it) {
 		key := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
+		// V2 format
 		if len(key) == containerIDSize {
 			list = append(list, key)
 		}
@@ -730,6 +734,7 @@ func getOwnerByID(ctx storage.Context, cid []byte) []byte {
 }
 
 func ownerFromBinaryContainer(container []byte) []byte {
+	// V2 format
 	offset := int(container[1])
 	offset = 2 + offset + 4              // version prefix + version size + owner prefix
 	return container[offset : offset+25] // offset + size of owner
@@ -770,6 +775,7 @@ func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)
 
 	for i := range snapshot {
+		// V2 format
 		nodeInfo := snapshot[i].info
 		nodeKey := nodeInfo[2:35] // offset:2, len:33
 
@@ -787,6 +793,7 @@ func keysToDelete(ctx storage.Context, epoch int) [][]byte {
 	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
 	for iterator.Next(it) {
 		k := iterator.Value(it).([]byte)
+		// V2 format
 		nbytes := k[len(estimateKeyPrefix) : len(k)-containerIDSize-estimatePostfixSize]
 
 		var n interface{} = nbytes
