@@ -62,21 +62,22 @@ var (
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
-	addrBalance := args[1].(interop.Hash160)
-	addrContainer := args[2].(interop.Hash160)
-	keys := args[3].([]interop.PublicKey)
-	config := args[4].([][]byte)
+	var args = data.(struct {
+		notaryDisabled bool
+		addrBalance    interop.Hash160
+		addrContainer  interop.Hash160
+		keys           []interop.PublicKey
+		config         [][]byte
+	})
 
-	ln := len(config)
+	ln := len(args.config)
 	if ln%2 != 0 {
 		panic("bad configuration")
 	}
 
 	for i := 0; i < ln/2; i++ {
-		key := config[i*2]
-		val := config[i*2+1]
+		key := args.config[i*2]
+		val := args.config[i*2+1]
 
 		setConfig(ctx, key, val)
 	}
@@ -85,7 +86,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	if len(addrBalance) != 20 || len(addrContainer) != 20 {
+	if len(args.addrBalance) != 20 || len(args.addrContainer) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
@@ -96,16 +97,16 @@ func _deploy(data interface{}, isUpdate bool) {
 	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
 	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
 
-	storage.Put(ctx, balanceContractKey, addrBalance)
-	storage.Put(ctx, containerContractKey, addrContainer)
+	storage.Put(ctx, balanceContractKey, args.addrBalance)
+	storage.Put(ctx, containerContractKey, args.addrContainer)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		var irList []common.IRNode
 
-		for i := 0; i < len(keys); i++ {
-			key := keys[i]
+		for i := 0; i < len(args.keys); i++ {
+			key := args.keys[i]
 			irList = append(irList, common.IRNode{PublicKey: key})
 		}
 

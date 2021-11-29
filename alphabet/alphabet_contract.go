@@ -37,34 +37,35 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	args := data.([]interface{})
-	notaryDisabled := args[0].(bool)
-	addrNetmap := args[1].(interop.Hash160)
-	addrProxy := args[2].(interop.Hash160)
-	name := args[3].(string)
-	index := args[4].(int)
-	total := args[5].(int)
+	args := data.(struct {
+		notaryDisabled bool
+		addrNetmap     interop.Hash160
+		addrProxy      interop.Hash160
+		name           string
+		index          int
+		total          int
+	})
 
 	ctx := storage.GetContext()
 
-	if len(addrNetmap) != 20 || !notaryDisabled && len(addrProxy) != 20 {
+	if len(args.addrNetmap) != 20 || !args.notaryDisabled && len(args.addrProxy) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, netmapKey, addrNetmap)
-	storage.Put(ctx, proxyKey, addrProxy)
-	storage.Put(ctx, nameKey, name)
-	storage.Put(ctx, indexKey, index)
-	storage.Put(ctx, totalKey, total)
+	storage.Put(ctx, netmapKey, args.addrNetmap)
+	storage.Put(ctx, proxyKey, args.addrProxy)
+	storage.Put(ctx, nameKey, args.name)
+	storage.Put(ctx, indexKey, args.index)
+	storage.Put(ctx, totalKey, args.total)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, notaryDisabled)
-	if notaryDisabled {
+	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	if args.notaryDisabled {
 		common.InitVote(ctx)
-		runtime.Log(name + " notary disabled")
+		runtime.Log(args.name + " notary disabled")
 	}
 
-	runtime.Log(name + " contract initialized")
+	runtime.Log(args.name + " contract initialized")
 }
 
 // Update method updates contract source code and manifest. Can be invoked

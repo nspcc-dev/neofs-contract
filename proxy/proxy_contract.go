@@ -28,16 +28,17 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	args := data.([]interface{})
-	addrNetmap := args[0].(interop.Hash160)
+	args := data.(struct {
+		addrNetmap interop.Hash160
+	})
 
 	ctx := storage.GetContext()
 
-	if len(addrNetmap) != 20 {
+	if len(args.addrNetmap) != 20 {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, netmapContractKey, addrNetmap)
+	storage.Put(ctx, netmapContractKey, args.addrNetmap)
 
 	runtime.Log("proxy contract initialized")
 }
