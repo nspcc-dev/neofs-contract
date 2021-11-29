@@ -86,7 +86,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		return
 	}
 
-	if len(args.addrBalance) != 20 || len(args.addrContainer) != 20 {
+	if len(args.addrBalance) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
@@ -252,7 +252,7 @@ func AddPeer(nodeInfo []byte) {
 //
 // Method panics when invoked with unsupported states.
 func UpdateState(state int, publicKey interop.PublicKey) {
-	if len(publicKey) != 33 {
+	if len(publicKey) != interop.PublicKeyCompressedLen {
 		panic("incorrect public key")
 	}
 

@@ -51,7 +51,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		addrContainer  interop.Hash160
 	})
 
-	if len(args.addrNetmap) != 20 || len(args.addrContainer) != 20 {
+	if len(args.addrNetmap) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
@@ -118,7 +118,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 	}
 
 	for i := range keys {
-		if len(keys[i]) != 33 {
+		if len(keys[i]) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key")
 		}
 	}
@@ -175,7 +175,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	}
 
 	for i := range keys {
-		if len(keys[i]) != 33 {
+		if len(keys[i]) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key")
 		}
 	}

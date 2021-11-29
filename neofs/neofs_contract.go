@@ -33,8 +33,6 @@ const (
 
 	processingContractKey = "processingScriptHash"
 
-	publicKeySize = 33
-
 	maxBalanceAmount    = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
 	maxBalanceAmountGAS = maxBalanceAmount * 1_0000_0000
 
@@ -75,13 +73,13 @@ func _deploy(data interface{}, isUpdate bool) {
 		panic("at least one alphabet key must be provided")
 	}
 
-	if len(args.addrProc) != 20 {
+	if len(args.addrProc) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
 	for i := 0; i < len(args.keys); i++ {
 		pub := args.keys[i]
-		if len(pub) != publicKeySize {
+		if len(pub) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key length")
 		}
 		irList = append(irList, common.IRNode{PublicKey: pub})
@@ -381,7 +379,7 @@ func Bind(user []byte, keys []interop.PublicKey) {
 
 	for i := 0; i < len(keys); i++ {
 		pubKey := keys[i]
-		if len(pubKey) != publicKeySize {
+		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
 	}
@@ -401,7 +399,7 @@ func Unbind(user []byte, keys []interop.PublicKey) {
 
 	for i := 0; i < len(keys); i++ {
 		pubKey := keys[i]
-		if len(pubKey) != publicKeySize {
+		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
 	}
@@ -442,7 +440,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 
 	for i := 0; i < len(args); i++ {
 		pubKey := args[i]
-		if len(pubKey) != publicKeySize {
+		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("invalid public key in alphabet list")
 		}
 

@@ -48,7 +48,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	ctx := storage.GetContext()
 
-	if len(args.addrNetmap) != 20 || !args.notaryDisabled && len(args.addrProxy) != 20 {
+	if len(args.addrNetmap) != interop.Hash160Len || !args.notaryDisabled && len(args.addrProxy) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 

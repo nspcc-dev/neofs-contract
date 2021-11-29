@@ -666,7 +666,7 @@ func getIdRecordKey(tokenId []byte, name string, typ RecordType, id byte) []byte
 
 // isValid returns true if the provided address is a valid Uint160.
 func isValid(address interop.Hash160) bool {
-	return address != nil && len(address) == 20
+	return address != nil && len(address) == interop.Hash160Len
 }
 
 // checkCommittee panics if the script container is not signed by the committee.

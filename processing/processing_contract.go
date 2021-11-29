@@ -37,7 +37,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	ctx := storage.GetContext()
 
-	if len(args.addrNeoFS) != 20 {
+	if len(args.addrNeoFS) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
