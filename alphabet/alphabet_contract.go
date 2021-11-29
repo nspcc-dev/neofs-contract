@@ -200,9 +200,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("invalid invoker")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	curEpoch := currentEpoch(ctx)

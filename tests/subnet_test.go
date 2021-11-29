@@ -45,10 +45,10 @@ func TestSubnet_Put(t *testing.T) {
 	binary.LittleEndian.PutUint32(id, 123)
 	info := randomBytes(10)
 
-	e.InvokeFail(t, "witness check failed", "put", id, pub, info)
+	e.InvokeFail(t, common.ErrWitnessFailed, "put", id, pub, info)
 
 	cAcc := e.WithSigners(acc)
-	cAcc.InvokeFail(t, "alphabet witness check failed", "put", id, pub, info)
+	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", id, pub, info)
 
 	cBoth := e.WithSigners(e.Committee, acc)
 	cBoth.InvokeFail(t, subnet.ErrInvalidSubnetID, "put", []byte{1, 2, 3}, pub, info)
@@ -63,7 +63,7 @@ func TestSubnet_Delete(t *testing.T) {
 
 	id, owner := createSubnet(t, e)
 
-	e.InvokeFail(t, "witness check failed", "delete", id)
+	e.InvokeFail(t, common.ErrWitnessFailed, "delete", id)
 
 	cAcc := e.WithSigners(owner)
 	cAcc.InvokeFail(t, subnet.ErrInvalidSubnetID, "delete", []byte{1, 1, 1, 1})
@@ -88,7 +88,7 @@ func TestSubnet_AddNodeAdmin(t *testing.T) {
 	e.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
 
 	cAdm := e.WithSigners(adm)
-	cAdm.InvokeFail(t, "owner witness check failed", method, id, admPub)
+	cAdm.InvokeFail(t, common.ErrOwnerWitnessFailed, method, id, admPub)
 
 	cOwner := e.WithSigners(owner)
 	cOwner.Invoke(t, stackitem.Null{}, method, id, admPub)
@@ -112,7 +112,7 @@ func TestSubnet_RemoveNodeAdmin(t *testing.T) {
 	e.InvokeFail(t, subnet.ErrNotExist, method, []byte{0, 0, 0, 0, 0}, admPub)
 
 	cAdm := e.WithSigners(adm)
-	cAdm.InvokeFail(t, "owner witness check failed", method, id, admPub)
+	cAdm.InvokeFail(t, common.ErrOwnerWitnessFailed, method, id, admPub)
 
 	cOwner := e.WithSigners(owner)
 

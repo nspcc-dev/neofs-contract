@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +74,7 @@ func TestAddPeer(t *testing.T) {
 
 	acc1 := c.NewAccount(t)
 	cAcc1 := c.WithSigners(acc1)
-	cAcc1.InvokeFail(t, "witness check failed", "addPeer", dummyInfo)
+	cAcc1.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo)
 
 	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo)
 	aer := cAcc.CheckHalt(t, h)
@@ -105,9 +106,9 @@ func TestUpdateState(t *testing.T) {
 	require.True(t, ok)
 
 	t.Run("missing witness", func(t *testing.T) {
-		cAcc.InvokeFail(t, "alphabet witness check failed",
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed,
 			"updateState", int64(2), pub)
-		e.InvokeFail(t, "witness check failed",
+		e.InvokeFail(t, common.ErrWitnessFailed,
 			"updateState", int64(2), pub)
 	})
 

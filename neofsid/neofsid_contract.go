@@ -113,9 +113,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("invocation from non inner ring node")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	for i := range keys {
@@ -172,9 +170,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("invocation from non inner ring node")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	for i := range keys {

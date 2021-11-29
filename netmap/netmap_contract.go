@@ -161,9 +161,7 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked by alphabet nodes")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	var irList []common.IRNode
@@ -218,9 +216,8 @@ func AddPeer(nodeInfo []byte) {
 	if !alphabetCall {
 		// V2 format
 		publicKey := nodeInfo[2:35] // offset:2, len:33
-		if !runtime.CheckWitness(publicKey) {
-			panic("witness check failed")
-		}
+		common.CheckWitness(publicKey)
+
 		runtime.Notify("AddPeer", nodeInfo)
 		return
 	}
@@ -270,9 +267,8 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			if !runtime.CheckWitness(publicKey) {
-				panic("witness check failed")
-			}
+			common.CheckWitness(publicKey)
+
 			runtime.Notify("UpdateState", state, publicKey)
 			return
 		}
@@ -288,12 +284,8 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		common.RemoveVotes(ctx, id)
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(publicKey) {
-			panic("witness check failed")
-		}
-		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabet witness check failed")
-		}
+		common.CheckWitness(publicKey)
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	switch nodeState(state) {
@@ -331,9 +323,7 @@ func NewEpoch(epochNum int) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("this method must be invoked by inner ring nodes")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled {
@@ -463,9 +453,7 @@ func SetConfig(id, key, val []byte) {
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("invoked by non inner ring node")
-		}
+		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	if notaryDisabled {
