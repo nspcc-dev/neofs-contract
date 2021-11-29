@@ -9,6 +9,7 @@ var (
 )
 
 func WalletToScriptHash(wallet []byte) []byte {
+	// V2 format
 	return wallet[1 : len(wallet)-4]
 }
 
