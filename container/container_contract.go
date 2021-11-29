@@ -227,7 +227,7 @@ func PutNamed(container []byte, signature interop.Signature,
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("put: alphabet witness check failed")
+			panic("alphabet witness check failed")
 		}
 	}
 	// todo: check if new container with unique container id
@@ -334,7 +334,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("delete: alphabet witness check failed")
+			panic("alphabet witness check failed")
 		}
 	}
 
@@ -446,7 +446,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("setEACL: alphabet witness check failed")
+			panic("alphabet witness check failed")
 		}
 	}
 
@@ -497,7 +497,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	}
 
 	if !isStorageNode(ctx, pubKey) {
-		panic("putContainerSize method must be invoked by storage node from network map")
+		panic("method must be invoked by storage node from network map")
 	}
 
 	key := estimationKey(epoch, cid, pubKey)
@@ -576,12 +576,12 @@ func NewEpoch(epochNum int) {
 			netmapContractKey,
 		)
 		if !indirectCall {
-			panic("newEpoch method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("newEpoch method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	}
 
@@ -606,12 +606,12 @@ func StartContainerEstimation(epoch int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("startContainerEstimation method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("startContainerEstimation method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	}
 
@@ -646,12 +646,12 @@ func StopContainerEstimation(epoch int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("stopContainerEstimation method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("stopContainerEstimation method must be invoked by inner ring")
+			panic("method must be invoked by inner ring")
 		}
 	}
 

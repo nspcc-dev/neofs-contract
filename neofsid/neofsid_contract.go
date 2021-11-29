@@ -51,7 +51,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	addrContainer := args[2].(interop.Hash160)
 
 	if len(addrNetmap) != 20 || len(addrContainer) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)
@@ -87,7 +87,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 func AddKey(owner []byte, keys []interop.PublicKey) {
 	// V2 format
 	if len(owner) != 25 {
-		panic("addKey: incorrect owner")
+		panic("incorrect owner")
 	}
 
 	ctx := storage.GetContext()
@@ -103,7 +103,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("addKey: invocation from non inner ring node")
+			panic("invocation from non inner ring node")
 		}
 
 		indirectCall = common.FromKnownContract(
@@ -114,13 +114,13 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("addKey: invocation from non inner ring node")
+			panic("invocation from non inner ring node")
 		}
 	}
 
 	for i := range keys {
 		if len(keys[i]) != 33 {
-			panic("addKey: incorrect public key")
+			panic("incorrect public key")
 		}
 	}
 
@@ -153,7 +153,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	// V2 format
 	if len(owner) != 25 {
-		panic("removeKey: incorrect owner")
+		panic("incorrect owner")
 	}
 
 	ctx := storage.GetContext()
@@ -168,18 +168,18 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("removeKey: invocation from non inner ring node")
+			panic("invocation from non inner ring node")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("removeKey: invocation from non inner ring node")
+			panic("invocation from non inner ring node")
 		}
 	}
 
 	for i := range keys {
 		if len(keys[i]) != 33 {
-			panic("addKey: incorrect public key")
+			panic("incorrect public key")
 		}
 	}
 
@@ -208,7 +208,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 func Key(owner []byte) [][]byte {
 	// V2 format
 	if len(owner) != 25 {
-		panic("key: incorrect owner")
+		panic("incorrect owner")
 	}
 
 	ctx := storage.GetReadOnlyContext()

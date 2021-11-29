@@ -161,7 +161,7 @@ func TestContainerDelete(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "delete: alphabet witness check failed", "delete",
+	cAcc.InvokeFail(t, "alphabet witness check failed", "delete",
 		cnt.id[:], cnt.sig, cnt.token)
 
 	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
