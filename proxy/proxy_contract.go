@@ -19,7 +19,7 @@ const (
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) {
-		panic("onNEP17Payment: proxy contract accepts GAS only")
+		panic("proxy contract accepts GAS only")
 	}
 }
 
@@ -34,7 +34,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if len(addrNetmap) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)

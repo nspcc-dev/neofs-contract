@@ -105,9 +105,9 @@ func TestUpdateState(t *testing.T) {
 	require.True(t, ok)
 
 	t.Run("missing witness", func(t *testing.T) {
-		cAcc.InvokeFail(t, "updateState: alphabet witness check failed",
+		cAcc.InvokeFail(t, "alphabet witness check failed",
 			"updateState", int64(2), pub)
-		e.InvokeFail(t, "updateState: witness check failed",
+		e.InvokeFail(t, "witness check failed",
 			"updateState", int64(2), pub)
 	})
 

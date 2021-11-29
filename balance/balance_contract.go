@@ -71,7 +71,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if len(addrNetmap) != 20 || len(addrContainer) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)
@@ -156,7 +156,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("transferX: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 
 		indirectCall = common.FromKnownContract(
@@ -167,7 +167,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("transferX: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	}
 
@@ -185,10 +185,10 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
-		panic("transferX: fail")
+		panic("can't transfer assets")
 	}
 
-	runtime.Log("transferX: success")
+	runtime.Log("successfully transferred assets")
 }
 
 // Lock is a method that transfers assets from user account to lock account
@@ -212,12 +212,12 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("lock: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("lock: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	}
 
@@ -246,7 +246,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
 		// consider using `return false` to remove votes
-		panic("lock: can't lock funds")
+		panic("can't lock funds")
 	}
 
 	runtime.Log("lock: created lock account")
@@ -269,12 +269,12 @@ func NewEpoch(epochNum int) {
 			netmapContractKey,
 		)
 		if !indirectCall {
-			panic("newEpoch: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("newEpoch: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	}
 
@@ -320,12 +320,12 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("mint: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("mint: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	}
 
@@ -345,7 +345,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 
 	ok := token.transfer(ctx, nil, to, amount, true, details)
 	if !ok {
-		panic("mint: can't transfer assets")
+		panic("can't transfer assets")
 	}
 
 	supply := token.getSupply(ctx)
@@ -379,12 +379,12 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("burn: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("burn: this method must be invoked from inner ring")
+			panic("this method must be invoked from inner ring")
 		}
 	}
 
@@ -404,12 +404,12 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 
 	ok := token.transfer(ctx, from, nil, amount, true, details)
 	if !ok {
-		panic("burn: can't transfer assets")
+		panic("can't transfer assets")
 	}
 
 	supply := token.getSupply(ctx)
 	if supply < amount {
-		panic("panic, negative supply after burn")
+		panic("negative supply after burn")
 	}
 
 	supply = supply - amount

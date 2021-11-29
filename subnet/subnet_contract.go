@@ -86,16 +86,16 @@ func Update(script []byte, manifest []byte, data interface{}) {
 func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 	// V2 format check
 	if len(id) != subnetIDSize {
-		panic("put: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 	if len(ownerKey) != interop.PublicKeyCompressedLen {
-		panic("put: " + ErrInvalidOwner)
+		panic(ErrInvalidOwner)
 	}
 
 	ctx := storage.GetContext()
 	stKey := append([]byte{ownerPrefix}, id...)
 	if storage.Get(ctx, stKey) != nil {
-		panic("put: " + ErrAlreadyExists)
+		panic(ErrAlreadyExists)
 	}
 
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -104,7 +104,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 		nodeKey := common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			if !runtime.CheckWitness(ownerKey) {
-				panic("put: witness check failed")
+				panic("witness check failed")
 			}
 			runtime.Notify("Put", id, ownerKey, info)
 			return
@@ -120,12 +120,12 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 		common.RemoveVotes(ctx, id)
 	} else {
 		if !runtime.CheckWitness(ownerKey) {
-			panic("put: " + errCheckWitnessFailed)
+			panic(errCheckWitnessFailed)
 		}
 
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("put: alphabet witness check failed")
+			panic("alphabet witness check failed")
 		}
 	}
 
@@ -138,14 +138,14 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 func Get(id []byte) []byte {
 	// V2 format check
 	if len(id) != subnetIDSize {
-		panic("get: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{infoPrefix}, id...)
 	raw := storage.Get(ctx, key)
 	if raw == nil {
-		panic("get: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 	return raw.([]byte)
 }
@@ -154,7 +154,7 @@ func Get(id []byte) []byte {
 func Delete(id []byte) {
 	// V2 format check
 	if len(id) != subnetIDSize {
-		panic("delete: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	ctx := storage.GetContext()
@@ -166,7 +166,7 @@ func Delete(id []byte) {
 
 	owner := raw.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("delete: " + errCheckWitnessFailed)
+		panic(errCheckWitnessFailed)
 	}
 
 	storage.Delete(ctx, key)
@@ -193,11 +193,11 @@ func Delete(id []byte) {
 func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("addNodeAdmin: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	if len(adminKey) != interop.PublicKeyCompressedLen {
-		panic("addNodeAdmin: " + ErrInvalidAdmin)
+		panic(ErrInvalidAdmin)
 	}
 
 	ctx := storage.GetContext()
@@ -206,12 +206,12 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addNodeAdmin: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("addNodeAdmin: " + errCheckWitnessFailed)
+		panic(errCheckWitnessFailed)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -228,11 +228,11 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("removeNodeAdmin: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	if len(adminKey) != interop.PublicKeyCompressedLen {
-		panic("removeNodeAdmin: " + ErrInvalidAdmin)
+		panic(ErrInvalidAdmin)
 	}
 
 	ctx := storage.GetContext()
@@ -241,12 +241,12 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeNodeAdmin: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("removeNodeAdmin: " + errCheckWitnessFailed)
+		panic(errCheckWitnessFailed)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -264,11 +264,11 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 func AddNode(subnetID []byte, node interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("addNode: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	if len(node) != interop.PublicKeyCompressedLen {
-		panic("addNode: " + ErrInvalidNode)
+		panic(ErrInvalidNode)
 	}
 
 	ctx := storage.GetContext()
@@ -277,7 +277,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addNode: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -285,7 +285,7 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 	owner := rawOwner.([]byte)
 
 	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
-		panic("addNode: " + ErrAccessDenied)
+		panic(ErrAccessDenied)
 	}
 
 	stKey[0] = nodePrefix
@@ -303,11 +303,11 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("removeNode: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	if len(node) != interop.PublicKeyCompressedLen {
-		panic("removeNode: " + ErrInvalidNode)
+		panic(ErrInvalidNode)
 	}
 
 	ctx := storage.GetContext()
@@ -316,7 +316,7 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeNode: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = nodeAdminPrefix
@@ -324,7 +324,7 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	owner := rawOwner.([]byte)
 
 	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
-		panic("removeNode: " + ErrAccessDenied)
+		panic(ErrAccessDenied)
 	}
 
 	stKey[0] = nodePrefix
@@ -343,11 +343,11 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("nodeAllowed: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	if len(node) != interop.PublicKeyCompressedLen {
-		panic("nodeAllowed: " + ErrInvalidNode)
+		panic(ErrInvalidNode)
 	}
 
 	ctx := storage.GetReadOnlyContext()
@@ -356,7 +356,7 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("nodeAllowed: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = nodePrefix
@@ -369,16 +369,16 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("addClientAdmin: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	// V2 format check
 	if len(groupID) != groupIDSize {
-		panic("addClientAdmin: " + ErrInvalidGroupID)
+		panic(ErrInvalidGroupID)
 	}
 
 	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
-		panic("addClientAdmin: " + ErrInvalidAdmin)
+		panic(ErrInvalidAdmin)
 	}
 
 	ctx := storage.GetContext()
@@ -387,12 +387,12 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addClientAdmin: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("addClientAdmin: " + errCheckWitnessFailed)
+		panic(errCheckWitnessFailed)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -411,16 +411,16 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("removeClientAdmin: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	// V2 format check
 	if len(groupID) != groupIDSize {
-		panic("removeClientAdmin: " + ErrInvalidGroupID)
+		panic(ErrInvalidGroupID)
 	}
 
 	if len(adminPublicKey) != interop.PublicKeyCompressedLen {
-		panic("removeClientAdmin: " + ErrInvalidAdmin)
+		panic(ErrInvalidAdmin)
 	}
 
 	ctx := storage.GetContext()
@@ -429,12 +429,12 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeClientAdmin: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	owner := rawOwner.([]byte)
 	if !runtime.CheckWitness(owner) {
-		panic("removeClientAdmin: " + errCheckWitnessFailed)
+		panic(errCheckWitnessFailed)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -452,17 +452,17 @@ func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.P
 func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("addUser: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	// V2 format check
 	if len(userID) != userIDSize {
-		panic("addUser: " + ErrInvalidUser)
+		panic(ErrInvalidUser)
 	}
 
 	// V2 format check
 	if len(groupID) != groupIDSize {
-		panic("addUser: " + ErrInvalidGroupID)
+		panic(ErrInvalidGroupID)
 	}
 
 	ctx := storage.GetContext()
@@ -471,7 +471,7 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("addUser: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -480,7 +480,7 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 	owner := rawOwner.([]byte)
 
 	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
-		panic("addUser: " + ErrAccessDenied)
+		panic(ErrAccessDenied)
 	}
 
 	stKey[0] = userPrefix
@@ -497,17 +497,17 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("removeUser: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	// V2 format check
 	if len(groupID) != groupIDSize {
-		panic("removeUser: " + ErrInvalidGroupID)
+		panic(ErrInvalidGroupID)
 	}
 
 	// V2 format check
 	if len(userID) != userIDSize {
-		panic("addUser: " + ErrInvalidUser)
+		panic(ErrInvalidUser)
 	}
 
 	ctx := storage.GetContext()
@@ -516,7 +516,7 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 
 	rawOwner := storage.Get(ctx, stKey)
 	if rawOwner == nil {
-		panic("removeUser: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = clientAdminPrefix
@@ -525,7 +525,7 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	owner := rawOwner.([]byte)
 
 	if !calledByOwnerOrAdmin(ctx, owner, stKey) {
-		panic("removeUser: " + ErrAccessDenied)
+		panic(ErrAccessDenied)
 	}
 
 	stKey[0] = userPrefix
@@ -542,14 +542,14 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 func UserAllowed(subnetID []byte, user []byte) bool {
 	// V2 format check
 	if len(subnetID) != subnetIDSize {
-		panic("userAllowed: " + ErrInvalidSubnetID)
+		panic(ErrInvalidSubnetID)
 	}
 
 	ctx := storage.GetContext()
 
 	stKey := append([]byte{ownerPrefix}, subnetID...)
 	if storage.Get(ctx, stKey) == nil {
-		panic("userAllowed: " + ErrNotExist)
+		panic(ErrNotExist)
 	}
 
 	stKey[0] = userPrefix

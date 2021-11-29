@@ -70,7 +70,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	ln := len(config)
 	if ln%2 != 0 {
-		panic("_deploy: bad configuration")
+		panic("bad configuration")
 	}
 
 	for i := 0; i < ln/2; i++ {
@@ -85,7 +85,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if len(addrBalance) != 20 || len(addrContainer) != 20 {
-		panic("_deploy: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	// epoch number is a little endian int, it doesn't need to be serialized
@@ -156,12 +156,12 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("updateInnerRing: this method must be invoked by alphabet nodes")
+			panic("this method must be invoked by alphabet nodes")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("updateInnerRing: this method must be invoked by alphabet nodes")
+			panic("this method must be invoked by alphabet nodes")
 		}
 	}
 
@@ -217,7 +217,7 @@ func AddPeer(nodeInfo []byte) {
 	if !alphabetCall {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 		if !runtime.CheckWitness(publicKey) {
-			panic("addPeer: witness check failed")
+			panic("witness check failed")
 		}
 		runtime.Notify("AddPeer", nodeInfo)
 		return
@@ -253,7 +253,7 @@ func AddPeer(nodeInfo []byte) {
 // Method panics when invoked with unsupported states.
 func UpdateState(state int, publicKey interop.PublicKey) {
 	if len(publicKey) != 33 {
-		panic("updateState: incorrect public key")
+		panic("incorrect public key")
 	}
 
 	ctx := storage.GetContext()
@@ -269,7 +269,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			if !runtime.CheckWitness(publicKey) {
-				panic("updateState: witness check failed")
+				panic("witness check failed")
 			}
 			runtime.Notify("UpdateState", state, publicKey)
 			return
@@ -287,10 +287,10 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(publicKey) {
-			panic("updateState: witness check failed")
+			panic("witness check failed")
 		}
 		if !runtime.CheckWitness(multiaddr) {
-			panic("updateState: alphabet witness check failed")
+			panic("alphabet witness check failed")
 		}
 	}
 
@@ -299,7 +299,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("updateState: remove storage node from the network map")
 	default:
-		panic("updateState: unsupported state")
+		panic("unsupported state")
 	}
 }
 
@@ -325,12 +325,12 @@ func NewEpoch(epochNum int) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("newEpoch: this method must be invoked by inner ring nodes")
+			panic("this method must be invoked by inner ring nodes")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("newEpoch: this method must be invoked by inner ring nodes")
+			panic("this method must be invoked by inner ring nodes")
 		}
 	}
 
@@ -415,7 +415,7 @@ func Snapshot(diff int) []storageNode {
 	case 1:
 		key = snapshot1Key
 	default:
-		panic("snapshot: incorrect diff")
+		panic("incorrect diff")
 	}
 
 	ctx := storage.GetReadOnlyContext()
@@ -457,12 +457,12 @@ func SetConfig(id, key, val []byte) {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("setConfig: invoked by non inner ring node")
+			panic("invoked by non inner ring node")
 		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("setConfig: invoked by non inner ring node")
+			panic("invoked by non inner ring node")
 		}
 	}
 

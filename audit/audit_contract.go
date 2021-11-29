@@ -53,7 +53,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if len(addrNetmap) != 20 {
-		panic("init: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)
@@ -111,7 +111,7 @@ func Put(rawAuditResult []byte) {
 	}
 
 	if !runtime.CheckWitness(hdr.from) || !presented {
-		panic("audit: put access denied")
+		panic("put access denied")
 	}
 
 	storage.Put(ctx, hdr.ID(), rawAuditResult)

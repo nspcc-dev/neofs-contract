@@ -62,17 +62,17 @@ func _deploy(data interface{}, isUpdate bool) {
 	var irList []common.IRNode
 
 	if len(keys) == 0 {
-		panic("neofs: at least one alphabet key must be provided")
+		panic("at least one alphabet key must be provided")
 	}
 
 	if len(addrProc) != 20 {
-		panic("neofs: incorrect length of contract script hash")
+		panic("incorrect length of contract script hash")
 	}
 
 	for i := 0; i < len(keys); i++ {
 		pub := keys[i]
 		if len(pub) != publicKeySize {
-			panic("neofs: incorrect public key length")
+			panic("incorrect public key length")
 		}
 		irList = append(irList, common.IRNode{PublicKey: pub})
 	}
@@ -92,7 +92,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	ln := len(config)
 	if ln%2 != 0 {
-		panic("init: bad configuration")
+		panic("bad configuration")
 	}
 
 	for i := 0; i < ln/2; i++ {
@@ -162,12 +162,12 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 			alphabet = getNodes(ctx, alphabetKey)
 			nodeKey = common.InnerRingInvoker(alphabet)
 			if len(nodeKey) == 0 {
-				panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
+				panic("this method must be invoked by candidate or alphabet")
 			}
 		} else {
 			multiaddr := AlphabetAddress()
 			if !runtime.CheckWitness(multiaddr) {
-				panic("irCandidateRemove: this method must be invoked by candidate or alphabet")
+				panic("this method must be invoked by candidate or alphabet")
 			}
 		}
 	}
@@ -209,7 +209,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	if !runtime.CheckWitness(key) {
-		panic("irCandidateAdd: this method must be invoked by candidate")
+		panic("this method must be invoked by candidate")
 	}
 
 	c := common.IRNode{PublicKey: key}
@@ -217,7 +217,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 
 	list, ok := addNode(candidates, c)
 	if !ok {
-		panic("irCandidateAdd: candidate already in the list")
+		panic("candidate already in the list")
 	}
 
 	from := contract.CreateStandardAccount(key)
@@ -226,7 +226,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 
 	transferred := gas.Transfer(from, to, fee, []byte(ignoreDepositNotification))
 	if !transferred {
-		panic("irCandidateAdd: failed to transfer funds, aborting")
+		panic("failed to transfer funds, aborting")
 	}
 
 	runtime.Log("irCandidateAdd: candidate has been added")
@@ -244,14 +244,14 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	if amount <= 0 {
-		panic("onNEP17Payment: amount must be positive")
+		panic("amount must be positive")
 	} else if maxBalanceAmountGAS < amount {
-		panic("onNEP17Payment: out of max amount limit")
+		panic("out of max amount limit")
 	}
 
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
-		panic("onNEP17Payment: only GAS can be accepted for deposit")
+		panic("only GAS can be accepted for deposit")
 	}
 
 	switch len(rcv) {
@@ -259,7 +259,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	case 0:
 		rcv = from
 	default:
-		panic("onNEP17Payment: invalid data argument, expected Hash160")
+		panic("invalid data argument, expected Hash160")
 	}
 
 	runtime.Log("onNEP17Payment: funds have been transferred")
@@ -277,15 +277,15 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 // Fee value specified in NeoFS network config with the key WithdrawFee.
 func Withdraw(user interop.Hash160, amount int) {
 	if !runtime.CheckWitness(user) {
-		panic("withdraw: you should be the owner of the wallet")
+		panic("you should be the owner of the wallet")
 	}
 
 	if amount < 0 {
-		panic("withdraw: non positive amount number")
+		panic("non positive amount number")
 	}
 
 	if amount > maxBalanceAmount {
-		panic("withdraw: out of max amount limit")
+		panic("out of max amount limit")
 	}
 
 	ctx := storage.GetContext()
@@ -301,7 +301,7 @@ func Withdraw(user interop.Hash160, amount int) {
 
 			transferred := gas.Transfer(user, processingAddr, fee, []byte{})
 			if !transferred {
-				panic("withdraw: failed to transfer withdraw fee, aborting")
+				panic("failed to transfer withdraw fee, aborting")
 			}
 		}
 	} else {
@@ -309,7 +309,7 @@ func Withdraw(user interop.Hash160, amount int) {
 
 		transferred := gas.Transfer(user, processingAddr, fee, []byte{})
 		if !transferred {
-			panic("withdraw: failed to transfer withdraw fee, aborting")
+			panic("failed to transfer withdraw fee, aborting")
 		}
 	}
 
@@ -338,12 +338,12 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 		alphabet = getNodes(ctx, alphabetKey)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("cheque: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	} else {
 		multiaddr := AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("cheque: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	}
 
@@ -362,7 +362,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 
 	transferred := gas.Transfer(from, user, amount, nil)
 	if !transferred {
-		panic("cheque: failed to transfer funds, aborting")
+		panic("failed to transfer funds, aborting")
 	}
 
 	runtime.Log("cheque: funds have been transferred")
@@ -376,13 +376,13 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 // 33 byte long. User argument must be valid 20 byte script hash.
 func Bind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
-		panic("binding: you should be the owner of the wallet")
+		panic("you should be the owner of the wallet")
 	}
 
 	for i := 0; i < len(keys); i++ {
 		pubKey := keys[i]
 		if len(pubKey) != publicKeySize {
-			panic("binding: incorrect public key size")
+			panic("incorrect public key size")
 		}
 	}
 
@@ -396,13 +396,13 @@ func Bind(user []byte, keys []interop.PublicKey) {
 // 33 byte long. User argument must be valid 20 byte script hash.
 func Unbind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
-		panic("unbinding: you should be the owner of the wallet")
+		panic("you should be the owner of the wallet")
 	}
 
 	for i := 0; i < len(keys); i++ {
 		pubKey := keys[i]
 		if len(pubKey) != publicKeySize {
-			panic("unbinding: incorrect public key size")
+			panic("incorrect public key size")
 		}
 	}
 
@@ -419,7 +419,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	if len(args) == 0 {
-		panic("alphabetUpdate: bad arguments")
+		panic("bad arguments")
 	}
 
 	var ( // for invocation collection without notary
@@ -431,12 +431,12 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 		alphabet = getNodes(ctx, alphabetKey)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
-			panic("alphabetUpdate: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	} else {
 		multiaddr := AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("alphabetUpdate: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	}
 
@@ -445,7 +445,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	for i := 0; i < len(args); i++ {
 		pubKey := args[i]
 		if len(pubKey) != publicKeySize {
-			panic("alphabetUpdate: invalid public key in alphabet list")
+			panic("invalid public key in alphabet list")
 		}
 
 		newAlphabet = append(newAlphabet, common.IRNode{
@@ -492,12 +492,12 @@ func SetConfig(id, key, val []byte) {
 		alphabet = getNodes(ctx, alphabetKey)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(key) == 0 {
-			panic("setConfig: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	} else {
 		multiaddr := AlphabetAddress()
 		if !runtime.CheckWitness(multiaddr) {
-			panic("setConfig: this method must be invoked by alphabet")
+			panic("this method must be invoked by alphabet")
 		}
 	}
 
