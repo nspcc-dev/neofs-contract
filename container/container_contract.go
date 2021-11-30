@@ -267,7 +267,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
 	}
 
-	runtime.Log("put: added new container")
+	runtime.Log("added new container")
 }
 
 // checkNiceNameAvailable checks if nice name is available for the container.
@@ -348,7 +348,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		}
 	}
 	removeContainer(ctx, containerID, ownerID)
-	runtime.Log("delete: remove container")
+	runtime.Log("remove container")
 }
 
 // Get method returns structure that contains stable marshaled Container structure,
@@ -455,7 +455,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	common.SetSerialized(ctx, key, rule)
 
-	runtime.Log("setEACL: success")
+	runtime.Log("success")
 }
 
 // EACL method returns structure that contains stable marshaled EACLTable structure,
@@ -501,7 +501,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 
 	storage.Put(ctx, key, std.Serialize(s))
 
-	runtime.Log("container: saved container size estimation")
+	runtime.Log("saved container size estimation")
 }
 
 // GetContainerSize method returns container ID and slice of container
@@ -616,7 +616,7 @@ func StartContainerEstimation(epoch int) {
 	}
 
 	runtime.Notify("StartEstimation", epoch)
-	runtime.Log("startEstimation: notification has been produced")
+	runtime.Log("notification has been produced")
 }
 
 // StopContainerEstimation method produces StopEstimation notification.
@@ -654,7 +654,7 @@ func StopContainerEstimation(epoch int) {
 	}
 
 	runtime.Notify("StopEstimation", epoch)
-	runtime.Log("stopEstimation: notification has been produced")
+	runtime.Log("notification has been produced")
 }
 
 // Version returns version of the contract.
