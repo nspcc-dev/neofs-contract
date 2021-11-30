@@ -239,14 +239,14 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	if amount <= 0 {
-		panic("amount must be positive")
+		common.AbortWithMessage("amount must be positive")
 	} else if maxBalanceAmountGAS < amount {
-		panic("out of max amount limit")
+		common.AbortWithMessage("out of max amount limit")
 	}
 
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
-		panic("only GAS can be accepted for deposit")
+		common.AbortWithMessage("only GAS can be accepted for deposit")
 	}
 
 	switch len(rcv) {
@@ -254,7 +254,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	case 0:
 		rcv = from
 	default:
-		panic("invalid data argument, expected Hash160")
+		common.AbortWithMessage("invalid data argument, expected Hash160")
 	}
 
 	runtime.Log("funds have been transferred")
