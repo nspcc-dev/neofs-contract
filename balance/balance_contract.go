@@ -245,7 +245,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		panic("can't lock funds")
 	}
 
-	runtime.Log("lock: created lock account")
+	runtime.Log("created lock account")
 	runtime.Notify("Lock", txDetails, from, to, amount, until)
 }
 
@@ -343,7 +343,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	supply := token.getSupply(ctx)
 	supply = supply + amount
 	storage.Put(ctx, token.CirculationKey, supply)
-	runtime.Log("mint: assets were minted")
+	runtime.Log("assets were minted")
 	runtime.Notify("Mint", to, amount)
 }
 
@@ -404,7 +404,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 
 	supply = supply - amount
 	storage.Put(ctx, token.CirculationKey, supply)
-	runtime.Log("burn: assets were burned")
+	runtime.Log("assets were burned")
 	runtime.Notify("Burn", from, amount)
 }
 
@@ -465,7 +465,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 
 	if !innerRing {
 		if len(to) != 20 || !isUsableAddress(from) {
-			runtime.Log("transfer: bad script hashes")
+			runtime.Log("bad script hashes")
 			return emptyAcc, false
 		}
 	} else if len(from) == 0 {
@@ -474,7 +474,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 
 	amountFrom := getAccount(ctx, from)
 	if amountFrom.Balance < amount {
-		runtime.Log("transfer: not enough assets")
+		runtime.Log("not enough assets")
 		return emptyAcc, false
 	}
 

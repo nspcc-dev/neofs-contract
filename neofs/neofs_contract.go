@@ -178,7 +178,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 		if !common.BytesEqual(c.PublicKey, key) {
 			nodes = append(nodes, c)
 		} else {
-			runtime.Log("irCandidateRemove: candidate has been removed")
+			runtime.Log("candidate has been removed")
 		}
 	}
 
@@ -225,7 +225,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 		panic("failed to transfer funds, aborting")
 	}
 
-	runtime.Log("irCandidateAdd: candidate has been added")
+	runtime.Log("candidate has been added")
 	common.SetSerialized(ctx, candidatesKey, list)
 }
 
@@ -258,7 +258,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 		panic("invalid data argument, expected Hash160")
 	}
 
-	runtime.Log("onNEP17Payment: funds have been transferred")
+	runtime.Log("funds have been transferred")
 
 	tx := runtime.GetScriptContainer()
 	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
@@ -359,7 +359,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 		panic("failed to transfer funds, aborting")
 	}
 
-	runtime.Log("cheque: funds have been transferred")
+	runtime.Log("funds have been transferred")
 	runtime.Notify("Cheque", id, user, amount, lockAcc)
 }
 
@@ -459,7 +459,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	common.SetSerialized(ctx, alphabetKey, newAlphabet)
 
 	runtime.Notify("AlphabetUpdate", id, newAlphabet)
-	runtime.Log("alphabetUpdate: alphabet list has been updated")
+	runtime.Log("alphabet list has been updated")
 }
 
 // Config returns configuration value of NeoFS configuration. If key does
@@ -505,7 +505,7 @@ func SetConfig(id, key, val []byte) {
 	setConfig(ctx, key, val)
 
 	runtime.Notify("SetConfig", id, key, val)
-	runtime.Log("setConfig: configuration has been updated")
+	runtime.Log("configuration has been updated")
 }
 
 // ListConfig returns array of structures that contain key and value of all

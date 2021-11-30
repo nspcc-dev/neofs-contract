@@ -182,7 +182,7 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 		common.RemoveVotes(ctx, id)
 	}
 
-	runtime.Log("updateInnerRing: inner ring list updated")
+	runtime.Log("inner ring list updated")
 	common.SetSerialized(ctx, innerRingKey, irList)
 }
 
@@ -289,7 +289,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	switch nodeState(state) {
 	case offlineState:
 		removeFromNetmap(ctx, publicKey)
-		runtime.Log("updateState: remove storage node from the network map")
+		runtime.Log("remove storage node from the network map")
 	default:
 		panic("unsupported state")
 	}
@@ -344,7 +344,7 @@ func NewEpoch(epochNum int) {
 	data0snapshot := getSnapshot(ctx, snapshot0Key)
 	dataOnlineState := filterNetmap(ctx, onlineState)
 
-	runtime.Log("newEpoch: process new epoch")
+	runtime.Log("process new epoch")
 
 	// todo: check if provided epoch number is bigger than current
 	storage.Put(ctx, snapshotEpoch, epochNum)
@@ -467,7 +467,7 @@ func SetConfig(id, key, val []byte) {
 
 	setConfig(ctx, key, val)
 
-	runtime.Log("setConfig: configuration has been updated")
+	runtime.Log("configuration has been updated")
 }
 
 // ListConfig returns array of structures that contain key and value of all

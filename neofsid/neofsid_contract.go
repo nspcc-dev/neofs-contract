@@ -138,7 +138,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		common.RemoveVotes(ctx, id)
 	}
 
-	runtime.Log("addKey: key bound to the owner")
+	runtime.Log("key bound to the owner")
 }
 
 // RemoveKey unbinds provided public keys from OwnerID. Can be invoked only by
