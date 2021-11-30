@@ -136,7 +136,9 @@ func Emit() {
 
 	contractHash := runtime.GetExecutingScriptHash()
 
-	neo.Transfer(contractHash, contractHash, neo.BalanceOf(contractHash), nil)
+	if !neo.Transfer(contractHash, contractHash, neo.BalanceOf(contractHash), nil) {
+		panic("failed to transfer funds, aborting")
+	}
 
 	gasBalance := gas.BalanceOf(contractHash)
 
@@ -148,7 +150,10 @@ func Emit() {
 			panic("no gas to emit")
 		}
 
-		gas.Transfer(contractHash, proxyAddr, proxyGas, nil)
+		if !gas.Transfer(contractHash, proxyAddr, proxyGas, nil) {
+			runtime.Log("could not transfer GAS to proxy contract")
+		}
+
 		gasBalance -= proxyGas
 
 		runtime.Log("utility token has been emitted to proxy contract")
@@ -168,7 +173,9 @@ func Emit() {
 	if gasPerNode != 0 {
 		for _, node := range innerRing {
 			address := contract.CreateStandardAccount(node.PublicKey)
-			gas.Transfer(contractHash, address, gasPerNode, nil)
+			if !gas.Transfer(contractHash, address, gasPerNode, nil) {
+				runtime.Log("could not transfer GAS to one of IR node")
+			}
 		}
 
 		runtime.Log("utility token has been emitted to inner ring nodes")
