@@ -95,6 +95,12 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		panic("incorrect owner")
 	}
 
+	for i := range keys {
+		if len(keys[i]) != interop.PublicKeyCompressedLen {
+			panic("incorrect public key")
+		}
+	}
+
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -114,35 +120,28 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 		indirectCall = common.FromKnownContract(
 			ctx,
 			runtime.GetCallingScriptHash(),
-			containerContractKey,
-		)
+			containerContractKey)
+
+		if indirectCall {
+			threshold := len(alphabet)*2/3 + 1
+			id := invokeIDKeys(owner, keys, []byte("add"))
+
+			n := common.Vote(ctx, id, nodeKey)
+			if n < threshold {
+				return
+			}
+
+			common.RemoveVotes(ctx, id)
+		}
 	} else {
 		multiaddr := common.AlphabetAddress()
 		common.CheckAlphabetWitness(multiaddr)
-	}
-
-	for i := range keys {
-		if len(keys[i]) != interop.PublicKeyCompressedLen {
-			panic("incorrect public key")
-		}
 	}
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
 	for i := range keys {
 		stKey := append(ownerKey, keys[i]...)
 		storage.Put(ctx, stKey, []byte{1})
-	}
-
-	if notaryDisabled && !indirectCall {
-		threshold := len(alphabet)*2/3 + 1
-		id := invokeIDKeys(owner, keys, []byte("add"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
 	}
 
 	runtime.Log("key bound to the owner")
@@ -159,6 +158,12 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		panic("incorrect owner")
 	}
 
+	for i := range keys {
+		if len(keys[i]) != interop.PublicKeyCompressedLen {
+			panic("incorrect public key")
+		}
+	}
+
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
@@ -173,24 +178,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		if len(nodeKey) == 0 {
 			panic("invocation from non inner ring node")
 		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
 
-	for i := range keys {
-		if len(keys[i]) != interop.PublicKeyCompressedLen {
-			panic("incorrect public key")
-		}
-	}
-
-	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
-	for i := range keys {
-		stKey := append(ownerKey, keys[i]...)
-		storage.Delete(ctx, stKey)
-	}
-
-	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		id := invokeIDKeys(owner, keys, []byte("remove"))
 
@@ -200,6 +188,17 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 		}
 
 		common.RemoveVotes(ctx, id)
+	} else {
+		multiaddr := common.AlphabetAddress()
+		if !runtime.CheckWitness(multiaddr) {
+			panic("invocation from non inner ring node")
+		}
+	}
+
+	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
+	for i := range keys {
+		stKey := append(ownerKey, keys[i]...)
+		storage.Delete(ctx, stKey)
 	}
 }
 

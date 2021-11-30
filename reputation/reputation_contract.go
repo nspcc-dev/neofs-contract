@@ -100,8 +100,18 @@ func Put(epoch int, peerID []byte, value []byte) {
 	}
 
 	id := storageID(epoch, peerID)
-	key := getReputationKey(reputationCountPrefix, id)
+	if notaryDisabled {
+		threshold := len(alphabet)*2/3 + 1
 
+		n := common.Vote(ctx, id, nodeKey)
+		if n < threshold {
+			return
+		}
+
+		common.RemoveVotes(ctx, id)
+	}
+
+	key := getReputationKey(reputationCountPrefix, id)
 	rawCnt := storage.Get(ctx, key)
 	cnt := 0
 	if rawCnt != nil {
@@ -113,17 +123,6 @@ func Put(epoch int, peerID []byte, value []byte) {
 	key[0] = reputationValuePrefix
 	key = append(key, convert.ToBytes(cnt)...)
 	storage.Put(ctx, key, value)
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
 }
 
 // Get method returns list of all stable marshaled DataAuditResult structures
