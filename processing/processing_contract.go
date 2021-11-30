@@ -22,7 +22,7 @@ const (
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
 	if !common.BytesEqual(caller, []byte(gas.Hash)) {
-		panic("processing contract accepts GAS only")
+		common.AbortWithMessage("processing contract accepts GAS only")
 	}
 }
 

@@ -1,5 +1,10 @@
 package common
 
+import (
+	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
+	"github.com/nspcc-dev/neo-go/pkg/interop/util"
+)
+
 var (
 	mintPrefix         = []byte{0x01}
 	burnPrefix         = []byte{0x02}
@@ -32,4 +37,11 @@ func UnlockTransferDetails(epoch int) []byte {
 
 func ContainerFeeTransferDetails(cid []byte) []byte {
 	return append(containerFeePrefix, cid...)
+}
+
+// AbortWithMessage calls `runtime.Log` with passed message
+// and calls `ABORT` opcode.
+func AbortWithMessage(msg string) {
+	runtime.Log(msg)
+	util.Abort()
 }
