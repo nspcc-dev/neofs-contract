@@ -521,10 +521,11 @@ func ListConfig() []record {
 
 	it := storage.Find(ctx, configPrefix, storage.None)
 	for iterator.Next(it) {
-		pair := iterator.Value(it).([]interface{})
-		key := pair[0].([]byte)
-		val := pair[1].([]byte)
-		r := record{key: key[len(configPrefix):], val: val}
+		pair := iterator.Value(it).(struct {
+			key []byte
+			val []byte
+		})
+		r := record{key: pair.key[len(configPrefix):], val: pair.val}
 
 		config = append(config, r)
 	}
