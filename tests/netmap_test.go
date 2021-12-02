@@ -90,6 +90,9 @@ func TestAddPeer(t *testing.T) {
 	require.Equal(t, "AddPeer", aer.Events[0].Name)
 	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo)}),
 		aer.Events[0].Item)
+
+	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo)
+	c.Invoke(t, stackitem.Null{}, "register", dummyInfo)
 }
 
 func TestUpdateState(t *testing.T) {

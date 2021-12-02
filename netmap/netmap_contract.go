@@ -188,6 +188,21 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	common.SetSerialized(ctx, innerRingKey, irList)
 }
 
+// Register method tries to add new candidate to the network map by
+// emitting AddPeer notification. Should be invoked by the registree.
+func Register(nodeInfo []byte) {
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	if notaryDisabled {
+		panic("Register should only be called in notary-enabled environment")
+	}
+
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+
+	addToNetmap(ctx, storageNode{info: nodeInfo})
+	return
+}
+
 // AddPeer method adds new candidate to the next network map if it was invoked
 // by Alphabet node. If it was invoked by node candidate, it produces AddPeer
 // notification. Otherwise method throws panic.
@@ -200,25 +215,22 @@ func AddPeer(nodeInfo []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
-		nodeKey      []byte
-		alphabetCall bool
+		alphabet []common.IRNode
+		nodeKey  []byte
 	)
 
 	if notaryDisabled {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
-	} else {
-		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
 	}
 
-	if !alphabetCall {
+	// If notary is enabled or caller is not an alphabet node,
+	// just emit the notification for alphabet.
+	if !notaryDisabled || len(nodeKey) == 0 {
 		// V2 format
 		publicKey := nodeInfo[2:35] // offset:2, len:33
-		common.CheckWitness(publicKey)
 
+		common.CheckWitness(publicKey)
 		runtime.Notify("AddPeer", nodeInfo)
 		return
 	}
