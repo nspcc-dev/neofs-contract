@@ -38,7 +38,7 @@ func deployNeoFSContract(t *testing.T, e *neotest.Executor, addrProc util.Uint16
 	return c.Hash
 }
 
-func newNeoFSInvoker(t *testing.T, n int, config ...interface{}) (*neotest.ContractInvoker, keys.PublicKeys) {
+func newNeoFSInvoker(t *testing.T, n int, config ...interface{}) (*neotest.ContractInvoker, neotest.Signer, keys.PublicKeys) {
 	e := newExecutor(t)
 
 	accounts := make([]*wallet.Account, n)
@@ -76,13 +76,13 @@ func newNeoFSInvoker(t *testing.T, n int, config ...interface{}) (*neotest.Contr
 		e.Validator.ScriptHash(), alphabet.ScriptHash(),
 		int64(10_0000_0000), nil)
 
-	return e.CommitteeInvoker(h).WithSigners(alphabet), pubs
+	return e.CommitteeInvoker(h).WithSigners(alphabet), alphabet, pubs
 }
 
 func TestNeoFS_AlphabetList(t *testing.T) {
 	const alphabetSize = 4
 
-	e, pubs := newNeoFSInvoker(t, alphabetSize)
+	e, _, pubs := newNeoFSInvoker(t, alphabetSize)
 	arr := make([]stackitem.Item, len(pubs))
 	for i := range arr {
 		arr[i] = stackitem.NewStruct([]stackitem.Item{
@@ -94,7 +94,7 @@ func TestNeoFS_AlphabetList(t *testing.T) {
 }
 
 func TestNeoFS_InnerRingCandidate(t *testing.T) {
-	e, _ := newNeoFSInvoker(t, 4, neofs.CandidateFeeConfigKey, int64(10))
+	e, _, _ := newNeoFSInvoker(t, 4, neofs.CandidateFeeConfigKey, int64(10))
 
 	const candidateCount = 3
 
