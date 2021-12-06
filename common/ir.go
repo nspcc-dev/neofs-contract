@@ -32,7 +32,7 @@ func InnerRingInvoker(ir []IRNode) interop.PublicKey {
 // in side chain.
 func InnerRingNodes() []IRNode {
 	blockHeight := ledger.CurrentIndex()
-	list := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight))
+	list := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
 	return keysToNodes(list)
 }
 
