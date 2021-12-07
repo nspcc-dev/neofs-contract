@@ -1,6 +1,35 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.13.0] - 2021-12-07 - Sinjido (신지도, 薪智島)
+
+Support of subnetwork contract from NeoFS API v2.11.0.
+
+### Fixed
+- Records with duplicate values are not allowed in NNS anymore (#165)
+- Allow multiple `reputation.Put`, `container.PutCotnainerSize`, 
+  `neofsid.AddKey`, `neofsid.RemoveKey`, `neofs.InnerRingCandidateAdd`, 
+  `neofs.InnerRingCandidateRemove` invocations in one block (#101)
+- `netmap.UpdateState` checks both node and alphabet signatures in notary
+  enabled environment (#154)
+
+### Added
+- Version method in NNS contract (#158)
+- Subnet contract (#122)
+- `netmap.Register` method for notary enabled environment (#154)
+
+### Changed
+- Container contract throws panic if required container is missing (#142)
+- Container contract does not throw panic if deleting container is already 
+  removed (#142)
+- NNS stores root as regular TLD (#139)
+- Use testing framework from neo-go (#161)
+- Allow hyphen in domain names in NNS (#180)
+- Panic messages do not heave method name prefix anymore (#179)
+- `OnNEP17Payment` method calls `Abort` instead of panic (#179)
+- Allow arbitrary-level domains in NNS (#172)
+- Refactor (#169)
+
 ## [0.12.2] - 2021-11-26
 
 ### Fixed
@@ -254,6 +283,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.13.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.11.0...v0.12.0
