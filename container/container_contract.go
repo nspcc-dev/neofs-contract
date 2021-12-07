@@ -94,9 +94,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	})
 
 	if isUpdate {
-		storage.Put(ctx, nnsContractKey, args.addrNNS)
-		storage.Put(ctx, nnsRootKey, args.nnsRoot)
-		registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 		return
 	}
 
