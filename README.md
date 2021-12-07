@@ -29,6 +29,7 @@ Side chain contracts:
 - nns
 - proxy
 - reputation
+- subnet
 
 # Getting started 
 
@@ -36,7 +37,7 @@ Side chain contracts:
 
 To compile smart contracts you need:
 
--   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.97.3
+-   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.98.0
 
 ## Compilation
 
@@ -46,17 +47,18 @@ corresponding directories.
 
 ```
 $ make all
-neo-go contract compile -i alphabet -c alphabet/config.yml -m alphabet/config.json -o alphabet/alphabet_contract.nef
-neo-go contract compile -i audit -c audit/config.yml -m audit/config.json -o audit/audit_contract.nef
-neo-go contract compile -i balance -c balance/config.yml -m balance/config.json -o balance/balance_contract.nef
-neo-go contract compile -i container -c container/config.yml -m container/config.json -o container/container_contract.nef
-neo-go contract compile -i neofsid -c neofsid/config.yml -m neofsid/config.json -o neofsid/neofsid_contract.nef
-neo-go contract compile -i netmap -c netmap/config.yml -m netmap/config.json -o netmap/netmap_contract.nef
-neo-go contract compile -i proxy -c proxy/config.yml -m proxy/config.json -o proxy/proxy_contract.nef
-neo-go contract compile -i reputation -c reputation/config.yml -m reputation/config.json -o reputation/reputation_contract.nef
-neo-go contract compile -i nns -c nns/config.yml -m nns/config.json -o nns/nns_contract.nef
-neo-go contract compile -i neofs -c neofs/config.yml -m neofs/config.json -o neofs/neofs_contract.nef
-neo-go contract compile -i processing -c processing/config.yml -m processing/config.json -o processing/processing_contract.nef
+/home/user/go/bin/cli contract compile -i alphabet -c alphabet/config.yml -m alphabet/config.json -o alphabet/alphabet_contract.nef
+/home/user/go/bin/cli contract compile -i audit -c audit/config.yml -m audit/config.json -o audit/audit_contract.nef
+/home/user/go/bin/cli contract compile -i balance -c balance/config.yml -m balance/config.json -o balance/balance_contract.nef
+/home/user/go/bin/cli contract compile -i container -c container/config.yml -m container/config.json -o container/container_contract.nef
+/home/user/go/bin/cli contract compile -i neofsid -c neofsid/config.yml -m neofsid/config.json -o neofsid/neofsid_contract.nef
+/home/user/go/bin/cli contract compile -i netmap -c netmap/config.yml -m netmap/config.json -o netmap/netmap_contract.nef
+/home/user/go/bin/cli contract compile -i proxy -c proxy/config.yml -m proxy/config.json -o proxy/proxy_contract.nef
+/home/user/go/bin/cli contract compile -i reputation -c reputation/config.yml -m reputation/config.json -o reputation/reputation_contract.nef
+/home/user/go/bin/cli contract compile -i subnet -c subnet/config.yml -m subnet/config.json -o subnet/subnet_contract.nef
+/home/user/go/bin/cli contract compile -i nns -c nns/config.yml -m nns/config.json -o nns/nns_contract.nef
+/home/user/go/bin/cli contract compile -i neofs -c neofs/config.yml -m neofs/config.json -o neofs/neofs_contract.nef
+/home/user/go/bin/cli contract compile -i processing -c processing/config.yml -m processing/config.json -o processing/processing_contract.nef
 ```
 
 You can specify path to the `neo-go` binary with `NEOGO` environment variable:
@@ -83,6 +85,7 @@ ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 |v0.10.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)|
 |v0.11.x|[v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0), [v2.9.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.9.0)|
 |v0.12.x|[v2.10.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.10.0)|
+|v0.13.x|[v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0)|
 
 
 # License
