@@ -130,7 +130,7 @@ func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	}
 
 	res := contract.Call(addrNNS, "register", contract.All,
-		nnsRoot, common.CommitteeAddress(), "ops@nspcc.ru",
+		nnsRoot, runtime.GetExecutingScriptHash(), "ops@nspcc.ru",
 		defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool)
 	if !res {
 		panic("can't register NNS TLD")
