@@ -94,8 +94,34 @@ func _deploy(data interface{}, isUpdate bool) {
 		it := storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
 		for iterator.Next(it) {
 			name := iterator.Value(it).(string)
+			if name != "neofs" {
+				continue
+			}
+
 			ns := NameState{
 				Owner:      committee,
+				Name:       name,
+				Expiration: runtime.GetTime() + millisecondsInYear,
+			}
+			tokenKey := getTokenKey([]byte(name))
+			putNameStateWithKey(ctx, tokenKey, ns)
+			putSoaRecord(ctx, name, "ops@nspcc.ru",
+				3600 /* 1 hour */, 600, /* 10 min */
+				604800 /* 1 week */, 3600 /* 1 hour */)
+		}
+
+		r := GetRecords("container.neofs", TXT)
+		owner := shBEFromLEHex(r[0])
+
+		it = storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
+		for iterator.Next(it) {
+			name := iterator.Value(it).(string)
+			if name == "neofs" {
+				continue
+			}
+
+			ns := NameState{
+				Owner:      owner,
 				Name:       name,
 				Expiration: runtime.GetTime() + millisecondsInYear,
 			}
@@ -111,6 +137,39 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	storage.Put(ctx, []byte{prefixTotalSupply}, 0)
 	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
+}
+
+// remove after v0.13.1 upgrade
+func shBEFromLEHex(s string) interop.Hash160 {
+	res := make([]byte, interop.Hash160Len)
+
+	ln := len(s) / 2
+	for i := 0; i < ln; i++ {
+		a := hexToNum(s[i*2])
+		b := hexToNum(s[i*2+1])
+
+		var n interface{} = a*16 + b
+		res[ln-1-i] = n.([]byte)[0]
+	}
+
+	return res
+}
+
+// remove after v0.13.1 upgrade
+func hexToNum(s uint8) int {
+	if s >= '0' && s <= '9' {
+		return int(s) - 48
+	}
+
+	if s >= 'A' && s <= 'F' {
+		return int(s) - 55
+	}
+
+	if s >= 'a' && s <= 'f' {
+		return int(s) - 87
+	}
+
+	panic("invalid hex")
 }
 
 // Symbol returns NeoNameService symbol.
