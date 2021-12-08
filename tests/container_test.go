@@ -124,30 +124,23 @@ func TestContainerPut(t *testing.T) {
 			cnt.value[len(cnt.value)-1] = 10
 			cnt.id = sha256.Sum256(cnt.value)
 
-			t.Run("bad domain owner", func(t *testing.T) {
-				c1 := cNNS.WithSigners(acc, c.Committee)
-				c1.Invoke(t, true, "register",
-					"baddomain.neofs", acc.ScriptHash(),
-					"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
-
-				cAcc.InvokeFail(t, "committee or container contract must own registered domain",
-					"putNamed",
-					cnt.value, cnt.sig, cnt.pub, cnt.token, "baddomain", "neofs")
-			})
+			cNNS.Invoke(t, true, "register",
+				"cdn", c.CommitteeHash,
+				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 
 			cNNS.Invoke(t, true, "register",
-				"second.neofs", c.CommitteeHash,
+				"domain.cdn", c.CommitteeHash,
 				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
 
 			balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
 
-			putArgs := []interface{}{cnt.value, cnt.sig, cnt.pub, cnt.token, "second", "neofs"}
+			putArgs := []interface{}{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
 			c2 := c.WithSigners(c.Committee, acc)
 			c2.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
 
 			expected = stackitem.NewArray([]stackitem.Item{
 				stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
-			cNNS.Invoke(t, expected, "resolve", "second.neofs", int64(nns.TXT))
+			cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(nns.TXT))
 		})
 	})
 }
