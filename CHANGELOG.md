@@ -1,6 +1,12 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.13.1] - 2021-12-08
+
+### Fixed
+- Specify container contract as owner of all container related domain zones
+  (#194)
+
 ## [0.13.0] - 2021-12-07 - Sinjido (신지도, 薪智島)
 
 Support of subnetwork contract from NeoFS API v2.11.0.
@@ -283,6 +289,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.13.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.0...v0.12.1
