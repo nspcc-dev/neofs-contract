@@ -23,12 +23,19 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		// Storage migration.
+		storage.Delete(ctx, []byte("contractOwner"))
+
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
 			kv := iterator.Value(it).([][]byte)
 			if string(kv[0]) == notaryDisabledKey {
 				continue
 			}
+			if string(kv[0]) == "ballots" {
+				continue
+			}
+
+			storage.Delete(ctx, kv[0])
 
 			rawValues := std.Deserialize(kv[1]).([][]byte)
 			key := getReputationKey(reputationCountPrefix, kv[0])
