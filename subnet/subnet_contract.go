@@ -578,12 +578,10 @@ func calledByOwnerOrAdmin(ctx storage.Context, owner []byte, adminPrefix []byte)
 		return true
 	}
 
-	prefixLen := len(adminPrefix)
-
-	iter := storage.Find(ctx, adminPrefix, storage.KeysOnly)
+	iter := storage.Find(ctx, adminPrefix, storage.KeysOnly|storage.RemovePrefix)
 	for iterator.Next(iter) {
 		key := iterator.Value(iter).([]byte)
-		if runtime.CheckWitness(key[prefixLen:]) {
+		if runtime.CheckWitness(key) {
 			return true
 		}
 	}
