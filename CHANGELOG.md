@@ -1,6 +1,11 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.13.2] - 2021-12-14
+
+### Fixed
+- Reputation contract migration (#201)
+
 ## [0.13.1] - 2021-12-08
 
 ### Fixed
@@ -289,6 +294,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.13.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.1...v0.12.2
