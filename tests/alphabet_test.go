@@ -18,11 +18,6 @@ import (
 
 const alphabetPath = "../alphabet"
 
-// FIXME: delete after https://github.com/nspcc-dev/neo-go/issues/2297
-const singleValidatorWIF = "KxyjQ8eUa4FHt3Gvioyt1Wz29cTUrE4eTqX3yFSk1YFCsPL8uNsY"
-
-var committeeAcc, _ = wallet.NewAccountFromWIF(singleValidatorWIF)
-
 func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy util.Uint160, name string, index, total int64) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
 
@@ -56,7 +51,9 @@ func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvok
 	deployProxyContract(t, e, ctrNetmap.Hash)
 	hash := deployAlphabetContract(t, e, ctrNetmap.Hash, ctrProxy.Hash, "Az", 0, 1)
 
-	setAlphabetRole(t, e, committeeAcc.PrivateKey().PublicKey().Bytes())
+	alphabet := getAlphabetAcc(t, e)
+
+	setAlphabetRole(t, e, alphabet.PrivateKey().PublicKey().Bytes())
 
 	return e, e.CommitteeInvoker(hash)
 }
@@ -66,7 +63,9 @@ func TestEmit(t *testing.T) {
 
 	const method = "emit"
 
-	cCommittee := c.WithSigners(neotest.NewSingleSigner(committeeAcc))
+	alphabet := getAlphabetAcc(t, c.Executor)
+
+	cCommittee := c.WithSigners(neotest.NewSingleSigner(alphabet))
 	cCommittee.InvokeFail(t, "no gas to emit", method)
 
 	transferNeoToContract(t, c)
@@ -141,4 +140,11 @@ func setAlphabetRole(t *testing.T, e *neotest.Executor, new []byte) {
 
 	// set committee as NeoFSAlphabet
 	designInvoker.Invoke(t, stackitem.Null{}, "designateAsRole", int64(noderoles.NeoFSAlphabet), []interface{}{new})
+}
+
+func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
+	multi, ok := e.Committee.(neotest.MultiSigner)
+	require.True(t, ok)
+
+	return multi.Single(0).Account()
 }
