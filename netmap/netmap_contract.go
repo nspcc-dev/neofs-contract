@@ -83,6 +83,9 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if isUpdate {
+		storage.Delete(ctx, "ballots")
+		storage.Put(ctx, notaryDisabledKey, false)
+
 		return
 	}
 

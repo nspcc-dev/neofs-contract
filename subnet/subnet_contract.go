@@ -58,6 +58,10 @@ const (
 // _deploy function sets up initial list of inner ring public keys.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		ctx := storage.GetContext()
+		storage.Delete(ctx, "ballots")
+		storage.Put(ctx, notaryDisabledKey, false)
+
 		return
 	}
 

@@ -34,6 +34,13 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		ctx := storage.GetContext()
+		storage.Delete(ctx, "ballots")
+		storage.Put(ctx, notaryDisabledKey, false)
+
+		proxyContract := data.([]interface{})[0] // better to hardcode it
+		storage.Put(ctx, proxyKey, proxyContract)
+
 		return
 	}
 
