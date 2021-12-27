@@ -83,6 +83,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if isUpdate {
+		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
 

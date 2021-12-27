@@ -43,7 +43,9 @@ const (
 )
 
 func _deploy(data interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
 	if isUpdate {
+		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
 
@@ -51,8 +53,6 @@ func _deploy(data interface{}, isUpdate bool) {
 		notaryDisabled bool
 		addrNetmap     interop.Hash160
 	})
-
-	ctx := storage.GetContext()
 
 	if len(args.addrNetmap) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")

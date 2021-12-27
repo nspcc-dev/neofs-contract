@@ -83,6 +83,10 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
+	if isUpdate {
+		storage.Delete(ctx, common.LegacyOwnerKey)
+		return
+	}
 
 	args := data.(struct {
 		notaryDisabled bool
@@ -92,10 +96,6 @@ func _deploy(data interface{}, isUpdate bool) {
 		addrNNS        interop.Hash160
 		nnsRoot        string
 	})
-
-	if isUpdate {
-		return
-	}
 
 	if len(args.addrNetmap) != interop.Hash160Len ||
 		len(args.addrBalance) != interop.Hash160Len ||
