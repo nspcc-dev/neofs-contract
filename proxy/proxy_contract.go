@@ -7,6 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
+	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
@@ -19,7 +20,9 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 func _deploy(_ interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
 	if isUpdate {
+		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
 

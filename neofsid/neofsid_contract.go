@@ -33,6 +33,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
+		storage.Delete(ctx, common.LegacyOwnerKey)
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
 			kv := iterator.Value(it).([][]byte)
