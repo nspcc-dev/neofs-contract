@@ -19,9 +19,11 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func _deploy(_ interface{}, isUpdate bool) {
-	ctx := storage.GetContext()
+func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		ctx := storage.GetContext()
+		args := data.([]interface{})
+		common.CheckVersion(args[len(args)-1].(int))
 		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
