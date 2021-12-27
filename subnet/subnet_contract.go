@@ -58,6 +58,8 @@ const (
 // _deploy function sets up initial list of inner ring public keys.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		args := data.([]interface{})
+		common.CheckVersion(args[len(args)-1].(int))
 		return
 	}
 

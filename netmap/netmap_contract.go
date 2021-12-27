@@ -68,6 +68,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		addrContainer  interop.Hash160
 		keys           []interop.PublicKey
 		config         [][]byte
+		version        int
 	})
 
 	ln := len(args.config)
@@ -83,6 +84,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	if isUpdate {
+		common.CheckVersion(args.version)
 		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}

@@ -90,6 +90,9 @@ func Update(nef []byte, manifest string, data interface{}) {
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
+		args := data.([]interface{})
+		common.CheckVersion(args[len(args)-1].(int))
+
 		ctx := storage.GetContext()
 		committee := common.CommitteeAddress()
 		it := storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
