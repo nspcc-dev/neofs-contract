@@ -7,12 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
-	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
-)
-
-const (
-	netmapContractKey = "netmapScriptHash"
 )
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
@@ -23,22 +18,10 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(_ interface{}, isUpdate bool) {
 	if isUpdate {
 		return
 	}
-
-	args := data.(struct {
-		addrNetmap interop.Hash160
-	})
-
-	ctx := storage.GetContext()
-
-	if len(args.addrNetmap) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
-	}
-
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
 
 	runtime.Log("proxy contract initialized")
 }
