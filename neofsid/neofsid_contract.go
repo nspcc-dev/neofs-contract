@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -34,19 +33,6 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		storage.Delete(ctx, common.LegacyOwnerKey)
-		it := storage.Find(ctx, []byte{}, storage.None)
-		for iterator.Next(it) {
-			kv := iterator.Value(it).([][]byte)
-			// V2 format
-			if len(kv[0]) == ownerSize {
-				info := std.Deserialize(kv[1]).(UserInfo)
-				key := append([]byte{ownerKeysPrefix}, kv[0]...)
-				for i := range info.Keys {
-					storage.Put(ctx, append(key, info.Keys[i]...), []byte{1})
-				}
-				storage.Delete(ctx, kv[0])
-			}
-		}
 		return
 	}
 
