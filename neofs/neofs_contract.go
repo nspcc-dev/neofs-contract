@@ -52,6 +52,10 @@ func _deploy(data interface{}, isUpdate bool) {
 		// common.CheckVersion(args[len(args)-1].(int))
 
 		ctx := storage.GetContext()
+
+		// TODO(@fyrchik): remove after mainnet update
+		storage.Delete(ctx, common.LegacyOwnerKey)
+
 		nodes := getNodes(ctx, candidatesKey)
 		storage.Delete(ctx, candidatesKey)
 
