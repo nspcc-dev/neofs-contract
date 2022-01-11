@@ -173,8 +173,8 @@ github.com/nspcc-dev/go-ordered-json v0.0.0-20210915112629-e1b6cce73d02/go.mod h
 github.com/nspcc-dev/hrw v1.0.9 h1:17VcAuTtrstmFppBjfRiia4K2wA/ukXZhLFS8Y8rz5Y=
 github.com/nspcc-dev/hrw v1.0.9/go.mod h1:l/W2vx83vMQo6aStyx2AuZrJ+07lGv2JQGlVkPG06MU=
 github.com/nspcc-dev/neo-go v0.73.1-pre.0.20200303142215-f5a1b928ce09/go.mod h1:pPYwPZ2ks+uMnlRLUyXOpLieaDQSEaf4NM3zHVbRjmg=
-github.com/nspcc-dev/neo-go v0.98.1-pre.0.20211210100555-b43335e5911f h1:2/9uQX8UfHnycmECD25c9VqEGINPmZyOJ2RpLRktego=
-github.com/nspcc-dev/neo-go v0.98.1-pre.0.20211210100555-b43335e5911f/go.mod h1:E3cc1x6RXSXrJb2nDWXTXjnXk3rIqVN8YdFyWv+FrqM=
+github.com/nspcc-dev/neo-go v0.98.1-pre.0.20220110205632-fcbb0aacc2fe h1:GcZ15OvNOi2EJhx4oseOAJqSPEhR0GP/zzY2HIPl3Qw=
+github.com/nspcc-dev/neo-go v0.98.1-pre.0.20220110205632-fcbb0aacc2fe/go.mod h1:E3cc1x6RXSXrJb2nDWXTXjnXk3rIqVN8YdFyWv+FrqM=
 github.com/nspcc-dev/neofs-api-go/v2 v2.11.0-pre.0.20211201134523-3604d96f3fe1 h1:CGA56mhLLduWRuMHcWujP5Ek+gAnXHk0WuIWkG65G1s=
 github.com/nspcc-dev/neofs-api-go/v2 v2.11.0-pre.0.20211201134523-3604d96f3fe1/go.mod h1:oS8dycEh8PPf2Jjp6+8dlwWyEv2Dy77h/XhhcdxYEFs=
 github.com/nspcc-dev/neofs-crypto v0.2.0/go.mod h1:F/96fUzPM3wR+UGsPi3faVNmFlA9KAEAUQR7dMxZmNA=
