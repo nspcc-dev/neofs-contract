@@ -50,7 +50,7 @@ func _deploy(data interface{}, isUpdate bool) {
 // only by side chain committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	blockHeight := ledger.CurrentIndex()
-	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight))
+	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
 	alphabetCommittee := common.Multiaddress(alphabetKeys, true)
 
 	if !runtime.CheckWitness(alphabetCommittee) {
