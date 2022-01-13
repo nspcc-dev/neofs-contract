@@ -1,6 +1,22 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.14.0] - 2022-01-14 - Geojedo (거제도, 巨濟島)
+
+### Fixed
+- Sync `Update` method signature in NNS contract (#197)
+- Use current block index in all `GetDisgnatedByRole` invocations (#209)
+
+### Added
+- Version check during contract update (#204)
+
+### Changed
+- Use `storage.RemovePrefix` in subnet contract (#199)
+
+### Removed
+- Netmap contract hash usage in proxy contract (#205)
+- Legacy contract owner records from contract storage (#202)
+
 ## [0.13.2] - 2021-12-14
 
 ### Fixed
@@ -294,6 +310,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.14.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.12.2...v0.13.0
