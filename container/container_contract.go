@@ -577,10 +577,7 @@ func NewEpoch(epochNum int) {
 		common.CheckAlphabetWitness(multiaddr)
 	}
 
-	candidates := keysToDelete(ctx, epochNum)
-	for _, candidate := range candidates {
-		storage.Delete(ctx, candidate)
-	}
+	cleanupContainers(ctx, epochNum)
 }
 
 // StartContainerEstimation method produces StartEstimation notification.
@@ -774,9 +771,7 @@ func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	return false
 }
 
-func keysToDelete(ctx storage.Context, epoch int) [][]byte {
-	results := [][]byte{}
-
+func cleanupContainers(ctx storage.Context, epoch int) {
 	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
 	for iterator.Next(it) {
 		k := iterator.Value(it).([]byte)
@@ -786,9 +781,7 @@ func keysToDelete(ctx storage.Context, epoch int) [][]byte {
 		var n interface{} = nbytes
 
 		if epoch-n.(int) > cleanupDelta {
-			results = append(results, k)
+			storage.Delete(ctx, k)
 		}
 	}
-
-	return results
 }
