@@ -61,7 +61,8 @@ const (
 
 	estimateKeyPrefix   = "cnr"
 	estimatePostfixSize = 10
-	cleanupDelta        = 3
+	// CleanupDelta contains number last epochs for which container estimations are present.
+	CleanupDelta = 3
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
@@ -780,7 +781,7 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 
 		var n interface{} = nbytes
 
-		if epoch-n.(int) > cleanupDelta {
+		if epoch-n.(int) > CleanupDelta {
 			storage.Delete(ctx, k)
 		}
 	}

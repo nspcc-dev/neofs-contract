@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"path"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/nspcc-dev/neofs-contract/nns"
+	"github.com/stretchr/testify/require"
 )
 
 const containerPath = "../container"
@@ -36,7 +38,7 @@ func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addr
 	return c.Hash
 }
 
-func newContainerInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker) {
+func newContainerInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
 	ctrNNS := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
@@ -50,7 +52,7 @@ func newContainerInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.Contr
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, ctrNNS.Hash)
-	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash)
+	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
 }
 
 func setContainerOwner(c []byte, acc neotest.Signer) {
@@ -78,7 +80,7 @@ func dummyContainer(owner neotest.Signer) testContainer {
 }
 
 func TestContainerPut(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t)
 
 	acc := c.NewAccount(t)
 	cnt := dummyContainer(acc)
@@ -155,7 +157,7 @@ func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signe
 }
 
 func TestContainerDelete(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t)
 
 	acc, cnt := addContainer(t, c, cBal)
 	cAcc := c.WithSigners(acc)
@@ -174,7 +176,7 @@ func TestContainerDelete(t *testing.T) {
 }
 
 func TestContainerOwner(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -189,7 +191,7 @@ func TestContainerOwner(t *testing.T) {
 }
 
 func TestContainerGet(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t)
 
 	_, cnt := addContainer(t, c, cBal)
 
@@ -227,7 +229,7 @@ func dummyEACL(containerID [32]byte) eacl {
 }
 
 func TestContainerSetEACL(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -252,4 +254,112 @@ func TestContainerSetEACL(t *testing.T) {
 		stackitem.NewByteArray(e.token),
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
+}
+
+func TestContainerSizeEstimation(t *testing.T) {
+	c, cBal, cNm := newContainerInvoker(t)
+
+	_, cnt := addContainer(t, c, cBal)
+	nodes := []testNodeInfo{
+		newStorageNode(t, c),
+		newStorageNode(t, c),
+		newStorageNode(t, c),
+	}
+	for i := range nodes {
+		cNm.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
+		cNm.Invoke(t, stackitem.Null{}, "register", nodes[i].raw)
+	}
+
+	// putContainerSize retrieves storage nodes from the previous snapshot,
+	// so epoch must be incremented twice.
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
+
+	t.Run("must be witnessed by key in the argument", func(t *testing.T) {
+		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putContainerSize",
+			int64(2), cnt.id[:], int64(123), nodes[0].pub)
+	})
+
+	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
+		int64(2), cnt.id[:], int64(123), nodes[0].pub)
+	estimations := []estimation{{nodes[0].pub, 123}}
+	checkEstimations(t, c, 2, cnt, estimations...)
+
+	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
+		int64(2), cnt.id[:], int64(42), nodes[1].pub)
+	estimations = append(estimations, estimation{nodes[1].pub, int64(42)})
+	checkEstimations(t, c, 2, cnt, estimations...)
+
+	t.Run("add estimation for a different epoch", func(t *testing.T) {
+		c.WithSigners(nodes[2].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
+			int64(1), cnt.id[:], int64(777), nodes[2].pub)
+		checkEstimations(t, c, 1, cnt, estimation{nodes[2].pub, 777})
+		checkEstimations(t, c, 2, cnt, estimations...)
+	})
+
+	c.WithSigners(nodes[2].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
+		int64(3), cnt.id[:], int64(888), nodes[2].pub)
+	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
+
+	// Remove old estimations.
+	for i := int64(1); i <= container.CleanupDelta; i++ {
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", 2+i)
+		checkEstimations(t, c, 2, cnt, estimations...)
+		checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
+	}
+
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2+container.CleanupDelta+1))
+	checkEstimations(t, c, 2, cnt)
+	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
+}
+
+type estimation struct {
+	from []byte
+	size int64
+}
+
+func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt testContainer, estimations ...estimation) {
+	s, err := c.TestInvoke(t, "listContainerSizes", epoch)
+	require.NoError(t, err)
+
+	var id []byte
+
+	// When there are no estimations, listContainerSizes can also return nothing.
+	item := s.Top().Item()
+	switch it := item.(type) {
+	case stackitem.Null:
+		require.Equal(t, 0, len(estimations))
+		require.Equal(t, stackitem.Null{}, it)
+		return
+	case *stackitem.Array:
+		id, err = it.Value().([]stackitem.Item)[0].TryBytes()
+		require.NoError(t, err)
+	default:
+		require.FailNow(t, "invalid return type for listContainerSizes")
+	}
+
+	s, err = c.TestInvoke(t, "getContainerSize", id)
+	require.NoError(t, err)
+
+	sizes := s.Top().Array()
+	require.Equal(t, cnt.id[:], sizes[0].Value())
+
+	actual := sizes[1].Value().([]stackitem.Item)
+	require.Equal(t, len(estimations), len(actual))
+	for i := range actual {
+		// type estimation struct {
+		// 	from interop.PublicKey
+		// 	size int
+		// }
+		est := actual[i].Value().([]stackitem.Item)
+		pub := est[0].Value().([]byte)
+		found := false
+		for i := range estimations {
+			if found = bytes.Equal(estimations[i].from, pub); found {
+				require.Equal(t, stackitem.Make(estimations[i].size), est[1])
+				break
+			}
+		}
+		require.True(t, found, "expected estimation from %x to be present", pub)
+	}
 }
