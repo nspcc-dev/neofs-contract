@@ -145,15 +145,19 @@ func TestContainerPut(t *testing.T) {
 	})
 }
 
-func TestContainerDelete(t *testing.T) {
-	c, cBal := newContainerInvoker(t)
-
+func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signer, testContainer) {
 	acc := c.NewAccount(t)
 	cnt := dummyContainer(acc)
 
 	balanceMint(t, cBal, acc, containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	return acc, cnt
+}
 
+func TestContainerDelete(t *testing.T) {
+	c, cBal := newContainerInvoker(t)
+
+	acc, cnt := addContainer(t, c, cBal)
 	cAcc := c.WithSigners(acc)
 	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "delete",
 		cnt.id[:], cnt.sig, cnt.token)
@@ -172,11 +176,7 @@ func TestContainerDelete(t *testing.T) {
 func TestContainerOwner(t *testing.T) {
 	c, cBal := newContainerInvoker(t)
 
-	acc := c.NewAccount(t)
-	cnt := dummyContainer(acc)
-
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	acc, cnt := addContainer(t, c, cBal)
 
 	t.Run("missing container", func(t *testing.T) {
 		id := cnt.id
@@ -191,12 +191,7 @@ func TestContainerOwner(t *testing.T) {
 func TestContainerGet(t *testing.T) {
 	c, cBal := newContainerInvoker(t)
 
-	acc := c.NewAccount(t)
-	cnt := dummyContainer(acc)
-
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
-
-	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	_, cnt := addContainer(t, c, cBal)
 
 	t.Run("missing container", func(t *testing.T) {
 		id := cnt.id
@@ -234,11 +229,7 @@ func dummyEACL(containerID [32]byte) eacl {
 func TestContainerSetEACL(t *testing.T) {
 	c, cBal := newContainerInvoker(t)
 
-	acc := c.NewAccount(t)
-	cnt := dummyContainer(acc)
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
-
-	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	acc, cnt := addContainer(t, c, cBal)
 
 	t.Run("missing container", func(t *testing.T) {
 		id := cnt.id
