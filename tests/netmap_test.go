@@ -56,13 +56,28 @@ func TestDeploySetConfig(t *testing.T) {
 		"config", container.AliasFeeKey)
 }
 
-func dummyNodeInfo(acc neotest.Signer) []byte {
+type testNodeInfo struct {
+	signer neotest.SingleSigner
+	pub    []byte
+	raw    []byte
+}
+
+func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 	ni := make([]byte, 66)
 	rand.Read(ni)
 
-	pub, _ := vm.ParseSignatureContract(acc.Script())
+	s := acc.(neotest.SingleSigner)
+	pub := s.Account().PrivateKey().PublicKey().Bytes()
 	copy(ni[2:], pub)
-	return ni
+	return testNodeInfo{
+		signer: s,
+		pub:    pub,
+		raw:    ni,
+	}
+}
+
+func newStorageNode(t *testing.T, c *neotest.ContractInvoker) testNodeInfo {
+	return dummyNodeInfo(c.NewAccount(t))
 }
 
 func TestAddPeer(t *testing.T) {
@@ -74,25 +89,25 @@ func TestAddPeer(t *testing.T) {
 
 	acc1 := c.NewAccount(t)
 	cAcc1 := c.WithSigners(acc1)
-	cAcc1.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo)
+	cAcc1.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
 
-	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo)
+	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer := cAcc.CheckHalt(t, h)
 	require.Equal(t, 1, len(aer.Events))
 	require.Equal(t, "AddPeer", aer.Events[0].Name)
-	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo)}),
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo.raw)}),
 		aer.Events[0].Item)
 
-	dummyInfo[0] ^= 0xFF
-	h = cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo)
+	dummyInfo.raw[0] ^= 0xFF
+	h = cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer = cAcc.CheckHalt(t, h)
 	require.Equal(t, 1, len(aer.Events))
 	require.Equal(t, "AddPeer", aer.Events[0].Name)
-	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo)}),
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo.raw)}),
 		aer.Events[0].Item)
 
-	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo)
-	c.Invoke(t, stackitem.Null{}, "register", dummyInfo)
+	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
+	c.Invoke(t, stackitem.Null{}, "register", dummyInfo.raw)
 }
 
 func TestUpdateState(t *testing.T) {
@@ -103,7 +118,7 @@ func TestUpdateState(t *testing.T) {
 	cBoth := e.WithSigners(e.Committee, acc)
 	dummyInfo := dummyNodeInfo(acc)
 
-	cBoth.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo)
+	cBoth.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 
 	pub, ok := vm.ParseSignatureContract(acc.Script())
 	require.True(t, ok)
