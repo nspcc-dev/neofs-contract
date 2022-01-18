@@ -3,6 +3,7 @@ package container
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
@@ -59,10 +60,15 @@ const (
 	// V2 format
 	containerIDSize = 32 // SHA256 size
 
-	estimateKeyPrefix   = "cnr"
-	estimatePostfixSize = 10
-	// CleanupDelta contains number last epochs for which container estimations are present.
+	singleEstimatePrefix = "est"
+	estimateKeyPrefix    = "cnr"
+	estimatePostfixSize  = 10
+	// CleanupDelta contains number of last epochs for which container estimations are present.
 	CleanupDelta = 3
+	// TotalCleanupDelta contains number of epochs after which estimation
+	// will be removed by epoch tick cleanup if any node didn't updated
+	// container size and/or container was removed. Must be greater than CleanupDelta.
+	TotalCleanupDelta = CleanupDelta + 1
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
@@ -88,6 +94,20 @@ func _deploy(data interface{}, isUpdate bool) {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
 		storage.Delete(ctx, common.LegacyOwnerKey)
+
+		// Migrate container estimation keys.
+		it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.DeserializeValues)
+		for iterator.Next(it) {
+			kv := iterator.Value(it).(struct {
+				key   []byte
+				value estimation
+			})
+
+			end := len(kv.key) - containerIDSize - estimatePostfixSize
+			rawEpoch := kv.key[len(estimateKeyPrefix):end]
+			cid := kv.key[end : len(kv.key)-estimatePostfixSize]
+			updateEstimations(ctx, convert.ToInteger(rawEpoch), cid, kv.value.from, true)
+		}
 		return
 	}
 
@@ -503,6 +523,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	}
 
 	storage.Put(ctx, key, std.Serialize(s))
+	updateEstimations(ctx, epoch, cid, pubKey, false)
 
 	runtime.Log("saved container size estimation")
 }
@@ -772,6 +793,32 @@ func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	return false
 }
 
+func updateEstimations(ctx storage.Context, epoch int, cid []byte, pub interop.PublicKey, isUpdate bool) {
+	h := crypto.Ripemd160(pub)
+	estKey := append([]byte(singleEstimatePrefix), cid...)
+	estKey = append(estKey, h...)
+
+	var newEpochs []int
+	rawList := storage.Get(ctx, estKey).([]byte)
+
+	if rawList != nil {
+		epochs := std.Deserialize(rawList).([]int)
+		for _, oldEpoch := range epochs {
+			if !isUpdate && epoch-oldEpoch > CleanupDelta {
+				key := append([]byte(estimateKeyPrefix), convert.ToBytes(oldEpoch)...)
+				key = append(key, cid...)
+				key = append(key, h[:estimatePostfixSize]...)
+				storage.Delete(ctx, key)
+			} else {
+				newEpochs = append(newEpochs, oldEpoch)
+			}
+		}
+	}
+
+	newEpochs = append(newEpochs, epoch)
+	common.SetSerialized(ctx, estKey, newEpochs)
+}
+
 func cleanupContainers(ctx storage.Context, epoch int) {
 	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
 	for iterator.Next(it) {
@@ -781,7 +828,7 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 
 		var n interface{} = nbytes
 
-		if epoch-n.(int) > CleanupDelta {
+		if epoch-n.(int) > TotalCleanupDelta {
 			storage.Delete(ctx, k)
 		}
 	}
