@@ -308,9 +308,23 @@ func TestContainerSizeEstimation(t *testing.T) {
 		checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
 	}
 
-	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2+container.CleanupDelta+1))
-	checkEstimations(t, c, 2, cnt)
+	epoch := int64(2 + container.CleanupDelta + 1)
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+	checkEstimations(t, c, 2, cnt, estimations...) // not yet removed
 	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
+
+	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
+		epoch, cnt.id[:], int64(999), nodes[1].pub)
+
+	checkEstimations(t, c, 2, cnt, estimations[:1]...)
+	checkEstimations(t, c, epoch, cnt, estimation{nodes[1].pub, int64(999)})
+
+	// Estimation from node 0 should be cleaned during epoch tick.
+	for i := int64(1); i <= container.TotalCleanupDelta-container.CleanupDelta; i++ {
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch+i)
+	}
+	checkEstimations(t, c, 2, cnt)
+	checkEstimations(t, c, epoch, cnt, estimation{nodes[1].pub, int64(999)})
 }
 
 type estimation struct {
