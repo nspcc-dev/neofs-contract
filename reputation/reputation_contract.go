@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -25,31 +24,7 @@ func _deploy(data interface{}, isUpdate bool) {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
 
-		// Storage migration.
 		storage.Delete(ctx, []byte("contractOwner"))
-
-		it := storage.Find(ctx, []byte{}, storage.None)
-		for iterator.Next(it) {
-			kv := iterator.Value(it).([][]byte)
-			if string(kv[0]) == notaryDisabledKey {
-				continue
-			}
-			if string(kv[0]) == "ballots" {
-				continue
-			}
-
-			storage.Delete(ctx, kv[0])
-
-			rawValues := std.Deserialize(kv[1]).([][]byte)
-			key := getReputationKey(reputationCountPrefix, kv[0])
-			storage.Put(ctx, key, len(rawValues))
-
-			key[0] = reputationValuePrefix
-			for i := range rawValues {
-				newKey := append(key, convert.ToBytes(i)...)
-				storage.Put(ctx, newKey, rawValues[i])
-			}
-		}
 		return
 	}
 
