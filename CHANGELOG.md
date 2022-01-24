@@ -1,6 +1,15 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.14.1] - 2022-01-24
+
+### Fixed
+- Remove migration routine for reputation contract update (#220)
+- Remove version check for subnet contract update (#220)
+
+### Added
+- Append version to `Update` arguments for subnet contract (#220)
+
 ## [0.14.0] - 2022-01-14 - Geojedo (거제도, 巨濟島)
 
 ### Fixed
