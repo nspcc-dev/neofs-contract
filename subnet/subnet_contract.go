@@ -58,8 +58,8 @@ const (
 // _deploy function sets up initial list of inner ring public keys.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
-		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		//args := data.([]interface{})
+		//common.CheckVersion(args[len(args)-1].(int))
 		return
 	}
 
@@ -78,7 +78,8 @@ func Update(script []byte, manifest []byte, data interface{}) {
 		panic("only committee can update contract")
 	}
 
-	contract.Call(interop.Hash160(management.Hash), "update", contract.All, script, manifest, data)
+	contract.Call(interop.Hash160(management.Hash), "update", contract.All,
+		script, manifest, common.AppendVersion(data))
 	runtime.Log("subnet contract updated")
 }
 
