@@ -85,7 +85,6 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
-		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
 

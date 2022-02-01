@@ -47,22 +47,8 @@ var (
 // _deploy sets up initial alphabet node keys.
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
-		// TODO(@fyrchik): restore after mainnet update
-		// args := data.([]interface{})
-		// common.CheckVersion(args[len(args)-1].(int))
-
-		ctx := storage.GetContext()
-
-		// TODO(@fyrchik): remove after mainnet update
-		storage.Delete(ctx, common.LegacyOwnerKey)
-
-		nodes := getNodes(ctx, candidatesKey)
-		storage.Delete(ctx, candidatesKey)
-
-		for i := range nodes {
-			key := append([]byte(candidatesKey), nodes[i].PublicKey...)
-			storage.Put(ctx, key, []byte{1})
-		}
+		args := data.([]interface{})
+		common.CheckVersion(args[len(args)-1].(int))
 		return
 	}
 

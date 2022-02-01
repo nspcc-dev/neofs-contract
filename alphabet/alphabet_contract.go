@@ -37,7 +37,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
-		storage.Delete(ctx, common.LegacyOwnerKey)
 		return
 	}
 
