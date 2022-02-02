@@ -93,47 +93,35 @@ func _deploy(data interface{}, isUpdate bool) {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
 
-		ctx := storage.GetContext()
-		committee := common.CommitteeAddress()
-		it := storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
-		for iterator.Next(it) {
-			name := iterator.Value(it).(string)
-			if name != "neofs" {
-				continue
+		if runtime.GetNetwork() == 0x572dfa5 {
+			// Some of the domains in mainnet have duplicate SOA records.
+			// One is stored by key with id 0, and the other with id []byte{0, 0, 0}.
+			// Delete the latter. Subnet contract is not affected.
+			ctx := storage.GetContext()
+			for _, name := range []string{
+				"alphabet0.neofs",
+				"alphabet1.neofs",
+				"alphabet2.neofs",
+				"alphabet3.neofs",
+				"alphabet4.neofs",
+				"alphabet5.neofs",
+				"alphabet6.neofs",
+				"container.neofs",
+				"reputation.neofs",
+				"neofsid.neofs",
+				"balance.neofs",
+				"netmap.neofs",
+				"audit.neofs",
+			} {
+				tokenID := []byte(tokenIDFromName(name))
+				recordsKey := getRecordsKeyByType(tokenID, name, SOA)
+				oldKey := append(recordsKey, 0, 0, 0)
+				data := storage.Get(ctx, oldKey)
+				if data == nil {
+					panic("unexpected")
+				}
+				storage.Delete(ctx, oldKey)
 			}
-
-			ns := NameState{
-				Owner:      committee,
-				Name:       name,
-				Expiration: runtime.GetTime() + millisecondsInYear,
-			}
-			tokenKey := getTokenKey([]byte(name))
-			putNameStateWithKey(ctx, tokenKey, ns)
-			putSoaRecord(ctx, name, "ops@nspcc.ru",
-				3600 /* 1 hour */, 600, /* 10 min */
-				604800 /* 1 week */, 3600 /* 1 hour */)
-		}
-
-		r := GetRecords("container.neofs", TXT)
-		owner := shBEFromLEHex(r[0])
-
-		it = storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
-		for iterator.Next(it) {
-			name := iterator.Value(it).(string)
-			if name == "neofs" {
-				continue
-			}
-
-			ns := NameState{
-				Owner:      owner,
-				Name:       name,
-				Expiration: runtime.GetTime() + millisecondsInYear,
-			}
-			tokenKey := getTokenKey([]byte(name))
-			putNameStateWithKey(ctx, tokenKey, ns)
-			putSoaRecord(ctx, name, "ops@nspcc.ru",
-				3600 /* 1 hour */, 600, /* 10 min */
-				604800 /* 1 week */, 3600 /* 1 hour */)
 		}
 		return
 	}
