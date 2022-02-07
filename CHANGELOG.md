@@ -1,6 +1,15 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.14.2] - 2022-02-07
+
+### Fixed
+- Remove duplicate records in NNS contract (#196)
+
+### Changed
+- Evict container estimations on every put (#215)
+- Update neo-go to v0.98.1
+
 ## [0.14.1] - 2022-01-24
 
 ### Fixed
@@ -319,6 +328,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.14.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.0...v0.13.1
