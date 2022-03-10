@@ -111,25 +111,44 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestUpdateState(t *testing.T) {
-	e := newNetmapInvoker(t)
+	cNm := newNetmapInvoker(t)
 
-	acc := e.NewAccount(t)
-	cAcc := e.WithSigners(acc)
-	cBoth := e.WithSigners(e.Committee, acc)
+	acc := cNm.NewAccount(t)
+	cAcc := cNm.WithSigners(acc)
 	dummyInfo := dummyNodeInfo(acc)
 
-	cBoth.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
+	cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
+	cNm.Invoke(t, stackitem.Null{}, "register", dummyInfo.raw)
 
 	pub, ok := vm.ParseSignatureContract(acc.Script())
 	require.True(t, ok)
 
 	t.Run("missing witness", func(t *testing.T) {
 		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed,
-			"updateState", int64(2), pub)
-		e.InvokeFail(t, common.ErrWitnessFailed,
+			"updateStateIR", int64(2), pub)
+		cNm.InvokeFail(t, common.ErrWitnessFailed,
 			"updateState", int64(2), pub)
 	})
 
-	cBoth.Invoke(t, stackitem.Null{}, "updateState", int64(2), pub)
+	h := cAcc.Invoke(t, stackitem.Null{}, "updateState", int64(2), pub)
+	aer := cAcc.CheckHalt(t, h)
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "UpdateState", aer.Events[0].Name)
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{
+		stackitem.NewBigInteger(big.NewInt(2)),
+		stackitem.NewByteArray(pub),
+	}), aer.Events[0].Item)
+
+	// Check that updating happens only after `updateState` is called by the alphabet.
+	s, err := cAcc.TestInvoke(t, "netmapCandidates")
+	require.NoError(t, err)
+	require.Equal(t, 1, s.Len())
+
+	arr, ok := s.Pop().Value().([]stackitem.Item)
+	require.True(t, ok)
+	require.Equal(t, 1, len(arr))
+
+	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(2), pub)
+
 	cAcc.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "netmapCandidates")
 }

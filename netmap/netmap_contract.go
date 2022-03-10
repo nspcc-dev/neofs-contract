@@ -190,8 +190,8 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	common.SetSerialized(ctx, innerRingKey, irList)
 }
 
-// Register method tries to add new candidate to the network map by
-// emitting AddPeer notification. Should be invoked by the registree.
+// Register method tries to add new candidate to the network map.
+// Should be invoked in notary-enabled environment by the alphabet.
 func Register(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -281,13 +281,17 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	if notaryDisabled {
 		alphabet = common.AlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			common.CheckWitness(publicKey)
+	}
 
-			runtime.Notify("UpdateState", state, publicKey)
-			return
-		}
+	// If notary is enabled or caller is not an alphabet node,
+	// just emit the notification for alphabet.
+	if !notaryDisabled || len(nodeKey) == 0 {
+		common.CheckWitness(publicKey)
+		runtime.Notify("UpdateState", state, publicKey)
+		return
+	}
 
+	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{state, publicKey}, []byte("update"))
 
@@ -297,16 +301,31 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		}
 
 		common.RemoveVotes(ctx, id)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckWitness(publicKey)
-		common.CheckAlphabetWitness(multiaddr)
 	}
 
 	switch nodeState(state) {
 	case offlineState:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
+	default:
+		panic("unsupported state")
+	}
+}
+
+// UpdateStateIR method tries to change node state in the network map.
+// Should only be invoked in notary-enabled environment by the alphabet.
+func UpdateStateIR(state nodeState, publicKey interop.PublicKey) {
+	ctx := storage.GetContext()
+	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	if notaryDisabled {
+		panic("UpdateStateIR should only be called in notary-enabled environment")
+	}
+
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+
+	switch state {
+	case offlineState:
+		removeFromNetmap(ctx, publicKey)
 	default:
 		panic("unsupported state")
 	}
