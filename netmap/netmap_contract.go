@@ -52,8 +52,8 @@ const (
 const (
 	// V2 format
 	_ nodeState = iota
-	onlineState
-	offlineState
+	OnlineState
+	OfflineState
 )
 
 var (
@@ -323,7 +323,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	}
 
 	switch nodeState(state) {
-	case offlineState:
+	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
 	default:
@@ -343,7 +343,7 @@ func UpdateStateIR(state nodeState, publicKey interop.PublicKey) {
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
 	switch state {
-	case offlineState:
+	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
 	default:
 		panic("unsupported state")
@@ -396,7 +396,7 @@ func NewEpoch(epochNum int) {
 		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
 
-	dataOnlineState := filterNetmap(ctx, onlineState)
+	dataOnlineState := filterNetmap(ctx, OnlineState)
 
 	runtime.Log("process new epoch")
 
@@ -556,7 +556,7 @@ func addToNetmap(ctx storage.Context, n storageNode) {
 
 		node = netmapNode{
 			node:  n,
-			state: onlineState,
+			state: OnlineState,
 		}
 	)
 
