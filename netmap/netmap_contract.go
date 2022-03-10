@@ -35,10 +35,13 @@ const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
 
-	snapshot0Key     = "snapshotCurrent"
-	snapshot1Key     = "snapshotPrevious"
-	snapshotEpoch    = "snapshotEpoch"
-	snapshotBlockKey = "snapshotBlock"
+	// SnapshotCount contains the number of previous snapshots stored by this contract.
+	// Must be less than 255.
+	SnapshotCount        = 2
+	snapshotKeyPrefix    = "snapshot_"
+	snapshotCurrentIDKey = "snapshotCurrent"
+	snapshotEpoch        = "snapshotEpoch"
+	snapshotBlockKey     = "snapshotBlock"
 
 	containerContractKey = "containerScriptHash"
 	balanceContractKey   = "balanceScriptHash"
@@ -85,6 +88,15 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
+
+		data = storage.Get(ctx, "snapshotPrevious")
+		storage.Put(ctx, snapshotKeyPrefix+"0", data)
+
+		data := storage.Get(ctx, "snapshotCurrent")
+		storage.Put(ctx, snapshotKeyPrefix+"1", data)
+
+		storage.Put(ctx, snapshotCurrentIDKey, 1)
+
 		return
 	}
 
@@ -96,8 +108,11 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, snapshotEpoch, 0)
 	storage.Put(ctx, snapshotBlockKey, 0)
 
-	common.SetSerialized(ctx, snapshot0Key, []netmapNode{})
-	common.SetSerialized(ctx, snapshot1Key, []netmapNode{})
+	prefix := []byte(snapshotKeyPrefix)
+	for i := 0; i < SnapshotCount; i++ {
+		common.SetSerialized(ctx, append(prefix, byte(i)), []storageNode{})
+	}
+	common.SetSerialized(ctx, snapshotCurrentIDKey, 0)
 
 	storage.Put(ctx, balanceContractKey, args.addrBalance)
 	storage.Put(ctx, containerContractKey, args.addrContainer)
@@ -381,7 +396,6 @@ func NewEpoch(epochNum int) {
 		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
 
-	data0snapshot := getSnapshot(ctx, snapshot0Key)
 	dataOnlineState := filterNetmap(ctx, onlineState)
 
 	runtime.Log("process new epoch")
@@ -390,11 +404,12 @@ func NewEpoch(epochNum int) {
 	storage.Put(ctx, snapshotEpoch, epochNum)
 	storage.Put(ctx, snapshotBlockKey, ledger.CurrentIndex())
 
-	// put actual snapshot into previous snapshot
-	common.SetSerialized(ctx, snapshot1Key, data0snapshot)
+	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
+	id = (id + 1) % SnapshotCount
+	storage.Put(ctx, snapshotCurrentIDKey, id)
 
 	// put netmap into actual snapshot
-	common.SetSerialized(ctx, snapshot0Key, dataOnlineState)
+	common.SetSerialized(ctx, snapshotKeyPrefix+string([]byte{byte(id)}), dataOnlineState)
 
 	// make clean up routines in other contracts
 	cleanup(ctx, epochNum)
@@ -419,10 +434,11 @@ func LastEpochBlock() int {
 // of current epoch.
 func Netmap() []storageNode {
 	ctx := storage.GetReadOnlyContext()
-	return getSnapshot(ctx, snapshot0Key)
+	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
+	return getSnapshot(ctx, snapshotKeyPrefix+string([]byte{byte(id)}))
 }
 
-// Snapshot method returns list of structures that contain node state
+// NetmapCandidates method returns list of structures that contain node state
 // and byte array of stable marshalled netmap.NodeInfo structure.
 // These structure contain Storage node candidates for next epoch.
 func NetmapCandidates() []netmapNode {
@@ -437,18 +453,14 @@ func NetmapCandidates() []netmapNode {
 // Netmap contract contains only two recent network map snapshot: current and
 // previous epoch. For diff bigger than 1 or less than 0 method throws panic.
 func Snapshot(diff int) []storageNode {
-	var key string
-
-	switch diff {
-	case 0:
-		key = snapshot0Key
-	case 1:
-		key = snapshot1Key
-	default:
+	if diff < 0 || SnapshotCount <= diff {
 		panic("incorrect diff")
 	}
 
 	ctx := storage.GetReadOnlyContext()
+	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
+	needID := (id - diff + SnapshotCount) % SnapshotCount
+	key := snapshotKeyPrefix + string([]byte{byte(needID)})
 	return getSnapshot(ctx, key)
 }
 
