@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"math/rand"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
@@ -13,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/container"
+	"github.com/nspcc-dev/neofs-contract/netmap"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,6 +104,91 @@ func TestAddPeer(t *testing.T) {
 
 	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
 	c.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
+}
+
+func TestNewEpoch(t *testing.T) {
+	rand.Seed(42)
+
+	const epochCount = netmap.SnapshotCount * 2
+
+	cNm := newNetmapInvoker(t)
+	nodes := make([][]testNodeInfo, epochCount)
+	for i := range nodes {
+		size := rand.Int()%5 + 1
+		arr := make([]testNodeInfo, size)
+		for j := 0; j < size; j++ {
+			arr[j] = newStorageNode(t, cNm)
+		}
+		nodes[i] = arr
+	}
+
+	for i := 0; i < epochCount; i++ {
+		for _, tn := range nodes[i] {
+			cNm.WithSigners(tn.signer).Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
+			cNm.Invoke(t, stackitem.Null{}, "addPeerIR", tn.raw)
+		}
+
+		if i > 0 {
+			// Remove random nodes from the previous netmap.
+			current := make([]testNodeInfo, 0, len(nodes[i])+len(nodes[i-1]))
+			current = append(current, nodes[i]...)
+
+			for j := range nodes[i-1] {
+				if rand.Int()%3 == 0 {
+					cNm.Invoke(t, stackitem.Null{}, "updateStateIR",
+						int64(netmap.OfflineState), nodes[i-1][j].pub)
+				} else {
+					current = append(current, nodes[i-1][j])
+				}
+			}
+			nodes[i] = current
+		}
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", i+1)
+
+		t.Logf("Epoch: %d, Netmap()", i)
+		s, err := cNm.TestInvoke(t, "netmap")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+		checkSnapshot(t, s, nodes[i])
+
+		for j := 0; j <= i && j < netmap.SnapshotCount; j++ {
+			t.Logf("Epoch: %d, diff: %d", i, j)
+			s, err := cNm.TestInvoke(t, "snapshot", int64(j))
+			require.NoError(t, err)
+			require.Equal(t, 1, s.Len())
+			checkSnapshot(t, s, nodes[i-j])
+		}
+
+		_, err = cNm.TestInvoke(t, "snapshot", netmap.SnapshotCount)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), "incorrect diff"))
+
+		_, err = cNm.TestInvoke(t, "snapshot", -1)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), "incorrect diff"))
+	}
+}
+
+func checkSnapshot(t *testing.T, s *vm.Stack, nodes []testNodeInfo) {
+	arr, ok := s.Pop().Value().([]stackitem.Item)
+	require.True(t, ok, "expected array")
+	require.Equal(t, len(nodes), len(arr), "expected %d nodes", len(nodes))
+
+	actual := make([][]byte, len(nodes))
+	expected := make([][]byte, len(nodes))
+	for i := range nodes {
+		n, ok := arr[i].Value().([]stackitem.Item)
+		require.True(t, ok, "expected node struct")
+		require.Equal(t, 1, len(n), "expected single field")
+
+		raw, ok := n[0].Value().([]byte)
+		require.True(t, ok, "expected bytes")
+
+		actual[i] = raw
+		expected[i] = nodes[i].raw
+	}
+
+	require.ElementsMatch(t, expected, actual, "snapshot is different")
 }
 
 func TestUpdateState(t *testing.T) {
