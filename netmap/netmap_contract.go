@@ -37,7 +37,7 @@ const (
 
 	// SnapshotCount contains the number of previous snapshots stored by this contract.
 	// Must be less than 255.
-	SnapshotCount        = 2
+	SnapshotCount        = 10
 	snapshotKeyPrefix    = "snapshot_"
 	snapshotCurrentIDKey = "snapshotCurrent"
 	snapshotEpoch        = "snapshotEpoch"
