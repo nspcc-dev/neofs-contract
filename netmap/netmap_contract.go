@@ -190,13 +190,13 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	common.SetSerialized(ctx, innerRingKey, irList)
 }
 
-// Register method tries to add new candidate to the network map.
-// Should be invoked in notary-enabled environment by the alphabet.
-func Register(nodeInfo []byte) {
+// AddPeerIR method tries to add new candidate to the network map.
+// Should only be invoked in notary-enabled environment by the alphabet.
+func AddPeerIR(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 	if notaryDisabled {
-		panic("Register should only be called in notary-enabled environment")
+		panic("AddPeerIR should only be called in notary-enabled environment")
 	}
 
 	common.CheckAlphabetWitness(common.AlphabetAddress())

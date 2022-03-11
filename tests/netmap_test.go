@@ -107,7 +107,7 @@ func TestAddPeer(t *testing.T) {
 		aer.Events[0].Item)
 
 	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
-	c.Invoke(t, stackitem.Null{}, "register", dummyInfo.raw)
+	c.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
 }
 
 func TestUpdateState(t *testing.T) {
@@ -118,7 +118,7 @@ func TestUpdateState(t *testing.T) {
 	dummyInfo := dummyNodeInfo(acc)
 
 	cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
-	cNm.Invoke(t, stackitem.Null{}, "register", dummyInfo.raw)
+	cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
 
 	pub, ok := vm.ParseSignatureContract(acc.Script())
 	require.True(t, ok)
