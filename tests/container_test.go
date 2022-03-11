@@ -267,7 +267,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 	}
 	for i := range nodes {
 		cNm.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
-		cNm.Invoke(t, stackitem.Null{}, "register", nodes[i].raw)
+		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", nodes[i].raw)
 	}
 
 	// putContainerSize retrieves storage nodes from the previous snapshot,
