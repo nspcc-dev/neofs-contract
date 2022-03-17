@@ -93,18 +93,12 @@ func TestAddPeer(t *testing.T) {
 
 	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer := cAcc.CheckHalt(t, h)
-	require.Equal(t, 1, len(aer.Events))
-	require.Equal(t, "AddPeer", aer.Events[0].Name)
-	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo.raw)}),
-		aer.Events[0].Item)
+	require.Equal(t, 0, len(aer.Events))
 
 	dummyInfo.raw[0] ^= 0xFF
 	h = cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer = cAcc.CheckHalt(t, h)
-	require.Equal(t, 1, len(aer.Events))
-	require.Equal(t, "AddPeer", aer.Events[0].Name)
-	require.Equal(t, stackitem.NewArray([]stackitem.Item{stackitem.NewByteArray(dummyInfo.raw)}),
-		aer.Events[0].Item)
+	require.Equal(t, 0, len(aer.Events))
 
 	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
 	c.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
@@ -132,12 +126,7 @@ func TestUpdateState(t *testing.T) {
 
 	h := cAcc.Invoke(t, stackitem.Null{}, "updateState", int64(2), pub)
 	aer := cAcc.CheckHalt(t, h)
-	require.Equal(t, 1, len(aer.Events))
-	require.Equal(t, "UpdateState", aer.Events[0].Name)
-	require.Equal(t, stackitem.NewArray([]stackitem.Item{
-		stackitem.NewBigInteger(big.NewInt(2)),
-		stackitem.NewByteArray(pub),
-	}), aer.Events[0].Item)
+	require.Equal(t, 0, len(aer.Events))
 
 	// Check that updating happens only after `updateState` is called by the alphabet.
 	s, err := cAcc.TestInvoke(t, "netmapCandidates")
