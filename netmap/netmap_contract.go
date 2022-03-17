@@ -233,7 +233,9 @@ func AddPeer(nodeInfo []byte) {
 		publicKey := nodeInfo[2:35] // offset:2, len:33
 
 		common.CheckWitness(publicKey)
-		runtime.Notify("AddPeer", nodeInfo)
+		if notaryDisabled {
+			runtime.Notify("AddPeer", nodeInfo)
+		}
 		return
 	}
 
@@ -287,7 +289,9 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	// just emit the notification for alphabet.
 	if !notaryDisabled || len(nodeKey) == 0 {
 		common.CheckWitness(publicKey)
-		runtime.Notify("UpdateState", state, publicKey)
+		if notaryDisabled {
+			runtime.Notify("UpdateState", state, publicKey)
+		}
 		return
 	}
 
