@@ -93,7 +93,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
+		alphabet     []interop.PublicKey
 		nodeKey      []byte
 		indirectCall bool
 	)
@@ -156,7 +156,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 

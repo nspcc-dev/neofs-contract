@@ -63,7 +63,7 @@ func Put(epoch int, peerID []byte, value []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
+		alphabet     []interop.PublicKey
 		nodeKey      []byte
 		alphabetCall bool
 	)

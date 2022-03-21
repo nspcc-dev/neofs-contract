@@ -257,7 +257,7 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	for i := 0; i < len(alphabet); i++ {
 		node := alphabet[i]
-		to := contract.CreateStandardAccount(node.PublicKey)
+		to := contract.CreateStandardAccount(node)
 
 		contract.Call(balanceContractAddr, "transferX",
 			contract.All,
@@ -609,7 +609,7 @@ func StartContainerEstimation(epoch int) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -647,7 +647,7 @@ func StopContainerEstimation(epoch int) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 

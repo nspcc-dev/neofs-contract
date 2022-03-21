@@ -92,7 +92,7 @@ func Put(rawAuditResult []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var innerRing []common.IRNode
+	var innerRing []interop.PublicKey
 
 	if notaryDisabled {
 		netmapContract := storage.Get(ctx, netmapContractKey).(interop.Hash160)
@@ -106,7 +106,7 @@ func Put(rawAuditResult []byte) {
 
 	for i := range innerRing {
 		ir := innerRing[i]
-		if common.BytesEqual(ir.PublicKey, hdr.from) {
+		if common.BytesEqual(ir, hdr.from) {
 			presented = true
 
 			break
