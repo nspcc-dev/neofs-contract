@@ -104,7 +104,7 @@ func index(ctx storage.Context) int {
 	return storage.Get(ctx, indexKey).(int)
 }
 
-func checkPermission(ir []common.IRNode) bool {
+func checkPermission(ir []interop.PublicKey) bool {
 	ctx := storage.GetReadOnlyContext()
 	index := index(ctx) // read from contract memory
 
@@ -113,7 +113,7 @@ func checkPermission(ir []common.IRNode) bool {
 	}
 
 	node := ir[index]
-	return runtime.CheckWitness(node.PublicKey)
+	return runtime.CheckWitness(node)
 }
 
 // Emit method produces side chain GAS and distributes it among Inner Ring nodes
@@ -160,7 +160,7 @@ func Emit() {
 		runtime.Log("utility token has been emitted to proxy contract")
 	}
 
-	var innerRing []common.IRNode
+	var innerRing []interop.PublicKey
 
 	if notaryDisabled {
 		netmapContract := storage.Get(ctx, netmapKey).(interop.Hash160)
@@ -173,7 +173,7 @@ func Emit() {
 
 	if gasPerNode != 0 {
 		for _, node := range innerRing {
-			address := contract.CreateStandardAccount(node.PublicKey)
+			address := contract.CreateStandardAccount(node)
 			if !gas.Transfer(contractHash, address, gasPerNode, nil) {
 				runtime.Log("could not transfer GAS to one of IR node")
 			}
@@ -197,7 +197,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	name := name(ctx)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 

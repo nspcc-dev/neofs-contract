@@ -46,9 +46,20 @@ var (
 
 // _deploy sets up initial alphabet node keys.
 func _deploy(data interface{}, isUpdate bool) {
+	ctx := storage.GetContext()
+
 	if isUpdate {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
+
+		data := storage.Get(ctx, alphabetKey)
+		alphabetNodes := std.Deserialize(data.([]byte)).([]common.IRNode)
+
+		pubs := []interop.PublicKey{}
+		for i := range alphabetNodes {
+			pubs = append(pubs, alphabetNodes[i].PublicKey)
+		}
+		common.SetSerialized(ctx, alphabetKey, pubs)
 		return
 	}
 
@@ -58,10 +69,6 @@ func _deploy(data interface{}, isUpdate bool) {
 		keys           []interop.PublicKey
 		config         [][]byte
 	})
-
-	ctx := storage.GetContext()
-
-	var irList []common.IRNode
 
 	if len(args.keys) == 0 {
 		panic("at least one alphabet key must be provided")
@@ -76,11 +83,10 @@ func _deploy(data interface{}, isUpdate bool) {
 		if len(pub) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key length")
 		}
-		irList = append(irList, common.IRNode{PublicKey: pub})
 	}
 
 	// initialize all storage slices
-	common.SetSerialized(ctx, alphabetKey, irList)
+	common.SetSerialized(ctx, alphabetKey, args.keys)
 
 	storage.Put(ctx, processingContractKey, args.addrProc)
 
@@ -124,7 +130,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // disabled environment.
 func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	return getNodes(ctx, alphabetKey)
+	pubs := getNodes(ctx, alphabetKey)
+	nodes := []common.IRNode{}
+	for i := range pubs {
+		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
+	}
+	return nodes
 }
 
 // AlphabetAddress returns 2\3n+1 multi signature address of alphabet nodes.
@@ -157,7 +168,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -291,7 +302,7 @@ func Withdraw(user interop.Hash160, amount int) {
 	if notaryDisabled {
 		alphabet := getNodes(ctx, alphabetKey)
 		for _, node := range alphabet {
-			processingAddr := contract.CreateStandardAccount(node.PublicKey)
+			processingAddr := contract.CreateStandardAccount(node)
 
 			transferred := gas.Transfer(user, processingAddr, fee, []byte{})
 			if !transferred {
@@ -324,7 +335,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -415,7 +426,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	}
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -430,7 +441,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 		common.CheckAlphabetWitness(multiaddr)
 	}
 
-	newAlphabet := []common.IRNode{}
+	newAlphabet := []interop.PublicKey{}
 
 	for i := 0; i < len(args); i++ {
 		pubKey := args[i]
@@ -438,9 +449,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 			panic("invalid public key in alphabet list")
 		}
 
-		newAlphabet = append(newAlphabet, common.IRNode{
-			PublicKey: pubKey,
-		})
+		newAlphabet = append(newAlphabet, pubKey)
 	}
 
 	if notaryDisabled {
@@ -474,7 +483,7 @@ func SetConfig(id, key, val []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -533,13 +542,13 @@ func Version() int {
 }
 
 // getNodes returns deserialized slice of nodes from storage.
-func getNodes(ctx storage.Context, key string) []common.IRNode {
+func getNodes(ctx storage.Context, key string) []interop.PublicKey {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return std.Deserialize(data.([]byte)).([]common.IRNode)
+		return std.Deserialize(data.([]byte)).([]interop.PublicKey)
 	}
 
-	return []common.IRNode{}
+	return []interop.PublicKey{}
 }
 
 // getConfig returns installed neofs configuration value or nil if it is not set.
@@ -560,14 +569,8 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 
 // multiaddress returns multi signature address from list of IRNode structures
 // with m = 2/3n+1.
-func multiaddress(n []common.IRNode) []byte {
-	threshold := len(n)*2/3 + 1
-
-	keys := []interop.PublicKey{}
-	for _, node := range n {
-		key := node.PublicKey
-		keys = append(keys, key)
-	}
+func multiaddress(keys []interop.PublicKey) []byte {
+	threshold := len(keys)*2/3 + 1
 
 	return contract.CreateMultisigAccount(threshold, keys)
 }

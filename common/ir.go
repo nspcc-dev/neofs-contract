@@ -17,11 +17,11 @@ const irListMethod = "innerRingList"
 
 // InnerRingInvoker returns public key of inner ring node that invoked contract.
 // Work around for environments without notary support.
-func InnerRingInvoker(ir []IRNode) interop.PublicKey {
+func InnerRingInvoker(ir []interop.PublicKey) interop.PublicKey {
 	for i := 0; i < len(ir); i++ {
 		node := ir[i]
-		if runtime.CheckWitness(node.PublicKey) {
-			return node.PublicKey
+		if runtime.CheckWitness(node) {
+			return node
 		}
 	}
 
@@ -30,23 +30,26 @@ func InnerRingInvoker(ir []IRNode) interop.PublicKey {
 
 // InnerRingNodes return list of inner ring nodes from state validator role
 // in side chain.
-func InnerRingNodes() []IRNode {
+func InnerRingNodes() []interop.PublicKey {
 	blockHeight := ledger.CurrentIndex()
-	list := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
-	return keysToNodes(list)
+	return roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
 }
 
 // InnerRingNodesFromNetmap gets list of inner ring through
 // calling "innerRingList" method of smart contract.
 // Work around for environments without notary support.
-func InnerRingNodesFromNetmap(sc interop.Hash160) []IRNode {
-	return contract.Call(sc, irListMethod, contract.ReadOnly).([]IRNode)
+func InnerRingNodesFromNetmap(sc interop.Hash160) []interop.PublicKey {
+	nodes := contract.Call(sc, irListMethod, contract.ReadOnly).([]IRNode)
+	pubs := []interop.PublicKey{}
+	for i := range nodes {
+		pubs = append(pubs, nodes[i].PublicKey)
+	}
+	return pubs
 }
 
 // AlphabetNodes return list of alphabet nodes from committee in side chain.
-func AlphabetNodes() []IRNode {
-	list := neo.GetCommittee()
-	return keysToNodes(list)
+func AlphabetNodes() []interop.PublicKey {
+	return neo.GetCommittee()
 }
 
 // AlphabetAddress returns multi address of alphabet public keys.
@@ -70,16 +73,4 @@ func Multiaddress(n []interop.PublicKey, committee bool) []byte {
 	}
 
 	return contract.CreateMultisigAccount(threshold, n)
-}
-
-func keysToNodes(list []interop.PublicKey) []IRNode {
-	result := []IRNode{}
-
-	for i := range list {
-		result = append(result, IRNode{
-			PublicKey: list[i],
-		})
-	}
-
-	return result
 }

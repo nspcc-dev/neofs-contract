@@ -149,7 +149,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet     []common.IRNode
+		alphabet     []interop.PublicKey
 		nodeKey      []byte
 		indirectCall bool
 	)
@@ -204,7 +204,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -308,7 +308,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -365,7 +365,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 

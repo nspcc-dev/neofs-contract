@@ -89,14 +89,24 @@ func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		common.CheckVersion(args.version)
 
-		data = storage.Get(ctx, "snapshotPrevious")
+		data := storage.Get(ctx, "snapshotPrevious")
 		storage.Put(ctx, snapshotKeyPrefix+"0", data)
 
-		data := storage.Get(ctx, "snapshotCurrent")
+		data = storage.Get(ctx, "snapshotCurrent")
 		storage.Put(ctx, snapshotKeyPrefix+"1", data)
 
 		storage.Put(ctx, snapshotCurrentIDKey, 1)
 
+		if args.notaryDisabled {
+			data = storage.Get(ctx, innerRingKey)
+			irNodes := std.Deserialize(data.([]byte)).([]common.IRNode)
+
+			pubs := []interop.PublicKey{}
+			for i := range irNodes {
+				pubs = append(pubs, irNodes[i].PublicKey)
+			}
+			common.SetSerialized(ctx, innerRingKey, pubs)
+		}
 		return
 	}
 
@@ -154,7 +164,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // contract of the side chain.
 func InnerRingList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	return getIRNodes(ctx)
+	pubs := getIRNodes(ctx)
+	nodes := []common.IRNode{}
+	for i := range pubs {
+		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
+	}
+	return nodes
 }
 
 // UpdateInnerRing method updates list of Inner Ring node keys. Should be used
@@ -167,7 +182,7 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -180,13 +195,6 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	} else {
 		multiaddr := common.AlphabetAddress()
 		common.CheckAlphabetWitness(multiaddr)
-	}
-
-	var irList []common.IRNode
-
-	for i := 0; i < len(keys); i++ {
-		key := keys[i]
-		irList = append(irList, common.IRNode{PublicKey: key})
 	}
 
 	if notaryDisabled {
@@ -202,7 +210,7 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	}
 
 	runtime.Log("inner ring list updated")
-	common.SetSerialized(ctx, innerRingKey, irList)
+	common.SetSerialized(ctx, innerRingKey, keys)
 }
 
 // AddPeerIR method tries to add new candidate to the network map.
@@ -232,7 +240,7 @@ func AddPeer(nodeInfo []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -367,7 +375,7 @@ func NewEpoch(epochNum int) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -494,7 +502,7 @@ func SetConfig(id, key, val []byte) {
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	var ( // for invocation collection without notary
-		alphabet []common.IRNode
+		alphabet []interop.PublicKey
 		nodeKey  []byte
 	)
 
@@ -630,13 +638,13 @@ func cleanup(ctx storage.Context, epoch int) {
 	contract.Call(containerContractAddr, cleanupEpochMethod, contract.All, epoch)
 }
 
-func getIRNodes(ctx storage.Context) []common.IRNode {
+func getIRNodes(ctx storage.Context) []interop.PublicKey {
 	data := storage.Get(ctx, innerRingKey)
 	if data != nil {
-		return std.Deserialize(data.([]byte)).([]common.IRNode)
+		return std.Deserialize(data.([]byte)).([]interop.PublicKey)
 	}
 
-	return []common.IRNode{}
+	return []interop.PublicKey{}
 }
 
 func keysID(args []interop.PublicKey, prefix []byte) []byte {
