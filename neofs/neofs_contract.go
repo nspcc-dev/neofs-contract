@@ -130,7 +130,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // disabled environment.
 func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
-	pubs := getNodes(ctx, alphabetKey)
+	pubs := getAlphabetNodes(ctx)
 	nodes := []common.IRNode{}
 	for i := range pubs {
 		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
@@ -142,7 +142,7 @@ func AlphabetList() []common.IRNode {
 // Used in side chain notary disabled environment.
 func AlphabetAddress() interop.Hash160 {
 	ctx := storage.GetReadOnlyContext()
-	return multiaddress(getNodes(ctx, alphabetKey))
+	return multiaddress(getAlphabetNodes(ctx))
 }
 
 // InnerRingCandidates returns array of structures that contain Inner Ring
@@ -176,7 +176,7 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 
 	if !keyOwner {
 		if notaryDisabled {
-			alphabet = getNodes(ctx, alphabetKey)
+			alphabet = getAlphabetNodes(ctx)
 			nodeKey = common.InnerRingInvoker(alphabet)
 			if len(nodeKey) == 0 {
 				panic("this method must be invoked by candidate or alphabet")
@@ -300,7 +300,7 @@ func Withdraw(user interop.Hash160, amount int) {
 	fee := getConfig(ctx, withdrawFeeConfigKey).(int)
 
 	if notaryDisabled {
-		alphabet := getNodes(ctx, alphabetKey)
+		alphabet := getAlphabetNodes(ctx)
 		for _, node := range alphabet {
 			processingAddr := contract.CreateStandardAccount(node)
 
@@ -340,7 +340,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	)
 
 	if notaryDisabled {
-		alphabet = getNodes(ctx, alphabetKey)
+		alphabet = getAlphabetNodes(ctx)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -431,7 +431,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	)
 
 	if notaryDisabled {
-		alphabet = getNodes(ctx, alphabetKey)
+		alphabet = getAlphabetNodes(ctx)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -488,7 +488,7 @@ func SetConfig(id, key, val []byte) {
 	)
 
 	if notaryDisabled {
-		alphabet = getNodes(ctx, alphabetKey)
+		alphabet = getAlphabetNodes(ctx)
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(key) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -541,9 +541,9 @@ func Version() int {
 	return common.Version
 }
 
-// getNodes returns deserialized slice of nodes from storage.
-func getNodes(ctx storage.Context, key string) []interop.PublicKey {
-	data := storage.Get(ctx, key)
+// getAlphabetNodes returns deserialized slice of nodes from storage.
+func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
+	data := storage.Get(ctx, alphabetKey)
 	if data != nil {
 		return std.Deserialize(data.([]byte)).([]interop.PublicKey)
 	}
