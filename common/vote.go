@@ -80,18 +80,20 @@ func Vote(ctx storage.Context, id, from []byte) int {
 // inner ring nodes.
 func RemoveVotes(ctx storage.Context, id []byte) {
 	var (
-		newCandidates []Ballot
-		candidates    = getBallots(ctx)
+		candidates = getBallots(ctx)
+		index      int
 	)
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if !BytesEqual(cnd.ID, id) {
-			newCandidates = append(newCandidates, cnd)
+		if BytesEqual(cnd.ID, id) {
+			index = i
+			break
 		}
 	}
 
-	SetSerialized(ctx, voteKey, newCandidates)
+	util.Remove(candidates, index)
+	SetSerialized(ctx, voteKey, candidates)
 }
 
 // getBallots returns deserialized slice of vote ballots.
