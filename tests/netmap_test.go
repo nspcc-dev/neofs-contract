@@ -191,40 +191,71 @@ func checkSnapshot(t *testing.T, s *vm.Stack, nodes []testNodeInfo) {
 	require.ElementsMatch(t, expected, actual, "snapshot is different")
 }
 
-func TestUpdateState(t *testing.T) {
+func TestUpdateStateIR(t *testing.T) {
 	cNm := newNetmapInvoker(t)
 
 	acc := cNm.NewAccount(t)
-	cAcc := cNm.WithSigners(acc)
 	dummyInfo := dummyNodeInfo(acc)
-
-	cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
 
-	pub, ok := vm.ParseSignatureContract(acc.Script())
-	require.True(t, ok)
+	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 
-	t.Run("missing witness", func(t *testing.T) {
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed,
-			"updateStateIR", int64(2), pub)
-		cNm.InvokeFail(t, common.ErrWitnessFailed,
-			"updateState", int64(2), pub)
+	t.Run("must be signed by the alphabet", func(t *testing.T) {
+		cAcc := cNm.WithSigners(acc)
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(2), pub)
+	})
+	t.Run("invalid state", func(t *testing.T) {
+		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(42), pub)
 	})
 
-	h := cAcc.Invoke(t, stackitem.Null{}, "updateState", int64(2), pub)
-	aer := cAcc.CheckHalt(t, h)
-	require.Equal(t, 0, len(aer.Events))
+	checkNetmapCandidates(t, cNm, 1)
+	t.Run("good", func(t *testing.T) {
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(2), pub)
+		checkNetmapCandidates(t, cNm, 0)
+	})
+}
 
-	// Check that updating happens only after `updateState` is called by the alphabet.
-	s, err := cAcc.TestInvoke(t, "netmapCandidates")
+func TestUpdateState(t *testing.T) {
+	cNm := newNetmapInvoker(t)
+
+	accs := []neotest.Signer{cNm.NewAccount(t), cNm.NewAccount(t)}
+	pubs := make([][]byte, len(accs))
+	for i := range accs {
+		dummyInfo := dummyNodeInfo(accs[i])
+		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
+		pubs[i] = accs[i].(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+	}
+
+	t.Run("missing witness", func(t *testing.T) {
+		cAcc := cNm.WithSigners(accs[0])
+		cNm.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[0])
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateState", int64(2), pubs[0])
+		cAcc.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[1])
+	})
+
+	checkNetmapCandidates(t, cNm, 2)
+
+	cBoth := cNm.WithSigners(accs[0], cNm.Committee)
+
+	cBoth.Invoke(t, stackitem.Null{}, "updateState", int64(2), pubs[0])
+	checkNetmapCandidates(t, cNm, 1)
+
+	t.Run("remove already removed node", func(t *testing.T) {
+		cBoth.Invoke(t, stackitem.Null{}, "updateState", int64(2), pubs[0])
+		checkNetmapCandidates(t, cNm, 1)
+	})
+
+	cBoth = cNm.WithSigners(accs[1], cNm.Committee)
+	cBoth.Invoke(t, stackitem.Null{}, "updateState", int64(2), pubs[1])
+	checkNetmapCandidates(t, cNm, 0)
+}
+
+func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) {
+	s, err := c.TestInvoke(t, "netmapCandidates")
 	require.NoError(t, err)
 	require.Equal(t, 1, s.Len())
 
 	arr, ok := s.Pop().Value().([]stackitem.Item)
 	require.True(t, ok)
-	require.Equal(t, 1, len(arr))
-
-	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(2), pub)
-
-	cAcc.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "netmapCandidates")
+	require.Equal(t, size, len(arr))
 }

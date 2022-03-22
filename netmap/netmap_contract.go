@@ -274,10 +274,19 @@ func AddPeer(nodeInfo []byte) {
 	addToNetmap(ctx, candidate)
 }
 
-// UpdateState method updates state of node from the network map candidate list
-// if it was invoked by Alphabet node. If it was invoked by public key owner,
-// then it produces UpdateState notification. Otherwise method throws panic.
+// UpdateState method updates state of node from the network map candidate list.
+// For notary-ENABLED environment tx must be signed by both storage node and the alphabet.
+// To force update without storage node signature, see `UpdateStateIR`.
 //
+// For notary-DISABLED environment the behaviour depends on who signed the transaction:
+// 1. If it was signed by alphabet, go into voting.
+// 2. If it was signed by a storage node, emit `UpdateState` notification.
+// 2. Fail in any other case.
+//
+// The behaviour can be summarized in the following table:
+// | notary \ Signer | Storage node | Alphabet | Both                  |
+// | ENABLED         | FAIL         | FAIL     | OK                    |
+// | DISABLED        | NOTIFICATION | OK       | OK (same as alphabet) |
 // State argument defines node state. The only supported state now is (2) --
 // offline state. Node is removed from network map candidate list.
 //
@@ -290,27 +299,18 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet []common.IRNode
-		nodeKey  []byte
-	)
-
 	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-	}
+		alphabet := common.AlphabetNodes()
+		nodeKey := common.InnerRingInvoker(alphabet)
 
-	// If notary is enabled or caller is not an alphabet node,
-	// just emit the notification for alphabet.
-	if !notaryDisabled || len(nodeKey) == 0 {
-		common.CheckWitness(publicKey)
-		if notaryDisabled {
+		// If caller is not an alphabet node,
+		// just emit the notification for alphabet.
+		if len(nodeKey) == 0 {
+			common.CheckWitness(publicKey)
 			runtime.Notify("UpdateState", state, publicKey)
+			return
 		}
-		return
-	}
 
-	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 		id := common.InvokeID([]interface{}{state, publicKey}, []byte("update"))
 
@@ -320,6 +320,9 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		}
 
 		common.RemoveVotes(ctx, id)
+	} else {
+		common.CheckWitness(publicKey)
+		common.CheckAlphabetWitness(common.AlphabetAddress())
 	}
 
 	switch nodeState(state) {
