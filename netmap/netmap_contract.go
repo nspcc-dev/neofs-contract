@@ -130,14 +130,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	// initialize the way to collect signatures
 	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
 	if args.notaryDisabled {
-		var irList []common.IRNode
-
-		for i := 0; i < len(args.keys); i++ {
-			key := args.keys[i]
-			irList = append(irList, common.IRNode{PublicKey: key})
-		}
-
-		common.SetSerialized(ctx, innerRingKey, irList)
+		common.SetSerialized(ctx, innerRingKey, args.keys)
 		common.InitVote(ctx)
 		runtime.Log("netmap contract notary disabled")
 	}
