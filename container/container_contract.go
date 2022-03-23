@@ -93,21 +93,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
-		storage.Delete(ctx, common.LegacyOwnerKey)
-
-		// Migrate container estimation keys.
-		it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.DeserializeValues)
-		for iterator.Next(it) {
-			kv := iterator.Value(it).(struct {
-				key   []byte
-				value estimation
-			})
-
-			end := len(kv.key) - containerIDSize - estimatePostfixSize
-			rawEpoch := kv.key[len(estimateKeyPrefix):end]
-			cid := kv.key[end : len(kv.key)-estimatePostfixSize]
-			updateEstimations(ctx, convert.ToInteger(rawEpoch), cid, kv.value.from, true)
-		}
 		return
 	}
 
