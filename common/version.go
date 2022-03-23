@@ -12,7 +12,7 @@ const (
 	// any migration routines.
 	prevMajor = 0
 	prevMinor = 14
-	prevPatch = 2
+	prevPatch = 0
 
 	Version = major*1_000_000 + minor*1_000 + patch
 
