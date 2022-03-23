@@ -1,6 +1,17 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.15.0] - 2022-03-23 - Heuksando (흑산도, 黑山島)
+
+### Fixed
+- Split `UpdateState` method to allow Alphabet nodes remove storage nodes from
+  network map based on consensus decision in notary-enabled environment (#225)
+
+### Changed
+- Increase from 2 to 10 stored network maps in netmap contract (#224)
+- Use public keys instead of `IRNode` structures in neofs and netmap contracts
+  (#222)
+
 ## [0.14.2] - 2022-02-07
 
 ### Fixed
@@ -328,6 +339,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.15.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.13.2...v0.14.0
