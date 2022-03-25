@@ -51,15 +51,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})
 		common.CheckVersion(args[len(args)-1].(int))
-
-		data := storage.Get(ctx, alphabetKey)
-		alphabetNodes := std.Deserialize(data.([]byte)).([]common.IRNode)
-
-		pubs := []interop.PublicKey{}
-		for i := range alphabetNodes {
-			pubs = append(pubs, alphabetNodes[i].PublicKey)
-		}
-		common.SetSerialized(ctx, alphabetKey, pubs)
 		return
 	}
 

@@ -88,25 +88,6 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
-
-		data := storage.Get(ctx, "snapshotPrevious")
-		storage.Put(ctx, snapshotKeyPrefix+"0", data)
-
-		data = storage.Get(ctx, "snapshotCurrent")
-		storage.Put(ctx, snapshotKeyPrefix+"1", data)
-
-		storage.Put(ctx, snapshotCurrentIDKey, 1)
-
-		if args.notaryDisabled {
-			data = storage.Get(ctx, innerRingKey)
-			irNodes := std.Deserialize(data.([]byte)).([]common.IRNode)
-
-			pubs := []interop.PublicKey{}
-			for i := range irNodes {
-				pubs = append(pubs, irNodes[i].PublicKey)
-			}
-			common.SetSerialized(ctx, innerRingKey, pubs)
-		}
 		return
 	}
 
