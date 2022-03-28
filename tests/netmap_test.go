@@ -109,7 +109,7 @@ func TestAddPeer(t *testing.T) {
 func TestNewEpoch(t *testing.T) {
 	rand.Seed(42)
 
-	const epochCount = netmap.SnapshotCount * 2
+	const epochCount = netmap.DefaultSnapshotCount * 2
 
 	cNm := newNetmapInvoker(t)
 	nodes := make([][]testNodeInfo, epochCount)
@@ -151,15 +151,12 @@ func TestNewEpoch(t *testing.T) {
 		require.Equal(t, 1, s.Len())
 		checkSnapshot(t, s, nodes[i])
 
-		for j := 0; j <= i && j < netmap.SnapshotCount; j++ {
+		for j := 0; j <= i && j < netmap.DefaultSnapshotCount; j++ {
 			t.Logf("Epoch: %d, diff: %d", i, j)
-			s, err := cNm.TestInvoke(t, "snapshot", int64(j))
-			require.NoError(t, err)
-			require.Equal(t, 1, s.Len())
-			checkSnapshot(t, s, nodes[i-j])
+			checkSnapshotAt(t, j, cNm, nodes[i-j])
 		}
 
-		_, err = cNm.TestInvoke(t, "snapshot", netmap.SnapshotCount)
+		_, err = cNm.TestInvoke(t, "snapshot", netmap.DefaultSnapshotCount)
 		require.Error(t, err)
 		require.True(t, strings.Contains(err.Error(), "incorrect diff"))
 
@@ -167,6 +164,124 @@ func TestNewEpoch(t *testing.T) {
 		require.Error(t, err)
 		require.True(t, strings.Contains(err.Error(), "incorrect diff"))
 	}
+}
+
+func TestUpdateSnapshotCount(t *testing.T) {
+	rand.Seed(42)
+
+	require.True(t, netmap.DefaultSnapshotCount > 5) // sanity check, adjust tests if false.
+
+	prepare := func(t *testing.T, cNm *neotest.ContractInvoker, epochCount int) [][]testNodeInfo {
+		nodes := make([][]testNodeInfo, epochCount)
+		nodes[0] = []testNodeInfo{newStorageNode(t, cNm)}
+		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", nodes[0][0].raw)
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", 1)
+		for i := 1; i < len(nodes); i++ {
+			sn := newStorageNode(t, cNm)
+			nodes[i] = append(nodes[i-1], sn)
+			cNm.Invoke(t, stackitem.Null{}, "addPeerIR", sn.raw)
+			cNm.Invoke(t, stackitem.Null{}, "newEpoch", i+1)
+		}
+		return nodes
+	}
+
+	t.Run("increase size, extend with nil", func(t *testing.T) {
+		// Before: S-old .. S
+		// After : S-old .. S nil nil ...
+		const epochCount = netmap.DefaultSnapshotCount / 2
+
+		cNm := newNetmapInvoker(t)
+		nodes := prepare(t, cNm, epochCount)
+
+		const newCount = netmap.DefaultSnapshotCount + 3
+		cNm.Invoke(t, stackitem.Null{}, "updateSnapshotCount", newCount)
+
+		s, err := cNm.TestInvoke(t, "netmap")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+		checkSnapshot(t, s, nodes[epochCount-1])
+		for i := 0; i < epochCount; i++ {
+			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
+		}
+		for i := epochCount; i < newCount; i++ {
+			checkSnapshotAt(t, i, cNm, nil)
+		}
+		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
+		require.Error(t, err)
+	})
+	t.Run("increase size, copy old snapshots", func(t *testing.T) {
+		// Before: S-x .. S S-old ...
+		// After : S-x .. S nil nil S-old ...
+		const epochCount = netmap.DefaultSnapshotCount + netmap.DefaultSnapshotCount/2
+
+		cNm := newNetmapInvoker(t)
+		nodes := prepare(t, cNm, epochCount)
+
+		const newCount = netmap.DefaultSnapshotCount + 3
+		cNm.Invoke(t, stackitem.Null{}, "updateSnapshotCount", newCount)
+
+		s, err := cNm.TestInvoke(t, "netmap")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+		checkSnapshot(t, s, nodes[epochCount-1])
+		for i := 0; i < newCount-3; i++ {
+			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
+		}
+		for i := newCount - 3; i < newCount; i++ {
+			checkSnapshotAt(t, i, cNm, nil)
+		}
+		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
+		require.Error(t, err)
+	})
+	t.Run("decrease size, small decrease", func(t *testing.T) {
+		// Before: S-x .. S S-old ... ...
+		// After : S-x .. S S-new ...
+		const epochCount = netmap.DefaultSnapshotCount + netmap.DefaultSnapshotCount/2
+
+		cNm := newNetmapInvoker(t)
+		nodes := prepare(t, cNm, epochCount)
+
+		const newCount = netmap.DefaultSnapshotCount/2 + 2
+		cNm.Invoke(t, stackitem.Null{}, "updateSnapshotCount", newCount)
+
+		s, err := cNm.TestInvoke(t, "netmap")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+		checkSnapshot(t, s, nodes[epochCount-1])
+		for i := 0; i < newCount; i++ {
+			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
+		}
+		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
+		require.Error(t, err)
+	})
+	t.Run("decrease size, big decrease", func(t *testing.T) {
+		// Before: S-x   ... ... S S-old ... ...
+		// After : S-new ...  S
+		const epochCount = netmap.DefaultSnapshotCount + netmap.DefaultSnapshotCount/2
+
+		cNm := newNetmapInvoker(t)
+		nodes := prepare(t, cNm, epochCount)
+
+		const newCount = netmap.DefaultSnapshotCount/2 - 2
+		cNm.Invoke(t, stackitem.Null{}, "updateSnapshotCount", newCount)
+
+		s, err := cNm.TestInvoke(t, "netmap")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+		checkSnapshot(t, s, nodes[epochCount-1])
+		for i := 0; i < newCount; i++ {
+			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
+		}
+		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
+		require.Error(t, err)
+	})
+}
+
+func checkSnapshotAt(t *testing.T, epoch int, cNm *neotest.ContractInvoker, nodes []testNodeInfo) {
+	s, err := cNm.TestInvoke(t, "snapshot", int64(epoch))
+	require.NoError(t, err)
+	require.Equal(t, 1, s.Len())
+	checkSnapshot(t, s, nodes)
 }
 
 func checkSnapshot(t *testing.T, s *vm.Stack, nodes []testNodeInfo) {

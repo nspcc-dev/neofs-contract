@@ -35,9 +35,10 @@ const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
 
-	// SnapshotCount contains the number of previous snapshots stored by this contract.
+	// DefaultSnapshotCount contains the number of previous snapshots stored by this contract.
 	// Must be less than 255.
-	SnapshotCount        = 10
+	DefaultSnapshotCount = 10
+	snapshotCountKey     = "snapshotCount"
 	snapshotKeyPrefix    = "snapshot_"
 	snapshotCurrentIDKey = "snapshotCurrent"
 	snapshotEpoch        = "snapshotEpoch"
@@ -88,6 +89,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
+		storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 		return
 	}
 
@@ -96,14 +98,15 @@ func _deploy(data interface{}, isUpdate bool) {
 	}
 
 	// epoch number is a little endian int, it doesn't need to be serialized
+	storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 	storage.Put(ctx, snapshotEpoch, 0)
 	storage.Put(ctx, snapshotBlockKey, 0)
 
 	prefix := []byte(snapshotKeyPrefix)
-	for i := 0; i < SnapshotCount; i++ {
+	for i := 0; i < DefaultSnapshotCount; i++ {
 		common.SetSerialized(ctx, append(prefix, byte(i)), []storageNode{})
 	}
-	common.SetSerialized(ctx, snapshotCurrentIDKey, 0)
+	storage.Put(ctx, snapshotCurrentIDKey, 0)
 
 	storage.Put(ctx, balanceContractKey, args.addrBalance)
 	storage.Put(ctx, containerContractKey, args.addrContainer)
@@ -389,7 +392,7 @@ func NewEpoch(epochNum int) {
 	storage.Put(ctx, snapshotBlockKey, ledger.CurrentIndex())
 
 	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	id = (id + 1) % SnapshotCount
+	id = (id + 1) % getSnapshotCount(ctx)
 	storage.Put(ctx, snapshotCurrentIDKey, id)
 
 	// put netmap into actual snapshot
@@ -437,15 +440,102 @@ func NetmapCandidates() []netmapNode {
 // Netmap contract contains only two recent network map snapshot: current and
 // previous epoch. For diff bigger than 1 or less than 0 method throws panic.
 func Snapshot(diff int) []storageNode {
-	if diff < 0 || SnapshotCount <= diff {
+	ctx := storage.GetReadOnlyContext()
+	count := getSnapshotCount(ctx)
+	if diff < 0 || count <= diff {
 		panic("incorrect diff")
 	}
 
-	ctx := storage.GetReadOnlyContext()
 	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	needID := (id - diff + SnapshotCount) % SnapshotCount
+	needID := (id - diff + count) % count
 	key := snapshotKeyPrefix + string([]byte{byte(needID)})
 	return getSnapshot(ctx, key)
+}
+
+func getSnapshotCount(ctx storage.Context) int {
+	return storage.Get(ctx, snapshotCountKey).(int)
+}
+
+// UpdateSnapshotCount updates number of stored snapshots.
+// If new number is less than the old one, old snapshots are removed.
+// Otherwise, history is extended to with empty snapshots, so
+// `Snapshot` method can return invalid results for `diff = new-old` epochs
+// until `diff` epochs have passed.
+func UpdateSnapshotCount(count int) {
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+	if count < 0 {
+		panic("count must be positive")
+	}
+	ctx := storage.GetContext()
+	curr := getSnapshotCount(ctx)
+	if curr == count {
+		panic("count has not changed")
+	}
+	storage.Put(ctx, snapshotCountKey, count)
+
+	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
+	var delStart, delFinish int
+	if curr < count {
+		// Increase history size.
+		//
+		// Old state (N = count, K = curr, E = current index, C = current epoch)
+		// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1   | ... | N-1
+		// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1 |
+		//
+		// New state:
+		// KEY INDEX: 0   | 1     | ... | E | E+1 | ... | K-1 | ... | N-1
+		// EPOCH    : C-E | C-E+1 | ... | C | nil | ... | .   | ... | C-E-1
+		//
+		// So we need to move tail snapshots N-K keys forward,
+		// i.e. from E+1 .. K to N-K+E+1 .. N
+		diff := count - curr
+		lower := diff + id + 1
+		for k := count - 1; k >= lower; k-- {
+			moveSnapshot(ctx, k-diff, k)
+		}
+		delStart, delFinish = id+1, id+1+diff
+		if curr < delFinish {
+			delFinish = curr
+		}
+	} else {
+		// Decrease history size.
+		//
+		// Old state (N = curr, K = count)
+		// KEY INDEX: 0   | 1     | ... K1 ... | E | E+1   | ... K2-1 ... | N-1
+		// EPOCH    : C-E | C-E+1 | ... .. ... | C | C-N+1 | ... ...  ... | C-E-1
+		var step, start int
+		if id < count {
+			// K2 case, move snapshots from E+1+N-K .. N-1 range to E+1 .. K-1
+			// New state:
+			// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1
+			// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1
+			step = curr - count
+			start = id + 1
+		} else {
+			// New state:
+			// KEY INDEX: 0     | 1     | ... | K-1
+			// EPOCH    : C-K+1 | C-K+2 | ... | C
+			// K1 case, move snapshots from E-K+1 .. E range to 0 .. K-1
+			// AND replace current id with K-1
+			step = id - count + 1
+			storage.Put(ctx, snapshotCurrentIDKey, count-1)
+		}
+		for k := start; k < count; k++ {
+			moveSnapshot(ctx, k+step, k)
+		}
+		delStart, delFinish = count, curr
+	}
+	for k := delStart; k < delFinish; k++ {
+		key := snapshotKeyPrefix + string([]byte{byte(k)})
+		storage.Delete(ctx, key)
+	}
+}
+
+func moveSnapshot(ctx storage.Context, from, to int) {
+	keyFrom := snapshotKeyPrefix + string([]byte{byte(from)})
+	keyTo := snapshotKeyPrefix + string([]byte{byte(to)})
+	data := storage.Get(ctx, keyFrom)
+	storage.Put(ctx, keyTo, data)
 }
 
 // SnapshotByEpoch method returns list of structures that contain node state
