@@ -218,7 +218,6 @@ func AddPeerIR(nodeInfo []byte) {
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
 	addToNetmap(ctx, storageNode{info: nodeInfo})
-	return
 }
 
 // AddPeer method adds new candidate to the next network map if it was invoked

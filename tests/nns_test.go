@@ -325,8 +325,8 @@ func TestNNSRenew(t *testing.T) {
 	cAcc := c.WithSigners(acc)
 	cAcc.Invoke(t, ts, "renew", "testdomain.com")
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
-		{stackitem.Make("name"), stackitem.Make("testdomain.com")},
-		{stackitem.Make("expiration"), stackitem.Make(ts)}})
+		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
 }
 
