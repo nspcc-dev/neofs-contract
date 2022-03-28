@@ -238,8 +238,6 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	} else {
 		runtime.Log(name + ": vote has been failed")
 	}
-
-	return
 }
 
 func voteID(epoch interface{}, args []interop.PublicKey) []byte {

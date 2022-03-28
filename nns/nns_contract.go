@@ -100,39 +100,6 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
 }
 
-// remove after v0.13.1 upgrade
-func shBEFromLEHex(s string) interop.Hash160 {
-	res := make([]byte, interop.Hash160Len)
-
-	ln := len(s) / 2
-	for i := 0; i < ln; i++ {
-		a := hexToNum(s[i*2])
-		b := hexToNum(s[i*2+1])
-
-		var n interface{} = a*16 + b
-		res[ln-1-i] = n.([]byte)[0]
-	}
-
-	return res
-}
-
-// remove after v0.13.1 upgrade
-func hexToNum(s uint8) int {
-	if s >= '0' && s <= '9' {
-		return int(s) - 48
-	}
-
-	if s >= 'A' && s <= 'F' {
-		return int(s) - 55
-	}
-
-	if s >= 'a' && s <= 'f' {
-		return int(s) - 87
-	}
-
-	panic("invalid hex")
-}
-
 // Symbol returns NeoNameService symbol.
 func Symbol() string {
 	return "NNS"
