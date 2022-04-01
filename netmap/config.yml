@@ -7,12 +7,22 @@ events:
     parameters:
       - name: nodeInfo
         type: ByteArray
+  - name: AddPeerSuccess
+    parameters:
+      - name: publicKey
+        type: PublicKey
   - name: UpdateState
     parameters:
       - name: state
         type: Integer
       - name: publicKey
         type: PublicKey
+  - name: UpdateStateSuccess
+    parameters:
+      - name: publicKey
+        type: PublicKey
+      - name: state
+        type: Integer
   - name: NewEpoch
     parameters:
       - name: epoch

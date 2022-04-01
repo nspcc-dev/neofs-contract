@@ -14,6 +14,12 @@ events:
         type: PublicKey
       - name: token
         type: ByteArray
+  - name: PutSuccess
+    parameters:
+      - name: containerID
+        type: Hash256
+      - name: publicKey
+        type: PublicKey
   - name: containerDelete
     parameters:
       - name: containerID
@@ -21,6 +27,10 @@ events:
       - name: signature
         type: Signature
       - name: token
+        type: ByteArray
+  - name: DeleteSuccess
+    parameters:
+      - name: containerID
         type: ByteArray
   - name: setEACL
     parameters:
@@ -32,6 +42,12 @@ events:
         type: PublicKey
       - name: token
         type: ByteArray
+  - name: SetEACLSuccess
+    parameters:
+      - name: containerID
+        type: ByteArray
+      - name: publicKey
+        type: PublicKey
   - name: StartEstimation
     parameters:
       - name: epoch
