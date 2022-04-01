@@ -202,6 +202,9 @@ func AddPeerIR(nodeInfo []byte) {
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
 	addToNetmap(ctx, storageNode{info: nodeInfo})
+
+	publicKey := nodeInfo[2:35] // V2 format: offset:2, len:33
+	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
 }
 
 // AddPeer method adds new candidate to the next network map if it was invoked
@@ -225,12 +228,12 @@ func AddPeer(nodeInfo []byte) {
 		nodeKey = common.InnerRingInvoker(alphabet)
 	}
 
+	// V2 format
+	publicKey := nodeInfo[2:35] // offset:2, len:33
+
 	// If notary is enabled or caller is not an alphabet node,
 	// just emit the notification for alphabet.
 	if !notaryDisabled || len(nodeKey) == 0 {
-		// V2 format
-		publicKey := nodeInfo[2:35] // offset:2, len:33
-
 		common.CheckWitness(publicKey)
 		if notaryDisabled {
 			runtime.Notify("AddPeer", nodeInfo)
@@ -256,6 +259,7 @@ func AddPeer(nodeInfo []byte) {
 	}
 
 	addToNetmap(ctx, candidate)
+	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
 }
 
 // UpdateState method updates state of node from the network map candidate list.
@@ -316,6 +320,8 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	default:
 		panic("unsupported state")
 	}
+
+	runtime.Notify("UpdateStateSuccess", publicKey, state)
 }
 
 // UpdateStateIR method tries to change node state in the network map.
@@ -335,6 +341,7 @@ func UpdateStateIR(state nodeState, publicKey interop.PublicKey) {
 	default:
 		panic("unsupported state")
 	}
+	runtime.Notify("UpdateStateSuccess", publicKey, state)
 }
 
 // NewEpoch method changes epoch number up to provided epochNum argument. Can

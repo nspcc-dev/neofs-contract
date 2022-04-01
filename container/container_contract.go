@@ -276,6 +276,7 @@ func PutNamed(container []byte, signature interop.Signature,
 	}
 
 	runtime.Log("added new container")
+	runtime.Notify("PutSuccess", containerID, publicKey)
 }
 
 // checkNiceNameAvailable checks if nice name is available for the container.
@@ -357,6 +358,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	}
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("remove container")
+	runtime.Notify("DeleteSuccess", containerID)
 }
 
 // Get method returns structure that contains stable marshaled Container structure,
@@ -464,6 +466,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	common.SetSerialized(ctx, key, rule)
 
 	runtime.Log("success")
+	runtime.Notify("SetEACLSuccess", containerID, publicKey)
 }
 
 // EACL method returns structure that contains stable marshaled EACLTable structure,
