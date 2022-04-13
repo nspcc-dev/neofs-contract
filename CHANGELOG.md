@@ -1,6 +1,18 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.15.1] - 2022-04-13
+
+### Fixed
+- Max domain name fragement length (#238)
+
+### Added
+- `netmap.UpdateSnapshotCount` method (#232)
+- Notifications of successful container and storage node operations (#236)
+
+### Changed
+- Update neo-go to v0.98.2 (#234)
+
 ## [0.15.0] - 2022-03-23 - Heuksando (흑산도, 黑山島)
 
 ### Fixed
@@ -339,6 +351,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.15.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.0...v0.14.1
