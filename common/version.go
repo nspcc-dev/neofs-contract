@@ -5,13 +5,13 @@ import "github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 const (
 	major = 0
 	minor = 15
-	patch = 0
+	patch = 1
 
 	// Versions from which an update should be performed.
 	// These should be used in a group (so prevMinor can be equal to minor if there are
 	// any migration routines.
 	prevMajor = 0
-	prevMinor = 14
+	prevMinor = 15
 	prevPatch = 0
 
 	Version = major*1_000_000 + minor*1_000 + patch
