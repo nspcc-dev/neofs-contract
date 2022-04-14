@@ -15,7 +15,7 @@ type IRNode struct {
 
 const irListMethod = "innerRingList"
 
-// InnerRingInvoker returns public key of inner ring node that invoked contract.
+// InnerRingInvoker returns the public key of the inner ring node that has invoked the contract.
 // Work around for environments without notary support.
 func InnerRingInvoker(ir []interop.PublicKey) interop.PublicKey {
 	for i := 0; i < len(ir); i++ {
@@ -28,14 +28,14 @@ func InnerRingInvoker(ir []interop.PublicKey) interop.PublicKey {
 	return nil
 }
 
-// InnerRingNodes return list of inner ring nodes from state validator role
-// in side chain.
+// InnerRingNodes return a list of inner ring nodes from state validator role
+// in the sidechain.
 func InnerRingNodes() []interop.PublicKey {
 	blockHeight := ledger.CurrentIndex()
 	return roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
 }
 
-// InnerRingNodesFromNetmap gets list of inner ring through
+// InnerRingNodesFromNetmap gets a list of inner ring nodes through
 // calling "innerRingList" method of smart contract.
 // Work around for environments without notary support.
 func InnerRingNodesFromNetmap(sc interop.Hash160) []interop.PublicKey {
@@ -47,7 +47,7 @@ func InnerRingNodesFromNetmap(sc interop.Hash160) []interop.PublicKey {
 	return pubs
 }
 
-// AlphabetNodes return list of alphabet nodes from committee in side chain.
+// AlphabetNodes returns a list of alphabet nodes from committee in the sidechain.
 func AlphabetNodes() []interop.PublicKey {
 	return neo.GetCommittee()
 }
@@ -64,8 +64,8 @@ func CommitteeAddress() []byte {
 	return Multiaddress(committee, true)
 }
 
-// Multiaddress returns default multi signature account address for N keys.
-// If committee set to true, then it is `M = N/2+1` committee account.
+// Multiaddress returns default multisignature account address for N keys.
+// If committee set to true, it is `M = N/2+1` committee account.
 func Multiaddress(n []interop.PublicKey, committee bool) []byte {
 	threshold := len(n)*2/3 + 1
 	if committee {

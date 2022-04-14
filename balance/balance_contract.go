@@ -24,7 +24,7 @@ type (
 
 	// Account structure stores metadata of each NeoFS balance account.
 	Account struct {
-		// Active  balance
+		// Active balance
 		Balance int
 		// Until valid for lock accounts
 		Until int
@@ -89,7 +89,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("balance contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -113,13 +113,13 @@ func Decimals() int {
 }
 
 // TotalSupply is a NEP-17 standard method that returns total amount of main
-// chain GAS in the NeoFS network.
+// chain GAS in NeoFS network.
 func TotalSupply() int {
 	ctx := storage.GetReadOnlyContext()
 	return token.getSupply(ctx)
 }
 
-// BalanceOf is a NEP-17 standard method that returns NeoFS balance of specified
+// BalanceOf is a NEP-17 standard method that returns NeoFS balance of the specified
 // account.
 func BalanceOf(account interop.Hash160) int {
 	ctx := storage.GetReadOnlyContext()
@@ -127,23 +127,23 @@ func BalanceOf(account interop.Hash160) int {
 }
 
 // Transfer is a NEP-17 standard method that transfers NeoFS balance from one
-// account to other. Can be invoked only by account owner.
+// account to another. It can be invoked only by the account owner.
 //
-// Produces Transfer and TransferX notifications. TransferX notification
+// It produces Transfer and TransferX notifications. TransferX notification
 // will have empty details field.
 func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 	ctx := storage.GetContext()
 	return token.transfer(ctx, from, to, amount, false, nil)
 }
 
-// TransferX is a method for NeoFS balance transfers from one account to
-// another. Can be invoked by account owner or by Alphabet nodes.
+// TransferX is a method for NeoFS balance to be transferred from one account to
+// another. It can be invoked by the account owner or by Alphabet nodes.
 //
-// Produces Transfer and TransferX notifications.
+// It produces Transfer and TransferX notifications.
 //
 // TransferX method expands Transfer method by having extra details argument.
-// Also TransferX method allows to transfer assets by Alphabet nodes of the
-// Inner Ring with multi signature.
+// TransferX method also allows to transfer assets by Alphabet nodes of the
+// Inner Ring with multisignature.
 func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -191,14 +191,14 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	runtime.Log("successfully transferred assets")
 }
 
-// Lock is a method that transfers assets from user account to lock account
-// related to the user. Can be invoked only by Alphabet nodes of the Inner Ring.
+// Lock is a method that transfers assets from a user account to the lock account
+// related to the user. It can be invoked only by Alphabet nodes of the Inner Ring.
 //
-// Produces Lock, Transfer and TransferX notifications.
+// It produces Lock, Transfer and TransferX notifications.
 //
-// Lock method invoked by Alphabet nodes of the Inner Ring when they process
+// Lock method is invoked by Alphabet nodes of the Inner Ring when they process
 // Withdraw notification from NeoFS contract. This should transfer assets
-// to new lock account that won't be used for anything besides Unlock and Burn.
+// to a new lock account that won't be used for anything beside Unlock and Burn.
 func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -251,11 +251,11 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	runtime.Notify("Lock", txDetails, from, to, amount, until)
 }
 
-// NewEpoch is a method that checks timeout on lock accounts and return assets
-// if lock is not available anymore. Can be invoked only by NewEpoch method
+// NewEpoch is a method that checks timeout on lock accounts and returns assets
+// if lock is not available anymore. It can be invoked only by NewEpoch method
 // of Netmap contract.
 //
-// Produces Transfer and TransferX notifications.
+// It produces Transfer and TransferX notifications.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -294,14 +294,14 @@ func NewEpoch(epochNum int) {
 	}
 }
 
-// Mint is a method that transfers assets to user account from empty account.
-// Can be invoked only by Alphabet nodes of the Inner Ring.
+// Mint is a method that transfers assets to a user account from an empty account.
+// It can be invoked only by Alphabet nodes of the Inner Ring.
 //
-// Produces Mint, Transfer and TransferX notifications.
+// It produces Mint, Transfer and TransferX notifications.
 //
-// Mint method invoked by Alphabet nodes of the Inner Ring when they process
-// Deposit notification from NeoFS contract. Before that Alphabet nodes should
-// synchronize precision of main chain GAS contract and Balance contract.
+// Mint method is invoked by Alphabet nodes of the Inner Ring when they process
+// Deposit notification from NeoFS contract. Before that, Alphabet nodes should
+// synchronize precision of mainchain GAS contract and Balance contract.
 // Mint increases total supply of NEP-17 compatible NeoFS token.
 func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
@@ -349,15 +349,15 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	runtime.Notify("Mint", to, amount)
 }
 
-// Burn is a method that transfers assets from user account to empty account.
-// Can be invoked only by Alphabet nodes of the Inner Ring.
+// Burn is a method that transfers assets from a user account to an empty account.
+// It can be invoked only by Alphabet nodes of the Inner Ring.
 //
-// Produces Burn, Transfer and TransferX notifications.
+// It produces Burn, Transfer and TransferX notifications.
 //
-// Burn method invoked by Alphabet nodes of the Inner Ring when they process
-// Cheque notification from NeoFS contract. It means that locked assets were
-// transferred to user in main chain, therefore lock account should be destroyed.
-// Before that Alphabet nodes should synchronize precision of main chain GAS
+// Burn method is invoked by Alphabet nodes of the Inner Ring when they process
+// Cheque notification from NeoFS contract. It means that locked assets have been
+// transferred to the user in the mainchain, therefore the lock account should be destroyed.
+// Before that, Alphabet nodes should synchronize precision of mainchain GAS
 // contract and Balance contract. Burn decreases total supply of NEP-17
 // compatible NeoFS token.
 func Burn(from interop.Hash160, amount int, txDetails []byte) {
@@ -410,7 +410,7 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	runtime.Notify("Burn", from, amount)
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }
@@ -484,7 +484,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 	return amountFrom, true
 }
 
-// isUsableAddress checks if the sender is either the correct NEO address or SC address.
+// isUsableAddress checks if the sender is either a correct NEO address or SC address.
 func isUsableAddress(addr interop.Hash160) bool {
 	if len(addr) == 20 {
 		if runtime.CheckWitness(addr) {

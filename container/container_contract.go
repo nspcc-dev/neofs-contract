@@ -63,11 +63,11 @@ const (
 	singleEstimatePrefix = "est"
 	estimateKeyPrefix    = "cnr"
 	estimatePostfixSize  = 10
-	// CleanupDelta contains number of last epochs for which container estimations are present.
+	// CleanupDelta contains the number of the last epochs for which container estimations are present.
 	CleanupDelta = 3
-	// TotalCleanupDelta contains number of epochs after which estimation
-	// will be removed by epoch tick cleanup if any node didn't updated
-	// container size and/or container was removed. Must be greater than CleanupDelta.
+	// TotalCleanupDelta contains the number of the epochs after which estimation
+	// will be removed by epoch tick cleanup if any of the nodes hasn't updated
+	// container size and/or container has been removed. It must be greater than CleanupDelta.
 	TotalCleanupDelta = CleanupDelta + 1
 
 	// NotFoundError is returned if container is missing.
@@ -84,7 +84,7 @@ var (
 	eACLPrefix = []byte("eACL")
 )
 
-// OnNEP11Payment is needed for registration with contract as owner to work.
+// OnNEP11Payment is needed for registration with contract as the owner to work.
 func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 }
 
@@ -145,8 +145,8 @@ func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	}
 }
 
-// Update method updates contract source code and manifest. Can be invoked
-// only by committee.
+// Update method updates contract source code and manifest. It can be invoked
+// by committee only.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
@@ -157,13 +157,13 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("container contract updated")
 }
 
-// Put method creates new container if it was invoked by Alphabet nodes
-// of the Inner Ring. Otherwise it produces containerPut notification.
+// Put method creates a new container if it has been invoked by Alphabet nodes
+// of the Inner Ring. Otherwise, it produces containerPut notification.
 //
-// Container should be stable marshaled Container structure from API.
-// Signature is a RFC6979 signature of Container.
-// PublicKey contains public key of the signer.
-// Token is optional and should be stable marshaled SessionToken structure from
+// Container should be a stable marshaled Container structure from API.
+// Signature is a RFC6979 signature of the Container.
+// PublicKey contains the public key of the signer.
+// Token is optional and should be a stable marshaled SessionToken structure from
 // API.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	PutNamed(container, signature, publicKey, token, "", "")
@@ -279,7 +279,7 @@ func PutNamed(container []byte, signature interop.Signature,
 	runtime.Notify("PutSuccess", containerID, publicKey)
 }
 
-// checkNiceNameAvailable checks if nice name is available for the container.
+// checkNiceNameAvailable checks if the nice name is available for the container.
 // It panics if the name is taken. Returned value specifies if new domain registration is needed.
 func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool {
 	isAvail := contract.Call(nnsContractAddr, "isAvailable",
@@ -303,15 +303,15 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	return false
 }
 
-// Delete method removes container from contract storage if it was
-// invoked by Alphabet nodes of the Inner Ring. Otherwise it produces
+// Delete method removes a container from the contract storage if it has been
+// invoked by Alphabet nodes of the Inner Ring. Otherwise, it produces
 // containerDelete notification.
 //
-// Signature is a RFC6979 signature of container ID.
-// Token is optional and should be stable marshaled SessionToken structure from
+// Signature is a RFC6979 signature of the container ID.
+// Token is optional and should be a stable marshaled SessionToken structure from
 // API.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -348,8 +348,8 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	if len(domain) != 0 {
 		storage.Delete(ctx, key)
 		// We should do `getRecord` first because NNS record could be deleted
-		// by other means (expiration, manual) thus leading to failing `deleteRecord`
-		// and inability to delete container. We should also check that we own the record in case.
+		// by other means (expiration, manual), thus leading to failing `deleteRecord`
+		// and inability to delete a container. We should also check if we own the record in case.
 		nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
 		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
 		if res != nil && std.Base58Encode(containerID) == string(res.([]interface{})[0].(string)) {
@@ -361,11 +361,11 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	runtime.Notify("DeleteSuccess", containerID)
 }
 
-// Get method returns structure that contains stable marshaled Container structure,
-// signature, public key of the container creator and stable marshaled SessionToken
+// Get method returns a structure that contains a stable marshaled Container structure,
+// the signature, the public key of the container creator and a stable marshaled SessionToken
 // structure if it was provided.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	cnt := getContainer(ctx, containerID)
@@ -375,9 +375,9 @@ func Get(containerID []byte) Container {
 	return cnt
 }
 
-// Owner method returns 25 byte Owner ID of the container.
+// Owner method returns a 25 byte Owner ID of the container.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func Owner(containerID []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
 	owner := getOwnerByID(ctx, containerID)
@@ -387,7 +387,7 @@ func Owner(containerID []byte) []byte {
 	return owner
 }
 
-// List method returns list of all container IDs owned by specified owner.
+// List method returns a list of all container IDs owned by the specified owner.
 func List(owner []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -406,17 +406,17 @@ func List(owner []byte) [][]byte {
 	return list
 }
 
-// SetEACL method sets new extended ACL table related to the contract
-// if it was invoked by Alphabet nodes of the Inner Ring. Otherwise it produces
+// SetEACL method sets a new extended ACL table related to the contract
+// if it was invoked by Alphabet nodes of the Inner Ring. Otherwise, it produces
 // setEACL notification.
 //
-// EACL should be stable marshaled EACLTable structure from API.
-// Signature is a RFC6979 signature of Container.
-// PublicKey contains public key of the signer.
-// Token is optional and should be stable marshaled SessionToken structure from
+// EACL should be a stable marshaled EACLTable structure from API.
+// Signature is a RFC6979 signature of the Container.
+// PublicKey contains the public key of the signer.
+// Token is optional and should be a stable marshaled SessionToken structure from
 // API.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -469,11 +469,11 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	runtime.Notify("SetEACLSuccess", containerID, publicKey)
 }
 
-// EACL method returns structure that contains stable marshaled EACLTable structure,
-// signature, public key of the extended ACL setter and stable marshaled SessionToken
+// EACL method returns a structure that contains a stable marshaled EACLTable structure,
+// the signature, the public key of the extended ACL setter and a stable marshaled SessionToken
 // structure if it was provided.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
 
@@ -486,10 +486,10 @@ func EACL(containerID []byte) ExtendedACL {
 }
 
 // PutContainerSize method saves container size estimation in contract
-// memory. Can be invoked only by Storage nodes from the network map. Method
+// memory. It can be invoked only by Storage nodes from the network map. This method
 // checks witness based on the provided public key of the Storage node.
 //
-// If a container doesn't exist it panics with NotFoundError.
+// If the container doesn't exist, it panics with NotFoundError.
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
@@ -516,13 +516,13 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	runtime.Log("saved container size estimation")
 }
 
-// GetContainerSize method returns container ID and slice of container
-// estimations. Container estimation includes public key of the Storage Node
-// that registered  estimation and value of estimation.
+// GetContainerSize method returns the container ID and a slice of container
+// estimations. Container estimation includes the public key of the Storage Node
+// that registered estimation and value of estimation.
 //
-// Use ID obtained from ListContainerSizes method. Estimations are removed
-// from contract storage every epoch, see NewEpoch method, therefore method
-// can return different results in different epochs.
+// Use the ID obtained from ListContainerSizes method. Estimations are removed
+// from contract storage every epoch, see NewEpoch method; therefore, this method
+// can return different results during different epochs.
 func GetContainerSize(id []byte) containerSizes {
 	ctx := storage.GetReadOnlyContext()
 
@@ -535,8 +535,8 @@ func GetContainerSize(id []byte) containerSizes {
 	return getContainerSizeEstimation(ctx, id, cid)
 }
 
-// ListContainerSizes method returns IDs of container size estimations
-// that has been registered for specified epoch.
+// ListContainerSizes method returns the IDs of container size estimations
+// that has been registered for the specified epoch.
 func ListContainerSizes(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -568,7 +568,7 @@ func ListContainerSizes(epoch int) [][]byte {
 }
 
 // NewEpoch method removes all container size estimations from epoch older than
-// epochNum + 3. Can be invoked only by NewEpoch method of the Netmap contract.
+// epochNum + 3. It can be invoked only by NewEpoch method of the Netmap contract.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -591,7 +591,7 @@ func NewEpoch(epochNum int) {
 }
 
 // StartContainerEstimation method produces StartEstimation notification.
-// Can be invoked only by Alphabet nodes of the Inner Ring.
+// It can be invoked only by Alphabet nodes of the Inner Ring.
 func StartContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -629,7 +629,7 @@ func StartContainerEstimation(epoch int) {
 }
 
 // StopContainerEstimation method produces StopEstimation notification.
-// Can be invoked only by Alphabet nodes of the Inner Ring.
+// It can be invoked only by Alphabet nodes of the Inner Ring.
 func StopContainerEstimation(epoch int) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -666,7 +666,7 @@ func StopContainerEstimation(epoch int) {
 	runtime.Log("notification has been produced")
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }
@@ -763,7 +763,7 @@ func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerS
 }
 
 // isStorageNode looks into _previous_ epoch network map, because storage node
-// announce container size estimation of previous epoch.
+// announces container size estimation of the previous epoch.
 func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)

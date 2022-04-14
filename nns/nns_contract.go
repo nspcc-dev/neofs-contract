@@ -4,7 +4,7 @@ implementation. This token is a compatible analogue of C# Neo Name Service
 token and is aimed to serve as a domain name service for Neo smart-contracts,
 thus it's NeoNameService. This token can be minted with new domain name
 registration, the domain name itself is your NFT. Corresponding domain root
-must be added by the committee before new domain name can be registered.
+must be added by committee before a new domain name can be registered.
 */
 package nns
 
@@ -26,7 +26,7 @@ import (
 const (
 	// prefixTotalSupply contains total supply of minted domains.
 	prefixTotalSupply byte = 0x00
-	// prefixBalance contains map from owner to his balance.
+	// prefixBalance contains map from the owner to their balance.
 	prefixBalance byte = 0x01
 	// prefixAccountToken contains map from (owner + token key) to token ID,
 	// where token key = hash160(token ID) and token ID = domain name.
@@ -110,25 +110,25 @@ func Decimals() int {
 	return 0
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }
 
-// TotalSupply returns overall number of domains minted by the NeoNameService contract.
+// TotalSupply returns the overall number of domains minted by NeoNameService contract.
 func TotalSupply() int {
 	ctx := storage.GetReadOnlyContext()
 	return getTotalSupply(ctx)
 }
 
-// OwnerOf returns owner of the specified domain.
+// OwnerOf returns the owner of the specified domain.
 func OwnerOf(tokenID []byte) interop.Hash160 {
 	ctx := storage.GetReadOnlyContext()
 	ns := getNameState(ctx, tokenID)
 	return ns.Owner
 }
 
-// Properties returns domain name and expiration date of the specified domain.
+// Properties returns a domain name and an expiration date of the specified domain.
 func Properties(tokenID []byte) map[string]interface{} {
 	ctx := storage.GetReadOnlyContext()
 	ns := getNameState(ctx, tokenID)
@@ -138,7 +138,7 @@ func Properties(tokenID []byte) map[string]interface{} {
 	}
 }
 
-// BalanceOf returns overall number of domains owned by the specified owner.
+// BalanceOf returns the overall number of domains owned by the specified owner.
 func BalanceOf(owner interop.Hash160) int {
 	if !isValid(owner) {
 		panic(`invalid owner`)
@@ -166,7 +166,7 @@ func TokensOf(owner interop.Hash160) iterator.Iterator {
 	return storage.Find(ctx, append([]byte{prefixAccountToken}, owner...), storage.ValuesOnly)
 }
 
-// Transfer transfers domain with the specified name to new owner.
+// Transfer transfers the domain with the specified name to a new owner.
 func Transfer(to interop.Hash160, tokenID []byte, data interface{}) bool {
 	if !isValid(to) {
 		panic(`invalid receiver`)
@@ -218,7 +218,7 @@ func GetPrice() int {
 	return storage.Get(ctx, []byte{prefixRegisterPrice}).(int)
 }
 
-// IsAvailable checks whether provided domain name is available.
+// IsAvailable checks whether the provided domain name is available.
 func IsAvailable(name string) bool {
 	fragments := splitAndCheck(name, false)
 	if fragments == nil {
@@ -235,7 +235,7 @@ func IsAvailable(name string) bool {
 	return parentExpired(ctx, 0, fragments)
 }
 
-// parentExpired returns true if any domain from fragments doesn't exist or expired.
+// parentExpired returns true if any domain from fragments doesn't exist or is expired.
 // first denotes the deepest subdomain to check.
 func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 	now := runtime.GetTime()
@@ -257,7 +257,7 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 	return false
 }
 
-// Register registers new domain with the specified owner and name if it's available.
+// Register registers a new domain with the specified owner and name if it's available.
 func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
 	fragments := splitAndCheck(name, true)
 	if fragments == nil {
@@ -343,7 +343,7 @@ func Renew(name string) int {
 	return ns.Expiration
 }
 
-// UpdateSOA update soa record.
+// UpdateSOA updates soa record.
 func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 	if len(name) > maxDomainNameLength {
 		panic("invalid domain name format")
@@ -369,7 +369,7 @@ func SetAdmin(name string, admin interop.Hash160) {
 	putNameState(ctx, ns)
 }
 
-// SetRecord adds new record of the specified type to the provided domain.
+// SetRecord adds a new record of the specified type to the provided domain.
 func SetRecord(name string, typ RecordType, id byte, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
@@ -397,7 +397,7 @@ func checkBaseRecords(typ RecordType, data string) bool {
 	}
 }
 
-// AddRecord adds new record of the specified type to the provided domain.
+// AddRecord adds a new record of the specified type to the provided domain.
 func AddRecord(name string, typ RecordType, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
@@ -443,7 +443,7 @@ func Resolve(name string, typ RecordType) []string {
 	return resolve(ctx, nil, name, typ, 2)
 }
 
-// GetAllRecords returns an Iterator with RecordState items for given name.
+// GetAllRecords returns an Iterator with RecordState items for the given name.
 func GetAllRecords(name string) iterator.Iterator {
 	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
@@ -490,7 +490,7 @@ func getTotalSupply(ctx storage.Context) int {
 	return val.(int)
 }
 
-// updateTotalSupply adds specified diff to the total supply.
+// updateTotalSupply adds the specified diff to the total supply.
 func updateTotalSupply(ctx storage.Context, diff int) {
 	tsKey := []byte{prefixTotalSupply}
 	ts := getTotalSupply(ctx)
@@ -587,7 +587,7 @@ func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 	storeRecord(ctx, recordKey, name, typ, id, data)
 }
 
-// storeRecord put record to storage.
+// storeRecord puts record to storage.
 func storeRecord(ctx storage.Context, recordKey []byte, name string, typ RecordType, id byte, data string) {
 	rs := RecordState{
 		Name: name,
@@ -644,19 +644,19 @@ func updateSoaSerial(ctx storage.Context, tokenId []byte) {
 	storage.Put(ctx, recordKey, recBytes)
 }
 
-// getRecordsKey returns prefix used to store domain records of different types.
+// getRecordsKey returns the prefix used to store domain records of different types.
 func getRecordsKey(tokenId []byte, name string) []byte {
 	recordKey := append([]byte{prefixRecord}, getTokenKey(tokenId)...)
 	return append(recordKey, getTokenKey([]byte(name))...)
 }
 
-// getRecordsKeyByType returns key used to store domain records.
+// getRecordsKeyByType returns the key used to store domain records.
 func getRecordsKeyByType(tokenId []byte, name string, typ RecordType) []byte {
 	recordKey := getRecordsKey(tokenId, name)
 	return append(recordKey, byte(typ))
 }
 
-// getIdRecordKey returns key used to store domain records.
+// getIdRecordKey returns the key used to store domain records.
 func getIdRecordKey(tokenId []byte, name string, typ RecordType, id byte) []byte {
 	recordKey := getRecordsKey(tokenId, name)
 	return append(recordKey, byte(typ), id)
@@ -682,7 +682,7 @@ func checkCommittee() {
 
 // checkFragment validates root or a part of domain name.
 // 1. Root domain must start with a letter.
-// 2. All other fragments must start and end in a letter or a digit.
+// 2. All other fragments must start and end with a letter or a digit.
 func checkFragment(v string, isRoot bool) bool {
 	maxLength := maxDomainNameFragmentLength
 	if isRoot {
@@ -843,7 +843,7 @@ func checkIPv6(data string) bool {
 	return true
 }
 
-// tokenIDFromName returns token ID (domain.root) from provided name.
+// tokenIDFromName returns token ID (domain.root) from the provided name.
 func tokenIDFromName(name string) string {
 	fragments := splitAndCheck(name, true)
 	if fragments == nil {
@@ -868,7 +868,7 @@ func tokenIDFromName(name string) string {
 	return name
 }
 
-// resolve resolves provided name using record with the specified type and given
+// resolve resolves the provided name using record with the specified type and given
 // maximum redirections constraint.
 func resolve(ctx storage.Context, res []string, name string, typ RecordType, redirect int) []string {
 	if redirect < 0 {

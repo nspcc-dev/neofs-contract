@@ -39,7 +39,7 @@ func ContainerFeeTransferDetails(cid []byte) []byte {
 	return append(containerFeePrefix, cid...)
 }
 
-// AbortWithMessage calls `runtime.Log` with passed message
+// AbortWithMessage calls `runtime.Log` with the passed message
 // and calls `ABORT` opcode.
 func AbortWithMessage(msg string) {
 	runtime.Log(msg)

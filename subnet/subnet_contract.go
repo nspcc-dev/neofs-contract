@@ -71,7 +71,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, []byte{notaryDisabledKey}, args.notaryDisabled)
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -83,7 +83,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("subnet contract updated")
 }
 
-// Put creates new subnet with the specified owner and info.
+// Put creates a new subnet with the specified owner and info.
 func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 	// V2 format
 	if len(id) != subnetIDSize {
@@ -129,7 +129,7 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 	storage.Put(ctx, stKey, info)
 }
 
-// Get returns info about subnet with the specified id.
+// Get returns info about the subnet with the specified id.
 func Get(id []byte) []byte {
 	// V2 format
 	if len(id) != subnetIDSize {
@@ -145,7 +145,7 @@ func Get(id []byte) []byte {
 	return raw.([]byte)
 }
 
-// Delete deletes subnet with the specified id.
+// Delete deletes the subnet with the specified id.
 func Delete(id []byte) {
 	// V2 format
 	if len(id) != subnetIDSize {
@@ -182,7 +182,7 @@ func Delete(id []byte) {
 	runtime.Notify("Delete", id)
 }
 
-// AddNodeAdmin adds new node administrator to the specified subnetwork.
+// AddNodeAdmin adds a new node administrator to the specified subnetwork.
 func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -215,7 +215,7 @@ func AddNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 }
 
 // RemoveNodeAdmin removes node administrator from the specified subnetwork.
-// Must be called by subnet owner only.
+// Must be called by the subnet owner only.
 func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -247,8 +247,8 @@ func RemoveNodeAdmin(subnetID []byte, adminKey interop.PublicKey) {
 	deleteKeyFromList(ctx, adminKey, stKey)
 }
 
-// AddNode adds node to the specified subnetwork.
-// Must be called by subnet's owner or node administrator
+// AddNode adds a node to the specified subnetwork.
+// Must be called by the subnet's owner or the node administrator
 // only.
 func AddNode(subnetID []byte, node interop.PublicKey) {
 	// V2 format
@@ -286,8 +286,8 @@ func AddNode(subnetID []byte, node interop.PublicKey) {
 	putKeyInList(ctx, node, stKey)
 }
 
-// RemoveNode removes node from the specified subnetwork.
-// Must be called by subnet's owner or node administrator
+// RemoveNode removes a node from the specified subnetwork.
+// Must be called by the subnet's owner or the node administrator
 // only.
 func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	// V2 format
@@ -327,8 +327,8 @@ func RemoveNode(subnetID []byte, node interop.PublicKey) {
 	runtime.Notify("RemoveNode", subnetID, node)
 }
 
-// NodeAllowed checks if node is included in the
-// specified subnet or not.
+// NodeAllowed checks if a node is included in the
+// specified subnet.
 func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -353,8 +353,8 @@ func NodeAllowed(subnetID []byte, node interop.PublicKey) bool {
 	return storage.Get(ctx, append(stKey, node...)) != nil
 }
 
-// AddClientAdmin adds new client administrator of the specified group in the specified subnetwork.
-// Must be called by owner only.
+// AddClientAdmin adds a new client administrator of the specified group in the specified subnetwork.
+// Must be called by the owner only.
 func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -394,7 +394,7 @@ func AddClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.Publ
 
 // RemoveClientAdmin removes client administrator from the
 // specified group in the specified subnetwork.
-// Must be called by owner only.
+// Must be called by the owner only.
 func RemoveClientAdmin(subnetID []byte, groupID []byte, adminPublicKey interop.PublicKey) {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -477,7 +477,7 @@ func AddUser(subnetID []byte, groupID []byte, userID []byte) {
 	putKeyInList(ctx, userID, stKey)
 }
 
-// RemoveUser removes user from the specified subnetwork and group.
+// RemoveUser removes a user from the specified subnetwork and group.
 // Must be called by the owner or the group's admin only.
 func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	// V2 format
@@ -522,8 +522,8 @@ func RemoveUser(subnetID []byte, groupID []byte, userID []byte) {
 	deleteKeyFromList(ctx, userID, stKey)
 }
 
-// UserAllowed returns bool that indicates if node is included in the
-// specified subnet or not.
+// UserAllowed returns bool that indicates if a node is included in the
+// specified subnet.
 func UserAllowed(subnetID []byte, user []byte) bool {
 	// V2 format
 	if len(subnetID) != subnetIDSize {
@@ -551,7 +551,7 @@ func UserAllowed(subnetID []byte, user []byte) bool {
 	return false
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

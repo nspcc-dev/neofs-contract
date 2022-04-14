@@ -19,8 +19,8 @@ type (
 	}
 )
 
-// Audit key is a combination of epoch, container ID and public key of node that
-// executed audit. Together it should be no more than 64 bytes. We can't shrink
+// Audit key is a combination of the epoch, the container ID and the public key of the node that
+// has executed the audit. Together, it shouldn't be more than 64 bytes. We can't shrink
 // epoch and container ID since we iterate over these values. But we can shrink
 // public key by using first bytes of the hashed value.
 
@@ -70,7 +70,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("audit contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -82,11 +82,11 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("audit contract updated")
 }
 
-// Put method stores stable marshalled `DataAuditResult` structure. Can be
+// Put method stores a stable marshalled `DataAuditResult` structure. It can be
 // invoked only by Inner Ring nodes.
 //
-// Inner Ring nodes perform audit of the containers and produce `DataAuditResult`
-// structures. They are being stored in audit contract and used for settlements
+// Inner Ring nodes perform audit of containers and produce `DataAuditResult`
+// structures. They are stored in audit contract and used for settlements
 // in later epochs.
 func Put(rawAuditResult []byte) {
 	ctx := storage.GetContext()
@@ -122,16 +122,16 @@ func Put(rawAuditResult []byte) {
 	runtime.Log("audit: result has been saved")
 }
 
-// Get method returns stable marshaled DataAuditResult structure.
+// Get method returns a stable marshaled DataAuditResult structure.
 //
-// ID of the DataAuditResult can be obtained from listing methods.
+// The ID of the DataAuditResult can be obtained from listing methods.
 func Get(id []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
 	return storage.Get(ctx, id).([]byte)
 }
 
-// List method returns list of all available DataAuditResult IDs from
-// contract storage.
+// List method returns a list of all available DataAuditResult IDs from
+// the contract storage.
 func List() [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
@@ -139,8 +139,8 @@ func List() [][]byte {
 	return list(it)
 }
 
-// ListByEpoch method returns list of DataAuditResult IDs generated in
-// specified epoch.
+// ListByEpoch method returns a list of DataAuditResult IDs generated during
+// the specified epoch.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	var buf interface{} = epoch
@@ -149,8 +149,8 @@ func ListByEpoch(epoch int) [][]byte {
 	return list(it)
 }
 
-// ListByCID method returns list of DataAuditResult IDs generated in
-// specified epoch for specified container.
+// ListByCID method returns a list of DataAuditResult IDs generated during
+// the specified epoch for the specified container.
 func ListByCID(epoch int, cid []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -162,8 +162,8 @@ func ListByCID(epoch int, cid []byte) [][]byte {
 	return list(it)
 }
 
-// ListByNode method returns list of DataAuditResult IDs generated in
-// specified epoch for specified container by specified Inner Ring node.
+// ListByNode method returns a list of DataAuditResult IDs generated in
+// the specified epoch for the specified container by the specified Inner Ring node.
 func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 	hdr := auditHeader{
@@ -200,12 +200,12 @@ loop:
 	return result
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }
 
-// readNext reads length from first byte and then reads data (max 127 bytes).
+// readNext reads the length from the first byte, and then reads data (max 127 bytes).
 func readNext(input []byte) ([]byte, int) {
 	var buf interface{} = input[0]
 	ln := buf.(int)

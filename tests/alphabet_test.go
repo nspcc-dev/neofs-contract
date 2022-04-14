@@ -112,7 +112,7 @@ func TestVote(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, method, int64(0), []interface{}{newAlphabetPub})
 
 	// wait one block util
-	// new committee is accepted
+	// a new committee is accepted
 	c.AddNewBlock(t)
 
 	cNewAlphabet.Invoke(t, stackitem.Null{}, "emit")

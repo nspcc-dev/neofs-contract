@@ -40,7 +40,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("reputation contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -52,12 +52,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("reputation contract updated")
 }
 
-// Put method saves DataAuditResult in contract storage. Can be invoked only by
-// Inner Ring nodes. Does not require multi signature invocations.
+// Put method saves DataAuditResult in contract storage. It can be invoked only by
+// Inner Ring nodes. It does not require multisignature invocations.
 //
-// Epoch is an epoch number when DataAuditResult structure was generated.
-// PeerID contains public keys of Inner Ring node that produced DataAuditResult.
-// Value contains stable marshaled structure of DataAuditResult.
+// Epoch is the epoch number when DataAuditResult structure was generated.
+// PeerID contains public keys of the Inner Ring node that has produced DataAuditResult.
+// Value contains a stable marshaled structure of DataAuditResult.
 func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -108,15 +108,15 @@ func Put(epoch int, peerID []byte, value []byte) {
 	storage.Put(ctx, key, value)
 }
 
-// Get method returns list of all stable marshaled DataAuditResult structures
-// produced by specified Inner Ring node in specified epoch.
+// Get method returns a list of all stable marshaled DataAuditResult structures
+// produced by the specified Inner Ring node during the specified epoch.
 func Get(epoch int, peerID []byte) [][]byte {
 	id := storageID(epoch, peerID)
 	return GetByID(id)
 }
 
-// GetByID method returns list of all stable marshaled DataAuditResult with
-// specified id. Use ListByEpoch method to obtain id.
+// GetByID method returns a list of all stable marshaled DataAuditResult with
+// the specified id. Use ListByEpoch method to obtain the id.
 func GetByID(id []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
@@ -133,7 +133,7 @@ func getReputationKey(prefix byte, id []byte) []byte {
 	return append([]byte{prefix}, id...)
 }
 
-// ListByEpoch returns list of IDs that may be used to get reputation data
+// ListByEpoch returns a list of IDs that may be used to get reputation data
 // with GetByID method.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
@@ -150,7 +150,7 @@ func ListByEpoch(epoch int) [][]byte {
 	return result
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

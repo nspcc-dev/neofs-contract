@@ -28,7 +28,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("proxy contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -40,7 +40,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("proxy contract updated")
 }
 
-// Verify method returns true if transaction contains valid multi signature of
+// Verify method returns true if transaction contains valid multisignature of
 // Alphabet nodes of the Inner Ring.
 func Verify() bool {
 	alphabet := neo.GetCommittee()
@@ -54,7 +54,7 @@ func Verify() bool {
 	return true
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

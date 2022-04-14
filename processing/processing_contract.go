@@ -48,8 +48,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("processing contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
-// only by side chain committee.
+// Update method updates contract source code and manifest. It can be invoked
+// only by the sidechain committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	blockHeight := ledger.CurrentIndex()
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
@@ -64,7 +64,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("processing contract updated")
 }
 
-// Verify method returns true if transaction contains valid multi signature of
+// Verify method returns true if transaction contains valid multisignature of
 // Alphabet nodes of the Inner Ring.
 func Verify() bool {
 	ctx := storage.GetContext()
@@ -74,7 +74,7 @@ func Verify() bool {
 	return runtime.CheckWitness(multiaddr)
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

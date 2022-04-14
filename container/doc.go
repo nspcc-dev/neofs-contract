@@ -1,17 +1,17 @@
 /*
-Container contract is a contract deployed in NeoFS side chain.
+Container contract is a contract deployed in NeoFS sidechain.
 
 Container contract stores and manages containers, extended ACLs and container
-size estimations. Contract does not perform sanity or signature checks of the
+size estimations. Contract does not perform sanity or signature checks of
 containers or extended ACLs, it is done by Alphabet nodes of the Inner Ring.
 Alphabet nodes approve it by invoking the same Put or SetEACL methods with
 the same arguments.
 
 Contract notifications
 
-containerPut notification. This notification is produced when user wants to
-create new container. Alphabet nodes of the Inner Ring catch notification and
-validate container data, signature and token if it is present.
+containerPut notification. This notification is produced when a user wants to
+create a new container. Alphabet nodes of the Inner Ring catch the notification and
+validate container data, signature and token if present.
 
   containerPut:
     - name: container
@@ -23,9 +23,9 @@ validate container data, signature and token if it is present.
     - name: token
       type: ByteArray
 
-containerDelete notification. This notification is produced when container owner
-wants to delete container. Alphabet nodes of the Inner Ring catch notification
-and validate container ownership, signature and token if it is present.
+containerDelete notification. This notification is produced when a container owner
+wants to delete a container. Alphabet nodes of the Inner Ring catch the notification
+and validate container ownership, signature and token if present.
 
   containerDelete:
     - name: containerID
@@ -35,9 +35,9 @@ and validate container ownership, signature and token if it is present.
     - name: token
       type: ByteArray
 
-setEACL notification. This notification is produced when container owner wants
-to update extended ACL of the container. Alphabet nodes of the Inner Ring catch
-notification and validate container ownership, signature and token if it is
+setEACL notification. This notification is produced when a container owner wants
+to update an extended ACL of a container. Alphabet nodes of the Inner Ring catch
+the notification and validate container ownership, signature and token if
 present.
 
   setEACL:

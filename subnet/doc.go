@@ -1,13 +1,13 @@
 /*
-Subnet contract is a contract deployed in NeoFS side chain.
+Subnet contract is a contract deployed in NeoFS sidechain.
 
 Subnet contract stores and manages NeoFS subnetwork states. It allows registering
-and deleting subnetworks, limiting access to them and defining a list of the Storage
+and deleting subnetworks, limiting access to them, and defining a list of the Storage
 Nodes that can be included in them.
 
 Contract notifications
 
-Put notification. This notification is produced when new subnetwork is
+Put notification. This notification is produced when a new subnetwork is
 registered by invoking Put method.
 
   Put
