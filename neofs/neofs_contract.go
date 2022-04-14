@@ -103,8 +103,8 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("neofs: contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
-// only by side chain committee.
+// Update method updates contract source code and manifest. It can be invoked
+// only by sidechain committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	blockHeight := ledger.CurrentIndex()
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
@@ -117,7 +117,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("neofs contract updated")
 }
 
-// AlphabetList returns array of alphabet node keys. Use in side chain notary
+// AlphabetList returns an array of alphabet node keys. It is used in sidechain notary
 // disabled environment.
 func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
@@ -129,14 +129,14 @@ func AlphabetList() []common.IRNode {
 	return nodes
 }
 
-// AlphabetAddress returns 2\3n+1 multi signature address of alphabet nodes.
-// Used in side chain notary disabled environment.
+// AlphabetAddress returns 2\3n+1 multisignature address of alphabet nodes.
+// It is used in sidechain notary disabled environment.
 func AlphabetAddress() interop.Hash160 {
 	ctx := storage.GetReadOnlyContext()
 	return multiaddress(getAlphabetNodes(ctx))
 }
 
-// InnerRingCandidates returns array of structures that contain Inner Ring
+// InnerRingCandidates returns an array of structures that contain an Inner Ring
 // candidate node key.
 func InnerRingCandidates() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
@@ -150,10 +150,10 @@ func InnerRingCandidates() []common.IRNode {
 	return nodes
 }
 
-// InnerRingCandidateRemove removes key from the list of Inner Ring candidates.
-// Can be invoked by Alphabet nodes or candidate itself.
+// InnerRingCandidateRemove removes a key from a list of Inner Ring candidates.
+// It can be invoked by Alphabet nodes or the candidate itself.
 //
-// Method does not return fee back to the candidate.
+// This method does not return fee back to the candidate.
 func InnerRingCandidateRemove(key interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -201,11 +201,11 @@ func InnerRingCandidateRemove(key interop.PublicKey) {
 	}
 }
 
-// InnerRingCandidateAdd adds key to the list of Inner Ring candidates.
-// Can be invoked only by candidate itself.
+// InnerRingCandidateAdd adds a key to a list of Inner Ring candidates.
+// It can be invoked only by the candidate itself.
 //
-// This method transfers fee from candidate to contract account.
-// Fee value specified in NeoFS network config with the key InnerRingCandidateFee.
+// This method transfers fee from a candidate to the contract account.
+// Fee value is specified in NeoFS network config with the key InnerRingCandidateFee.
 func InnerRingCandidateAdd(key interop.PublicKey) {
 	ctx := storage.GetContext()
 
@@ -230,7 +230,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
-// It takes no more than 9000.0 GAS. Native GAS has precision 8 and
+// It takes no more than 9000.0 GAS. Native GAS has precision 8, and
 // NeoFS balance contract has precision 12. Values bigger than 9000.0 can
 // break JSON limits for integers when precision is converted.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
@@ -264,13 +264,13 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	runtime.Notify("Deposit", from, amount, rcv, tx.Hash)
 }
 
-// Withdraw initialize gas asset withdraw from NeoFS. Can be invoked only
+// Withdraw initializes gas asset withdraw from NeoFS. It can be invoked only
 // by the specified user.
 //
-// This method produces Withdraw notification to lock assets in side chain and
-// transfers withdraw fee from user account to each Alphabet node. If notary
-// is enabled in main chain, fee is transferred to Processing contract.
-// Fee value specified in NeoFS network config with the key WithdrawFee.
+// This method produces Withdraw notification to lock assets in the sidechain and
+// transfers withdraw fee from a user account to each Alphabet node. If notary
+// is enabled in the mainchain, fee is transferred to Processing contract.
+// Fee value is specified in NeoFS network config with the key WithdrawFee.
 func Withdraw(user interop.Hash160, amount int) {
 	if !runtime.CheckWitness(user) {
 		panic("you should be the owner of the wallet")
@@ -316,11 +316,11 @@ func Withdraw(user interop.Hash160, amount int) {
 	runtime.Notify("Withdraw", user, amount, tx.Hash)
 }
 
-// Cheque transfers GAS back to the user from contract account, if assets were
-// successfully locked in NeoFS balance contract. Can be invoked only by
+// Cheque transfers GAS back to the user from the contract account, if assets were
+// successfully locked in NeoFS balance contract. It can be invoked only by
 // Alphabet nodes.
 //
-// This method produces Cheque notification to burn assets in side chain.
+// This method produces Cheque notification to burn assets in sidechain.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -363,11 +363,11 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	runtime.Notify("Cheque", id, user, amount, lockAcc)
 }
 
-// Bind method produces notification to bind specified public keys in NeoFSID
-// contract in side chain. Can be invoked only by specified user.
+// Bind method produces notification to bind the specified public keys in NeoFSID
+// contract in the sidechain. It can be invoked only by specified user.
 //
-// This method produces Bind notification. Method panics if keys are not
-// 33 byte long. User argument must be valid 20 byte script hash.
+// This method produces Bind notification. This method panics if keys are not
+// 33 byte long. User argument must be a valid 20 byte script hash.
 func Bind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("you should be the owner of the wallet")
@@ -383,11 +383,11 @@ func Bind(user []byte, keys []interop.PublicKey) {
 	runtime.Notify("Bind", user, keys)
 }
 
-// Unbind method produces notification to unbind specified public keys in NeoFSID
-// contract in side chain. Can be invoked only by specified user.
+// Unbind method produces notification to unbind the specified public keys in NeoFSID
+// contract in the sidechain. It can be invoked only by the specified user.
 //
-// This method produces Unbind notification. Method panics if keys are not
-// 33 byte long. User argument must be valid 20 byte script hash.
+// This method produces Unbind notification. This method panics if keys are not
+// 33 byte long. User argument must be a valid 20 byte script hash.
 func Unbind(user []byte, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("you should be the owner of the wallet")
@@ -403,11 +403,11 @@ func Unbind(user []byte, keys []interop.PublicKey) {
 	runtime.Notify("Unbind", user, keys)
 }
 
-// AlphabetUpdate updates list of alphabet nodes with provided list of
-// public keys. Can be invoked only by alphabet nodes.
+// AlphabetUpdate updates a list of alphabet nodes with the provided list of
+// public keys. It can be invoked only by alphabet nodes.
 //
-// This method used in notary disabled side chain environment. In this case
-// actual alphabet list should be stored in the NeoFS contract.
+// This method is used in notary disabled sidechain environment. In this case,
+// the actual alphabet list should be stored in the NeoFS contract.
 func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -460,14 +460,14 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	runtime.Log("alphabet list has been updated")
 }
 
-// Config returns configuration value of NeoFS configuration. If key does
+// Config returns configuration value of NeoFS configuration. If the key does
 // not exists, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
 
-// SetConfig key-value pair as a NeoFS runtime configuration value. Can be invoked
+// SetConfig key-value pair as a NeoFS runtime configuration value. It can be invoked
 // only by Alphabet nodes.
 func SetConfig(id, key, val []byte) {
 	ctx := storage.GetContext()
@@ -506,7 +506,7 @@ func SetConfig(id, key, val []byte) {
 	runtime.Log("configuration has been updated")
 }
 
-// ListConfig returns array of structures that contain key and value of all
+// ListConfig returns an array of structures that contain a key and a value of all
 // NeoFS configuration records. Key and value are both byte arrays.
 func ListConfig() []record {
 	ctx := storage.GetReadOnlyContext()
@@ -532,7 +532,7 @@ func Version() int {
 	return common.Version
 }
 
-// getAlphabetNodes returns deserialized slice of nodes from storage.
+// getAlphabetNodes returns a deserialized slice of nodes from storage.
 func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
 	data := storage.Get(ctx, alphabetKey)
 	if data != nil {
@@ -542,7 +542,7 @@ func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
 	return []interop.PublicKey{}
 }
 
-// getConfig returns installed neofs configuration value or nil if it is not set.
+// getConfig returns the installed neofs configuration value or nil if it is not set.
 func getConfig(ctx storage.Context, key interface{}) interface{} {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
@@ -550,7 +550,7 @@ func getConfig(ctx storage.Context, key interface{}) interface{} {
 	return storage.Get(ctx, storageKey)
 }
 
-// setConfig sets neofs configuration value in the contract storage.
+// setConfig sets a neofs configuration value in the contract storage.
 func setConfig(ctx storage.Context, key, val interface{}) {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
@@ -558,7 +558,7 @@ func setConfig(ctx storage.Context, key, val interface{}) {
 	storage.Put(ctx, storageKey, val)
 }
 
-// multiaddress returns multi signature address from list of IRNode structures
+// multiaddress returns a multisignature address from the list of IRNode structures
 // with m = 2/3n+1.
 func multiaddress(keys []interop.PublicKey) []byte {
 	threshold := len(keys)*2/3 + 1

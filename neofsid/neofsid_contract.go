@@ -60,7 +60,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("neofsid contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -72,11 +72,11 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("neofsid contract updated")
 }
 
-// AddKey binds list of provided public keys to OwnerID. Can be invoked only by
+// AddKey binds a list of the provided public keys to the OwnerID. It can be invoked only by
 // Alphabet nodes.
 //
-// This method panics if OwnerID is not ownerSize byte or public key is not 33 byte long.
-// If key is already bound, ignores it.
+// This method panics if the OwnerID is not an ownerSize byte or the public key is not 33 byte long.
+// If the key is already bound, the method ignores it.
 func AddKey(owner []byte, keys []interop.PublicKey) {
 	// V2 format
 	if len(owner) != ownerSize {
@@ -135,11 +135,11 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 	runtime.Log("key bound to the owner")
 }
 
-// RemoveKey unbinds provided public keys from OwnerID. Can be invoked only by
+// RemoveKey unbinds the provided public keys from the OwnerID. It can be invoked only by
 // Alphabet nodes.
 //
-// This method panics if OwnerID is not ownerSize byte or public key is not 33 byte long.
-// If key is already unbound, ignores it.
+// This method panics if the OwnerID is not an ownerSize byte or the public key is not 33 byte long.
+// If the key is already unbound, the method ignores it.
 func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	// V2 format
 	if len(owner) != ownerSize {
@@ -190,9 +190,9 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	}
 }
 
-// Key method returns list of 33-byte public keys bound with OwnerID.
+// Key method returns a list of 33-byte public keys bound with the OwnerID.
 //
-// This method panics if owner is not ownerSize byte long.
+// This method panics if the owner is not ownerSize byte long.
 func Key(owner []byte) [][]byte {
 	// V2 format
 	if len(owner) != ownerSize {
@@ -207,7 +207,7 @@ func Key(owner []byte) [][]byte {
 	return info.Keys
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

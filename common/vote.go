@@ -13,7 +13,7 @@ type Ballot struct {
 	// ID of the voting decision.
 	ID []byte
 
-	// Public keys of already voted inner ring nodes.
+	// Public keys of the already voted inner ring nodes.
 	Voters []interop.PublicKey
 
 	// Height of block with the last vote.
@@ -28,8 +28,8 @@ func InitVote(ctx storage.Context) {
 	SetSerialized(ctx, voteKey, []Ballot{})
 }
 
-// Vote adds ballot for the decision with specific 'id' and returns amount
-// on unique voters for that decision.
+// Vote adds ballot for the decision with a specific 'id' and returns the amount
+// of unique voters for that decision.
 func Vote(ctx storage.Context, id, from []byte) int {
 	var (
 		newCandidates []Ballot
@@ -96,7 +96,7 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 	SetSerialized(ctx, voteKey, candidates)
 }
 
-// getBallots returns deserialized slice of vote ballots.
+// getBallots returns a deserialized slice of vote ballots.
 func getBallots(ctx storage.Context) []Ballot {
 	data := storage.Get(ctx, voteKey)
 	if data != nil {
@@ -106,13 +106,13 @@ func getBallots(ctx storage.Context) []Ballot {
 	return []Ballot{}
 }
 
-// BytesEqual compares two slice of bytes by wrapping them into strings,
-// which is necessary with new util.Equal interop behaviour, see neo-go#1176.
+// BytesEqual compares two slices of bytes by wrapping them into strings,
+// which is necessary with new util.Equals interop behaviour, see neo-go#1176.
 func BytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
 }
 
-// InvokeID returns hashed value of prefix and args concatenation. Used to
+// InvokeID returns hashed value of prefix and args concatenation. Iy is used to
 // identify different ballots.
 func InvokeID(args []interface{}, prefix []byte) []byte {
 	for i := range args {
@@ -124,22 +124,22 @@ func InvokeID(args []interface{}, prefix []byte) []byte {
 }
 
 /*
-   Check if invocation made from known container or audit contracts.
+   Check if the invocation is made from known container or audit contracts.
    This is necessary because calls from these contracts require to do transfer
    without signature collection (1 invoke transfer).
 
    IR1, IR2, IR3, IR4 -(4 invokes)-> [ Container Contract ] -(1 invoke)-> [ Balance Contract ]
 
    We can do 1 invoke transfer if:
-   - invoke happened from inner ring node,
-   - it is indirect invocation from other smart-contract.
+   - invokation has happened from inner ring node,
+   - it is indirect invocation from another smart-contract.
 
-   However there is a possible attack, when malicious inner ring node creates
-   malicious smart-contract in morph chain to do indirect call.
+   However, there is a possible attack, when a malicious inner ring node creates
+   a malicious smart-contract in the morph chain to do indirect call.
 
-   MaliciousIR  -(1 invoke)-> [ Malicious Contract ] -(1 invoke) -> [ Balance Contract ]
+   MaliciousIR -(1 invoke)-> [ Malicious Contract ] -(1 invoke)-> [ Balance Contract ]
 
-   To prevent that, we have to allow 1 invoke transfer from authorised well known
+   To prevent that, we have to allow 1 invoke transfer from authorised well-known
    smart-contracts, that will be set up at `Init` method.
 */
 

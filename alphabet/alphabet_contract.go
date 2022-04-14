@@ -69,7 +69,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log(args.name + " contract initialized")
 }
 
-// Update method updates contract source code and manifest. Can be invoked
+// Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(script []byte, manifest []byte, data interface{}) {
 	if !common.HasUpdateAccess() {
@@ -81,12 +81,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("alphabet contract updated")
 }
 
-// GAS returns amount of side chain GAS stored in contract account.
+// GAS returns the amount of the sidechain GAS stored in the contract account.
 func Gas() int {
 	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-// NEO returns amount of side chain NEO stored in contract account.
+// NEO returns the amount of sidechain NEO stored in the contract account.
 func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
@@ -116,16 +116,16 @@ func checkPermission(ir []interop.PublicKey) bool {
 	return runtime.CheckWitness(node)
 }
 
-// Emit method produces side chain GAS and distributes it among Inner Ring nodes
-// and proxy contract. Can be invoked only by Alphabet node of the Inner Ring.
+// Emit method produces sidechain GAS and distributes it among Inner Ring nodes
+// and proxy contract. It can be invoked only by an Alphabet node of the Inner Ring.
 //
-// To produce GAS, alphabet contract transfers all available NEO from contract
-// account to itself. If notary enabled, then 50% of the GAS in the contract account
-// transferred to proxy contract. 43.75% of the GAS are equally distributed
-// among all Inner Ring nodes. Remaining 6.25% of the GAS stays in the contract.
+// To produce GAS, an alphabet contract transfers all available NEO from the contract
+// account to itself. If notary is enabled, 50% of the GAS in the contract account
+// are transferred to proxy contract. 43.75% of the GAS are equally distributed
+// among all Inner Ring nodes. Remaining 6.25% of the GAS stay in the contract.
 //
-// If notary disabled, then 87.5% of the GAS are equally distributed among all
-// Inner Ring nodes. Remaining 12.5% of the GAS stays in the contract.
+// If notary is disabled, 87.5% of the GAS are equally distributed among all
+// Inner Ring nodes. Remaining 12.5% of the GAS stay in the contract.
 func Emit() {
 	ctx := storage.GetReadOnlyContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -183,13 +183,13 @@ func Emit() {
 	}
 }
 
-// Vote method votes for side chain committee. Requires multisignature from
+// Vote method votes for the sidechain committee. It requires multisignature from
 // Alphabet nodes of the Inner Ring.
 //
-// This method is used when governance changes list of Alphabet nodes of the
-// Inner Ring. Alphabet nodes share keys with side chain validators, therefore
-// it is required to change them as well. To do that NEO holders, which are
-// alphabet contracts, should vote for new committee.
+// This method is used when governance changes the list of Alphabet nodes of the
+// Inner Ring. Alphabet nodes share keys with sidechain validators, therefore
+// it is required to change them as well. To do that, NEO holders (which are
+// alphabet contracts) should vote for a new committee.
 func Vote(epoch int, candidates []interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -255,13 +255,13 @@ func voteID(epoch interface{}, args []interop.PublicKey) []byte {
 	return crypto.Sha256(result)
 }
 
-// Name returns Glagolitic name of the contract.
+// Name returns the Glagolitic name of the contract.
 func Name() string {
 	ctx := storage.GetReadOnlyContext()
 	return name(ctx)
 }
 
-// Version returns version of the contract.
+// Version returns the version of the contract.
 func Version() int {
 	return common.Version
 }

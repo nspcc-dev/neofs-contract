@@ -11,14 +11,14 @@
 
 NeoFS-Contract contains all NeoFS related contracts written for
 [neo-go](https://github.com/nspcc-dev/neo-go) compiler. These contracts
-are deployed both in main chain and side chain.
+are deployed both in the mainchain and the sidechain.
 
-Main chain contracts:
+Mainchain contracts:
 
 - neofs
 - processing
 
-Side chain contracts:
+Sidechain contracts:
 
 - alphabet
 - audit
@@ -41,7 +41,7 @@ To compile smart contracts you need:
 
 ## Compilation
 
-To build and compile smart contract run `make all` command. Compiled contracts
+To build and compile smart contract, run `make all` command. Compiled contracts
 `*_contract.nef` and manifest `config.json` files are placed in the 
 corresponding directories. 
 
@@ -71,7 +71,7 @@ Remove compiled files with `make clean` or `make mr_proper` command.
 
 # Testing
 Smartcontract tests reside in `tests/` directory. To execute test suite
-after applying changes simply run `make test`.
+after applying changes, simply run `make test`.
 ```
 $ make test
 ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
