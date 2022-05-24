@@ -1,5 +1,5 @@
 name: "NeoFS Container"
-safemethods: ["get", "owner", "list", "eACL", "getContainerSize", "listContainerSizes", "version"]
+safemethods: ["count", "get", "owner", "list", "eACL", "getContainerSize", "listContainerSizes", "version"]
 permissions:
   - methods: ["update", "addKey", "transferX",
                "addRoot", "register", "addRecord", "deleteRecords"]
