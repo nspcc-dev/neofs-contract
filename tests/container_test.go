@@ -79,6 +79,39 @@ func dummyContainer(owner neotest.Signer) testContainer {
 	}
 }
 
+func TestContainerCount(t *testing.T) {
+	c, cBal, _ := newContainerInvoker(t)
+
+	checkCount := func(t *testing.T, expected int64) {
+		s, err := c.TestInvoke(t, "count")
+		require.NoError(t, err)
+		bi := s.Pop().BigInt()
+		require.True(t, bi.IsInt64())
+		require.Equal(t, int64(expected), bi.Int64())
+	}
+
+	checkCount(t, 0)
+	acc1, cnt1 := addContainer(t, c, cBal)
+	checkCount(t, 1)
+
+	_, cnt2 := addContainer(t, c, cBal)
+	checkCount(t, 2)
+
+	// Same owner.
+	cnt3 := dummyContainer(acc1)
+	balanceMint(t, cBal, acc1, containerFee*1, []byte{})
+	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
+
+	c.Invoke(t, stackitem.Null{}, "delete", cnt1.id[:], cnt1.sig, cnt1.token)
+	checkCount(t, 2)
+
+	c.Invoke(t, stackitem.Null{}, "delete", cnt2.id[:], cnt2.sig, cnt2.token)
+	checkCount(t, 1)
+
+	c.Invoke(t, stackitem.Null{}, "delete", cnt3.id[:], cnt3.sig, cnt3.token)
+	checkCount(t, 0)
+}
+
 func TestContainerPut(t *testing.T) {
 	c, cBal, _ := newContainerInvoker(t)
 

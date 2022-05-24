@@ -387,6 +387,21 @@ func Owner(containerID []byte) []byte {
 	return owner
 }
 
+// Count method returns the number of registered containers.
+func Count() int {
+	count := 0
+	ctx := storage.GetReadOnlyContext()
+	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
+	for iterator.Next(it) {
+		key := iterator.Value(it).([]byte)
+		// V2 format
+		if len(key) == containerIDSize {
+			count++
+		}
+	}
+	return count
+}
+
 // List method returns a list of all container IDs owned by the specified owner.
 func List(owner []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
