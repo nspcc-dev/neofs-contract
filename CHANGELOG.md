@@ -1,6 +1,14 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.15.2] - 2022-06-07
+
+### Added
+- `container.Count` method (#242)
+
+### Changed
+- Update neo-go to v0.99.0 (#246)
+
 ## [0.15.1] - 2022-04-13
 
 ### Fixed
