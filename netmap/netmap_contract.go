@@ -89,7 +89,6 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
-		storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 		return
 	}
 
