@@ -46,7 +46,7 @@ const (
 // Values constraints.
 const (
 	// maxRegisterPrice is the maximum price of register method.
-	maxRegisterPrice = 1_0000_0000_0000
+	maxRegisterPrice = int64(1_0000_0000_0000)
 	// maxRootLength is the maximum domain root length.
 	maxRootLength = 16
 	// maxDomainNameFragmentLength is the maximum length of the domain name fragment.
@@ -64,7 +64,7 @@ const (
 	// defaultRegisterPrice is the default price for new domain registration.
 	defaultRegisterPrice = 10_0000_0000
 	// millisecondsInYear is amount of milliseconds per year.
-	millisecondsInYear = 365 * 24 * 3600 * 1000
+	millisecondsInYear = int64(365 * 24 * 3600 * 1000)
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -203,7 +203,7 @@ func Roots() iterator.Iterator {
 }
 
 // SetPrice sets the domain registration price.
-func SetPrice(price int) {
+func SetPrice(price int64) {
 	checkCommittee()
 	if price < 0 || price > maxRegisterPrice {
 		panic("The price is out of range.")
@@ -238,7 +238,7 @@ func IsAvailable(name string) bool {
 // parentExpired returns true if any domain from fragments doesn't exist or is expired.
 // first denotes the deepest subdomain to check.
 func parentExpired(ctx storage.Context, first int, fragments []string) bool {
-	now := runtime.GetTime()
+	now := int64(runtime.GetTime())
 	last := len(fragments) - 1
 	name := fragments[last]
 	for i := last; i >= first; i-- {
@@ -310,7 +310,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	nsBytes := storage.Get(ctx, append([]byte{prefixName}, tokenKey...))
 	if nsBytes != nil {
 		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
-		if runtime.GetTime() < ns.Expiration {
+		if int64(runtime.GetTime()) < ns.Expiration {
 			return false
 		}
 		oldOwner = ns.Owner
@@ -321,7 +321,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	ns := NameState{
 		Owner:      owner,
 		Name:       name,
-		Expiration: runtime.GetTime() + millisecondsInYear,
+		Expiration: int64(runtime.GetTime()) + millisecondsInYear,
 	}
 	putNameStateWithKey(ctx, tokenKey, ns)
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
@@ -331,7 +331,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 }
 
 // Renew increases domain expiration date.
-func Renew(name string) int {
+func Renew(name string) int64 {
 	if len(name) > maxDomainNameLength {
 		panic("invalid domain name format")
 	}
@@ -859,7 +859,7 @@ func tokenIDFromName(name string) string {
 		nsBytes := storage.Get(ctx, nameKey)
 		if nsBytes != nil {
 			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
-			if runtime.GetTime() < ns.Expiration {
+			if int64(runtime.GetTime()) < ns.Expiration {
 				return name[sum:]
 			}
 		}
