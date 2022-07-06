@@ -34,7 +34,7 @@ const (
 	processingContractKey = "processingScriptHash"
 
 	maxBalanceAmount    = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
-	maxBalanceAmountGAS = maxBalanceAmount * 1_0000_0000
+	maxBalanceAmountGAS = int64(maxBalanceAmount) * 1_0000_0000
 
 	// hardcoded value to ignore deposit notification in onReceive
 	ignoreDepositNotification = "\x57\x0b"
@@ -241,7 +241,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 
 	if amount <= 0 {
 		common.AbortWithMessage("amount must be positive")
-	} else if maxBalanceAmountGAS < amount {
+	} else if maxBalanceAmountGAS < int64(amount) {
 		common.AbortWithMessage("out of max amount limit")
 	}
 

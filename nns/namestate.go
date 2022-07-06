@@ -9,13 +9,13 @@ import (
 type NameState struct {
 	Owner      interop.Hash160
 	Name       string
-	Expiration int
+	Expiration int64
 	Admin      interop.Hash160
 }
 
 // ensureNotExpired panics if domain name is expired.
 func (n NameState) ensureNotExpired() {
-	if runtime.GetTime() >= n.Expiration {
+	if int64(runtime.GetTime()) >= n.Expiration {
 		panic("name has expired")
 	}
 }
