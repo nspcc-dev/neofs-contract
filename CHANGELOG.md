@@ -1,6 +1,15 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.15.3] - 2022-07-22
+
+### Added
+- Allow to build archive from source (#250)
+
+### Changed
+- Update neo-go to the latest version
+- Use proper type for integer constants (#248)
+
 ## [0.15.2] - 2022-06-07
 
 ### Added
