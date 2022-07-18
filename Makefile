@@ -3,7 +3,7 @@
 SHELL=bash
 GOBIN ?= $(shell go env GOPATH)/bin
 NEOGO ?= $(GOBIN)/cli
-VERSION?=$(shell git describe --tags)
+VERSION ?= $(shell git describe --tags --dirty --always 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 
 .PHONY: all build clean test neo-go
 .PHONY: alphabet mainnet morph nns sidechain
