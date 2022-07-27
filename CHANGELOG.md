@@ -1,6 +1,9 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [0.15.4] - 2022-07-27
+Only a version bump to update manifest.
+
 ## [0.15.3] - 2022-07-22
 
 ### Added
