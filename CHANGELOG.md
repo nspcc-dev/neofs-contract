@@ -1,6 +1,11 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## Unrelease
+
+### Updated
+- Update neo-go to v0.99.1
+
 ## [0.15.4] - 2022-07-27
 Only a version bump to update manifest.
 
