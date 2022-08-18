@@ -3,6 +3,9 @@ Changelog for NeoFS Contract
 
 ## Unrelease
 
+### Updated
+- NNS contract now sets domain expiration based on `register` arguments (#262)
+
 ## [0.15.5] - 2022-08-23
 
 ### Updated

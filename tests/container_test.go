@@ -161,11 +161,11 @@ func TestContainerPut(t *testing.T) {
 
 			cNNS.Invoke(t, true, "register",
 				"cdn", c.CommitteeHash,
-				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
+				"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
 
 			cNNS.Invoke(t, true, "register",
 				"domain.cdn", c.CommitteeHash,
-				"whateveriwant@world.com", int64(0), int64(0), int64(0), int64(0))
+				"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
 
 			balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
 

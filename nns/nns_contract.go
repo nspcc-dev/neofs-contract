@@ -319,9 +319,10 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		updateTotalSupply(ctx, +1)
 	}
 	ns := NameState{
-		Owner:      owner,
-		Name:       name,
-		Expiration: int64(runtime.GetTime()) + millisecondsInYear,
+		Owner: owner,
+		Name:  name,
+		// NNS expiration is in milliseconds
+		Expiration: int64(runtime.GetTime() + expire*1000),
 	}
 	putNameStateWithKey(ctx, tokenKey, ns)
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
