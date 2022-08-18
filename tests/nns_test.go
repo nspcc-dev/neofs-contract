@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,8 @@ func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
 
 	c := e.CommitteeInvoker(ctr.Hash)
 	if addRoot {
-		refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+		// Set expiration big enough to pass all tests.
+		refresh, retry, expire, ttl := int64(101), int64(102), int64(msPerYear/1000*100), int64(104)
 		c.Invoke(t, true, "register",
 			"com", c.CommitteeHash,
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -252,14 +254,36 @@ func TestNNSGetAllRecords(t *testing.T) {
 func TestExpiration(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
-	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(msPerYear/1000*10), int64(104)
 	c.Invoke(t, true, "register",
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
+	checkProperties := func(t *testing.T, expiration uint64) {
+		expected := stackitem.NewMapWithValue([]stackitem.MapElement{
+			{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
+			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)}})
+		s, err := c.TestInvoke(t, "properties", "testdomain.com")
+		require.NoError(t, err)
+		require.Equal(t, expected.Value(), s.Top().Item().Value())
+	}
+
+	top := c.TopBlock(t)
+	expiration := top.Timestamp + uint64(expire*1000)
+	checkProperties(t, expiration)
+
 	b := c.NewUnsignedBlock(t)
-	b.Timestamp = c.TopBlock(t).Timestamp + uint64(msPerYear) - 1
+	b.Timestamp = expiration - 2 // test invoke is done with +1 timestamp
 	require.NoError(t, c.Chain.AddBlock(c.SignBlock(b)))
+	checkProperties(t, expiration)
+
+	b = c.NewUnsignedBlock(t)
+	b.Timestamp = expiration - 1
+	require.NoError(t, c.Chain.AddBlock(c.SignBlock(b)))
+
+	_, err := c.TestInvoke(t, "properties", "testdomain.com")
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "name has expired"))
 
 	c.InvokeFail(t, "name has expired", "getAllRecords", "testdomain.com")
 	c.InvokeFail(t, "name has expired", "ownerOf", "testdomain.com")
@@ -320,7 +344,7 @@ func TestNNSRenew(t *testing.T) {
 
 	const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 	b := c.TopBlock(t)
-	ts := b.Timestamp + 2*uint64(msPerYear)
+	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)
 
 	cAcc := c.WithSigners(acc)
 	cAcc.Invoke(t, ts, "renew", "testdomain.com")
