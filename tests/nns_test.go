@@ -347,7 +347,8 @@ func TestNNSRenew(t *testing.T) {
 	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.Invoke(t, ts, "renew", "testdomain.com")
+	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com")
+	c1.Invoke(t, ts, "renew", "testdomain.com")
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
 		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)}})

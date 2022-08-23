@@ -339,6 +339,7 @@ func Renew(name string) int64 {
 	runtime.BurnGas(GetPrice())
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
+	ns.checkAdmin()
 	ns.Expiration += millisecondsInYear
 	putNameState(ctx, ns)
 	return ns.Expiration
