@@ -3,8 +3,11 @@ Changelog for NeoFS Contract
 
 ## Unrelease
 
+## [0.15.5] - 2022-08-23
+
 ### Updated
-- Update neo-go to v0.99.1
+- Update neo-go to v0.99.2 (#261)
+- Makefile now takes only `v*` tags into account (#255)
 
 ## [0.15.4] - 2022-07-27
 Only a version bump to update manifest.
@@ -376,6 +379,10 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[0.15.5]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.4...v0.15.5
+[0.15.4]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.3...v0.15.4
+[0.15.3]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.2...v0.15.3
+[0.15.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/nspcc-dev/neofs-contract/compare/v0.14.1...v0.14.2
