@@ -251,6 +251,23 @@ func TestNNSGetAllRecords(t *testing.T) {
 	require.False(t, iter.Next())
 }
 
+func TestNNSGetRecords(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	txtData := "first TXT record"
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.TXT), txtData)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.A), "1.2.3.4")
+
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make(txtData)}), "getRecords", "testdomain.com", int64(nns.TXT))
+	// Check empty result.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "getRecords", "testdomain.com", int64(nns.AAAA))
+}
+
 func TestExpiration(t *testing.T) {
 	c := newNNSInvoker(t, true)
 

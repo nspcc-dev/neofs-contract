@@ -295,8 +295,8 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	}
 
 	res := contract.Call(nnsContractAddr, "getRecords",
-		contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
-	if res != nil {
+		contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */).([]string)
+	if len(res) > 0 {
 		panic("name is already taken")
 	}
 
@@ -351,8 +351,8 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		// by other means (expiration, manual), thus leading to failing `deleteRecord`
 		// and inability to delete a container. We should also check if we own the record in case.
 		nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
-		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
-		if res != nil && std.Base58Encode(containerID) == string(res.([]interface{})[0].(string)) {
+		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */).([]string)
+		if len(res) > 0 && std.Base58Encode(containerID) == res[0] {
 			contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
 		}
 	}

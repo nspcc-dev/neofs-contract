@@ -542,11 +542,11 @@ func putNameStateWithKey(ctx storage.Context, tokenKey []byte, ns NameState) {
 	storage.Put(ctx, nameKey, nsBytes)
 }
 
-// getRecordsByType returns domain record.
+// getRecordsByType returns domain record. It returns empty array if no records found.
 func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ RecordType) []string {
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
-	var result []string
+	result := []string{}
 	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
