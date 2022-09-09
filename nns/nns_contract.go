@@ -57,6 +57,9 @@ const (
 	maxDomainNameLength = 255
 	// maxTXTRecordLength is the maximum length of the TXT domain record.
 	maxTXTRecordLength = 255
+	// maxRecordID is the maximum value of record ID (the upper bound for the number
+	// of records with the same type).
+	maxRecordID = 255
 )
 
 // Other constants.
@@ -581,6 +584,9 @@ func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 		if r.Name == name && r.Type == typ && r.Data == data {
 			panic("record already exists")
 		}
+	}
+	if id > maxRecordID {
+		panic("maximum number of records reached")
 	}
 
 	if typ == CNAME && id != 0 {

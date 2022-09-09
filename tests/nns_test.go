@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,10 @@ import (
 
 const nnsPath = "../nns"
 
-const msPerYear = 365 * 24 * time.Hour / time.Millisecond
+const (
+	msPerYear   = 365 * 24 * time.Hour / time.Millisecond
+	maxRecordID = 255 // value from the contract.
+)
 
 func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
 	e := newExecutor(t)
@@ -399,4 +403,20 @@ func TestNNSResolve(t *testing.T) {
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
 	// Empty result.
 	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(nns.CNAME))
+}
+
+func TestNNSAddRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	for i := 0; i <= maxRecordID+1; i++ {
+		if i == maxRecordID+1 {
+			c.InvokeFail(t, "maximum number of records reached", "addRecord", "testdomain.com", int64(nns.TXT), strconv.Itoa(i))
+		} else {
+			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.TXT), strconv.Itoa(i))
+		}
+	}
 }
