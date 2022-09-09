@@ -380,4 +380,6 @@ func TestNNSResolve(t *testing.T) {
 	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+	// Empty result.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(nns.CNAME))
 }

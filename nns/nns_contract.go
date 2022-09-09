@@ -443,7 +443,8 @@ func DeleteRecords(name string, typ RecordType) {
 // Resolve resolves given name (not more then three redirects are allowed).
 func Resolve(name string, typ RecordType) []string {
 	ctx := storage.GetReadOnlyContext()
-	return resolve(ctx, nil, name, typ, 2)
+	res := []string{}
+	return resolve(ctx, res, name, typ, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
