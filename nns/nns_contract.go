@@ -902,7 +902,6 @@ func resolve(ctx storage.Context, res []string, name string, typ RecordType, red
 		return res
 	}
 
-	res = append(res, cname)
 	return resolve(ctx, res, cname, typ, redirect-1)
 }
 

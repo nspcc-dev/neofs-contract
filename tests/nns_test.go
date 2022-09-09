@@ -390,19 +390,29 @@ func TestNNSResolve(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	c.Invoke(t, true, "register",
-		"test.com", c.CommitteeHash,
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, true, "register", "test.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(nns.TXT), "expected result")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(nns.CNAME), "alias.com")
 
-	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"test.com", int64(nns.TXT), "expected result")
+	c.Invoke(t, true, "register", "alias.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(nns.A), "1.2.3.4")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(nns.CNAME), "alias2.com")
+
+	c.Invoke(t, true, "register", "alias2.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias2.com", int64(nns.A), "5.6.7.8")
 
 	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
 	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+
 	// Empty result.
-	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(nns.CNAME))
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(nns.AAAA))
+
+	// Check CNAME is properly resolved and is not included into the result list.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("1.2.3.4"), stackitem.Make("5.6.7.8")}), "resolve", "test.com", int64(nns.A))
+	// And this time it should be properly included without resolution.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("alias.com")}), "resolve", "test.com", int64(nns.CNAME))
 }
 
 func TestNNSAddRecord(t *testing.T) {
