@@ -358,8 +358,8 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	}
 
 	res := contract.Call(nnsContractAddr, "getRecords",
-		contract.ReadStates|contract.AllowCall, domain, recordtype.TXT)
-	if res != nil {
+		contract.ReadStates|contract.AllowCall, domain, recordtype.TXT).([]string)
+	if len(res) > 0 {
 		panic("name is already taken")
 	}
 
