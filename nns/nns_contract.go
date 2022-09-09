@@ -135,6 +135,7 @@ func Properties(tokenID []byte) map[string]interface{} {
 	return map[string]interface{}{
 		"name":       ns.Name,
 		"expiration": ns.Expiration,
+		"admin":      ns.Admin,
 	}
 }
 
