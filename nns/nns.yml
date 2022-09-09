@@ -1,7 +1,7 @@
 name: "NameService"
 supportedstandards: ["NEP-11"]
 safemethods: ["balanceOf", "decimals", "symbol", "totalSupply", "tokensOf", "ownerOf",
-              "tokens", "properties", "roots", "getPrice", "isAvailable", "getRecord",
+              "tokens", "properties", "roots", "getPrice", "isAvailable", "getRecords",
               "resolve", "getAllRecords"]
 events:
   - name: Transfer
