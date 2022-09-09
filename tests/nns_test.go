@@ -274,7 +274,8 @@ func TestExpiration(t *testing.T) {
 	checkProperties := func(t *testing.T, expiration uint64) {
 		expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 			{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)}})
+			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+			{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 		s, err := c.TestInvoke(t, "properties", "testdomain.com")
 		require.NoError(t, err)
 		require.Equal(t, expected.Value(), s.Top().Item().Value())
@@ -315,6 +316,7 @@ func TestNNSSetAdmin(t *testing.T) {
 	c.Invoke(t, true, "register",
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	top := c.TopBlock(t)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
@@ -323,6 +325,13 @@ func TestNNSSetAdmin(t *testing.T) {
 
 	c1 := c.WithSigners(c.Committee, acc)
 	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+
+	expiration := top.Timestamp + uint64(expire*1000)
+	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{
+		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Make(acc.ScriptHash().BytesBE())}})
+	cAcc.Invoke(t, expectedProps, "properties", "testdomain.com")
 
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
 		"testdomain.com", int64(recordtype.TXT), "will be added")
@@ -369,7 +378,8 @@ func TestNNSRenew(t *testing.T) {
 	c1.Invoke(t, ts, "renew", "testdomain.com")
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)}})
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
 }
 

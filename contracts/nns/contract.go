@@ -202,6 +202,7 @@ func Properties(tokenID []byte) map[string]any {
 	return map[string]any{
 		"name":       ns.Name,
 		"expiration": ns.Expiration,
+		"admin":      ns.Admin,
 	}
 }
 
