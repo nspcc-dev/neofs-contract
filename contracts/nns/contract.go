@@ -629,7 +629,8 @@ func Resolve(name string, typ recordtype.Type) []string {
 	}
 
 	ctx := storage.GetReadOnlyContext()
-	return resolve(ctx, nil, name, typ, 2)
+	res := []string{}
+	return resolve(ctx, res, name, typ, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.

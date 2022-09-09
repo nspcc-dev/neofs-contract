@@ -416,6 +416,9 @@ func TestNNSResolve(t *testing.T) {
 	c.Invoke(t, records, "resolve", "test.com.", int64(recordtype.TXT))
 	c.InvokeFail(t, "invalid domain fragment", "resolve", "test.com..", int64(recordtype.TXT))
 
+	// Empty result.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(recordtype.AAAA))
+
 	// Check CNAME is properly resolved and is not included into the result list.
 	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("1.2.3.4"), stackitem.Make("5.6.7.8")}), "resolve", "test.com", int64(recordtype.A))
 	// And this time it should be properly included without resolution.
