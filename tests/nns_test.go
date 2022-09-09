@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,10 @@ import (
 
 const nnsPath = "../contracts/nns"
 
-const msPerYear = 365 * 24 * time.Hour / time.Millisecond
+const (
+	msPerYear   = 365 * 24 * time.Hour / time.Millisecond
+	maxRecordID = 255 // value from the contract.
+)
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
@@ -514,4 +518,20 @@ func TestNNSRoots(t *testing.T) {
 	}
 
 	require.ElementsMatch(t, tlds, res)
+}
+
+func TestNNSAddRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	for i := 0; i <= maxRecordID+1; i++ {
+		if i == maxRecordID+1 {
+			c.InvokeFail(t, "maximum number of records reached", "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
+		} else {
+			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
+		}
+	}
 }
