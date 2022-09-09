@@ -440,7 +440,7 @@ func DeleteRecords(name string, typ RecordType) {
 	updateSoaSerial(ctx, tokenID)
 }
 
-// Resolve resolves given name (not more then three redirects are allowed).
+// Resolve resolves given name (not more than three redirects are allowed).
 func Resolve(name string, typ RecordType) []string {
 	ctx := storage.GetReadOnlyContext()
 	res := []string{}
