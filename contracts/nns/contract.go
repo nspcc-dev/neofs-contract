@@ -613,11 +613,8 @@ func GetAllRecords(name string) iterator.Iterator {
 		panic("token not found")
 	}
 
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
-	recordsKey := getRecordsKey(tokenID, name)
-	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	return getAllRecords(ctx, name, fragments)
 }
 
 // updateBalance updates account's balance and account's tokens.
@@ -1060,7 +1057,7 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 	if name[len(name)-1] == '.' {
 		name = name[:len(name)-1]
 	}
-	records := getAllRecords(ctx, name)
+	records := getAllRecords(ctx, name, nil)
 	cname := ""
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
@@ -1080,10 +1077,11 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 }
 
 // getAllRecords returns iterator over the set of records corresponded with the
-// specified name.
-func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
+// specified name. Optional fragments parameter allows to pass pre-calculated
+// elements of the domain name path: if empty, splits name on its own.
+func getAllRecords(ctx storage.Context, name string, fragments []string) iterator.Iterator {
 	tokenID := []byte(tokenIDFromName(name))
-	_ = getNameState(ctx, tokenID)
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 }
