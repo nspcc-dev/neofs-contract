@@ -452,11 +452,8 @@ func Resolve(name string, typ RecordType) []string {
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
 func GetAllRecords(name string) iterator.Iterator {
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
-	_ = getNameState(ctx, tokenID) // ensure not expired
-	recordsKey := getRecordsKey(tokenID, name)
-	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	return getAllRecords(ctx, name)
 }
 
 // updateBalance updates account's balance and account's tokens.
@@ -913,7 +910,7 @@ func resolve(ctx storage.Context, res []string, name string, typ RecordType, red
 // specified name.
 func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
 	tokenID := []byte(tokenIDFromName(name))
-	_ = getNameState(ctx, tokenID)
+	_ = getNameState(ctx, tokenID) // ensure not expired.
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 }
