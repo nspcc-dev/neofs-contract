@@ -375,7 +375,7 @@ func SetAdmin(name string, admin interop.Hash160) {
 	putNameState(ctx, ns)
 }
 
-// SetRecord adds a new record of the specified type to the provided domain.
+// SetRecord updates existing domain record with the specified type and ID.
 func SetRecord(name string, typ RecordType, id byte, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
@@ -384,7 +384,12 @@ func SetRecord(name string, typ RecordType, id byte, data string) {
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, tokenID)
 	ns.checkAdmin()
-	putRecord(ctx, tokenID, name, typ, id, data)
+	recordKey := getIdRecordKey(tokenID, name, typ, id)
+	recBytes := storage.Get(ctx, recordKey)
+	if recBytes == nil {
+		panic("invalid record id")
+	}
+	storeRecord(ctx, recordKey, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
@@ -403,7 +408,8 @@ func checkBaseRecords(typ RecordType, data string) bool {
 	}
 }
 
-// AddRecord adds a new record of the specified type to the provided domain.
+// AddRecord appends domain record to the list of domain records with the specified type
+// if it doesn't exist yet.
 func AddRecord(name string, typ RecordType, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
@@ -412,7 +418,27 @@ func AddRecord(name string, typ RecordType, data string) {
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, tokenID)
 	ns.checkAdmin()
-	addRecord(ctx, tokenID, name, typ, data)
+	recordsKey := getRecordsKeyByType(tokenID, name, typ)
+	var id byte
+	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	for iterator.Next(records) {
+		id++
+
+		r := iterator.Value(records).(RecordState)
+		if r.Name == name && r.Type == typ && r.Data == data {
+			panic("record already exists")
+		}
+	}
+	if id > maxRecordID {
+		panic("maximum number of records reached")
+	}
+
+	if typ == CNAME && id != 0 {
+		panic("you shouldn't have more than one CNAME record")
+	}
+
+	recordKey := append(recordsKey, id) // the same as getIdRecordKey
+	storeRecord(ctx, recordKey, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
@@ -557,44 +583,7 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ Reco
 	return result
 }
 
-// putRecord stores domain record.
-func putRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType, id byte, data string) {
-	recordKey := getIdRecordKey(tokenId, name, typ, id)
-	recBytes := storage.Get(ctx, recordKey)
-	if recBytes == nil {
-		panic("invalid record id")
-	}
-
-	storeRecord(ctx, recordKey, name, typ, id, data)
-}
-
-// addRecord stores domain record.
-func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType, data string) {
-	recordsKey := getRecordsKeyByType(tokenId, name, typ)
-
-	var id byte
-	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
-	for iterator.Next(records) {
-		id++
-
-		r := iterator.Value(records).(RecordState)
-		if r.Name == name && r.Type == typ && r.Data == data {
-			panic("record already exists")
-		}
-	}
-	if id > maxRecordID {
-		panic("maximum number of records reached")
-	}
-
-	if typ == CNAME && id != 0 {
-		panic("you shouldn't have more than one CNAME record")
-	}
-
-	recordKey := append(recordsKey, id) // the same as getIdRecordKey
-	storeRecord(ctx, recordKey, name, typ, id, data)
-}
-
-// storeRecord puts record to storage.
+// storeRecord puts record to storage and performs no additional checks.
 func storeRecord(ctx storage.Context, recordKey []byte, name string, typ RecordType, id byte, data string) {
 	rs := RecordState{
 		Name: name,
