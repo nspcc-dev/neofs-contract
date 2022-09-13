@@ -501,19 +501,8 @@ func SetAdmin(name string, admin interop.Hash160) {
 // SetRecord updates existing domain record with the specified type and ID.
 // The name MUST NOT be a TLD.
 func SetRecord(name string, typ recordtype.Type, id byte, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
-		panic("invalid record data")
-	}
-
-	fragments := std.StringSplit(string(tokenID), ".")
-	if len(fragments) == 1 {
-		panic("token not found")
-	}
-
 	ctx := storage.GetContext()
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
-	ns.checkAdmin()
+	tokenID := checkRecord(ctx, name, typ, data)
 	recordKey := getIdRecordKey(tokenID, name, typ, id)
 	recBytes := storage.Get(ctx, recordKey)
 	if recBytes == nil {
@@ -523,26 +512,23 @@ func SetRecord(name string, typ recordtype.Type, id byte, data string) {
 	updateSoaSerial(ctx, tokenID)
 }
 
-func checkBaseRecords(typ recordtype.Type, data string) bool {
+// checkRecord performs record validness check and returns token ID.
+func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data string) []byte {
+	tokenID := []byte(tokenIDFromName(name))
+	var ok bool
 	switch typ {
 	case recordtype.A:
-		return checkIPv4(data)
+		ok = checkIPv4(data)
 	case recordtype.CNAME:
-		return splitAndCheck(data, true) != nil
+		ok = splitAndCheck(data, true) != nil
 	case recordtype.TXT:
-		return len(data) <= maxTXTRecordLength
+		ok = len(data) <= maxTXTRecordLength
 	case recordtype.AAAA:
-		return checkIPv6(data)
+		ok = checkIPv6(data)
 	default:
 		panic("unsupported record type")
 	}
-}
-
-// AddRecord appends domain record to the list of domain records with the specified type
-// if it doesn't exist yet. The name MUST NOT be a TLD.
-func AddRecord(name string, typ recordtype.Type, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
+	if !ok {
 		panic("invalid record data")
 	}
 
@@ -551,9 +537,16 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 		panic("token not found")
 	}
 
-	ctx := storage.GetContext()
 	ns := getFragmentedNameState(ctx, tokenID, fragments)
 	ns.checkAdmin()
+	return tokenID
+}
+
+// AddRecord appends domain record to the list of domain records with the specified type
+// if it doesn't exist yet. The name MUST NOT be a TLD.
+func AddRecord(name string, typ recordtype.Type, data string) {
+	ctx := storage.GetContext()
+	tokenID := checkRecord(ctx, name, typ, data)
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
 	var id byte
 	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
