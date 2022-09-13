@@ -759,22 +759,14 @@ func storeRecord(ctx storage.Context, tokenId []byte, name string, typ recordtyp
 
 // putSoaRecord stores soa domain record.
 func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	var id byte
 	tokenId := []byte(tokenIDFromName(name))
-	recordKey := getIdRecordKey(tokenId, name, recordtype.SOA, id)
-	rs := RecordState{
-		Name: name,
-		Type: recordtype.SOA,
-		ID:   id,
-		Data: name + " " + email + " " +
-			std.Itoa(runtime.GetTime(), 10) + " " +
-			std.Itoa(refresh, 10) + " " +
-			std.Itoa(retry, 10) + " " +
-			std.Itoa(expire, 10) + " " +
-			std.Itoa(ttl, 10),
-	}
-	recBytes := std.Serialize(rs)
-	storage.Put(ctx, recordKey, recBytes)
+	data := name + " " + email + " " +
+		std.Itoa(runtime.GetTime(), 10) + " " +
+		std.Itoa(refresh, 10) + " " +
+		std.Itoa(retry, 10) + " " +
+		std.Itoa(expire, 10) + " " +
+		std.Itoa(ttl, 10)
+	storeRecord(ctx, tokenId, name, recordtype.SOA, 0, data)
 }
 
 // updateSoaSerial stores soa domain record.
