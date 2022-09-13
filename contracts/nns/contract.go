@@ -706,7 +706,7 @@ func getFragmentedNameState(ctx storage.Context, tokenID []byte, fragments []str
 
 // getNameStateWithKey returns domain name state by the specified token key.
 func getNameStateWithKey(ctx storage.Context, tokenKey []byte) NameState {
-	nameKey := append([]byte{prefixName}, tokenKey...)
+	nameKey := getNameStateKey(tokenKey)
 	nsBytes := storage.Get(ctx, nameKey)
 	if nsBytes == nil {
 		panic("token not found")
@@ -714,6 +714,11 @@ func getNameStateWithKey(ctx storage.Context, tokenKey []byte) NameState {
 	ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 	ns.ensureNotExpired()
 	return ns
+}
+
+// getNameStateKey returns NameState key for the provided token key.
+func getNameStateKey(tokenKey []byte) []byte {
+	return append([]byte{prefixName}, tokenKey...)
 }
 
 // putNameState stores domain name state.
@@ -1005,7 +1010,7 @@ func tokenIDFromName(name string) string {
 	l := len(fragments) - 1
 	for i := 0; i < l; i++ {
 		tokenKey := getTokenKey([]byte(name[sum:]))
-		nameKey := append([]byte{prefixName}, tokenKey...)
+		nameKey := getNameStateKey(tokenKey)
 		nsBytes := storage.Get(ctx, nameKey)
 		if nsBytes != nil {
 			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
