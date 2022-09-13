@@ -508,7 +508,7 @@ func SetRecord(name string, typ recordtype.Type, id byte, data string) {
 	if recBytes == nil {
 		panic("invalid record id")
 	}
-	storeRecord(ctx, recordKey, name, typ, id, data)
+	storeRecord(ctx, tokenID, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
@@ -566,8 +566,7 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 		panic("you shouldn't have more than one CNAME record")
 	}
 
-	recordKey := append(recordsKey, id) // the same as getIdRecordKey
-	storeRecord(ctx, recordKey, name, typ, id, data)
+	storeRecord(ctx, tokenID, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
@@ -746,7 +745,8 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ reco
 }
 
 // storeRecord puts record to storage and performs no additional checks.
-func storeRecord(ctx storage.Context, recordKey []byte, name string, typ recordtype.Type, id byte, data string) {
+func storeRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
+	recordKey := getIdRecordKey(tokenId, name, typ, id)
 	rs := RecordState{
 		Name: name,
 		Type: typ,
