@@ -377,48 +377,47 @@ func SetAdmin(name string, admin interop.Hash160) {
 
 // SetRecord updates existing domain record with the specified type and ID.
 func SetRecord(name string, typ RecordType, id byte, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
-		panic("invalid record data")
-	}
 	ctx := storage.GetContext()
-	ns := getNameState(ctx, tokenID)
-	ns.checkAdmin()
-	recordKey := getIdRecordKey(tokenID, name, typ, id)
+	tokenId := checkRecord(ctx, name, typ, data)
+	recordKey := getIdRecordKey(tokenId, name, typ, id)
 	recBytes := storage.Get(ctx, recordKey)
 	if recBytes == nil {
 		panic("invalid record id")
 	}
 	storeRecord(ctx, recordKey, name, typ, id, data)
-	updateSoaSerial(ctx, tokenID)
+	updateSoaSerial(ctx, tokenId)
 }
 
-func checkBaseRecords(typ RecordType, data string) bool {
+// checkRecord performs record validness check and returns token ID.
+func checkRecord(ctx storage.Context, name string, typ RecordType, data string) []byte {
+	tokenID := []byte(tokenIDFromName(name))
+	var ok bool
 	switch typ {
 	case A:
-		return checkIPv4(data)
+		ok = checkIPv4(data)
 	case CNAME:
-		return splitAndCheck(data, true) != nil
+		ok = splitAndCheck(data, true) != nil
 	case TXT:
-		return len(data) <= maxTXTRecordLength
+		ok = len(data) <= maxTXTRecordLength
 	case AAAA:
-		return checkIPv6(data)
+		ok = checkIPv6(data)
 	default:
 		panic("unsupported record type")
 	}
+	if !ok {
+		panic("invalid record data")
+	}
+	ns := getNameState(ctx, tokenID)
+	ns.checkAdmin()
+	return tokenID
 }
 
 // AddRecord appends domain record to the list of domain records with the specified type
 // if it doesn't exist yet.
 func AddRecord(name string, typ RecordType, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
-		panic("invalid record data")
-	}
 	ctx := storage.GetContext()
-	ns := getNameState(ctx, tokenID)
-	ns.checkAdmin()
-	recordsKey := getRecordsKeyByType(tokenID, name, typ)
+	tokenId := checkRecord(ctx, name, typ, data)
+	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 	var id byte
 	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
@@ -439,7 +438,7 @@ func AddRecord(name string, typ RecordType, data string) {
 
 	recordKey := append(recordsKey, id) // the same as getIdRecordKey
 	storeRecord(ctx, recordKey, name, typ, id, data)
-	updateSoaSerial(ctx, tokenID)
+	updateSoaSerial(ctx, tokenId)
 }
 
 // GetRecords returns domain record of the specified type if it exists or an empty
