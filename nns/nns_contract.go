@@ -390,7 +390,7 @@ func SetRecord(name string, typ RecordType, id byte, data string) {
 
 // checkRecord performs record validness check and returns token ID.
 func checkRecord(ctx storage.Context, name string, typ RecordType, data string) []byte {
-	tokenID := []byte(tokenIDFromName(name))
+	tokenID := []byte(tokenIDFromName(ctx, name))
 	var ok bool
 	switch typ {
 	case A:
@@ -443,8 +443,8 @@ func AddRecord(name string, typ RecordType, data string) {
 // GetRecords returns domain record of the specified type if it exists or an empty
 // string if not.
 func GetRecords(name string, typ RecordType) []string {
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
 	_ = getNameState(ctx, tokenID) // ensure not expired
 	return getRecordsByType(ctx, tokenID, name, typ)
 }
@@ -454,8 +454,8 @@ func DeleteRecords(name string, typ RecordType) {
 	if typ == SOA {
 		panic("you cannot delete soa record")
 	}
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
 	ns := getNameState(ctx, tokenID)
 	ns.checkAdmin()
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
@@ -601,7 +601,7 @@ func storeRecord(ctx storage.Context, tokenId []byte, name string, typ RecordTyp
 
 // putSoaRecord stores soa domain record.
 func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	tokenId := []byte(tokenIDFromName(name))
+	tokenId := []byte(tokenIDFromName(ctx, name))
 	data := name + " " + email + " " +
 		std.Itoa(runtime.GetTime(), 10) + " " +
 		std.Itoa(refresh, 10) + " " +
@@ -836,13 +836,12 @@ func checkIPv6(data string) bool {
 }
 
 // tokenIDFromName returns token ID (domain.root) from the provided name.
-func tokenIDFromName(name string) string {
+func tokenIDFromName(ctx storage.Context, name string) string {
 	fragments := splitAndCheck(name, true)
 	if fragments == nil {
 		panic("invalid domain name format")
 	}
 
-	ctx := storage.GetReadOnlyContext()
 	sum := 0
 	l := len(fragments) - 1
 	for i := 0; i < l; i++ {
@@ -893,7 +892,7 @@ func resolve(ctx storage.Context, res []string, name string, typ RecordType, red
 // getAllRecords returns iterator over the set of records corresponded with the
 // specified name.
 func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
-	tokenID := []byte(tokenIDFromName(name))
+	tokenID := []byte(tokenIDFromName(ctx, name))
 	_ = getNameState(ctx, tokenID) // ensure not expired.
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
