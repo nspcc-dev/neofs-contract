@@ -178,11 +178,13 @@ func TestNNSRegisterMulti(t *testing.T) {
 		"another.fs.neo.com", int64(nns.A), "4.3.2.1")
 
 	c2 = c.WithSigners(acc, acc2)
+	c2.Invoke(t, stackitem.NewBool(false), "isAvailable", "mainnet.fs.neo.com")
 	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.fs.neo.com",
 		"register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "deleteRecords",
 		"something.mainnet.fs.neo.com", int64(nns.A))
+	c2.Invoke(t, stackitem.NewBool(true), "isAvailable", "mainnet.fs.neo.com")
 	c2.Invoke(t, true, "register", args...)
 
 	c2 = c.WithSigners(acc2)
