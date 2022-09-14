@@ -299,7 +299,7 @@ func GetPrice() int {
 // IsAvailable checks whether the provided domain name is available. Notice that
 // TLD is available for the committee only.
 func IsAvailable(name string) bool {
-	fragments := splitAndCheck(name, false)
+	fragments := splitAndCheck(name, true)
 	if fragments == nil {
 		panic("invalid domain name format")
 	}
@@ -311,7 +311,27 @@ func IsAvailable(name string) bool {
 		}
 		return true
 	}
-	return parentExpired(ctx, 0, fragments)
+	if !parentExpired(ctx, 0, fragments) {
+		return false
+	}
+	return len(getParentConflictingRecord(ctx, name, fragments)) == 0
+}
+
+// getPrentConflictingRecord returns record of '*.name' format if they are presented.
+// These records conflict with domain name to be registered.
+func getParentConflictingRecord(ctx storage.Context, name string, fragments []string) string {
+	parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
+	parentRecKey := append([]byte{prefixRecord}, parentKey...)
+	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
+	suffix := []byte(name)
+	for iterator.Next(it) {
+		r := iterator.Value(it).(RecordState)
+		ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
+		if ind > 0 && ind+len(suffix) == len(r.Name) {
+			return r.Name
+		}
+	}
+	return ""
 }
 
 // parentExpired returns true if any domain from fragments doesn't exist or is expired.
@@ -371,15 +391,8 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		ns.checkAdmin()
 	}
 
-	parentRecKey := append([]byte{prefixRecord}, parentKey...)
-	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
-	suffix := []byte(name)
-	for iterator.Next(it) {
-		r := iterator.Value(it).(RecordState)
-		ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
-		if ind > 0 && ind+len(suffix) == len(r.Name) {
-			panic("parent domain has conflicting records: " + r.Name)
-		}
+	if conflict := getParentConflictingRecord(ctx, name, fragments); len(conflict) != 0 {
+		panic("parent domain has conflicting records: " + conflict)
 	}
 
 	if !isValid(owner) {
