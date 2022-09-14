@@ -66,8 +66,10 @@ const (
 const (
 	// defaultRegisterPrice is the default price for new domain registration.
 	defaultRegisterPrice = 10_0000_0000
+	// millisecondsInSecond is the amount of milliseconds per second.
+	millisecondsInSecond = 1000
 	// millisecondsInYear is amount of milliseconds per year.
-	millisecondsInYear = int64(365 * 24 * 3600 * 1000)
+	millisecondsInYear = int64(365 * 24 * 3600 * millisecondsInSecond)
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -339,7 +341,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		Owner: owner,
 		Name:  name,
 		// NNS expiration is in milliseconds
-		Expiration: int64(runtime.GetTime() + expire*1000),
+		Expiration: int64(runtime.GetTime() + expire*millisecondsInSecond),
 	}
 	putNameStateWithKey(ctx, tokenKey, ns)
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
