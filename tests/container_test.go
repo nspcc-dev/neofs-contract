@@ -153,7 +153,7 @@ func TestContainerPut(t *testing.T) {
 		})
 
 		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-		cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt.neofs", int64(nns.TXT))
+		cNNS.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "mycnt.neofs", int64(nns.TXT))
 
 		t.Run("register in advance", func(t *testing.T) {
 			cnt.value[len(cnt.value)-1] = 10

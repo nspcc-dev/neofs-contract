@@ -2,8 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"math/big"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +19,10 @@ import (
 
 const nnsPath = "../nns"
 
-const msPerYear = 365 * 24 * time.Hour / time.Millisecond
+const (
+	msPerYear   = 365 * 24 * time.Hour / time.Millisecond
+	maxRecordID = 255 // value from the contract.
+)
 
 func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
 	e := newExecutor(t)
@@ -33,6 +38,56 @@ func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
 	}
 	return c
+}
+
+func TestNNSPrice(t *testing.T) {
+	const (
+		minPrice       = int64(-1)
+		maxPrice       = int64(10000_00000000)
+		defaultPrice   = 10_0000_0000
+		committeePrice = -1
+	)
+	c := newNNSInvoker(t, false)
+
+	t.Run("get, default value", func(t *testing.T) {
+		c.Invoke(t, defaultPrice, "getPrice", 0)
+		c.Invoke(t, committeePrice, "getPrice", 1)
+		c.Invoke(t, committeePrice, "getPrice", 2)
+		c.Invoke(t, committeePrice, "getPrice", 3)
+		c.Invoke(t, committeePrice, "getPrice", 4)
+		c.Invoke(t, defaultPrice, "getPrice", 5)
+	})
+	t.Run("set, not signed by committee", func(t *testing.T) {
+		acc := c.NewAccount(t)
+		cAcc := c.WithSigners(acc)
+		cAcc.InvokeFail(t, "not witnessed by committee", "setPrice", []interface{}{minPrice + 1})
+	})
+	t.Run("set, too small value", func(t *testing.T) {
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{minPrice - 1})
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{defaultPrice, minPrice - 1})
+	})
+	t.Run("set, too large value", func(t *testing.T) {
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{maxPrice + 1})
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{defaultPrice, maxPrice + 1})
+	})
+	t.Run("set, negative default price", func(t *testing.T) {
+		c.InvokeFail(t, "default price is out of range", "setPrice", []interface{}{committeePrice, minPrice + 1})
+	})
+
+	t.Run("set, success", func(t *testing.T) {
+		txSet := c.PrepareInvoke(t, "setPrice", []interface{}{defaultPrice - 1, committeePrice, committeePrice, committeePrice, committeePrice, committeePrice})
+		txGet1 := c.PrepareInvoke(t, "getPrice", 5)
+		txGet2 := c.PrepareInvoke(t, "getPrice", 6)
+		c.AddBlockCheckHalt(t, txSet, txGet1, txGet2)
+		c.CheckHalt(t, txSet.Hash(), stackitem.Null{})
+		c.CheckHalt(t, txGet1.Hash(), stackitem.Make(committeePrice))
+		c.CheckHalt(t, txGet2.Hash(), stackitem.Make(defaultPrice-1))
+
+		// Get in the next block.
+		c.Invoke(t, stackitem.Make(committeePrice), "getPrice", 2)
+		c.Invoke(t, stackitem.Make(committeePrice), "getPrice", 5)
+		c.Invoke(t, stackitem.Make(defaultPrice-1), "getPrice", 6)
+	})
 }
 
 func TestNNSGeneric(t *testing.T) {
@@ -153,40 +208,43 @@ func TestNNSRegisterMulti(t *testing.T) {
 	c1 := c.WithSigners(acc)
 	t.Run("parent domain is missing", func(t *testing.T) {
 		msg := "one of the parent domains is not registered"
-		args[0] = "testnet.fs.neo.com"
+		args[0] = "testnet.filestorage.neo.com"
 		c1.InvokeFail(t, msg, "register", args...)
 	})
 
-	args[0] = "fs.neo.com"
+	// Use long (>4 chars) domain name to avoid committee signature check.
+	args[0] = "filestorage.neo.com"
 	c1.Invoke(t, true, "register", args...)
 
-	args[0] = "testnet.fs.neo.com"
+	args[0] = "testnet.filestorage.neo.com"
 	c1.Invoke(t, true, "register", args...)
 
 	acc2 := c.NewAccount(t)
 	c2 := c.WithSigners(c.Committee, acc2)
-	args = newArgs("mainnet.fs.neo.com", acc2)
+	args = newArgs("mainnet.filestorage.neo.com", acc2)
 	c2.InvokeFail(t, "not witnessed by admin", "register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"something.mainnet.fs.neo.com", int64(nns.A), "1.2.3.4")
+		"something.mainnet.filestorage.neo.com", int64(nns.A), "1.2.3.4")
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"another.fs.neo.com", int64(nns.A), "4.3.2.1")
+		"another.filestorage.neo.com", int64(nns.A), "4.3.2.1")
 
 	c2 = c.WithSigners(acc, acc2)
-	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.fs.neo.com",
+	c2.Invoke(t, stackitem.NewBool(false), "isAvailable", "mainnet.filestorage.neo.com")
+	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.filestorage.neo.com",
 		"register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "deleteRecords",
-		"something.mainnet.fs.neo.com", int64(nns.A))
+		"something.mainnet.filestorage.neo.com", int64(nns.A))
+	c2.Invoke(t, stackitem.NewBool(true), "isAvailable", "mainnet.filestorage.neo.com")
 	c2.Invoke(t, true, "register", args...)
 
 	c2 = c.WithSigners(acc2)
 	c2.Invoke(t, stackitem.Null{}, "addRecord",
-		"cdn.mainnet.fs.neo.com", int64(nns.A), "166.15.14.13")
+		"cdn.mainnet.filestorage.neo.com", int64(nns.A), "166.15.14.13")
 	result := stackitem.NewArray([]stackitem.Item{
 		stackitem.NewByteArray([]byte("166.15.14.13"))})
-	c2.Invoke(t, result, "resolve", "cdn.mainnet.fs.neo.com", int64(nns.A))
+	c2.Invoke(t, result, "resolve", "cdn.mainnet.filestorage.neo.com", int64(nns.A))
 }
 
 func TestNNSUpdateSOA(t *testing.T) {
@@ -251,6 +309,23 @@ func TestNNSGetAllRecords(t *testing.T) {
 	require.False(t, iter.Next())
 }
 
+func TestNNSGetRecords(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	txtData := "first TXT record"
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.TXT), txtData)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.A), "1.2.3.4")
+
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make(txtData)}), "getRecords", "testdomain.com", int64(nns.TXT))
+	// Check empty result.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "getRecords", "testdomain.com", int64(nns.AAAA))
+}
+
 func TestExpiration(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
@@ -262,7 +337,8 @@ func TestExpiration(t *testing.T) {
 	checkProperties := func(t *testing.T, expiration uint64) {
 		expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 			{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)}})
+			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+			{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 		s, err := c.TestInvoke(t, "properties", "testdomain.com")
 		require.NoError(t, err)
 		require.Equal(t, expected.Value(), s.Top().Item().Value())
@@ -296,6 +372,7 @@ func TestNNSSetAdmin(t *testing.T) {
 	c.Invoke(t, true, "register",
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	top := c.TopBlock(t)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
@@ -303,7 +380,23 @@ func TestNNSSetAdmin(t *testing.T) {
 		"testdomain.com", int64(nns.TXT), "won't be added")
 
 	c1 := c.WithSigners(c.Committee, acc)
-	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	h := c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	c1.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: c1.Hash,
+		Name:       "SetAdmin",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Null{},
+			stackitem.NewByteArray(acc.ScriptHash().BytesBE()),
+		}),
+	})
+
+	expiration := top.Timestamp + uint64(expire*1000)
+	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{
+		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Make(acc.ScriptHash().BytesBE())}})
+	cAcc.Invoke(t, expectedProps, "properties", "testdomain.com")
 
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
 		"testdomain.com", int64(nns.TXT), "will be added")
@@ -344,30 +437,87 @@ func TestNNSRenew(t *testing.T) {
 
 	const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 	b := c.TopBlock(t)
-	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)
+	renewalPeriod := int64(2)
+	oldExpiration := b.Timestamp + uint64(expire*1000)
+	ts := oldExpiration + uint64(msPerYear)*uint64(renewalPeriod)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com")
-	c1.Invoke(t, ts, "renew", "testdomain.com")
+	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com", renewalPeriod)
+	h := c1.Invoke(t, ts, "renew", "testdomain.com", renewalPeriod)
+	cAcc.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: cAcc.Hash,
+		Name:       "Renew",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Make(oldExpiration),
+			stackitem.Make(ts),
+		}),
+	})
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)}})
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
+
+	// Invalid renewal period.
+	c1.InvokeFail(t, "invalid renewal period value", "renew", "testdomain.com", 11)
+	// Too large expiration period.
+	c1.InvokeFail(t, "10 years of expiration period at max is allowed", "renew", "testdomain.com", 10)
+
+	// Default renewal period.
+	h = c1.Invoke(t, ts+uint64(msPerYear), "renew", "testdomain.com")
+	c1.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: cAcc.Hash,
+		Name:       "Renew",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Make(ts),
+			stackitem.Make(ts + uint64(msPerYear)),
+		}),
+	})
 }
 
 func TestNNSResolve(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	c.Invoke(t, true, "register",
-		"test.com", c.CommitteeHash,
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, true, "register", "test.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(nns.TXT), "expected result")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(nns.CNAME), "alias.com")
 
-	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"test.com", int64(nns.TXT), "expected result")
+	c.Invoke(t, true, "register", "alias.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(nns.A), "1.2.3.4")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(nns.CNAME), "alias2.com")
+
+	c.Invoke(t, true, "register", "alias2.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias2.com", int64(nns.A), "5.6.7.8")
 
 	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
 	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+
+	// Empty result.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "test.com", int64(nns.AAAA))
+
+	// Check CNAME is properly resolved and is not included into the result list.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("1.2.3.4"), stackitem.Make("5.6.7.8")}), "resolve", "test.com", int64(nns.A))
+	// And this time it should be properly included without resolution.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("alias.com")}), "resolve", "test.com", int64(nns.CNAME))
+}
+
+func TestNNSAddRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	for i := 0; i <= maxRecordID+1; i++ {
+		if i == maxRecordID+1 {
+			c.InvokeFail(t, "maximum number of records reached", "addRecord", "testdomain.com", int64(nns.TXT), strconv.Itoa(i))
+		} else {
+			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.TXT), strconv.Itoa(i))
+		}
+	}
 }
