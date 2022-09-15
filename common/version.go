@@ -9,7 +9,7 @@ const (
 
 	// Versions from which an update should be performed.
 	// These should be used in a group (so prevMinor can be equal to minor if there are
-	// any migration routines.
+	// any migration routines).
 	prevMajor = 0
 	prevMinor = 15
 	prevPatch = 1
