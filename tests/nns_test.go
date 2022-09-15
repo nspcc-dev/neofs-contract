@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -354,7 +355,16 @@ func TestNNSSetAdmin(t *testing.T) {
 		"testdomain.com", int64(recordtype.TXT), "won't be added")
 
 	c1 := c.WithSigners(c.Committee, acc)
-	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	h := c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	c1.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: c1.Hash,
+		Name:       "SetAdmin",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Null{},
+			stackitem.NewByteArray(acc.ScriptHash().BytesBE()),
+		}),
+	})
 
 	expiration := top.Timestamp + uint64(expire*1000)
 	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{

@@ -522,8 +522,10 @@ func SetAdmin(name string, admin interop.Hash160) {
 	ctx := storage.GetContext()
 	ns := getFragmentedNameState(ctx, []byte(name), fragments)
 	common.CheckOwnerWitness(ns.Owner)
+	oldAdm := ns.Admin
 	ns.Admin = admin
 	putNameState(ctx, ns)
+	runtime.Notify("SetAdmin", name, oldAdm, admin)
 }
 
 // SetRecord updates existing domain record with the specified type and ID.
