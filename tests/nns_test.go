@@ -427,16 +427,25 @@ func TestNNSRenew(t *testing.T) {
 
 	const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 	b := c.TopBlock(t)
-	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)
+	renewalPeriod := int64(2)
+	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)*uint64(renewalPeriod)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com")
-	c1.Invoke(t, ts, "renew", "testdomain.com")
+	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com", renewalPeriod)
+	c1.Invoke(t, ts, "renew", "testdomain.com", renewalPeriod)
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
 		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)},
 		{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
+
+	// Invalid renewal period.
+	c1.InvokeFail(t, "invalid renewal period value", "renew", "testdomain.com", 11)
+	// Too large expiration period.
+	c1.InvokeFail(t, "10 years of expiration period at max is allowed", "renew", "testdomain.com", 10)
+
+	// Default renewal period.
+	c1.Invoke(t, ts+uint64(msPerYear), "renew", "testdomain.com")
 }
 
 func TestNNSResolve(t *testing.T) {

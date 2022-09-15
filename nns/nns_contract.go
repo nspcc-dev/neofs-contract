@@ -71,6 +71,8 @@ const (
 	millisecondsInSecond = 1000
 	// millisecondsInYear is amount of milliseconds per year.
 	millisecondsInYear = int64(365 * 24 * 3600 * millisecondsInSecond)
+	// millisecondsInTenYears is the amount of milliseconds per ten years.
+	millisecondsInTenYears = 10 * millisecondsInYear
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -384,8 +386,16 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	return true
 }
 
-// Renew increases domain expiration date.
-func Renew(name string) int64 {
+// RenewDefault increases domain expiration date up to 1 year.
+func RenewDefault(name string) int64 {
+	return Renew(name, 1)
+}
+
+// Renew increases domain expiration date up to the specified amount of years.
+func Renew(name string, years int64) int64 {
+	if years < 1 || years > 10 {
+		panic("invalid renewal period value")
+	}
 	if len(name) > maxDomainNameLength {
 		panic("invalid domain name format")
 	}
@@ -397,12 +407,15 @@ func Renew(name string) int64 {
 	if price < 0 {
 		checkCommittee()
 	} else {
-		runtime.BurnGas(price)
+		runtime.BurnGas(price * int(years))
 	}
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
 	ns.checkAdmin()
-	ns.Expiration += millisecondsInYear
+	ns.Expiration += millisecondsInYear * years
+	if ns.Expiration > int64(runtime.GetTime())+millisecondsInTenYears {
+		panic("10 years of expiration period at max is allowed")
+	}
 	putNameState(ctx, ns)
 	return ns.Expiration
 }
