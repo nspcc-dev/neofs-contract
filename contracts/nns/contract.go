@@ -72,6 +72,8 @@ const (
 	millisecondsInSecond = 1000
 	// millisecondsInYear is amount of milliseconds per year.
 	millisecondsInYear = int64(365 * 24 * 3600 * millisecondsInSecond)
+	// millisecondsInTenYears is the amount of milliseconds per ten years.
+	millisecondsInTenYears = 10 * millisecondsInYear
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -461,16 +463,33 @@ func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire,
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
 }
 
-// Renew increases domain expiration date.
-func Renew(name string) int64 {
-	if len(name) > maxDomainNameLength {
-		panic("too long name")
+// RenewDefault increases domain expiration date for 1 year and returns
+// the new expriration timestamp.
+func RenewDefault(name string) int64 {
+	return Renew(name, 1)
+}
+
+// Renew increases domain expiration date up to the specified amount of years
+// (from 1 to 10, can't renew for more than 10 years). Returns new expiration
+// timestamp.
+func Renew(name string, years int) int64 {
+	if years < 1 || years > 10 {
+		panic("invalid renewal period value")
 	}
-	runtime.BurnGas(GetPrice())
+	if len(name) > maxDomainNameLength {
+		panic("invalid domain name format")
+	}
+	runtime.BurnGas(int(GetPrice()) * years)
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
 	ns.checkAdmin()
-	ns.Expiration += millisecondsInYear
+	ns.Expiration += millisecondsInYear * int64(years)
+
+	fragments := splitAndCheck(name)
+	// TLDs are not subject to this check.
+	if len(fragments) > 1 && ns.Expiration > int64(runtime.GetTime())+millisecondsInTenYears {
+		panic("10 years of expiration period at max is allowed")
+	}
 	putNameState(ctx, ns)
 	return ns.Expiration
 }
