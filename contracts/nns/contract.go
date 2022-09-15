@@ -483,6 +483,7 @@ func Renew(name string, years int) int64 {
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
 	ns.checkAdmin()
+	oldExpiration := ns.Expiration
 	ns.Expiration += millisecondsInYear * int64(years)
 
 	fragments := splitAndCheck(name)
@@ -491,6 +492,7 @@ func Renew(name string, years int) int64 {
 		panic("10 years of expiration period at max is allowed")
 	}
 	putNameState(ctx, ns)
+	runtime.Notify("Renew", name, oldExpiration, ns.Expiration)
 	return ns.Expiration
 }
 
