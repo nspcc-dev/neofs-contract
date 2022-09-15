@@ -39,6 +39,56 @@ func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
 	return c
 }
 
+func TestNNSPrice(t *testing.T) {
+	const (
+		minPrice       = int64(-1)
+		maxPrice       = int64(10000_00000000)
+		defaultPrice   = 10_0000_0000
+		committeePrice = -1
+	)
+	c := newNNSInvoker(t, false)
+
+	t.Run("get, default value", func(t *testing.T) {
+		c.Invoke(t, defaultPrice, "getPrice", 0)
+		c.Invoke(t, committeePrice, "getPrice", 1)
+		c.Invoke(t, committeePrice, "getPrice", 2)
+		c.Invoke(t, committeePrice, "getPrice", 3)
+		c.Invoke(t, committeePrice, "getPrice", 4)
+		c.Invoke(t, defaultPrice, "getPrice", 5)
+	})
+	t.Run("set, not signed by committee", func(t *testing.T) {
+		acc := c.NewAccount(t)
+		cAcc := c.WithSigners(acc)
+		cAcc.InvokeFail(t, "not witnessed by committee", "setPrice", []interface{}{minPrice + 1})
+	})
+	t.Run("set, too small value", func(t *testing.T) {
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{minPrice - 1})
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{defaultPrice, minPrice - 1})
+	})
+	t.Run("set, too large value", func(t *testing.T) {
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{maxPrice + 1})
+		c.InvokeFail(t, "price is out of range", "setPrice", []interface{}{defaultPrice, maxPrice + 1})
+	})
+	t.Run("set, negative default price", func(t *testing.T) {
+		c.InvokeFail(t, "default price is out of range", "setPrice", []interface{}{committeePrice, minPrice + 1})
+	})
+
+	t.Run("set, success", func(t *testing.T) {
+		txSet := c.PrepareInvoke(t, "setPrice", []interface{}{defaultPrice - 1, committeePrice, committeePrice, committeePrice, committeePrice, committeePrice})
+		txGet1 := c.PrepareInvoke(t, "getPrice", 5)
+		txGet2 := c.PrepareInvoke(t, "getPrice", 6)
+		c.AddBlockCheckHalt(t, txSet, txGet1, txGet2)
+		c.CheckHalt(t, txSet.Hash(), stackitem.Null{})
+		c.CheckHalt(t, txGet1.Hash(), stackitem.Make(committeePrice))
+		c.CheckHalt(t, txGet2.Hash(), stackitem.Make(defaultPrice-1))
+
+		// Get in the next block.
+		c.Invoke(t, stackitem.Make(committeePrice), "getPrice", 2)
+		c.Invoke(t, stackitem.Make(committeePrice), "getPrice", 5)
+		c.Invoke(t, stackitem.Make(defaultPrice-1), "getPrice", 6)
+	})
+}
+
 func TestNNSGeneric(t *testing.T) {
 	c := newNNSInvoker(t, false)
 
@@ -157,42 +207,43 @@ func TestNNSRegisterMulti(t *testing.T) {
 	c1 := c.WithSigners(acc)
 	t.Run("parent domain is missing", func(t *testing.T) {
 		msg := "one of the parent domains is not registered"
-		args[0] = "testnet.fs.neo.com"
+		args[0] = "testnet.filestorage.neo.com"
 		c1.InvokeFail(t, msg, "register", args...)
 	})
 
-	args[0] = "fs.neo.com"
+	// Use long (>4 chars) domain name to avoid committee signature check.
+	args[0] = "filestorage.neo.com"
 	c1.Invoke(t, true, "register", args...)
 
-	args[0] = "testnet.fs.neo.com"
+	args[0] = "testnet.filestorage.neo.com"
 	c1.Invoke(t, true, "register", args...)
 
 	acc2 := c.NewAccount(t)
 	c2 := c.WithSigners(c.Committee, acc2)
-	args = newArgs("mainnet.fs.neo.com", acc2)
+	args = newArgs("mainnet.filestorage.neo.com", acc2)
 	c2.InvokeFail(t, "not witnessed by admin", "register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"something.mainnet.fs.neo.com", int64(nns.A), "1.2.3.4")
+		"something.mainnet.filestorage.neo.com", int64(nns.A), "1.2.3.4")
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"another.fs.neo.com", int64(nns.A), "4.3.2.1")
+		"another.filestorage.neo.com", int64(nns.A), "4.3.2.1")
 
 	c2 = c.WithSigners(acc, acc2)
-	c2.Invoke(t, stackitem.NewBool(false), "isAvailable", "mainnet.fs.neo.com")
-	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.fs.neo.com",
+	c2.Invoke(t, stackitem.NewBool(false), "isAvailable", "mainnet.filestorage.neo.com")
+	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.filestorage.neo.com",
 		"register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "deleteRecords",
-		"something.mainnet.fs.neo.com", int64(nns.A))
-	c2.Invoke(t, stackitem.NewBool(true), "isAvailable", "mainnet.fs.neo.com")
+		"something.mainnet.filestorage.neo.com", int64(nns.A))
+	c2.Invoke(t, stackitem.NewBool(true), "isAvailable", "mainnet.filestorage.neo.com")
 	c2.Invoke(t, true, "register", args...)
 
 	c2 = c.WithSigners(acc2)
 	c2.Invoke(t, stackitem.Null{}, "addRecord",
-		"cdn.mainnet.fs.neo.com", int64(nns.A), "166.15.14.13")
+		"cdn.mainnet.filestorage.neo.com", int64(nns.A), "166.15.14.13")
 	result := stackitem.NewArray([]stackitem.Item{
 		stackitem.NewByteArray([]byte("166.15.14.13"))})
-	c2.Invoke(t, result, "resolve", "cdn.mainnet.fs.neo.com", int64(nns.A))
+	c2.Invoke(t, result, "resolve", "cdn.mainnet.filestorage.neo.com", int64(nns.A))
 }
 
 func TestNNSUpdateSOA(t *testing.T) {
