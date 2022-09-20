@@ -20,10 +20,11 @@ type (
 
 	netmapNode struct {
 		node  storageNode
-		state nodeState
+		state NodeState
 	}
 
-	nodeState int
+	// NodeState is an enumeration for node states.
+	NodeState int
 
 	record struct {
 		key []byte
@@ -52,7 +53,7 @@ const (
 
 const (
 	// V2 format
-	_ nodeState = iota
+	_ NodeState = iota
 	OnlineState
 	OfflineState
 )
@@ -312,7 +313,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		common.CheckAlphabetWitness(common.AlphabetAddress())
 	}
 
-	switch nodeState(state) {
+	switch NodeState(state) {
 	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
@@ -325,7 +326,7 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 
 // UpdateStateIR method tries to change the node state in the network map.
 // Should only be invoked in notary-enabled environment by alphabet.
-func UpdateStateIR(state nodeState, publicKey interop.PublicKey) {
+func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 	if notaryDisabled {
@@ -648,7 +649,7 @@ func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 	storage.Delete(ctx, storageKey)
 }
 
-func filterNetmap(ctx storage.Context, st nodeState) []storageNode {
+func filterNetmap(ctx storage.Context, st NodeState) []storageNode {
 	var (
 		netmap = getNetmapNodes(ctx)
 		result = []storageNode{}
