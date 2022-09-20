@@ -56,6 +56,7 @@ const (
 	_ NodeState = iota
 	OnlineState
 	OfflineState
+	MaintenanceState
 )
 
 var (
@@ -317,6 +318,9 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
+	case MaintenanceState:
+		updateNetmapState(ctx, publicKey, MaintenanceState)
+		runtime.Log("move storage node to a maintenance state")
 	default:
 		panic("unsupported state")
 	}
@@ -338,6 +342,8 @@ func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
 	switch state {
 	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
+	case MaintenanceState:
+		updateNetmapState(ctx, publicKey, MaintenanceState)
 	default:
 		panic("unsupported state")
 	}
@@ -647,6 +653,14 @@ func addToNetmap(ctx storage.Context, n storageNode) {
 func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 	storageKey := append(candidatePrefix, key...)
 	storage.Delete(ctx, storageKey)
+}
+
+func updateNetmapState(ctx storage.Context, key interop.PublicKey, state NodeState) {
+	storageKey := append(candidatePrefix, key...)
+	raw := storage.Get(ctx, storageKey).([]byte)
+	node := std.Deserialize(raw).(netmapNode)
+	node.state = state
+	storage.Put(ctx, storageKey, std.Serialize(node))
 }
 
 func filterNetmap(ctx storage.Context, st NodeState) []storageNode {
