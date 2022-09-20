@@ -314,12 +314,13 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		common.CheckAlphabetWitness(common.AlphabetAddress())
 	}
 
-	switch NodeState(state) {
+	st := NodeState(state)
+	switch st {
 	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
-	case MaintenanceState:
-		updateNetmapState(ctx, publicKey, MaintenanceState)
+	case MaintenanceState, OnlineState:
+		updateNetmapState(ctx, publicKey, st)
 		runtime.Log("move storage node to a maintenance state")
 	default:
 		panic("unsupported state")
@@ -342,8 +343,8 @@ func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
 	switch state {
 	case OfflineState:
 		removeFromNetmap(ctx, publicKey)
-	case MaintenanceState:
-		updateNetmapState(ctx, publicKey, MaintenanceState)
+	case MaintenanceState, OnlineState:
+		updateNetmapState(ctx, publicKey, state)
 	default:
 		panic("unsupported state")
 	}
@@ -658,6 +659,9 @@ func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 func updateNetmapState(ctx storage.Context, key interop.PublicKey, state NodeState) {
 	storageKey := append(candidatePrefix, key...)
 	raw := storage.Get(ctx, storageKey).([]byte)
+	if raw == nil {
+		panic("peer is missing")
+	}
 	node := std.Deserialize(raw).(netmapNode)
 	node.state = state
 	storage.Put(ctx, storageKey, std.Serialize(node))

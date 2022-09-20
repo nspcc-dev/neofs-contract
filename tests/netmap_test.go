@@ -310,9 +310,14 @@ func TestUpdateStateIR(t *testing.T) {
 	cNm := newNetmapInvoker(t)
 
 	acc := cNm.NewAccount(t)
+	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+
+	t.Run("can't move online, need addPeerIR", func(t *testing.T) {
+		cNm.InvokeFail(t, "peer is missing", "updateStateIR", int64(netmap.OnlineState), pub)
+	})
+
 	dummyInfo := dummyNodeInfo(acc)
 	cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
-	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 
 	acc1 := cNm.NewAccount(t)
 	dummyInfo1 := dummyNodeInfo(acc1)
@@ -321,9 +326,6 @@ func TestUpdateStateIR(t *testing.T) {
 	t.Run("must be signed by the alphabet", func(t *testing.T) {
 		cAcc := cNm.WithSigners(acc)
 		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(netmap.OfflineState), pub)
-	})
-	t.Run("can't move online", func(t *testing.T) {
-		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(netmap.OnlineState), pub)
 	})
 	t.Run("invalid state", func(t *testing.T) {
 		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(42), pub)
@@ -335,14 +337,28 @@ func TestUpdateStateIR(t *testing.T) {
 	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.OfflineState), pub)
 	checkNetmapCandidates(t, cNm, 1)
 
+	checkState := func(expected netmap.NodeState) {
+		arr := checkNetmapCandidates(t, cNm, 1)
+		nn := arr[0].Value().([]stackitem.Item)
+		state, err := nn[1].TryInteger()
+		require.NoError(t, err)
+		require.Equal(t, int64(expected), state.Int64())
+	}
+
 	// Move the second node in the maintenance state.
 	pub1 := acc1.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
-	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
-	arr := checkNetmapCandidates(t, cNm, 1)
-	nn := arr[0].Value().([]stackitem.Item)
-	state, err := nn[1].TryInteger()
-	require.NoError(t, err)
-	require.Equal(t, int64(netmap.MaintenanceState), state.Int64())
+	t.Run("maintenance -> add peer", func(t *testing.T) {
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
+		checkState(netmap.MaintenanceState)
+		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo1.raw)
+		checkState(netmap.OnlineState)
+	})
+	t.Run("maintenance -> online", func(t *testing.T) {
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
+		checkState(netmap.MaintenanceState)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.OnlineState), pub1)
+		checkState(netmap.OnlineState)
+	})
 }
 
 func TestUpdateState(t *testing.T) {
