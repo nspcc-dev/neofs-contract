@@ -312,22 +312,37 @@ func TestUpdateStateIR(t *testing.T) {
 	acc := cNm.NewAccount(t)
 	dummyInfo := dummyNodeInfo(acc)
 	cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
-
 	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+
+	acc1 := cNm.NewAccount(t)
+	dummyInfo1 := dummyNodeInfo(acc1)
+	cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo1.raw)
 
 	t.Run("must be signed by the alphabet", func(t *testing.T) {
 		cAcc := cNm.WithSigners(acc)
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(2), pub)
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(netmap.OfflineState), pub)
+	})
+	t.Run("can't move online", func(t *testing.T) {
+		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(netmap.OnlineState), pub)
 	})
 	t.Run("invalid state", func(t *testing.T) {
 		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(42), pub)
 	})
 
+	checkNetmapCandidates(t, cNm, 2)
+
+	// Move the first node offline.
+	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.OfflineState), pub)
 	checkNetmapCandidates(t, cNm, 1)
-	t.Run("good", func(t *testing.T) {
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(2), pub)
-		checkNetmapCandidates(t, cNm, 0)
-	})
+
+	// Move the second node in the maintenance state.
+	pub1 := acc1.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
+	arr := checkNetmapCandidates(t, cNm, 1)
+	nn := arr[0].Value().([]stackitem.Item)
+	state, err := nn[1].TryInteger()
+	require.NoError(t, err)
+	require.Equal(t, int64(netmap.MaintenanceState), state.Int64())
 }
 
 func TestUpdateState(t *testing.T) {
@@ -365,7 +380,7 @@ func TestUpdateState(t *testing.T) {
 	checkNetmapCandidates(t, cNm, 0)
 }
 
-func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) {
+func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) []stackitem.Item {
 	s, err := c.TestInvoke(t, "netmapCandidates")
 	require.NoError(t, err)
 	require.Equal(t, 1, s.Len())
@@ -373,4 +388,5 @@ func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) {
 	arr, ok := s.Pop().Value().([]stackitem.Item)
 	require.True(t, ok)
 	require.Equal(t, size, len(arr))
+	return arr
 }
