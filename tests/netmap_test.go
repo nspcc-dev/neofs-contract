@@ -62,6 +62,7 @@ type testNodeInfo struct {
 	signer neotest.SingleSigner
 	pub    []byte
 	raw    []byte
+	state  netmap.NodeState
 }
 
 func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
@@ -75,6 +76,7 @@ func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 		signer: s,
 		pub:    pub,
 		raw:    ni,
+		state:  netmap.NodeStateOnline,
 	}
 }
 
@@ -136,7 +138,7 @@ func TestNewEpoch(t *testing.T) {
 			for j := range nodes[i-1] {
 				if rand.Int()%3 == 0 {
 					cNm.Invoke(t, stackitem.Null{}, "updateStateIR",
-						int64(netmap.OfflineState), nodes[i-1][j].pub)
+						int64(netmap.NodeStateOffline), nodes[i-1][j].pub)
 				} else {
 					current = append(current, nodes[i-1][j])
 				}
@@ -289,18 +291,22 @@ func checkSnapshot(t *testing.T, s *vm.Stack, nodes []testNodeInfo) {
 	require.True(t, ok, "expected array")
 	require.Equal(t, len(nodes), len(arr), "expected %d nodes", len(nodes))
 
-	actual := make([][]byte, len(nodes))
-	expected := make([][]byte, len(nodes))
+	actual := make([]netmap.Node, len(nodes))
+	expected := make([]netmap.Node, len(nodes))
 	for i := range nodes {
 		n, ok := arr[i].Value().([]stackitem.Item)
 		require.True(t, ok, "expected node struct")
-		require.Equal(t, 1, len(n), "expected single field")
+		require.Equalf(t, 2, len(n), "expected %d field(s)", 2)
 
-		raw, ok := n[0].Value().([]byte)
-		require.True(t, ok, "expected bytes")
+		require.IsType(t, []byte{}, n[0].Value())
 
-		actual[i] = raw
-		expected[i] = nodes[i].raw
+		state, err := n[1].TryInteger()
+		require.NoError(t, err)
+
+		actual[i].BLOB = n[0].Value().([]byte)
+		actual[i].State = netmap.NodeState(state.Int64())
+		expected[i].BLOB = nodes[i].raw
+		expected[i].State = nodes[i].state
 	}
 
 	require.ElementsMatch(t, expected, actual, "snapshot is different")
@@ -313,7 +319,7 @@ func TestUpdateStateIR(t *testing.T) {
 	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 
 	t.Run("can't move online, need addPeerIR", func(t *testing.T) {
-		cNm.InvokeFail(t, "peer is missing", "updateStateIR", int64(netmap.OnlineState), pub)
+		cNm.InvokeFail(t, "peer is missing", "updateStateIR", int64(netmap.NodeStateOnline), pub)
 	})
 
 	dummyInfo := dummyNodeInfo(acc)
@@ -325,7 +331,7 @@ func TestUpdateStateIR(t *testing.T) {
 
 	t.Run("must be signed by the alphabet", func(t *testing.T) {
 		cAcc := cNm.WithSigners(acc)
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(netmap.OfflineState), pub)
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(netmap.NodeStateOffline), pub)
 	})
 	t.Run("invalid state", func(t *testing.T) {
 		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(42), pub)
@@ -334,7 +340,7 @@ func TestUpdateStateIR(t *testing.T) {
 	checkNetmapCandidates(t, cNm, 2)
 
 	// Move the first node offline.
-	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.OfflineState), pub)
+	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateOffline), pub)
 	checkNetmapCandidates(t, cNm, 1)
 
 	checkState := func(expected netmap.NodeState) {
@@ -348,16 +354,16 @@ func TestUpdateStateIR(t *testing.T) {
 	// Move the second node in the maintenance state.
 	pub1 := acc1.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 	t.Run("maintenance -> add peer", func(t *testing.T) {
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
-		checkState(netmap.MaintenanceState)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateMaintenance), pub1)
+		checkState(netmap.NodeStateMaintenance)
 		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo1.raw)
-		checkState(netmap.OnlineState)
+		checkState(netmap.NodeStateOnline)
 	})
 	t.Run("maintenance -> online", func(t *testing.T) {
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.MaintenanceState), pub1)
-		checkState(netmap.MaintenanceState)
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.OnlineState), pub1)
-		checkState(netmap.OnlineState)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateMaintenance), pub1)
+		checkState(netmap.NodeStateMaintenance)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateOnline), pub1)
+		checkState(netmap.NodeStateOnline)
 	})
 }
 

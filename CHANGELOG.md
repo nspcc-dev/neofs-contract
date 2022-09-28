@@ -3,11 +3,21 @@ Changelog for NeoFS Contract
 
 ## Unrelease
 
+### Added
+- Support `MAINTENANCE` state of storage nodes (#269)
+
+### Changed
+- `netmap.Snapshot` and all similar methods return (#269)
+
 ### Updated
 - NNS contract now sets domain expiration based on `register` arguments (#262)
 
 ### Fixed
 - NNS `renew` now can only be done by the domain owner
+
+### Updating from v0.15.x
+Update deployed `Netmap` contract using `Update` method: storage of the contract
+has been incompatibly changed.
 
 ## [0.15.5] - 2022-08-23
 
