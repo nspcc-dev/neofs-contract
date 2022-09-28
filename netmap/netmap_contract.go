@@ -13,24 +13,35 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
-type (
-	storageNode struct {
-		info []byte
-	}
+// NodeState is an enumeration for node states.
+type NodeState int
 
-	netmapNode struct {
-		node  storageNode
-		state NodeState
-	}
+// Various Node states
+const (
+	_ NodeState = iota
 
-	// NodeState is an enumeration for node states.
-	NodeState int
+	// NodeStateOnline stands for nodes that are in full network and
+	// operational availability.
+	NodeStateOnline
 
-	record struct {
-		key []byte
-		val []byte
-	}
+	// NodeStateOffline stands for nodes that are in network unavailability.
+	NodeStateOffline
+
+	// NodeStateMaintenance stands for nodes under maintenance with partial
+	// network availability.
+	NodeStateMaintenance
 )
+
+// Node groups data related to NeoFS storage nodes registered in the NeoFS
+// network. The information is stored in the current contract.
+type Node struct {
+	// Information about the node encoded according to the NeoFS binary
+	// protocol.
+	BLOB []byte
+
+	// Current node state.
+	State NodeState
+}
 
 const (
 	notaryDisabledKey = "notary"
@@ -49,14 +60,6 @@ const (
 	balanceContractKey   = "balanceScriptHash"
 
 	cleanupEpochMethod = "newEpoch"
-)
-
-const (
-	// V2 format
-	_ NodeState = iota
-	OnlineState
-	OfflineState
-	MaintenanceState
 )
 
 var (
@@ -105,7 +108,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	prefix := []byte(snapshotKeyPrefix)
 	for i := 0; i < DefaultSnapshotCount; i++ {
-		common.SetSerialized(ctx, append(prefix, byte(i)), []storageNode{})
+		common.SetSerialized(ctx, append(prefix, byte(i)), []Node{})
 	}
 	storage.Put(ctx, snapshotCurrentIDKey, 0)
 
@@ -191,8 +194,11 @@ func UpdateInnerRing(keys []interop.PublicKey) {
 	common.SetSerialized(ctx, innerRingKey, keys)
 }
 
-// AddPeerIR method tries to add a new candidate to the network map.
-// It should only be invoked in notary-enabled environment by the alphabet.
+// AddPeerIR accepts Alphabet calls in the notary-enabled contract setting and
+// behaves similar to AddPeer in the notary-disabled one.
+//
+// AddPeerIR MUST NOT be called in notary-disabled contract setting.
+// AddPeerIR MUST be called by the Alphabet member only.
 func AddPeerIR(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -202,19 +208,40 @@ func AddPeerIR(nodeInfo []byte) {
 
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
-	addToNetmap(ctx, storageNode{info: nodeInfo})
-
 	publicKey := nodeInfo[2:35] // V2 format: offset:2, len:33
-	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
+
+	addToNetmap(ctx, publicKey, Node{
+		BLOB:  nodeInfo,
+		State: NodeStateOnline,
+	})
 }
 
-// AddPeer method adds a new candidate to the next network map if it was invoked
-// by Alphabet node. If it was invoked by a node candidate, it produces AddPeer
-// notification. Otherwise, the method throws panic.
+// AddPeer accepts information about the network map candidate in the NeoFS
+// binary protocol format, identifies the caller and behaves depending on different
+// conditions listed below.
 //
-// If the candidate already exists, its info is updated.
-// NodeInfo argument contains a stable marshaled version of netmap.NodeInfo
-// structure.
+// Contract settings:
+//
+//	(1) notary-enabled
+//	(2) notary-disabled
+//
+// Callers:
+//
+//	(a) candidate himself, if node's public key corresponds to the signer
+//	(b) Alphabet member
+//	(c) others
+//
+// AddPeer case-by-case behavior:
+//
+//	(1a) does nothing
+//	(1b) panics. Notice that AddPeerIR MUST be used for this purpose.
+//	(2a) throws AddPeer notification with the provided BLOB
+//	(2b) accepts Alphabet vote. If the threshold of votes is reached, adds
+//	new element to the candidate set, and throws AddPeerSuccess notification.
+//	(c) panics
+//
+// Candidate MUST call AddPeer with "online" state in its descriptor. Alphabet
+// members MUST NOT call AddPeer with any other states.
 func AddPeer(nodeInfo []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -242,8 +269,9 @@ func AddPeer(nodeInfo []byte) {
 		return
 	}
 
-	candidate := storageNode{
-		info: nodeInfo,
+	candidate := Node{
+		BLOB:  nodeInfo,
+		State: NodeStateOnline,
 	}
 
 	if notaryDisabled {
@@ -259,28 +287,63 @@ func AddPeer(nodeInfo []byte) {
 		common.RemoveVotes(ctx, id)
 	}
 
-	addToNetmap(ctx, candidate)
-	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
+	addToNetmap(ctx, publicKey, candidate)
 }
 
-// UpdateState method updates the state of a node from the network map candidate list.
-// For notary-ENABLED environment, tx must be signed by both storage node and alphabet.
-// To force update without storage node signature, see `UpdateStateIR`.
+// updates state of the network map candidate by its public key in the contract
+// storage, and throws UpdateStateSuccess notification after this.
 //
-// For notary-DISABLED environment, the behaviour depends on who signed the transaction:
-// 1. If it was signed by alphabet, go into voting.
-// 2. If it was signed by a storage node, emit `UpdateState` notification.
-// 2. Fail in any other case.
+// State MUST be from the NodeState enum.
+func updateCandidateState(ctx storage.Context, publicKey interop.PublicKey, state NodeState) {
+	switch state {
+	case NodeStateOffline:
+		removeFromNetmap(ctx, publicKey)
+		runtime.Log("remove storage node from the network map")
+	case NodeStateOnline, NodeStateMaintenance:
+		updateNetmapState(ctx, publicKey, state)
+		runtime.Log("update state of the network map candidate")
+	default:
+		panic("unsupported state")
+	}
+
+	runtime.Notify("UpdateStateSuccess", publicKey, state)
+}
+
+// UpdateState accepts new state to be assigned to network map candidate
+// identified by the given public key, identifies the signer and behaves
+// depending on different conditions listed below.
 //
-// The behaviour can be summarized in the following table:
-// | notary \ Signer | Storage node | Alphabet | Both                  |
-// | ENABLED         | FAIL         | FAIL     | OK                    |
-// | DISABLED        | NOTIFICATION | OK       | OK (same as alphabet) |
-// State argument defines node state. The only supported state now is (2) --
-// offline state. Node is removed from the network map candidate list.
+// Contract settings:
 //
-// Method panics when invoked with unsupported states.
-func UpdateState(state int, publicKey interop.PublicKey) {
+//	(1) notary-enabled
+//	(2) notary-disabled
+//
+// Signers:
+//
+//	(a) candidate himself only, if provided public key corresponds to the signer
+//	(b) Alphabet member only
+//	(ab) both candidate and Alphabet member
+//	(c) others
+//
+// UpdateState case-by-case behavior:
+//
+//	(1a) panics
+//	(1b) like (1a)
+//	(1ab) updates candidate's state in the contract storage (*), and throws
+//	UpdateStateSuccess with the provided key and new state
+//	(2a) throws UpdateState notification with the provided key and new state
+//	(2b) accepts Alphabet vote. If the threshold of votes is reached, behaves
+//	like (1ab).
+//	(c) panics
+//
+// (*) Candidate is removed from the candidate set if state is NodeStateOffline.
+// Any other state is written into candidate's descriptor in the contract storage.
+// If requested candidate is missing, panic occurs. Throws UpdateStateSuccess
+// notification on success.
+//
+// State MUST be from the NodeState enum. Public key MUST be
+// interop.PublicKeyCompressedLen bytes.
+func UpdateState(state NodeState, publicKey interop.PublicKey) {
 	if len(publicKey) != interop.PublicKeyCompressedLen {
 		panic("incorrect public key")
 	}
@@ -314,23 +377,15 @@ func UpdateState(state int, publicKey interop.PublicKey) {
 		common.CheckAlphabetWitness(common.AlphabetAddress())
 	}
 
-	st := NodeState(state)
-	switch st {
-	case OfflineState:
-		removeFromNetmap(ctx, publicKey)
-		runtime.Log("remove storage node from the network map")
-	case MaintenanceState, OnlineState:
-		updateNetmapState(ctx, publicKey, st)
-		runtime.Log("move storage node to a maintenance state")
-	default:
-		panic("unsupported state")
-	}
-
-	runtime.Notify("UpdateStateSuccess", publicKey, state)
+	updateCandidateState(ctx, publicKey, state)
 }
 
-// UpdateStateIR method tries to change the node state in the network map.
-// Should only be invoked in notary-enabled environment by alphabet.
+// UpdateStateIR accepts Alphabet calls in the notary-enabled contract setting
+// and behaves similar to UpdateState, but does not require candidate's
+// signature presence.
+//
+// UpdateStateIR MUST NOT be called in notary-disabled contract setting.
+// UpdateStateIR MUST be called by the Alphabet member only.
 func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -340,15 +395,7 @@ func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
 
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
-	switch state {
-	case OfflineState:
-		removeFromNetmap(ctx, publicKey)
-	case MaintenanceState, OnlineState:
-		updateNetmapState(ctx, publicKey, state)
-	default:
-		panic("unsupported state")
-	}
-	runtime.Notify("UpdateStateSuccess", publicKey, state)
+	updateCandidateState(ctx, publicKey, state)
 }
 
 // NewEpoch method changes the epoch number up to the provided epochNum argument. It can
@@ -397,7 +444,7 @@ func NewEpoch(epochNum int) {
 		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
 
-	dataOnlineState := filterNetmap(ctx, OnlineState)
+	dataOnlineState := filterNetmap(ctx)
 
 	runtime.Log("process new epoch")
 
@@ -430,30 +477,40 @@ func LastEpochBlock() int {
 	return storage.Get(ctx, snapshotBlockKey).(int)
 }
 
-// Netmap method returns a list of structures that contain a byte array of a stable
-// marshalled netmap.NodeInfo structure. These structures contain Storage nodes
-// of the current epoch.
-func Netmap() []storageNode {
+// Netmap returns set of information about the storage nodes representing a network
+// map in the current epoch.
+//
+// Current state of each node is represented in the State field. It MAY differ
+// with the state encoded into BLOB field, in this case binary encoded state
+// MUST NOT be processed.
+func Netmap() []Node {
 	ctx := storage.GetReadOnlyContext()
 	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
 	return getSnapshot(ctx, snapshotKeyPrefix+string([]byte{byte(id)}))
 }
 
-// NetmapCandidates method returns a list of structures that contain the node state
-// and a byte array of a stable marshalled netmap.NodeInfo structure.
-// These structures contain Storage node candidates for the next epoch.
-func NetmapCandidates() []netmapNode {
+// NetmapCandidates returns set of information about the storage nodes
+// representing candidates for the network map in the coming epoch.
+//
+// Current state of each node is represented in the State field. It MAY differ
+// with the state encoded into BLOB field, in this case binary encoded state
+// MUST NOT be processed.
+func NetmapCandidates() []Node {
 	ctx := storage.GetReadOnlyContext()
 	return getNetmapNodes(ctx)
 }
 
-// Snapshot method returns a list of structures that contain the node state
-// (online: 1) and a byte array of a stable marshalled netmap.NodeInfo structure.
-// These structures contain Storage nodes of the specified epoch.
+// Snapshot returns set of information about the storage nodes representing a network
+// map in (current-diff)-th epoch.
 //
-// Netmap contract contains only two recent network map snapshots: current and
-// previous epoch. For diff bigger than 1 or less than 0, the method throws panic.
-func Snapshot(diff int) []storageNode {
+// Diff MUST NOT be negative. Diff MUST be less than maximum number of network
+// map snapshots stored in the contract. The limit is a contract setting,
+// DefaultSnapshotCount by default. See UpdateSnapshotCount for details.
+//
+// Current state of each node is represented in the State field. It MAY differ
+// with the state encoded into BLOB field, in this case binary encoded state
+// MUST NOT be processed.
+func Snapshot(diff int) []Node {
 	ctx := storage.GetReadOnlyContext()
 	count := getSnapshotCount(ctx)
 	if diff < 0 || count <= diff {
@@ -475,6 +532,8 @@ func getSnapshotCount(ctx storage.Context) int {
 // Otherwise, history is extended with empty snapshots, so
 // `Snapshot` method can return invalid results for `diff = new-old` epochs
 // until `diff` epochs have passed.
+//
+// Count MUST NOT be negative.
 func UpdateSnapshotCount(count int) {
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 	if count < 0 {
@@ -552,13 +611,12 @@ func moveSnapshot(ctx storage.Context, from, to int) {
 	storage.Put(ctx, keyTo, data)
 }
 
-// SnapshotByEpoch method returns a list of structures that contain the node state
-// (online: 1) and a byte array of a stable marshalled netmap.NodeInfo structure.
-// These structures contain Storage nodes of the specified epoch.
+// SnapshotByEpoch returns set of information about the storage nodes representing
+// a network map in the given epoch.
 //
-// Netmap contract contains only two recent network map snapshot: current and
-// previous epoch. For all others epoch method throws panic.
-func SnapshotByEpoch(epoch int) []storageNode {
+// Behaves like Snapshot: it is called after difference with the current epoch is
+// calculated.
+func SnapshotByEpoch(epoch int) []Node {
 	ctx := storage.GetReadOnlyContext()
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
 
@@ -610,6 +668,11 @@ func SetConfig(id, key, val []byte) {
 	runtime.Log("configuration has been updated")
 }
 
+type record struct {
+	key []byte
+	val []byte
+}
+
 // ListConfig returns an array of structures that contain key and value of all
 // NeoFS configuration records. Key and value are both byte arrays.
 func ListConfig() []record {
@@ -636,19 +699,15 @@ func Version() int {
 	return common.Version
 }
 
-func addToNetmap(ctx storage.Context, n storageNode) {
-	var (
-		newNode    = n.info
-		newNodeKey = newNode[2:35]
-		storageKey = append(candidatePrefix, newNodeKey...)
-
-		node = netmapNode{
-			node:  n,
-			state: OnlineState,
-		}
-	)
-
+// serializes and stores the given Node by its public key in the contract storage,
+// and throws AddPeerSuccess notification after this.
+//
+// Public key MUST match the one encoded in BLOB field.
+func addToNetmap(ctx storage.Context, publicKey []byte, node Node) {
+	storageKey := append(candidatePrefix, publicKey...)
 	storage.Put(ctx, storageKey, std.Serialize(node))
+
+	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
 }
 
 func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
@@ -662,46 +721,46 @@ func updateNetmapState(ctx storage.Context, key interop.PublicKey, state NodeSta
 	if raw == nil {
 		panic("peer is missing")
 	}
-	node := std.Deserialize(raw).(netmapNode)
-	node.state = state
+	node := std.Deserialize(raw).(Node)
+	node.State = state
 	storage.Put(ctx, storageKey, std.Serialize(node))
 }
 
-func filterNetmap(ctx storage.Context, st NodeState) []storageNode {
+func filterNetmap(ctx storage.Context) []Node {
 	var (
 		netmap = getNetmapNodes(ctx)
-		result = []storageNode{}
+		result = []Node{}
 	)
 
 	for i := 0; i < len(netmap); i++ {
 		item := netmap[i]
-		if item.state == st {
-			result = append(result, item.node)
+		if item.State != NodeStateOffline {
+			result = append(result, item)
 		}
 	}
 
 	return result
 }
 
-func getNetmapNodes(ctx storage.Context) []netmapNode {
-	result := []netmapNode{}
+func getNetmapNodes(ctx storage.Context) []Node {
+	result := []Node{}
 
 	it := storage.Find(ctx, candidatePrefix, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(it) {
-		node := iterator.Value(it).(netmapNode)
+		node := iterator.Value(it).(Node)
 		result = append(result, node)
 	}
 
 	return result
 }
 
-func getSnapshot(ctx storage.Context, key string) []storageNode {
+func getSnapshot(ctx storage.Context, key string) []Node {
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return std.Deserialize(data.([]byte)).([]storageNode)
+		return std.Deserialize(data.([]byte)).([]Node)
 	}
 
-	return []storageNode{}
+	return []Node{}
 }
 
 func getConfig(ctx storage.Context, key interface{}) interface{} {
