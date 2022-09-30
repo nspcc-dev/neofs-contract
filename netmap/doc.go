@@ -1,5 +1,5 @@
 /*
-Netmap contract is a contract deployed in NeoFS sidechain.
+Package netmap contains implementation of the Netmap contract for NeoFS systems.
 
 Netmap contract stores and manages NeoFS network map, Storage node candidates
 and epoch number counter. In notary disabled environment, contract also stores
