@@ -1,7 +1,7 @@
 # Changelog
 Changelog for NeoFS Contract
 
-## Unrelease
+## [Unreleased]
 
 ### Added
 - Support `MAINTENANCE` state of storage nodes (#269)
@@ -395,6 +395,7 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...master
 [0.15.5]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.4...v0.15.5
 [0.15.4]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.3...v0.15.4
 [0.15.3]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.2...v0.15.3
