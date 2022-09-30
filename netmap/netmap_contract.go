@@ -94,6 +94,25 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
+
+		count := getSnapshotCount(ctx)
+		prefix := []byte(snapshotKeyPrefix)
+		for i := 0; i < count; i++ {
+			key := append(prefix, byte(i))
+			data := storage.Get(ctx, key)
+			if data != nil {
+				nodes := std.Deserialize(data.([]byte)).([]Node)
+				for i := range nodes {
+					// Old structure contains only the first field,
+					// second is implicitly assumed to be Online.
+					nodes[i] = Node{
+						BLOB:  nodes[i].BLOB,
+						State: NodeStateOnline,
+					}
+				}
+				common.SetSerialized(ctx, key, nodes)
+			}
+		}
 		return
 	}
 
