@@ -4,6 +4,14 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+### Changed
+### Updated
+### Fixed
+### Updating from v0.16.0
+
+## [0.16.0] - 2022-10-17
+
+### Added
 - Support `MAINTENANCE` state of storage nodes (#269)
 
 ### Changed
@@ -15,7 +23,7 @@ Changelog for NeoFS Contract
 ### Fixed
 - NNS `renew` now can only be done by the domain owner
 
-### Updating from v0.15.x
+### Updating from v0.15.5
 Update deployed `Netmap` contract using `Update` method: storage of the contract
 has been incompatibly changed.
 
@@ -395,7 +403,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...master
+[0.16.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.4...v0.15.5
 [0.15.4]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.3...v0.15.4
 [0.15.3]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.2...v0.15.3
