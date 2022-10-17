@@ -9,7 +9,7 @@ Changelog for NeoFS Contract
 ### Fixed
 ### Updating from v0.16.0
 
-## [0.16.0] - 2022-10-17
+## [0.16.0] - 2022-10-17 - Anmado (안마도, 鞍馬島)
 
 ### Added
 - Support `MAINTENANCE` state of storage nodes (#269)
