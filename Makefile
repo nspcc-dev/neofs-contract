@@ -1,7 +1,9 @@
 #!/usr/bin/make -f
 
 SHELL=bash
-GOBIN ?= $(shell go env GOPATH)/bin
+# GOBIN is used only to install neo-go and allows to override
+# the location of written binary.
+export GOBIN ?= $(shell pwd)/bin
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 
@@ -45,6 +47,7 @@ test:
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
 	find . -name 'config.json' -exec rm -rf {} \;
+	rm -rf ./bin/
 
 mr_proper: clean
 	for sc in $(alphabet_sc); do\
