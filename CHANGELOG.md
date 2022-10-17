@@ -6,6 +6,8 @@ Changelog for NeoFS Contract
 ### Added
 ### Changed
 ### Updated
+- `neo-go` to `v0.99.4`
+
 ### Fixed
 ### Updating from v0.16.0
 
