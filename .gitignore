@@ -4,3 +4,6 @@
 config.json
 /vendor/
 .idea
+
+# debhelpers
+**/.debhelper
