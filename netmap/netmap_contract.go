@@ -43,6 +43,11 @@ type Node struct {
 	State NodeState
 }
 
+// Temporary migration-related types.
+type oldNode struct {
+	BLOB []byte
+}
+
 const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
@@ -101,16 +106,17 @@ func _deploy(data interface{}, isUpdate bool) {
 			key := append(prefix, byte(i))
 			data := storage.Get(ctx, key)
 			if data != nil {
-				nodes := std.Deserialize(data.([]byte)).([]Node)
-				for i := range nodes {
+				nodes := std.Deserialize(data.([]byte)).([]oldNode)
+				var newnodes []Node
+				for j := range nodes {
 					// Old structure contains only the first field,
 					// second is implicitly assumed to be Online.
-					nodes[i] = Node{
-						BLOB:  nodes[i].BLOB,
+					newnodes = append(newnodes, Node{
+						BLOB:  nodes[j].BLOB,
 						State: NodeStateOnline,
-					}
+					})
 				}
-				common.SetSerialized(ctx, key, nodes)
+				common.SetSerialized(ctx, key, newnodes)
 			}
 		}
 		return
