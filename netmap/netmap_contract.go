@@ -110,6 +110,10 @@ func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		common.CheckVersion(args.version)
 
+		if args.version >= 16*1_000 { // 0.16.0+ already have appropriate format
+			return
+		}
+
 		count := getSnapshotCount(ctx)
 		prefix := []byte(snapshotKeyPrefix)
 		for i := 0; i < count; i++ {
