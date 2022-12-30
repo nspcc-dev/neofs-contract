@@ -48,6 +48,16 @@ type oldNode struct {
 	BLOB []byte
 }
 
+type oldCandidate struct {
+	f1 oldNode
+	f2 NodeState
+}
+
+type kv struct {
+	k []byte
+	v []byte
+}
+
 const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
@@ -119,6 +129,18 @@ func _deploy(data interface{}, isUpdate bool) {
 				common.SetSerialized(ctx, key, newnodes)
 			}
 		}
+
+		it := storage.Find(ctx, candidatePrefix, storage.None)
+		for iterator.Next(it) {
+			cand := iterator.Value(it).(kv)
+			oldcan := std.Deserialize(cand.v).(oldCandidate)
+			newcan := Node{
+				BLOB:  oldcan.f1.BLOB,
+				State: oldcan.f2,
+			}
+			common.SetSerialized(ctx, cand.k, newcan)
+		}
+
 		return
 	}
 
