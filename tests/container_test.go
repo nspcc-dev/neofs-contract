@@ -3,10 +3,12 @@ package tests
 import (
 	"bytes"
 	"crypto/sha256"
+	"math/big"
 	"path"
 	"testing"
 
 	"github.com/mr-tron/base58"
+	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -101,15 +103,62 @@ func TestContainerCount(t *testing.T) {
 	cnt3 := dummyContainer(acc1)
 	balanceMint(t, cBal, acc1, containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
+	checkContainerList(t, c, [][]byte{cnt1.id[:], cnt2.id[:], cnt3.id[:]})
 
 	c.Invoke(t, stackitem.Null{}, "delete", cnt1.id[:], cnt1.sig, cnt1.token)
 	checkCount(t, 2)
+	checkContainerList(t, c, [][]byte{cnt2.id[:], cnt3.id[:]})
 
 	c.Invoke(t, stackitem.Null{}, "delete", cnt2.id[:], cnt2.sig, cnt2.token)
 	checkCount(t, 1)
+	checkContainerList(t, c, [][]byte{cnt3.id[:]})
 
 	c.Invoke(t, stackitem.Null{}, "delete", cnt3.id[:], cnt3.sig, cnt3.token)
 	checkCount(t, 0)
+	checkContainerList(t, c, [][]byte{})
+}
+
+func checkContainerList(t *testing.T, c *neotest.ContractInvoker, expected [][]byte) {
+	t.Run("check with `list`", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "list", nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		if len(expected) == 0 {
+			_, ok := s.Top().Item().(stackitem.Null)
+			require.True(t, ok)
+			return
+		}
+
+		arr, ok := s.Top().Value().([]stackitem.Item)
+		require.True(t, ok)
+		require.Equal(t, len(expected), len(arr))
+
+		actual := make([][]byte, 0, len(expected))
+		for i := range arr {
+			id, ok := arr[i].Value().([]byte)
+			require.True(t, ok)
+			actual = append(actual, id)
+		}
+		require.ElementsMatch(t, expected, actual)
+	})
+	t.Run("check with `containersOf`", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "containersOf", nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		iter, ok := s.Top().Value().(*storage.Iterator)
+		require.True(t, ok)
+
+		actual := make([][]byte, 0, len(expected))
+		for iter.Next() {
+			id, ok := iter.Value().Value().([]byte)
+			require.True(t, ok)
+			actual = append(actual, id)
+		}
+		require.ElementsMatch(t, expected, actual)
+	})
+
 }
 
 func TestContainerPut(t *testing.T) {
@@ -366,6 +415,16 @@ type estimation struct {
 }
 
 func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt testContainer, estimations ...estimation) {
+	// Check that listed estimations match expected
+	listEstimations := getListEstimations(t, c, epoch, cnt)
+	requireEstimationsMatch(t, estimations, listEstimations)
+
+	// Check that iterated estimations match expected
+	iterEstimations := getIterEstimations(t, c, epoch)
+	requireEstimationsMatch(t, estimations, iterEstimations)
+}
+
+func getListEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt testContainer) []estimation {
 	s, err := c.TestInvoke(t, "listContainerSizes", epoch)
 	require.NoError(t, err)
 
@@ -375,9 +434,8 @@ func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt
 	item := s.Top().Item()
 	switch it := item.(type) {
 	case stackitem.Null:
-		require.Equal(t, 0, len(estimations))
 		require.Equal(t, stackitem.Null{}, it)
-		return
+		return make([]estimation, 0)
 	case *stackitem.Array:
 		id, err = it.Value().([]stackitem.Item)[0].TryBytes()
 		require.NoError(t, err)
@@ -388,25 +446,52 @@ func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt
 	s, err = c.TestInvoke(t, "getContainerSize", id)
 	require.NoError(t, err)
 
+	// Here and below we assume that all estimations in the contract are related to our container
 	sizes := s.Top().Array()
 	require.Equal(t, cnt.id[:], sizes[0].Value())
 
-	actual := sizes[1].Value().([]stackitem.Item)
-	require.Equal(t, len(estimations), len(actual))
-	for i := range actual {
-		// type estimation struct {
-		// 	from interop.PublicKey
-		// 	size int
-		// }
-		est := actual[i].Value().([]stackitem.Item)
-		pub := est[0].Value().([]byte)
+	return convertStackToEstimations(sizes[1].Value().([]stackitem.Item))
+}
+
+func getIterEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64) []estimation {
+	iterStack, err := c.TestInvoke(t, "iterateContainerSizes", epoch)
+	require.NoError(t, err)
+	iter := iterStack.Pop().Value().(*storage.Iterator)
+
+	// Iterator contains pairs: key + estimation (as stack item), we extract estimations only
+	pairs := iteratorToArray(iter)
+	estimationItems := make([]stackitem.Item, len(pairs))
+	for i, pair := range pairs {
+		pairItems := pair.Value().([]stackitem.Item)
+		estimationItems[i] = pairItems[1]
+	}
+
+	return convertStackToEstimations(estimationItems)
+}
+
+func convertStackToEstimations(stackItems []stackitem.Item) []estimation {
+	estimations := make([]estimation, 0, len(stackItems))
+	for _, item := range stackItems {
+		value := item.Value().([]stackitem.Item)
+		from := value[0].Value().([]byte)
+		size := value[1].Value().(*big.Int)
+
+		estimation := estimation{from: from, size: size.Int64()}
+		estimations = append(estimations, estimation)
+	}
+	return estimations
+}
+
+func requireEstimationsMatch(t *testing.T, expected []estimation, actual []estimation) {
+	require.Equal(t, len(expected), len(actual))
+	for _, e := range expected {
 		found := false
-		for i := range estimations {
-			if found = bytes.Equal(estimations[i].from, pub); found {
-				require.Equal(t, stackitem.Make(estimations[i].size), est[1])
+		for _, a := range actual {
+			if found = bytes.Equal(e.from, a.from); found {
+				require.Equal(t, e.size, a.size)
 				break
 			}
 		}
-		require.True(t, found, "expected estimation from %x to be present", pub)
+		require.True(t, found, "expected estimation from %x to be present", e.from)
 	}
 }

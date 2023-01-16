@@ -43,6 +43,21 @@ type Node struct {
 	State NodeState
 }
 
+// Temporary migration-related types.
+type oldNode struct {
+	BLOB []byte
+}
+
+type oldCandidate struct {
+	f1 oldNode
+	f2 NodeState
+}
+
+type kv struct {
+	k []byte
+	v []byte
+}
+
 const (
 	notaryDisabledKey = "notary"
 	innerRingKey      = "innerring"
@@ -94,6 +109,42 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
+
+		if args.version >= 16*1_000 { // 0.16.0+ already have appropriate format
+			return
+		}
+
+		count := getSnapshotCount(ctx)
+		prefix := []byte(snapshotKeyPrefix)
+		for i := 0; i < count; i++ {
+			key := append(prefix, byte(i))
+			data := storage.Get(ctx, key)
+			if data != nil {
+				nodes := std.Deserialize(data.([]byte)).([]oldNode)
+				var newnodes []Node
+				for j := range nodes {
+					// Old structure contains only the first field,
+					// second is implicitly assumed to be Online.
+					newnodes = append(newnodes, Node{
+						BLOB:  nodes[j].BLOB,
+						State: NodeStateOnline,
+					})
+				}
+				common.SetSerialized(ctx, key, newnodes)
+			}
+		}
+
+		it := storage.Find(ctx, candidatePrefix, storage.None)
+		for iterator.Next(it) {
+			cand := iterator.Value(it).(kv)
+			oldcan := std.Deserialize(cand.v).(oldCandidate)
+			newcan := Node{
+				BLOB:  oldcan.f1.BLOB,
+				State: oldcan.f2,
+			}
+			common.SetSerialized(ctx, cand.k, newcan)
+		}
+
 		return
 	}
 
