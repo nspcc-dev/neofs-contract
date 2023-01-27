@@ -78,3 +78,6 @@ debpackage:
 
 debclean:
 	dh clean		
+
+fmt:
+	@gofmt -l -w -s $$(find . -type f -name '*.go'| grep -v "/vendor/")
