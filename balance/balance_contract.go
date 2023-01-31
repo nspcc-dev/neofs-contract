@@ -494,7 +494,7 @@ func isUsableAddress(addr interop.Hash160) bool {
 
 		// Check if a smart contract is calling script hash
 		callingScriptHash := runtime.GetCallingScriptHash()
-		if common.BytesEqual(callingScriptHash, addr) {
+		if callingScriptHash.Equals(addr) {
 			return true
 		}
 	}

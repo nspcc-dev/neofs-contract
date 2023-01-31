@@ -13,7 +13,7 @@ import (
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(gas.Hash)) {
+	if !caller.Equals(gas.Hash) {
 		common.AbortWithMessage("proxy contract accepts GAS only")
 	}
 }

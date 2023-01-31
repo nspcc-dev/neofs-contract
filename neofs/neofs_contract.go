@@ -236,7 +236,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 // break JSON limits for integers when precision is converted.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	rcv := data.(interop.Hash160)
-	if common.BytesEqual(rcv, []byte(ignoreDepositNotification)) {
+	if rcv.Equals(ignoreDepositNotification) {
 		return
 	}
 
@@ -247,7 +247,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
+	if !caller.Equals(gas.Hash) {
 		common.AbortWithMessage("only GAS can be accepted for deposit")
 	}
 

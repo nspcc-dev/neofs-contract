@@ -27,7 +27,7 @@ const (
 // contracts.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(gas.Hash)) && !common.BytesEqual(caller, []byte(neo.Hash)) {
+	if !caller.Equals(gas.Hash) && !caller.Equals(neo.Hash) {
 		common.AbortWithMessage("alphabet contract accepts GAS and NEO only")
 	}
 }
