@@ -252,7 +252,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	switch len(rcv) {
-	case 20:
+	case interop.Hash160Len:
 	case 0:
 		rcv = from
 	default:

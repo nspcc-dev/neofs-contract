@@ -439,7 +439,7 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 		return false
 	}
 
-	if len(from) == 20 {
+	if len(from) == interop.Hash160Len {
 		if amountFrom.Balance == amount {
 			storage.Delete(ctx, from)
 		} else {
@@ -448,7 +448,7 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 		}
 	}
 
-	if len(to) == 20 {
+	if len(to) == interop.Hash160Len {
 		amountTo := getAccount(ctx, to)
 		amountTo.Balance = amountTo.Balance + amount // neo-go#953
 		common.SetSerialized(ctx, to, amountTo)
@@ -487,7 +487,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 
 // isUsableAddress checks if the sender is either a correct NEO address or SC address.
 func isUsableAddress(addr interop.Hash160) bool {
-	if len(addr) == 20 {
+	if len(addr) == interop.Hash160Len {
 		if runtime.CheckWitness(addr) {
 			return true
 		}
