@@ -82,12 +82,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("alphabet contract updated")
 }
 
-// GAS returns the amount of the sidechain GAS stored in the contract account.
+// Gas returns the amount of the sidechain GAS stored in the contract account.
 func Gas() int {
 	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-// NEO returns the amount of sidechain NEO stored in the contract account.
+// Neo returns the amount of sidechain NEO stored in the contract account.
 func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }

@@ -462,7 +462,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 }
 
 // Config returns configuration value of NeoFS configuration. If the key does
-// not exists, returns nil.
+// not exist, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)

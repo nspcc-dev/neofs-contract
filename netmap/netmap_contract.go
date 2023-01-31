@@ -679,7 +679,7 @@ func SnapshotByEpoch(epoch int) []Node {
 }
 
 // Config returns configuration value of NeoFS configuration. If key does
-// not exists, returns nil.
+// not exist, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
