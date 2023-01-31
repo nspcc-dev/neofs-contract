@@ -26,6 +26,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})

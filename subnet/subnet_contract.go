@@ -56,6 +56,7 @@ const (
 )
 
 // _deploy function sets up initial list of inner ring public keys.
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})

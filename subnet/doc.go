@@ -1,5 +1,6 @@
 /*
-Subnet contract is a contract deployed in NeoFS sidechain.
+Package subnet contains implementation of Subnet contract deployed in NeoFS
+sidechain.
 
 Subnet contract stores and manages NeoFS subnetwork states. It allows registering
 and deleting subnetworks, limiting access to them, and defining a list of the Storage

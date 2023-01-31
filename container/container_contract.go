@@ -90,6 +90,7 @@ var (
 func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
@@ -152,6 +153,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("container contract initialized")
 }
 
+// nolint:deadcode,unused
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
 		"container").(bool)

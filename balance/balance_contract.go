@@ -58,6 +58,7 @@ func init() {
 	token = createToken()
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {

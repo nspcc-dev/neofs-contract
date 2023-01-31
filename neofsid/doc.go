@@ -1,5 +1,6 @@
 /*
-NeoFSID contract is a contract deployed in NeoFS sidechain.
+Package neofsid contains implementation of NeoFSID contract deployed in NeoFS
+sidechain.
 
 NeoFSID contract is used to store connection between an OwnerID and its public keys.
 OwnerID is a 25-byte N3 wallet address that can be produced from a public key.

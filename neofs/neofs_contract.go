@@ -45,6 +45,7 @@ var (
 )
 
 // _deploy sets up initial alphabet node keys.
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 

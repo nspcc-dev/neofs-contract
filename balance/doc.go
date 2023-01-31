@@ -1,5 +1,6 @@
 /*
-Balance contract is a contract deployed in NeoFS sidechain.
+Package balance contains implementation of Balance contract deployed in NeoFS
+sidechain.
 
 Balance contract stores all NeoFS account balances. It is a NEP-17 compatible
 contract, so it can be tracked and controlled by N3 compatible network

@@ -28,6 +28,7 @@ const (
 	ownerKeysPrefix      = 'o'
 )
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 

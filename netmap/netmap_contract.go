@@ -44,15 +44,18 @@ type Node struct {
 }
 
 // Temporary migration-related types.
+// nolint:deadcode,unused
 type oldNode struct {
 	BLOB []byte
 }
 
+// nolint:deadcode,unused
 type oldCandidate struct {
 	f1 oldNode
 	f2 NodeState
 }
 
+// nolint:deadcode,unused
 type kv struct {
 	k []byte
 	v []byte
@@ -83,6 +86,7 @@ var (
 )
 
 // _deploy function sets up initial list of inner ring public keys.
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 

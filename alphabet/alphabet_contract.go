@@ -32,6 +32,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
