@@ -36,3 +36,21 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go_versions: [ '1.17', '1.18', '1.19' ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '${{ matrix.go_versions }}'
+
+      - name: Compile contracts
+        run: make build
