@@ -77,3 +77,17 @@ when NeoFS contract has transferred GAS assets back to the user.
 	    type: Integer
 */
 package balance
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - 'MainnetGAS' -> int
+   total amount of Mainchain GAS deployed in the NeoFS network in Fixed12
+ - interop.Hash160 -> std.Serialize(Account)
+   balance sheet of all NeoFS users (here Account is a structure defined in current package)
+
+# Accounting
+Contract stores information about all NeoFS accounts.
+*/

@@ -21,3 +21,15 @@ execution.
 Processing contract does not produce notifications to process.
 */
 package processing
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - 'neofsScriptHash' -> interop.Hash160
+   NeoFS contract reference
+
+# Setting
+To handle some events, the contract refers to other contracts.
+*/
