@@ -42,6 +42,7 @@ const (
 	notaryDisabledKey = "notary"
 )
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {

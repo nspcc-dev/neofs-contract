@@ -45,6 +45,7 @@ var (
 )
 
 // _deploy sets up initial alphabet node keys.
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
@@ -235,7 +236,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 // break JSON limits for integers when precision is converted.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	rcv := data.(interop.Hash160)
-	if common.BytesEqual(rcv, []byte(ignoreDepositNotification)) {
+	if rcv.Equals(ignoreDepositNotification) {
 		return
 	}
 
@@ -246,12 +247,12 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	}
 
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, interop.Hash160(gas.Hash)) {
+	if !caller.Equals(gas.Hash) {
 		common.AbortWithMessage("only GAS can be accepted for deposit")
 	}
 
 	switch len(rcv) {
-	case 20:
+	case interop.Hash160Len:
 	case 0:
 		rcv = from
 	default:
@@ -461,7 +462,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 }
 
 // Config returns configuration value of NeoFS configuration. If the key does
-// not exists, returns nil.
+// not exist, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)

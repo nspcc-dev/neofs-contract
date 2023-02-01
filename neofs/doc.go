@@ -1,5 +1,5 @@
 /*
-NeoFS contract is a contract deployed in NeoFS mainchain.
+Package neofs contains implementation of NeoFS contract deployed in NeoFS mainchain.
 
 NeoFS contract is an entry point to NeoFS users. This contract stores all NeoFS
 related GAS, registers new Inner Ring candidates and produces notifications

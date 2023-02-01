@@ -1,5 +1,6 @@
 /*
-Processing contract is a contract deployed in NeoFS mainchain.
+Package processing contains implementation of Processing contract deployed in
+NeoFS mainchain.
 
 Processing contract pays for all multisignature transaction executions when notary
 service is enabled in the mainchain. Notary service prepares multisigned transactions,

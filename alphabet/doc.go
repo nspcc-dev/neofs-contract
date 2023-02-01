@@ -1,5 +1,6 @@
 /*
-Alphabet contract is a contract deployed in NeoFS sidechain.
+Package alphabet contains implementation of Alphabet contract deployed in NeoFS
+sidechain.
 
 Alphabet contract is designed to support GAS production and vote for new
 validators in the sidechain. NEO token is required to produce GAS and vote for

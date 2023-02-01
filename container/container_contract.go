@@ -58,7 +58,7 @@ const (
 	AliasFeeKey = "ContainerAliasFee"
 
 	// V2 format
-	containerIDSize = 32 // SHA256 size
+	containerIDSize = interop.Hash256Len // SHA256 size
 
 	singleEstimatePrefix = "est"
 	estimateKeyPrefix    = "cnr"
@@ -80,6 +80,13 @@ const (
 	defaultRetry   = 600                  // 10 min
 	defaultExpire  = 3600 * 24 * 365 * 10 // 10 years
 	defaultTTL     = 3600                 // 1 hour
+
+	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
+	// marking the start of the node's public key.
+	nodeKeyOffset = 2
+	// nodeKeyEndOffset is an offset in a serialized node info representation (V2 format)
+	// marking the end of the node's public key.
+	nodeKeyEndOffset = nodeKeyOffset + interop.PublicKeyCompressedLen
 )
 
 var (
@@ -90,6 +97,7 @@ var (
 func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
@@ -152,6 +160,7 @@ func _deploy(data interface{}, isUpdate bool) {
 	runtime.Log("container contract initialized")
 }
 
+// nolint:deadcode,unused
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
 		"container").(bool)
@@ -469,7 +478,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	// get container ID
 	offset := int(eACL[1])
 	offset = 2 + offset + 4
-	containerID := eACL[offset : offset+32]
+	containerID := eACL[offset : offset+containerIDSize]
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if ownerID == nil {
@@ -829,7 +838,7 @@ func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	for i := range snapshot {
 		// V2 format
 		nodeInfo := snapshot[i].info
-		nodeKey := nodeInfo[2:35] // offset:2, len:33
+		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 		if common.BytesEqual(key, nodeKey) {
 			return true

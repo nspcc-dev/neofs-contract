@@ -145,5 +145,5 @@ func InvokeID(args []interface{}, prefix []byte) []byte {
 
 func FromKnownContract(ctx storage.Context, caller interop.Hash160, key string) bool {
 	addr := storage.Get(ctx, key).(interop.Hash160)
-	return BytesEqual(caller, addr)
+	return caller.Equals(addr)
 }

@@ -27,11 +27,12 @@ const (
 // contracts.
 func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 	caller := runtime.GetCallingScriptHash()
-	if !common.BytesEqual(caller, []byte(gas.Hash)) && !common.BytesEqual(caller, []byte(neo.Hash)) {
+	if !caller.Equals(gas.Hash) && !caller.Equals(neo.Hash) {
 		common.AbortWithMessage("alphabet contract accepts GAS and NEO only")
 	}
 }
 
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
@@ -81,12 +82,12 @@ func Update(script []byte, manifest []byte, data interface{}) {
 	runtime.Log("alphabet contract updated")
 }
 
-// GAS returns the amount of the sidechain GAS stored in the contract account.
+// Gas returns the amount of the sidechain GAS stored in the contract account.
 func Gas() int {
 	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-// NEO returns the amount of sidechain NEO stored in the contract account.
+// Neo returns the amount of sidechain NEO stored in the contract account.
 func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }

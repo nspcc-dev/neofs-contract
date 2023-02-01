@@ -44,15 +44,18 @@ type Node struct {
 }
 
 // Temporary migration-related types.
+// nolint:deadcode,unused
 type oldNode struct {
 	BLOB []byte
 }
 
+// nolint:deadcode,unused
 type oldCandidate struct {
 	f1 oldNode
 	f2 NodeState
 }
 
+// nolint:deadcode,unused
 type kv struct {
 	k []byte
 	v []byte
@@ -75,6 +78,13 @@ const (
 	balanceContractKey   = "balanceScriptHash"
 
 	cleanupEpochMethod = "newEpoch"
+
+	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
+	// marking the start of the node's public key.
+	nodeKeyOffset = 2
+	// nodeKeyEndOffset is an offset in a serialized node info representation (V2 format)
+	// marking the end of the node's public key.
+	nodeKeyEndOffset = nodeKeyOffset + interop.PublicKeyCompressedLen
 )
 
 var (
@@ -83,6 +93,7 @@ var (
 )
 
 // _deploy function sets up initial list of inner ring public keys.
+// nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 
@@ -259,7 +270,7 @@ func AddPeerIR(nodeInfo []byte) {
 
 	common.CheckAlphabetWitness(common.AlphabetAddress())
 
-	publicKey := nodeInfo[2:35] // V2 format: offset:2, len:33
+	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 	addToNetmap(ctx, publicKey, Node{
 		BLOB:  nodeInfo,
@@ -308,7 +319,7 @@ func AddPeer(nodeInfo []byte) {
 	}
 
 	// V2 format
-	publicKey := nodeInfo[2:35] // offset:2, len:33
+	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 	// If notary is enabled or caller is not an alphabet node,
 	// just emit the notification for alphabet.
@@ -675,7 +686,7 @@ func SnapshotByEpoch(epoch int) []Node {
 }
 
 // Config returns configuration value of NeoFS configuration. If key does
-// not exists, returns nil.
+// not exist, returns nil.
 func Config(key []byte) interface{} {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
