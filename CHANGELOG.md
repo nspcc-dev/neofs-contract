@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 - `cmd/dump` app that pulls state and data of contracts from remote networks (#324)
 - `tests/migration` framework for storage migration testing (#324)
+- Dumps of the NeoFS MainNet and TestNet contracts (#324)
 
 ### Changed
 ### Updated
