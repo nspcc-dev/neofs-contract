@@ -6,7 +6,9 @@ Changelog for NeoFS Contract
 ### Added
 ### Changed
 ### Updated
-- `neo-go` to `v0.99.4`
+- `neo-go` to `v0.101.0`
+- `neo-go/pkg/interop` to `v0.0.0-20230208100456-1d6e48ee78e5`
+- `stretchr/testify` to `v1.8.2`
 
 ### Fixed
 ### Updating from v0.16.0
