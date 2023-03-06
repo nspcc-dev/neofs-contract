@@ -10,8 +10,18 @@ Changelog for NeoFS Contract
 - `neo-go/pkg/interop` to `v0.0.0-20230208100456-1d6e48ee78e5`
 - `stretchr/testify` to `v1.8.2`
 
+### Removed
+- Support for non-notary settings (#303)
+- `updateInnerRing` of the Netmap contract (#303)
+
 ### Fixed
 ### Updating from v0.16.0
+When updating a non-notary installation:
+- read Inner Ring set using `innerRingList` method of the Netmap contract and
+  install it as NeoFSAlphabet role in RoleManagement one
+- if an update is aborted due to pending votes, try again later
+- replace calling of removed `updateInnerRing` and deprecated `innerRingList`
+  methods of the Netmap contract with RoleManagement contract API
 
 ## [0.16.0] - 2022-10-17 - Anmado (안마도, 鞍馬島)
 

@@ -36,39 +36,55 @@ func (a auditHeader) ID() []byte {
 	return append(buf.([]byte), append(a.cid, shortedKey...)...)
 }
 
-const (
-	netmapContractKey = "netmapScriptHash"
-
-	notaryDisabledKey = "notary"
-)
-
 // nolint:deadcode,unused
 func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(ctx)
+		}
+
 		return
 	}
 
-	args := data.(struct {
-		notaryDisabled bool
-		addrNetmap     interop.Hash160
-	})
-
-	if len(args.addrNetmap) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
-	}
-
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
-
-	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
-	if args.notaryDisabled {
-		runtime.Log("audit contract notary disabled")
-	}
-
 	runtime.Log("audit contract initialized")
+}
+
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// switchToNotary removes values stored by 'netmapScriptHash' and 'notary' keys.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
+
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	}
+
+	storage.Delete(ctx, notaryDisabledKey)
+	storage.Delete(ctx, "netmapScriptHash")
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
@@ -91,17 +107,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // in later epochs.
 func Put(rawAuditResult []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
-
-	var innerRing []interop.PublicKey
-
-	if notaryDisabled {
-		netmapContract := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-		innerRing = common.InnerRingNodesFromNetmap(netmapContract)
-	} else {
-		innerRing = common.InnerRingNodes()
-	}
-
+	innerRing := common.InnerRingNodes()
 	hdr := newAuditHeader(rawAuditResult)
 	presented := false
 
@@ -181,20 +187,8 @@ func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 func list(it iterator.Iterator) [][]byte {
 	var result [][]byte
 
-	ignore := [][]byte{
-		[]byte(netmapContractKey),
-		[]byte(notaryDisabledKey),
-	}
-
-loop:
 	for iterator.Next(it) {
 		key := iterator.Value(it).([]byte) // iterator MUST BE `storage.KeysOnly`
-		for _, ignoreKey := range ignore {
-			if common.BytesEqual(key, ignoreKey) {
-				continue loop
-			}
-		}
-
 		result = append(result, key)
 	}
 

@@ -50,7 +50,6 @@ const (
 	nnsContractKey     = "nnsScriptHash"
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
-	notaryDisabledKey  = "notary"
 
 	// RegistrationFeeKey is a key in netmap config which contains fee for container registration.
 	RegistrationFeeKey = "ContainerFee"
@@ -102,7 +101,12 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
 
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
@@ -123,6 +127,15 @@ func _deploy(data interface{}, isUpdate bool) {
 				storage.Put(ctx, append([]byte{ownerKeyPrefix}, item.key...), item.value)
 			}
 		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(ctx)
+		}
+
 		return
 	}
 
@@ -134,6 +147,10 @@ func _deploy(data interface{}, isUpdate bool) {
 		addrNNS        interop.Hash160
 		nnsRoot        string
 	})
+
+	if args.notaryDisabled {
+		panic("non-notary mode is not supported anymore")
+	}
 
 	if len(args.addrNetmap) != interop.Hash160Len ||
 		len(args.addrBalance) != interop.Hash160Len ||
@@ -147,17 +164,38 @@ func _deploy(data interface{}, isUpdate bool) {
 	storage.Put(ctx, nnsContractKey, args.addrNNS)
 	storage.Put(ctx, nnsRootKey, args.nnsRoot)
 
-	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
-	if args.notaryDisabled {
-		common.InitVote(ctx)
-		runtime.Log("container contract notary disabled")
-	}
-
 	// add NNS root for container alias domains
 	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 
 	runtime.Log("container contract initialized")
+}
+
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
+// Otherwise, existing value is removed.
+//
+// switchToNotary removes value stored by 'notary' key.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
+
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
+		panic("pending vote detected")
+	}
+
+	storage.Delete(ctx, notaryDisabledKey)
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // nolint:deadcode,unused
@@ -206,7 +244,6 @@ func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	ownerID := ownerFromBinaryContainer(container)
 	containerID := crypto.Sha256(container)
@@ -247,26 +284,9 @@ func PutNamed(container []byte, signature interop.Signature,
 		panic("insufficient balance to create container")
 	}
 
-	if notaryDisabled {
-		nodeKey := common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			runtime.Notify("containerPut", container, signature, publicKey, token)
-			return
-		}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{container, signature, publicKey}, []byte("put"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
 	// todo: check if new container with unique container id
 
 	details := common.ContainerFeeTransferDetails(containerID)
@@ -345,34 +365,14 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 // If the container doesn't exist, it panics with NotFoundError.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if ownerID == nil {
 		return
 	}
 
-	if notaryDisabled {
-		alphabet := common.AlphabetNodes()
-		nodeKey := common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			runtime.Notify("containerDelete", containerID, signature, token)
-			return
-		}
-
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{containerID, signature}, []byte("delete"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
 	domain := storage.Get(ctx, key).(string)
@@ -472,7 +472,6 @@ func List(owner []byte) [][]byte {
 // If the container doesn't exist, it panics with NotFoundError.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
 	// V2 format
 	// get container ID
@@ -485,27 +484,8 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 		panic(NotFoundError)
 	}
 
-	if notaryDisabled {
-		alphabet := common.AlphabetNodes()
-		nodeKey := common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			runtime.Notify("setEACL", eACL, signature, publicKey, token)
-			return
-		}
-
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{eACL}, []byte("setEACL"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	rule := ExtendedACL{
 		value: eACL,
@@ -637,21 +617,9 @@ func IterateContainerSizes(epoch int) iterator.Iterator {
 // epochNum + 3. It can be invoked only by NewEpoch method of the Netmap contract.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	if notaryDisabled {
-		indirectCall := common.FromKnownContract(
-			ctx,
-			runtime.GetCallingScriptHash(),
-			netmapContractKey,
-		)
-		if !indirectCall {
-			panic("method must be invoked by inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	cleanupContainers(ctx, epochNum)
 }
@@ -659,36 +627,8 @@ func NewEpoch(epochNum int) {
 // StartContainerEstimation method produces StartEstimation notification.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 func StartContainerEstimation(epoch int) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
-
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("method must be invoked by inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{epoch}, []byte("startEstimation"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	runtime.Notify("StartEstimation", epoch)
 	runtime.Log("notification has been produced")
@@ -697,36 +637,8 @@ func StartContainerEstimation(epoch int) {
 // StopContainerEstimation method produces StopEstimation notification.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 func StopContainerEstimation(epoch int) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
-
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("method must be invoked by inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{epoch}, []byte("stopEstimation"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	runtime.Notify("StopEstimation", epoch)
 	runtime.Log("notification has been produced")

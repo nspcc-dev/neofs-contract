@@ -46,7 +46,6 @@ const (
 	nodePrefix        = 'n'
 	ownerPrefix       = 'o'
 	userPrefix        = 'u'
-	notaryDisabledKey = 'z'
 )
 
 const (
@@ -60,16 +59,52 @@ const (
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(storage.GetContext())
+		}
+
 		return
 	}
+}
 
-	args := data.(struct {
-		notaryDisabled bool
-	})
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
+// Otherwise, existing value is removed.
+//
+// switchToNotary removes value stored by 'notary' key.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
 
-	ctx := storage.GetContext()
-	storage.Put(ctx, []byte{notaryDisabledKey}, args.notaryDisabled)
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
+		panic("pending vote detected")
+	}
+
+	storage.Delete(ctx, notaryDisabledKey)
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
@@ -100,30 +135,10 @@ func Put(id []byte, ownerKey interop.PublicKey, info []byte) {
 		panic(ErrAlreadyExists)
 	}
 
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
-	if notaryDisabled {
-		alphabet := common.AlphabetNodes()
-		nodeKey := common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			common.CheckWitness(ownerKey)
-			runtime.Notify("Put", id, ownerKey, info)
-			return
-		}
+	common.CheckOwnerWitness(ownerKey)
 
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{ownerKey, info}, []byte("put"))
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	} else {
-		common.CheckOwnerWitness(ownerKey)
-
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	storage.Put(ctx, stKey, ownerKey)
 	stKey[0] = infoPrefix

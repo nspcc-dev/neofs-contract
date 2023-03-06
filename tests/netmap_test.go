@@ -381,7 +381,6 @@ func TestUpdateState(t *testing.T) {
 	t.Run("missing witness", func(t *testing.T) {
 		cAcc := cNm.WithSigners(accs[0])
 		cNm.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[0])
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateState", int64(2), pubs[0])
 		cAcc.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[1])
 	})
 

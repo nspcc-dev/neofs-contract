@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	notaryDisabledKey     = "notary"
 	reputationValuePrefix = 'r'
 	reputationCountPrefix = 'c'
 )
@@ -23,22 +22,54 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(ctx)
+		}
+
 		return
 	}
 
-	args := data.(struct {
-		notaryDisabled bool
-	})
+	runtime.Log("reputation contract initialized")
+}
 
-	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
-	if args.notaryDisabled {
-		common.InitVote(ctx)
-		runtime.Log("reputation contract notary disabled")
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
+// Otherwise, existing value is removed.
+//
+// switchToNotary removes value stored by 'notary' key.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
+
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
+		panic("pending vote detected")
 	}
 
-	runtime.Log("reputation contract initialized")
+	storage.Delete(ctx, notaryDisabledKey)
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
@@ -61,22 +92,9 @@ func Update(script []byte, manifest []byte, data interface{}) {
 // Value contains a stable marshaled structure of DataAuditResult.
 func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet     []interop.PublicKey
-		nodeKey      []byte
-		alphabetCall bool
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		alphabetCall = len(nodeKey) != 0
-	} else {
-		multiaddr := common.AlphabetAddress()
-		alphabetCall = runtime.CheckWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	alphabetCall := runtime.CheckWitness(multiaddr)
 
 	if !alphabetCall {
 		runtime.Notify("reputationPut", epoch, peerID, value)
@@ -84,16 +102,6 @@ func Put(epoch int, peerID []byte, value []byte) {
 	}
 
 	id := storageID(epoch, peerID)
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
 
 	key := getReputationKey(reputationCountPrefix, id)
 	rawCnt := storage.Get(ctx, key)
