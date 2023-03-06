@@ -9,6 +9,8 @@ Changelog for NeoFS Contract
 - Dumps of the NeoFS MainNet and TestNet contracts (#324)
 
 ### Changed
+- Current `common.Version` to v0.17.0 (#324)
+
 ### Updated
 - `neo-go` to `v0.101.0`
 - `neo-go/pkg/interop` to `v0.0.0-20230208100456-1d6e48ee78e5`
