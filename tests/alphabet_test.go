@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
-	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -130,16 +129,6 @@ func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker) {
 
 	// transfer all NEO to alphabet contract
 	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Committee.ScriptHash(), invoker.Hash, res.Top().BigInt().Int64(), nil)
-}
-
-func setAlphabetRole(t *testing.T, e *neotest.Executor, new []byte) {
-	designSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Designation)
-	require.NoError(t, err)
-
-	designInvoker := e.CommitteeInvoker(designSH)
-
-	// set committee as NeoFSAlphabet
-	designInvoker.Invoke(t, stackitem.Null{}, "designateAsRole", int64(noderoles.NeoFSAlphabet), []interface{}{new})
 }
 
 func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {

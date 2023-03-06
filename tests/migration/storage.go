@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"crypto/elliptic"
 	"encoding/binary"
 	"encoding/json"
 	"math/rand"
@@ -13,8 +12,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core"
 	"github.com/nspcc-dev/neo-go/pkg/core/dao"
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
-	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
-	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -27,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
+	"github.com/nspcc-dev/neofs-contract/tests"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/stretchr/testify/require"
 )
@@ -281,43 +279,14 @@ func (x *Contract) RegisterContractInNNS(tb testing.TB, name string, addr util.U
 	)
 }
 
-func (x *Contract) roleManagementInvoker(tb testing.TB) *neotest.ContractInvoker {
-	roleMgmtContract, err := x.exec.Chain.GetNativeContractScriptHash(nativenames.Designation)
-	require.NoError(tb, err)
-	return x.exec.CommitteeInvoker(roleMgmtContract)
-}
-
 // SetInnerRing sets Inner Ring composition using RoleManagement contract. The
 // list can be read via InnerRing.
 func (x *Contract) SetInnerRing(tb testing.TB, _keys keys.PublicKeys) {
-	keysArg := make([]interface{}, len(_keys))
-	for i := range _keys {
-		keysArg[i] = _keys[i].Bytes()
-	}
-
-	var noResult stackitem.Null
-	x.roleManagementInvoker(tb).Invoke(tb, noResult, "designateAsRole",
-		int64(noderoles.NeoFSAlphabet), keysArg)
+	tests.SetInnerRing(tb, x.exec, _keys)
 }
 
 // InnerRing reads Inner Ring composition using RoleManagement contract. The
 // list can be set via SetInnerRing.
 func (x *Contract) InnerRing(tb testing.TB) keys.PublicKeys {
-	item := makeTestInvoke(tb, x.roleManagementInvoker(tb), "getDesignatedByRole",
-		int64(noderoles.NeoFSAlphabet), x.exec.TopBlock(tb).Index+1)
-
-	arr, ok := item.Value().([]stackitem.Item)
-	require.True(tb, ok)
-
-	res := make(keys.PublicKeys, len(arr))
-
-	for i := range arr {
-		b, err := arr[i].TryBytes()
-		require.NoError(tb, err)
-
-		res[i], err = keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		require.NoError(tb, err)
-	}
-
-	return res
+	return tests.InnerRing(tb, x.exec)
 }

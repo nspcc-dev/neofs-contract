@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -410,4 +411,21 @@ func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) [
 	require.True(t, ok)
 	require.Equal(t, size, len(arr))
 	return arr
+}
+
+func TestInnerRing(t *testing.T) {
+	e := newExecutor(t)
+
+	ir := make(keys.PublicKeys, 2)
+	for i := range ir {
+		k, err := keys.NewPrivateKey()
+		require.NoError(t, err)
+		ir[i] = k.PublicKey()
+	}
+
+	var containerContract, balanceContract util.Uint160
+	deployNetmapContract(t, e, balanceContract, containerContract)
+
+	SetInnerRing(t, e, ir)
+	require.ElementsMatch(t, ir, InnerRing(t, e))
 }
