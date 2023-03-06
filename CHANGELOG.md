@@ -4,6 +4,8 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- `cmd/dump` app that pulls state and data of contracts from remote networks (#324)
+
 ### Changed
 ### Updated
 - `neo-go` to `v0.101.0`
