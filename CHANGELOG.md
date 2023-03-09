@@ -17,6 +17,8 @@ Changelog for NeoFS Contract
 - `updateInnerRing` of the Netmap contract (#303)
 
 ### Fixed
+- Migration of contracts to previous versions (#324)
+
 ### Updating from v0.16.0
 When updating a non-notary installation:
 - read Inner Ring set using `innerRingList` method of the Netmap contract and
