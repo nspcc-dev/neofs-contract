@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -381,7 +382,6 @@ func TestUpdateState(t *testing.T) {
 	t.Run("missing witness", func(t *testing.T) {
 		cAcc := cNm.WithSigners(accs[0])
 		cNm.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[0])
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateState", int64(2), pubs[0])
 		cAcc.InvokeFail(t, common.ErrWitnessFailed, "updateState", int64(2), pubs[1])
 	})
 
@@ -411,4 +411,21 @@ func checkNetmapCandidates(t *testing.T, c *neotest.ContractInvoker, size int) [
 	require.True(t, ok)
 	require.Equal(t, size, len(arr))
 	return arr
+}
+
+func TestInnerRing(t *testing.T) {
+	e := newExecutor(t)
+
+	ir := make(keys.PublicKeys, 2)
+	for i := range ir {
+		k, err := keys.NewPrivateKey()
+		require.NoError(t, err)
+		ir[i] = k.PublicKey()
+	}
+
+	var containerContract, balanceContract util.Uint160
+	deployNetmapContract(t, e, balanceContract, containerContract)
+
+	SetInnerRing(t, e, ir)
+	require.ElementsMatch(t, ir, InnerRing(t, e))
 }

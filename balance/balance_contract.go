@@ -38,10 +38,6 @@ const (
 	symbol      = "NEOFS"
 	decimals    = 12
 	circulation = "MainnetGAS"
-
-	netmapContractKey    = "netmapScriptHash"
-	containerContractKey = "containerScriptHash"
-	notaryDisabledKey    = "notary"
 )
 
 var token Token
@@ -63,31 +59,57 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(ctx)
+		}
+
 		return
 	}
 
-	args := data.(struct {
-		notaryDisabled bool
-		addrNetmap     interop.Hash160
-		addrContainer  interop.Hash160
-	})
-
-	if len(args.addrNetmap) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
-	}
-
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
-	storage.Put(ctx, containerContractKey, args.addrContainer)
-
-	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
-	if args.notaryDisabled {
-		common.InitVote(ctx)
-		runtime.Log("balance contract notary disabled")
-	}
-
 	runtime.Log("balance contract initialized")
+}
+
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
+// Otherwise, existing value is removed.
+//
+// switchToNotary removes values stored by 'netmapScriptHash',
+// 'containerScriptHash' and 'notary' keys.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
+
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
+		panic("pending vote detected")
+	}
+
+	storage.Delete(ctx, notaryDisabledKey)
+	storage.Delete(ctx, "netmapScriptHash")
+	storage.Delete(ctx, "containerScriptHash")
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
@@ -147,42 +169,9 @@ func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
 // Inner Ring with multisignature.
 func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet     []interop.PublicKey
-		nodeKey      []byte
-		indirectCall bool
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("this method must be invoked from inner ring")
-		}
-
-		indirectCall = common.FromKnownContract(
-			ctx,
-			runtime.GetCallingScriptHash(),
-			containerContractKey,
-		)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
-
-	if notaryDisabled && !indirectCall {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{from, to, amount}, []byte("transfer"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
@@ -202,23 +191,9 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 // to a new lock account that won't be used for anything beside Unlock and Burn.
 func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("this method must be invoked from inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	details := common.LockTransferDetails(txDetails)
 
@@ -226,18 +201,6 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		Balance: 0,
 		Until:   until,
 		Parent:  from,
-	}
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{txDetails}, []byte("lock"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
 	}
 
 	common.SetSerialized(ctx, to, lockAccount)
@@ -259,21 +222,9 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 // It produces Transfer and TransferX notifications.
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	if notaryDisabled {
-		indirectCall := common.FromKnownContract(
-			ctx,
-			runtime.GetCallingScriptHash(),
-			netmapContractKey,
-		)
-		if !indirectCall {
-			panic("this method must be invoked from inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
 	for iterator.Next(it) {
@@ -306,37 +257,11 @@ func NewEpoch(epochNum int) {
 // Mint increases total supply of NEP-17 compatible NeoFS token.
 func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("this method must be invoked from inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	details := common.MintTransferDetails(txDetails)
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{txDetails}, []byte("mint"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
 
 	ok := token.transfer(ctx, nil, to, amount, true, details)
 	if !ok {
@@ -363,37 +288,11 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 // compatible NeoFS token.
 func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("this method must be invoked from inner ring")
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	details := common.BurnTransferDetails(txDetails)
-
-	if notaryDisabled {
-		threshold := len(alphabet)*2/3 + 1
-		id := common.InvokeID([]interface{}{txDetails}, []byte("burn"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	}
 
 	ok := token.transfer(ctx, from, nil, amount, true, details)
 	if !ok {

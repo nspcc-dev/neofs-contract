@@ -4,7 +4,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -22,10 +21,8 @@ const (
 )
 
 const (
-	netmapContractKey    = "netmapScriptHash"
-	containerContractKey = "containerScriptHash"
-	notaryDisabledKey    = "notary"
-	ownerKeysPrefix      = 'o'
+	netmapContractKey = "netmapScriptHash"
+	ownerKeysPrefix   = 'o'
 )
 
 // nolint:deadcode,unused
@@ -34,31 +31,72 @@ func _deploy(data interface{}, isUpdate bool) {
 
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+
+		common.CheckVersion(version)
+
+		if args[0].(bool) {
+			panic("update to non-notary mode is not supported anymore")
+		}
+
+		// switch to notary mode if version of the current contract deployment is
+		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
+		// use)
+		// TODO: avoid number magic, add function for version comparison to common package
+		if version < 17_000 {
+			switchToNotary(ctx)
+		}
+
 		return
 	}
 
 	args := data.(struct {
 		notaryDisabled bool
 		addrNetmap     interop.Hash160
-		addrContainer  interop.Hash160
+		_              interop.Hash160 // Container contract from non-notary legacy
 	})
 
-	if len(args.addrNetmap) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
+	if args.notaryDisabled {
+		panic("non-notary mode is not supported anymore")
+	}
+
+	if len(args.addrNetmap) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
 	storage.Put(ctx, netmapContractKey, args.addrNetmap)
-	storage.Put(ctx, containerContractKey, args.addrContainer)
-
-	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
-	if args.notaryDisabled {
-		common.InitVote(ctx)
-		runtime.Log("neofsid contract notary disabled")
-	}
 
 	runtime.Log("neofsid contract initialized")
+}
+
+// re-initializes contract from non-notary to notary mode. Does nothing if
+// action has already been done. The function is called on contract update with
+// storage.Context from _deploy.
+//
+// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
+// Otherwise, existing value is removed.
+//
+// switchToNotary removes values stored by 'containerScriptHash' and 'notary'
+// keys.
+//
+// nolint:unused
+func switchToNotary(ctx storage.Context) {
+	const notaryDisabledKey = "notary" // non-notary legacy
+
+	notaryVal := storage.Get(ctx, notaryDisabledKey)
+	if notaryVal == nil {
+		runtime.Log("contract is already notarized")
+		return
+	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
+		panic("pending vote detected")
+	}
+
+	storage.Delete(ctx, notaryDisabledKey)
+	storage.Delete(ctx, "containerScriptHash")
+
+	if notaryVal.(bool) {
+		runtime.Log("contract successfully notarized")
+	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
@@ -91,41 +129,9 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 	}
 
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet     []interop.PublicKey
-		nodeKey      []byte
-		indirectCall bool
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("invocation from non inner ring node")
-		}
-
-		indirectCall = common.FromKnownContract(
-			ctx,
-			runtime.GetCallingScriptHash(),
-			containerContractKey)
-
-		if indirectCall {
-			threshold := len(alphabet)*2/3 + 1
-			id := invokeIDKeys(owner, keys, []byte("add"))
-
-			n := common.Vote(ctx, id, nodeKey)
-			if n < threshold {
-				return
-			}
-
-			common.RemoveVotes(ctx, id)
-		}
-	} else {
-		multiaddr := common.AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
-	}
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
 	for i := range keys {
@@ -154,34 +160,10 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 	}
 
 	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
 
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	if notaryDisabled {
-		alphabet = common.AlphabetNodes()
-		nodeKey = common.InnerRingInvoker(alphabet)
-		if len(nodeKey) == 0 {
-			panic("invocation from non inner ring node")
-		}
-
-		threshold := len(alphabet)*2/3 + 1
-		id := invokeIDKeys(owner, keys, []byte("remove"))
-
-		n := common.Vote(ctx, id, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, id)
-	} else {
-		multiaddr := common.AlphabetAddress()
-		if !runtime.CheckWitness(multiaddr) {
-			panic("invocation from non inner ring node")
-		}
+	multiaddr := common.AlphabetAddress()
+	if !runtime.CheckWitness(multiaddr) {
+		panic("invocation from non inner ring node")
 	}
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
@@ -222,13 +204,4 @@ func getUserInfo(ctx storage.Context, key interface{}) UserInfo {
 	}
 
 	return UserInfo{Keys: pubs}
-}
-
-func invokeIDKeys(owner []byte, keys []interop.PublicKey, prefix []byte) []byte {
-	prefix = append(prefix, owner...)
-	for i := range keys {
-		prefix = append(prefix, keys[i]...)
-	}
-
-	return crypto.Sha256(prefix)
 }

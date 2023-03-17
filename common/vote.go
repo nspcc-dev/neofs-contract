@@ -96,6 +96,18 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 	SetSerialized(ctx, voteKey, candidates)
 }
 
+// TryPurgeVotes removes storage item by 'ballots' key if it doesn't contain any
+// in-progress vote. Otherwise, TryPurgeVotes returns false.
+func TryPurgeVotes(ctx storage.Context) bool {
+	if len(getBallots(ctx)) > 0 {
+		return false
+	}
+
+	storage.Delete(ctx, voteKey)
+
+	return true
+}
+
 // getBallots returns a deserialized slice of vote ballots.
 func getBallots(ctx storage.Context) []Ballot {
 	data := storage.Get(ctx, voteKey)

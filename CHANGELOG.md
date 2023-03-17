@@ -4,12 +4,32 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- `cmd/dump` app that pulls state and data of contracts from remote networks (#324)
+- `tests/migration` framework for storage migration testing (#324)
+- Dumps of the NeoFS MainNet and TestNet contracts (#324)
+
 ### Changed
+- Current `common.Version` to v0.17.0 (#324)
+
 ### Updated
-- `neo-go` to `v0.99.4`
+- `neo-go` to `v0.101.0`
+- `neo-go/pkg/interop` to `v0.0.0-20230208100456-1d6e48ee78e5`
+- `stretchr/testify` to `v1.8.2`
+
+### Removed
+- Support for non-notary settings (#303)
+- `updateInnerRing` of the Netmap contract (#303)
 
 ### Fixed
+- Migration of contracts to previous versions (#324)
+
 ### Updating from v0.16.0
+When updating a non-notary installation:
+- read Inner Ring set using `innerRingList` method of the Netmap contract and
+  install it as NeoFSAlphabet role in RoleManagement one
+- if an update is aborted due to pending votes, try again later
+- replace calling of removed `updateInnerRing` and deprecated `innerRingList`
+  methods of the Netmap contract with RoleManagement contract API
 
 ## [0.16.0] - 2022-10-17 - Anmado (안마도, 鞍馬島)
 

@@ -62,6 +62,7 @@ const (
 // Other constants.
 const (
 	// defaultRegisterPrice is the default price for new domain registration.
+	// nolint:unused
 	defaultRegisterPrice = 10_0000_0000
 	// millisecondsInYear is amount of milliseconds per year.
 	millisecondsInYear = int64(365 * 24 * 3600 * 1000)
