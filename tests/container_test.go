@@ -362,6 +362,10 @@ func TestContainerSizeEstimation(t *testing.T) {
 			int64(2), cnt.id[:], int64(123), nodes[0].pub)
 	})
 
+	t.Run("incorrect key must fail", func(t *testing.T) {
+		_, err := c.TestInvoke(t, "getContainerSize", cnt.id[:])
+		require.Error(t, err)
+	})
 	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
 		int64(2), cnt.id[:], int64(123), nodes[0].pub)
 	estimations := []estimation{{nodes[0].pub, 123}}

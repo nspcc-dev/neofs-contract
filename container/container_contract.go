@@ -559,6 +559,11 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 func GetContainerSize(id []byte) containerSizes {
 	ctx := storage.GetReadOnlyContext()
 
+	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
+		string(id[:len(estimateKeyPrefix)]) != estimateKeyPrefix {
+		panic("wrong estimation prefix")
+	}
+
 	// V2 format
 	// this `id` expected to be from `ListContainerSizes`
 	// therefore it is not contains postfix, we ignore it in the cut.
