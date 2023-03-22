@@ -605,9 +605,30 @@ func ListContainerSizes(epoch int) [][]byte {
 	return result
 }
 
-// IterateContainerSizes method returns iterator over container size estimations
-// that have been registered for the specified epoch.
-func IterateContainerSizes(epoch int) iterator.Iterator {
+// IterateContainerSizes method returns iterator over specific container size
+// estimations that have been registered for the specified epoch. The iterator items
+// are estimate structures with estimator public key and his estimation integer value.
+func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
+	if len(cid) != interop.Hash256Len {
+		panic("wrong container id")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+
+	var buf interface{} = epoch
+
+	key := []byte(estimateKeyPrefix)
+	key = append(key, buf.([]byte)...)
+	key = append(key, cid...)
+
+	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+}
+
+// IterateAllContainerSizes method returns iterator over all container size estimations
+// that have been registered for the specified epoch. Items returned from this iterator
+// are key-value pairs with keys having container ID as a prefix and values being estimate
+// structures with estimator public key and his estimation integer value.
+func IterateAllContainerSizes(epoch int) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 
 	var buf interface{} = epoch
@@ -615,7 +636,7 @@ func IterateContainerSizes(epoch int) iterator.Iterator {
 	key := []byte(estimateKeyPrefix)
 	key = append(key, buf.([]byte)...)
 
-	return storage.Find(ctx, key, storage.DeserializeValues)
+	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
 }
 
 // NewEpoch method removes all container size estimations from epoch older than
