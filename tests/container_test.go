@@ -362,8 +362,10 @@ func TestContainerSizeEstimation(t *testing.T) {
 			int64(2), cnt.id[:], int64(123), nodes[0].pub)
 	})
 
-	t.Run("incorrect key must fail", func(t *testing.T) {
-		_, err := c.TestInvoke(t, "getContainerSize", cnt.id[:])
+	t.Run("incorrect key fails", func(t *testing.T) {
+		_, err := c.TestInvoke(t, "getContainerSize", cnt.id[:]) // Incorrect length.
+		require.Error(t, err)
+		_, err = c.TestInvoke(t, "getContainerSize", append([]byte("0"), cnt.id[:]...)) // Incorrect prefix.
 		require.Error(t, err)
 	})
 	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
@@ -424,7 +426,7 @@ func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt
 	requireEstimationsMatch(t, estimations, listEstimations)
 
 	// Check that iterated estimations match expected
-	iterEstimations := getIterEstimations(t, c, epoch)
+	iterEstimations := getIterEstimations(t, c, epoch, cnt.id[:])
 	requireEstimationsMatch(t, estimations, iterEstimations)
 }
 
@@ -457,18 +459,30 @@ func getListEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, c
 	return convertStackToEstimations(sizes[1].Value().([]stackitem.Item))
 }
 
-func getIterEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64) []estimation {
-	iterStack, err := c.TestInvoke(t, "iterateContainerSizes", epoch)
+func getIterEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cid []byte) []estimation {
+	iterStack, err := c.TestInvoke(t, "iterateAllContainerSizes", epoch)
 	require.NoError(t, err)
 	iter := iterStack.Pop().Value().(*storage.Iterator)
 
-	// Iterator contains pairs: key + estimation (as stack item), we extract estimations only
+	// Iterator contains pairs: key + estimation (as stack item).
 	pairs := iteratorToArray(iter)
 	estimationItems := make([]stackitem.Item, len(pairs))
 	for i, pair := range pairs {
 		pairItems := pair.Value().([]stackitem.Item)
 		estimationItems[i] = pairItems[1]
+
+		// Assuming a single container.
+		cntId := pairItems[0].Value().([]byte)
+		require.Less(t, len(cid), len(cntId))
+		require.Equal(t, cid, cntId[:len(cid)])
 	}
+	cidSpecificIter, err := c.TestInvoke(t, "iterateContainerSizes", epoch, cid)
+	require.NoError(t, err)
+	iter = cidSpecificIter.Pop().Value().(*storage.Iterator)
+
+	// Iterator contains pairs: key + estimation (as stack item).
+	cidSpecificArray := iteratorToArray(iter)
+	require.Equal(t, estimationItems, cidSpecificArray)
 
 	return convertStackToEstimations(estimationItems)
 }
