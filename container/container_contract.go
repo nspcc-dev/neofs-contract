@@ -558,6 +558,10 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 // Use the ID obtained from ListContainerSizes method. Estimations are removed
 // from contract storage every epoch, see NewEpoch method; therefore, this method
 // can return different results during different epochs.
+//
+// Deprecated: please use IterateContainerSizes API, this one is not convenient
+// to use and limited in the number of items it can return. It will be removed in
+// future versions.
 func GetContainerSize(id []byte) containerSizes {
 	ctx := storage.GetReadOnlyContext()
 
@@ -577,6 +581,10 @@ func GetContainerSize(id []byte) containerSizes {
 
 // ListContainerSizes method returns the IDs of container size estimations
 // that have been registered for the specified epoch.
+//
+// Deprecated: please use IterateAllContainerSizes API, this one is not convenient
+// to use and limited in the number of items it can return. It will be removed in
+// future versions.
 func ListContainerSizes(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
