@@ -32,14 +32,16 @@ type (
 		token []byte
 	}
 
-	estimation struct {
-		from interop.PublicKey
-		size int
+	// Estimation contains the public key of the estimator (storage node) and
+	// the size this estimator has for the container.
+	Estimation struct {
+		From interop.PublicKey
+		Size int
 	}
 
 	containerSizes struct {
 		cid         []byte
-		estimations []estimation
+		estimations []Estimation
 	}
 )
 
@@ -538,9 +540,9 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 
 	key := estimationKey(epoch, cid, pubKey)
 
-	s := estimation{
-		from: pubKey,
-		size: usedSize,
+	s := Estimation{
+		From: pubKey,
+		Size: usedSize,
 	}
 
 	storage.Put(ctx, key, std.Serialize(s))
@@ -607,7 +609,7 @@ func ListContainerSizes(epoch int) [][]byte {
 
 // IterateContainerSizes method returns iterator over specific container size
 // estimations that have been registered for the specified epoch. The iterator items
-// are estimate structures with estimator public key and his estimation integer value.
+// are Estimation structures.
 func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("wrong container id")
@@ -626,8 +628,8 @@ func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 
 // IterateAllContainerSizes method returns iterator over all container size estimations
 // that have been registered for the specified epoch. Items returned from this iterator
-// are key-value pairs with keys having container ID as a prefix and values being estimate
-// structures with estimator public key and his estimation integer value.
+// are key-value pairs with keys having container ID as a prefix and values being Estimation
+// structures.
 func IterateAllContainerSizes(epoch int) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 
@@ -753,11 +755,11 @@ func estimationKey(epoch int, cid []byte, key interop.PublicKey) []byte {
 }
 
 func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerSizes {
-	var estimations []estimation
+	var estimations []Estimation
 
 	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(it) {
-		est := iterator.Value(it).(estimation)
+		est := iterator.Value(it).(Estimation)
 		estimations = append(estimations, est)
 	}
 
