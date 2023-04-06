@@ -1,20 +1,20 @@
 # Changelog
 Changelog for NeoFS Contract
 
-## [Unreleased]
+## [0.17.0] - 2023-04-06
 
 ### Added
+- methods to iterate over containers and their sizes (#293, #300, #326)
 - `cmd/dump` app that pulls state and data of contracts from remote networks (#324)
 - `tests/migration` framework for storage migration testing (#324)
 - Dumps of the NeoFS MainNet and TestNet contracts (#324)
-
-### Changed
-- Current `common.Version` to v0.17.0 (#324)
 
 ### Updated
 - `neo-go` to `v0.101.0`
 - `neo-go/pkg/interop` to `v0.0.0-20230208100456-1d6e48ee78e5`
 - `stretchr/testify` to `v1.8.2`
+- NNS contract now uses 10 years for the default domain expiration (#296)
+- contract documentation (#275, #317)
 
 ### Removed
 - Support for non-notary settings (#303)
@@ -22,6 +22,7 @@ Changelog for NeoFS Contract
 
 ### Fixed
 - Migration of contracts to previous versions (#324)
+- Potential panic in container contract's `getContainerSize` (#321)
 
 ### Updating from v0.16.0
 When updating a non-notary installation:
