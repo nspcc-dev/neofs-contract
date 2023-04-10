@@ -465,7 +465,9 @@ func List(owner []byte) [][]byte {
 // if it was invoked by Alphabet nodes of the Inner Ring. Otherwise, it produces
 // setEACL notification.
 //
-// EACL should be a stable marshaled EACLTable structure from API.
+// EACL should be a stable marshaled EACLTable structure from API. Protocol
+// version and container reference must be set in 'version' and 'container_id'
+// fields respectively.
 // Signature is a RFC6979 signature of the Container.
 // PublicKey contains the public key of the signer.
 // Token is optional and should be a stable marshaled SessionToken structure from
