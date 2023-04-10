@@ -336,6 +336,33 @@ func TestContainerSetEACL(t *testing.T) {
 		stackitem.NewByteArray(e.token),
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
+
+	replaceEACLArg := func(eACL []byte) []interface{} {
+		res := make([]interface{}, len(setArgs))
+		copy(res, setArgs)
+		res[0] = eACL
+		return res
+	}
+
+	checkInvalidEACL := func(eACL []byte, exception string) {
+		c.InvokeFail(t, exception, "setEACL", replaceEACLArg(eACL)...)
+	}
+
+	const missingVersionException = "missing version field in eACL BLOB"
+	const missingContainerException = "missing container ID field in eACL BLOB"
+
+	checkInvalidEACL([]byte{}, missingVersionException)
+	checkInvalidEACL([]byte{0}, missingVersionException)
+	checkInvalidEACL([]byte{0, 0, 0}, missingContainerException)
+
+	const offset = byte(20) // any
+
+	// first byte can be any since protobuf is not completely decoded
+	prefix := append([]byte{0, offset}, make([]byte, offset+4)...)
+
+	checkInvalidEACL(prefix, missingContainerException)
+	checkInvalidEACL(append(prefix, make([]byte, len(cnt.id)-1)...), missingContainerException)
+	c.Invoke(t, stackitem.Null{}, "setEACL", replaceEACLArg(append(prefix, cnt.id[:]...))...)
 }
 
 func TestContainerSizeEstimation(t *testing.T) {

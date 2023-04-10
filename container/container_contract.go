@@ -477,8 +477,15 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	// V2 format
 	// get container ID
+	lnEACL := len(eACL)
+	if lnEACL < 2 {
+		panic("missing version field in eACL BLOB")
+	}
 	offset := int(eACL[1])
 	offset = 2 + offset + 4
+	if lnEACL < offset+containerIDSize {
+		panic("missing container ID field in eACL BLOB")
+	}
 	containerID := eACL[offset : offset+containerIDSize]
 
 	ownerID := getOwnerByID(ctx, containerID)
