@@ -99,8 +99,16 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 // TryPurgeVotes removes storage item by 'ballots' key if it doesn't contain any
 // in-progress vote. Otherwise, TryPurgeVotes returns false.
 func TryPurgeVotes(ctx storage.Context) bool {
-	if len(getBallots(ctx)) > 0 {
-		return false
+	var (
+		candidates  = getBallots(ctx)
+		blockHeight = ledger.CurrentIndex()
+	)
+	for i := 0; i < len(candidates); i++ {
+		cnd := candidates[i]
+
+		if blockHeight-cnd.Height <= blockDiff {
+			return false
+		}
 	}
 
 	storage.Delete(ctx, voteKey)
