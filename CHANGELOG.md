@@ -1,6 +1,19 @@
 # Changelog
 Changelog for NeoFS Contract
 
+## [Unreleased]
+
+### Added
+
+### Updated
+
+### Removed
+
+### Fixed
+- migration of non-notary network to notarized one with stale votes
+
+### Updating from v0.17.0
+
 ## [0.17.0] - 2023-04-06
 
 ### Added
