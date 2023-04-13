@@ -439,7 +439,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...master
+[0.17.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.4...v0.15.5
 [0.15.4]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.3...v0.15.4
