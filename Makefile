@@ -4,9 +4,12 @@ SHELL=bash
 # GOBIN is used only to install neo-go and allows to override
 # the location of written binary.
 export GOBIN ?= $(shell pwd)/bin
+export CGO_ENABLED=0
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
-
+NEOGOORIGMOD = github.com/nspcc-dev/neo-go
+NEOGOMOD = $(shell go list -f '{{.Path}}' -m $(NEOGOORIGMOD))
+NEOGOVER = $(shell go list -f '{{.Version}}' -m $(NEOGOORIGMOD) | tr -d v)
 
 # .deb package versioning
 OS_RELEASE = $(shell lsb_release -cs)
@@ -46,11 +49,10 @@ mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
 nns: $(foreach sc,$(nns_sc),$(sc)/$(sc)_contract.nef)
 
 neo-go:
-	@go list -f '{{.Path}}/...@{{.Version}}' -m github.com/nspcc-dev/neo-go \
-		| xargs go install -v
+	@go install -trimpath -v -ldflags "-X '$(NEOGOMOD)/pkg/config.Version=$(NEOGOVER)'" $(NEOGOMOD)/cli@v$(NEOGOVER)
 
 test:
-	@go test ./tests/...
+	@go test ./...
 
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
