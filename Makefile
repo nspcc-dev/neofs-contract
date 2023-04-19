@@ -50,7 +50,7 @@ neo-go:
 		| xargs go install -v
 
 test:
-	@go test ./tests/...
+	@go test ./...
 
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
