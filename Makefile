@@ -4,6 +4,7 @@ SHELL=bash
 # GOBIN is used only to install neo-go and allows to override
 # the location of written binary.
 export GOBIN ?= $(shell pwd)/bin
+export CGO_ENABLED=0
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
 
