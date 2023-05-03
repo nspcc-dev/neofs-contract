@@ -3,11 +3,3 @@ safemethods: ["get", "getByID", "listByEpoch"]
 permissions:
   - methods: ["update"]
 events:
-  - name: reputationPut
-    parameters:
-      - name: epoch
-        type: Integer
-      - name: peerID
-        type: ByteArray
-      - name: value
-        type: ByteArray
