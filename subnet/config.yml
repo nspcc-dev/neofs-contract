@@ -3,14 +3,6 @@ safemethods: ["version"]
 permissions:
   - methods: ["update"]
 events:
-  - name: Put
-    parameters:
-      - name: id
-        type: ByteArray
-      - name: ownerKey
-        type: PublicKey
-      - name: info
-        type: ByteArray
   - name: Delete
     parameters:
         - name: id

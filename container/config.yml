@@ -4,43 +4,15 @@ permissions:
   - methods: ["update", "addKey", "transferX",
                "register", "addRecord", "deleteRecords"]
 events:
-  - name: containerPut
-    parameters:
-      - name: container
-        type: ByteArray
-      - name: signature
-        type: Signature
-      - name: publicKey
-        type: PublicKey
-      - name: token
-        type: ByteArray
   - name: PutSuccess
     parameters:
       - name: containerID
         type: Hash256
       - name: publicKey
         type: PublicKey
-  - name: containerDelete
-    parameters:
-      - name: containerID
-        type: ByteArray
-      - name: signature
-        type: Signature
-      - name: token
-        type: ByteArray
   - name: DeleteSuccess
     parameters:
       - name: containerID
-        type: ByteArray
-  - name: setEACL
-    parameters:
-      - name: eACL
-        type: ByteArray
-      - name: signature
-        type: Signature
-      - name: publicKey
-        type: PublicKey
-      - name: token
         type: ByteArray
   - name: SetEACLSuccess
     parameters:

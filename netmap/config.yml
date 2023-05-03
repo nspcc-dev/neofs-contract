@@ -3,18 +3,8 @@ safemethods: ["innerRingList", "epoch", "netmap", "netmapCandidates", "snapshot"
 permissions:
   - methods: ["update", "newEpoch"]
 events:
-  - name: AddPeer
-    parameters:
-      - name: nodeInfo
-        type: ByteArray
   - name: AddPeerSuccess
     parameters:
-      - name: publicKey
-        type: PublicKey
-  - name: UpdateState
-    parameters:
-      - name: state
-        type: Integer
       - name: publicKey
         type: PublicKey
   - name: UpdateStateSuccess
