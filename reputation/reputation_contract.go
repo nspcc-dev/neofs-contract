@@ -85,7 +85,7 @@ func Update(script []byte, manifest []byte, data interface{}) {
 }
 
 // Put method saves DataAuditResult in contract storage. It can be invoked only by
-// Inner Ring nodes. It does not require multisignature invocations.
+// storage nodes with Alphabet assistance (multisignature witness).
 //
 // Epoch is the epoch number when DataAuditResult structure was generated.
 // PeerID contains public keys of the Inner Ring node that has produced DataAuditResult.
@@ -94,12 +94,7 @@ func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
 
 	multiaddr := common.AlphabetAddress()
-	alphabetCall := runtime.CheckWitness(multiaddr)
-
-	if !alphabetCall {
-		runtime.Notify("reputationPut", epoch, peerID, value)
-		return
-	}
+	common.CheckAlphabetWitness(multiaddr)
 
 	id := storageID(epoch, peerID)
 

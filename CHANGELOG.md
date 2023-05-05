@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- old unused (notary-disabled) events
 
 ### Fixed
 - migration of non-notary network to notarized one with stale votes
