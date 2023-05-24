@@ -20,3 +20,26 @@ for each alphabet contract.
 Alphabet contract does not produce notifications to process.
 */
 package alphabet
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - 'netmapScriptHash' -> interop.Hash160
+   Netmap contract reference
+ - 'proxyScriptHash' -> interop.Hash160
+   Proxy contract reference
+ - 'name' -> string
+   name (Glagolitic letter) of the contract
+ - 'index' -> int
+   member index in the Alphabet list
+ - 'threshold' -> int
+   currently unused value
+
+# Setting
+To handle some events, the contract refers to other contracts.
+
+# Membership
+Contracts are named and positioned in the Alphabet list of the NeoFS Sidechain.
+*/

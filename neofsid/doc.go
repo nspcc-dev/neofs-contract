@@ -19,3 +19,18 @@ contract.
 NeoFSID contract does not produce notifications to process.
 */
 package neofsid
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - 'netmapScriptHash' -> interop.Hash160
+   Netmap contract reference (currently unused)
+ - 'o' + ID + interop.PublicKey -> 1
+   each key of the NeoFS user identified by 25-byte NEO3 account
+
+# Keychains
+Contract collects all keys of the NeoFS users except ones that may be directly
+resolved into user ID.
+*/

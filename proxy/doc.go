@@ -20,3 +20,9 @@ verified, Proxy contract pays for the execution.
 Proxy contract does not produce notifications to process.
 */
 package proxy
+
+/*
+Contract storage model.
+
+At the moment, no data is stored in the contract.
+*/

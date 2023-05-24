@@ -54,17 +54,10 @@ Key-value storage format:
    Container contract reference
  - 'balanceScriptHash' -> 20-byte script hash
    Balance contract reference
- - 'notary' -> bool
-   is notary mode disabled
- - 'innerring' -> []interop.PublicKey
-   public keys of the Inner Ring members
  - 'config<name>' -> []byte
    value of the particular NeoFS network parameter
 
 # Setting
-Contract can be deployed in notary and notary-disabled mode. In notary-disabled
-mode contract stores the Inner Ring members.
-
 To handle some events, the contract refers to other contracts.
 
 # Epoch

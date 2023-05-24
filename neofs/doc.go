@@ -92,3 +92,36 @@ NeoFS network configuration value.
 	    type: ByteArray
 */
 package neofs
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - 'notary' -> bool
+   is notary mode disabled
+ - 'ballots' -> std.Serialize([]Ballot)
+   collected ballots for pending voting if notary disabled (here Ballot is a
+   structure defined in common package)
+ - 'processingScriptHash' -> interop.Hash160
+   Processing contract reference
+ - 'candidates' + interop.PublicKey -> 1
+   each participant who is considered for entry into the Inner Ring
+ - 'alphabet' -> []interop.PublicKey
+   list of the NeoFS Alphabet members
+
+# Setting
+Contract can be deployed in notary and notary-disabled mode.
+
+To handle some events, the contract refers to other contracts.
+
+# Network configuration
+Contract storage configuration of the NeoFS network within which the contract is
+deployed.
+
+# Inner Ring Contract accumulates candidates for the Inner Ring. It also holds
+current NeoFS Alphabet.
+
+# Voting
+Contract collects voting data in notary-disabled installation.
+*/

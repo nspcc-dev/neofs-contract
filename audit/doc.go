@@ -21,3 +21,19 @@ they make a list and get these AuditResultStructures from the audit contract.
 Audit contract does not produce notifications to process.
 */
 package audit
+
+/*
+Contract storage model.
+
+# Summary
+Key-value storage format:
+ - <epoch><cid><key> -> []byte
+   Data audit results encoded into NeoFS API binary protocol format. Results are
+   identified by triplet concatenation:
+    1. little-endian unsigned integer NeoFS epoch when audit was performed
+    2. 32-byte identifier of the NeoFS container under audit
+    3. 24-byte prefix of SHA-256 hash of the auditor's (Inner Ring) public key
+
+# Audit history
+Contracts stores results of the NeoFS data audits performed by the Inner Ring.
+*/
