@@ -1,6 +1,7 @@
 *.avm
 *.nef
 *.manifest.json
+bindings_config.yml
 config.json
 /vendor/
 .idea

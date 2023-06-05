@@ -5,6 +5,7 @@ Changelog for NeoFS Contract
 
 ### Added
 - bump minimum required go version up to 1.18
+- RPC bindings generation (#345)
 
 ### Updated
 

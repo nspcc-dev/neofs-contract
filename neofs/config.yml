@@ -37,18 +37,30 @@ events:
         type: ByteArray
       - name: keys
         type: Array
+        extendedtype:
+          base: Array
+          value:
+            base: PublicKey
   - name: Unbind
     parameters:
       - name: user
         type: ByteArray
       - name: keys
         type: Array
+        extendedtype:
+          base: Array
+          value:
+            base: PublicKey
   - name: AlphabetUpdate
     parameters:
       - name: id
         type: ByteArray
       - name: alphabet
         type: Array
+        extendedtype:
+          base: Array
+          value:
+            base: PublicKey
   - name: SetConfig
     parameters:
       - name: id
