@@ -4,6 +4,7 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- bump minimum required go version up to 1.18
 
 ### Updated
 
