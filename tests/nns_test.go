@@ -10,6 +10,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/nns"
@@ -20,10 +21,18 @@ const nnsPath = "../nns"
 
 const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 
-func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
+func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
 	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
-	e.DeployContract(t, ctr, nil)
+	if len(tldSet) > 0 {
+		_tldSet := make([]interface{}, len(tldSet))
+		for i := range tldSet {
+			_tldSet[i] = []interface{}{tldSet[i], "user@domain.org"}
+		}
+		e.DeployContract(t, ctr, []interface{}{_tldSet})
+	} else {
+		e.DeployContract(t, ctr, nil)
+	}
 
 	c := e.CommitteeInvoker(ctr.Hash)
 	if addRoot {
@@ -419,4 +428,36 @@ func TestNNSRegisterAccess(t *testing.T) {
 		l3ByL2Admin, anonymousAcc.ScriptHash(), email, refresh, retry, expire, ttl)
 	l2AdminInv.Invoke(t, true, "register",
 		l3ByL2Admin, l2AdminAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+}
+
+func TestPredefinedTLD(t *testing.T) {
+	const anyTLD1 = "hello"
+	const anyTLD2 = "world"
+
+	inv := newNNSInvoker(t, false, anyTLD1, anyTLD2)
+
+	require.Nil(t, getDomainOwner(t, inv, anyTLD1))
+	require.Nil(t, getDomainOwner(t, inv, anyTLD2))
+}
+
+// getDomainOwner reads owner of the domain. Returns nil if domain is owned by the committee.
+func getDomainOwner(tb testing.TB, inv *neotest.ContractInvoker, domain string) *util.Uint160 {
+	stack, err := inv.TestInvoke(tb, "ownerOf", domain)
+	require.NoError(tb, err)
+
+	arr := stack.ToArray()
+	require.Len(tb, arr, 1)
+
+	item := arr[0]
+	if _, ok := item.(stackitem.Null); ok {
+		return nil
+	}
+
+	b, err := item.TryBytes()
+	require.NoError(tb, err)
+
+	res, err := util.Uint160DecodeBytesBE(b)
+	require.NoError(tb, err)
+
+	return &res
 }

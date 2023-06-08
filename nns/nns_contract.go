@@ -100,6 +100,20 @@ func _deploy(data interface{}, isUpdate bool) {
 	ctx := storage.GetContext()
 	storage.Put(ctx, []byte{prefixTotalSupply}, 0)
 	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
+
+	if data != nil { // for backward compatibility
+		args := data.(struct {
+			tldSet []struct {
+				name  string
+				email string
+			}
+		})
+
+		for i := range args.tldSet {
+			saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email)
+			runtime.Log("registered committee domain " + args.tldSet[i].name)
+		}
+	}
 }
 
 // Symbol returns NeoNameService symbol.
@@ -273,7 +287,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	}
 
 	l := len(fragments)
-	tldKey := append([]byte{prefixRoot}, []byte(fragments[l-1])...)
+	tldKey := makeTLDKey(fragments[l-1])
 	ctx := storage.GetContext()
 	tldBytes := storage.Get(ctx, tldKey)
 	if l == 1 {
@@ -281,13 +295,8 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		if tldBytes != nil {
 			panic("TLD already exists")
 		}
-		storage.Put(ctx, tldKey, 0)
-		putNameStateWithKey(ctx, getTokenKey([]byte(name)), NameState{
-			Name: name,
-			// NNS expiration is in milliseconds
-			Expiration: int64(runtime.GetTime() + expire*1000),
-		})
-		putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
+		putTLD(ctx, tldKey)
+		saveDomain(ctx, name, email, refresh, retry, expire, ttl, nil)
 		return true
 	}
 
@@ -336,17 +345,39 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	} else {
 		updateTotalSupply(ctx, +1)
 	}
-	ns := NameState{
+	saveDomain(ctx, name, email, refresh, retry, expire, ttl, owner)
+	updateBalance(ctx, []byte(name), owner, +1)
+	postTransfer(oldOwner, owner, []byte(name), nil)
+	return true
+}
+
+func saveCommitteeDomain(ctx storage.Context, name, email string) {
+	putTLD(ctx, makeTLDKey(name))
+
+	// TODO: values from NeoFS ADM, check
+	const (
+		refresh = 3600
+		retry   = 600
+		expire  = 10 * 365 * 24 * 60 * 60 // 10 years
+		ttl     = 3600
+	)
+	var committeeOwner interop.Hash160
+	saveDomain(ctx, name, email, refresh, retry, expire, ttl, committeeOwner)
+}
+
+// saveDomain constructs NameState and RecordState of SOA type for the domain
+// based on parameters and saves these descriptors in the contract storage.
+// Empty owner parameter corresponds to owner-by-committee domains.
+//
+// Provided storage.Context MUST be read-write.
+func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int, owner interop.Hash160) {
+	putNameStateWithKey(ctx, getTokenKey([]byte(name)), NameState{
 		Owner: owner,
 		Name:  name,
 		// NNS expiration is in milliseconds
 		Expiration: int64(runtime.GetTime() + expire*1000),
-	}
-	putNameStateWithKey(ctx, tokenKey, ns)
+	})
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
-	updateBalance(ctx, []byte(name), owner, +1)
-	postTransfer(oldOwner, owner, []byte(name), nil)
-	return true
 }
 
 // Renew increases domain expiration date.
@@ -926,4 +957,12 @@ func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
 	_ = getNameState(ctx, tokenID)
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+}
+
+func putTLD(ctx storage.Context, key []byte) {
+	storage.Put(ctx, key, 0)
+}
+
+func makeTLDKey(name string) []byte {
+	return append([]byte{prefixRoot}, name...)
 }
