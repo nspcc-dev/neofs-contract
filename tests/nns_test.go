@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/nns"
 	"github.com/stretchr/testify/require"
 )
@@ -78,10 +79,6 @@ func TestNNSRegister(t *testing.T) {
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
-	c2 := c.WithSigners(c.Committee, acc)
-	c2.InvokeFail(t, "not witnessed by admin", "register",
-		"testdomain.com", acc.ScriptHash(),
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c3 := c.WithSigners(accTop, acc)
 	t.Run("domain names with hyphen", func(t *testing.T) {
@@ -370,4 +367,56 @@ func TestNNSResolve(t *testing.T) {
 	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+}
+
+func TestNNSRegisterAccess(t *testing.T) {
+	inv := newNNSInvoker(t, false)
+	const email, refresh, retry, expire, ttl = "user@domain.org", 0, 1, 2, 3
+	const tld = "com"
+	const registerMethod = "register"
+	const ownerWitnessFailMsg = "not witnessed by committee"
+
+	// TLD
+	l2OwnerAcc := inv.NewAccount(t)
+	l2OwnerInv := inv.WithSigners(l2OwnerAcc)
+
+	l2OwnerInv.InvokeFail(t, ownerWitnessFailMsg, registerMethod,
+		tld, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2OwnerInv.InvokeFail(t, ownerWitnessFailMsg, registerMethod,
+		tld, nil, email, refresh, retry, expire, ttl)
+
+	inv.WithSigners(inv.Committee).Invoke(t, true, registerMethod,
+		tld, nil, email, refresh, retry, expire, ttl)
+
+	// L2
+	const l2 = "l2." + tld
+
+	anonymousAcc := inv.NewAccount(t)
+	anonymousInv := inv.WithSigners(anonymousAcc)
+
+	l2OwnerInv.InvokeFail(t, "invalid owner", registerMethod,
+		l2, nil, email, refresh, retry, expire, ttl)
+	l2OwnerInv.InvokeFail(t, common.ErrOwnerWitnessFailed, registerMethod,
+		l2, anonymousAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2OwnerInv.Invoke(t, true, registerMethod,
+		l2, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+
+	// L3 (by L2 owner)
+	const l3ByL2Owner = "l3-owner." + l2
+
+	l2OwnerInv.Invoke(t, true, registerMethod,
+		l3ByL2Owner, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+
+	// L3 (by L2 admin)
+	const l3ByL2Admin = "l3-admin." + l2
+
+	l2AdminAcc := inv.NewAccount(t)
+	l2AdminInv := inv.WithSigners(l2AdminAcc)
+
+	inv.WithSigners(l2OwnerAcc, l2AdminAcc).Invoke(t, stackitem.Null{}, "setAdmin", l2, l2AdminAcc.ScriptHash())
+
+	anonymousInv.InvokeFail(t, "not witnessed by admin", registerMethod,
+		l3ByL2Admin, anonymousAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2AdminInv.Invoke(t, true, "register",
+		l3ByL2Admin, l2AdminAcc.ScriptHash(), email, refresh, retry, expire, ttl)
 }

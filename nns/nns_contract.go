@@ -260,6 +260,12 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 }
 
 // Register registers a new domain with the specified owner and name if it's available.
+//
+// Access rules::
+//   - TLD can be registered only by the committee
+//   - 2nd-level domain can be registered by anyone
+//   - starting from the 3rd level, the domain can only be registered by the
+//     owner or administrator (if any) of the previous level domain
 func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
 	fragments := splitAndCheck(name, true)
 	if fragments == nil {
@@ -276,27 +282,37 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 			panic("TLD already exists")
 		}
 		storage.Put(ctx, tldKey, 0)
-	} else {
-		if tldBytes == nil {
-			panic("TLD not found")
-		}
-		if parentExpired(ctx, 1, fragments) {
-			panic("one of the parent domains is not registered")
-		}
-		parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
+		putNameStateWithKey(ctx, getTokenKey([]byte(name)), NameState{
+			Name: name,
+			// NNS expiration is in milliseconds
+			Expiration: int64(runtime.GetTime() + expire*1000),
+		})
+		putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
+		return true
+	}
+
+	if tldBytes == nil {
+		panic("TLD not found")
+	}
+	if parentExpired(ctx, 1, fragments) {
+		panic("one of the parent domains is not registered")
+	}
+	parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
+
+	if l > 2 {
 		nsBytes := storage.Get(ctx, append([]byte{prefixName}, parentKey...))
 		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 		ns.checkAdmin()
+	}
 
-		parentRecKey := append([]byte{prefixRecord}, parentKey...)
-		it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
-		suffix := []byte(name)
-		for iterator.Next(it) {
-			r := iterator.Value(it).(RecordState)
-			ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
-			if ind > 0 && ind+len(suffix) == len(r.Name) {
-				panic("parent domain has conflicting records: " + r.Name)
-			}
+	parentRecKey := append([]byte{prefixRecord}, parentKey...)
+	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
+	suffix := []byte(name)
+	for iterator.Next(it) {
+		r := iterator.Value(it).(RecordState)
+		ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
+		if ind > 0 && ind+len(suffix) == len(r.Name) {
+			panic("parent domain has conflicting records: " + r.Name)
 		}
 	}
 
