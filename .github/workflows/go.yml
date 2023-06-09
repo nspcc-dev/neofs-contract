@@ -18,6 +18,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+          args: --config=.github/workflows/config/.golangci.yml
 
   tests:
     name: Tests
@@ -38,7 +39,7 @@ jobs:
       run: go test -v ./...
 
   build:
-    name: Build
+    name: Build contracts and RPC bindings
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -52,5 +53,17 @@ jobs:
         with:
           go-version: '${{ matrix.go_versions }}'
 
-      - name: Compile contracts
+      - name: Clear built RPC bindings
+        run: make mr_proper
+
+      - name: Compile contracts and build RPC bindings
         run: make build
+
+      - name: Check that fresh version of RPC bindings is committed (for minimum supported Go version only)
+        if: ${{ matrix.go_versions == '1.18' }}
+        run: |
+          if [[ $(git diff --name-only | grep '^rpc/*' -c) != 0 ]]; then
+          echo "Fresh version of RPC bindings should be committed for the following contracts:";
+          git diff --name-only;
+          exit 1;
+          fi
