@@ -4,16 +4,16 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
-- bump minimum required go version up to 1.18
+- bump minimum required go version up to 1.18 (#346)
 - RPC bindings generation (#345)
 
 ### Updated
 
 ### Removed
-- old unused (notary-disabled) events
+- old unused (notary-disabled) events (#341)
 
 ### Fixed
-- migration of non-notary network to notarized one with stale votes
+- migration of non-notary network to notarized one with stale votes (#333)
 
 ### Updating from v0.17.0
 
