@@ -133,15 +133,6 @@ func TestNNSRegister(t *testing.T) {
 	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.TXT))
 }
 
-func TestTLDRecord(t *testing.T) {
-	c := newNNSInvoker(t, true)
-	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"com", int64(nns.A), "1.2.3.4")
-
-	result := []stackitem.Item{stackitem.NewByteArray([]byte("1.2.3.4"))}
-	c.Invoke(t, result, "resolve", "com", int64(nns.A))
-}
-
 func TestNNSRegisterMulti(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
@@ -431,33 +422,36 @@ func TestNNSRegisterAccess(t *testing.T) {
 }
 
 func TestPredefinedTLD(t *testing.T) {
-	const anyTLD1 = "hello"
-	const anyTLD2 = "world"
+	predefined := []string{"hello", "world"}
+	const otherTLD = "goodbye"
 
-	inv := newNNSInvoker(t, false, anyTLD1, anyTLD2)
+	inv := newNNSInvoker(t, false, predefined...)
 
-	require.Nil(t, getDomainOwner(t, inv, anyTLD1))
-	require.Nil(t, getDomainOwner(t, inv, anyTLD2))
+	inv.Invoke(t, true, "isAvailable", otherTLD)
+
+	for i := range predefined {
+		inv.Invoke(t, false, "isAvailable", predefined[i])
+	}
 }
 
-// getDomainOwner reads owner of the domain. Returns nil if domain is owned by the committee.
-func getDomainOwner(tb testing.TB, inv *neotest.ContractInvoker, domain string) *util.Uint160 {
-	stack, err := inv.TestInvoke(tb, "ownerOf", domain)
-	require.NoError(tb, err)
+func TestNNSTLD(t *testing.T) {
+	const tld = "any-tld"
+	const tldFailMsg = "token not found"
+	const recTyp = int64(nns.TXT) // InvokeFail doesn't support nns.RecordType
 
-	arr := stack.ToArray()
-	require.Len(tb, arr, 1)
+	inv := newNNSInvoker(t, false, tld)
 
-	item := arr[0]
-	if _, ok := item.(stackitem.Null); ok {
-		return nil
-	}
-
-	b, err := item.TryBytes()
-	require.NoError(tb, err)
-
-	res, err := util.Uint160DecodeBytesBE(b)
-	require.NoError(tb, err)
-
-	return &res
+	inv.InvokeFail(t, tldFailMsg, "addRecord", tld, recTyp, "any data")
+	inv.InvokeFail(t, tldFailMsg, "deleteRecords", tld, recTyp)
+	inv.InvokeFail(t, tldFailMsg, "getAllRecords", tld)
+	inv.InvokeFail(t, tldFailMsg, "getRecords", tld, recTyp)
+	inv.Invoke(t, false, "isAvailable", tld)
+	inv.InvokeFail(t, tldFailMsg, "ownerOf", tld)
+	inv.InvokeFail(t, tldFailMsg, "properties", tld)
+	inv.InvokeAndCheck(t, func(t testing.TB, stack []stackitem.Item) {}, "renew", tld)
+	inv.InvokeFail(t, tldFailMsg, "resolve", tld, recTyp)
+	inv.InvokeFail(t, tldFailMsg, "setAdmin", tld, util.Uint160{})
+	inv.InvokeFail(t, tldFailMsg, "setRecord", tld, recTyp, 1, "any data")
+	inv.InvokeFail(t, tldFailMsg, "transfer", util.Uint160{}, tld, nil)
+	inv.Invoke(t, stackitem.Null{}, "updateSOA", tld, "user@domain.org", 0, 1, 2, 3)
 }
