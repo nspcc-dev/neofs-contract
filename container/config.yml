@@ -2,7 +2,7 @@ name: "NeoFS Container"
 safemethods: ["count", "containersOf", "get", "owner", "list", "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes", "version"]
 permissions:
   - methods: ["update", "addKey", "transferX",
-               "register", "addRecord", "deleteRecords"]
+              "register", "registerTLD", "addRecord", "deleteRecords"]
 events:
   - name: PutSuccess
     parameters:

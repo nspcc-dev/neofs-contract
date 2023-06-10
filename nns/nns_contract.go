@@ -110,7 +110,13 @@ func _deploy(data interface{}, isUpdate bool) {
 		})
 
 		for i := range args.tldSet {
-			saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email)
+			const (
+				refresh = 3600
+				retry   = 600
+				expire  = 10 * 365 * 24 * 60 * 60 // 10 years
+				ttl     = 3600
+			)
+			saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email, refresh, retry, expire, ttl)
 			runtime.Log("registered committee domain " + args.tldSet[i].name)
 		}
 	}
@@ -296,10 +302,11 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 	return false
 }
 
-// Register registers a new domain with the specified owner and name if it's available.
+// Register registers a new domain with the specified owner and name if it's
+// available. Top-level domains MUST NOT be registered via Register, use
+// RegisterTLD for this.
 //
 // Access rules::
-//   - TLD can be registered only by the committee
 //   - 2nd-level domain can be registered by anyone
 //   - starting from the 3rd level, the domain can only be registered by the
 //     owner or administrator (if any) of the previous level domain
@@ -310,20 +317,13 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	}
 
 	l := len(fragments)
-	tldKey := makeTLDKey(fragments[l-1])
-	ctx := storage.GetContext()
-	tldBytes := storage.Get(ctx, tldKey)
 	if l == 1 {
-		checkCommittee()
-		if tldBytes != nil {
-			panic("TLD already exists")
-		}
-		putTLD(ctx, tldKey)
-		saveDomain(ctx, name, email, refresh, retry, expire, ttl, nil)
-		return true
+		panic("TLD denied")
 	}
 
-	if tldBytes == nil {
+	ctx := storage.GetContext()
+
+	if storage.Get(ctx, makeTLDKey(fragments[l-1])) == nil {
 		panic("TLD not found")
 	}
 	if parentExpired(ctx, 1, fragments) {
@@ -374,16 +374,31 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	return true
 }
 
-func saveCommitteeDomain(ctx storage.Context, name, email string) {
-	putTLD(ctx, makeTLDKey(name))
+// RegisterTLD registers new top-level domain. RegisterTLD MUST be called by the
+// committee only. Name MUST be a valid TLD.
+//
+// RegisterTLD panics with 'TLD already exists' if domain already exists.
+func RegisterTLD(name, email string, refresh, retry, expire, ttl int) {
+	checkCommittee()
+	saveCommitteeDomain(storage.GetContext(), name, email, refresh, retry, expire, ttl)
+}
 
-	// TODO: values from NeoFS ADM, check
-	const (
-		refresh = 3600
-		retry   = 600
-		expire  = 10 * 365 * 24 * 60 * 60 // 10 years
-		ttl     = 3600
-	)
+// saveCommitteeDomain marks TLD as registered via prefixRoot<name> storage
+// record and saves domain state calling saveDomain with given parameters and
+// empty owner. The name MUST be a valid TLD name.
+func saveCommitteeDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
+	fragments := splitAndCheck(name, false)
+	if len(fragments) != 1 {
+		panic("invalid domain name format")
+	}
+
+	tldKey := makeTLDKey(name)
+	if storage.Get(ctx, tldKey) != nil {
+		panic("TLD already exists")
+	}
+
+	storage.Put(ctx, tldKey, 0)
+
 	var committeeOwner interop.Hash160
 	saveDomain(ctx, name, email, refresh, retry, expire, ttl, committeeOwner)
 }
@@ -1031,10 +1046,6 @@ func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
 	_ = getNameState(ctx, tokenID)
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
-}
-
-func putTLD(ctx storage.Context, key []byte) {
-	storage.Put(ctx, key, 0)
 }
 
 func makeTLDKey(name string) []byte {

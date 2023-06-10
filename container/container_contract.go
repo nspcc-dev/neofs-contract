@@ -208,12 +208,9 @@ func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 		return
 	}
 
-	res := contract.Call(addrNNS, "register", contract.All,
-		nnsRoot, runtime.GetExecutingScriptHash(), "ops@nspcc.ru",
-		defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool)
-	if !res {
-		panic("can't register NNS TLD")
-	}
+	contract.Call(addrNNS, "registerTLD", contract.All,
+		nnsRoot, "ops@nspcc.ru",
+		defaultRefresh, defaultRetry, defaultExpire, defaultTTL)
 }
 
 // Update method updates contract source code and manifest. It can be invoked

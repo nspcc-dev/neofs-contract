@@ -38,9 +38,8 @@ func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.Contra
 	if addRoot {
 		// Set expiration big enough to pass all tests.
 		refresh, retry, expire, ttl := int64(101), int64(102), int64(msPerYear/1000*100), int64(104)
-		c.Invoke(t, true, "register",
-			"com", c.CommitteeHash,
-			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, stackitem.Null{}, "registerTLD",
+			"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 	}
 	return c
 }
@@ -58,23 +57,19 @@ func TestNNSRegisterTLD(t *testing.T) {
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 
-	c.InvokeFail(t, "invalid domain name format", "register",
-		"0com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.InvokeFail(t, "invalid domain name format", "registerTLD",
+		"0com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "not witnessed by committee", "register",
-		"com", acc.ScriptHash(),
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	cAcc.InvokeFail(t, "not witnessed by committee", "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
-	c.Invoke(t, true, "register",
-		"com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
-	c.InvokeFail(t, "TLD already exists", "register",
-		"com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.InvokeFail(t, "TLD already exists", "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 }
 
 func TestNNSRegister(t *testing.T) {
@@ -83,9 +78,8 @@ func TestNNSRegister(t *testing.T) {
 	accTop := c.NewAccount(t)
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	c1 := c.WithSigners(c.Committee, accTop)
-	c1.Invoke(t, true, "register",
-		"com", accTop.ScriptHash(),
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c1.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
 
@@ -313,9 +307,8 @@ func TestNNSIsAvailable(t *testing.T) {
 	c.InvokeFail(t, "TLD not found", "isAvailable", "domain.com")
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	c.Invoke(t, true, "register",
-		"com", c.CommitteeHash,
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c.Invoke(t, false, "isAvailable", "com")
 	c.Invoke(t, true, "isAvailable", "domain.com")
@@ -374,19 +367,22 @@ func TestNNSRegisterAccess(t *testing.T) {
 	const email, refresh, retry, expire, ttl = "user@domain.org", 0, 1, 2, 3
 	const tld = "com"
 	const registerMethod = "register"
-	const ownerWitnessFailMsg = "not witnessed by committee"
+	const registerTLDMethod = "registerTLD"
+	const tldDeniedFailMsg = "TLD denied"
 
 	// TLD
 	l2OwnerAcc := inv.NewAccount(t)
 	l2OwnerInv := inv.WithSigners(l2OwnerAcc)
 
-	l2OwnerInv.InvokeFail(t, ownerWitnessFailMsg, registerMethod,
+	l2OwnerInv.InvokeFail(t, tldDeniedFailMsg, registerMethod,
 		tld, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
-	l2OwnerInv.InvokeFail(t, ownerWitnessFailMsg, registerMethod,
+	l2OwnerInv.InvokeFail(t, tldDeniedFailMsg, registerMethod,
 		tld, nil, email, refresh, retry, expire, ttl)
 
-	inv.WithSigners(inv.Committee).Invoke(t, true, registerMethod,
+	inv.WithSigners(inv.Committee).InvokeFail(t, tldDeniedFailMsg, registerMethod,
 		tld, nil, email, refresh, retry, expire, ttl)
+	inv.WithSigners(inv.Committee).Invoke(t, stackitem.Null{}, registerTLDMethod,
+		tld, email, refresh, retry, expire, ttl)
 
 	// L2
 	const l2 = "l2." + tld
