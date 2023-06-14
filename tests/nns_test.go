@@ -451,3 +451,29 @@ func TestNNSTLD(t *testing.T) {
 	inv.InvokeFail(t, tldFailMsg, "transfer", util.Uint160{}, tld, nil)
 	inv.Invoke(t, stackitem.Null{}, "updateSOA", tld, "user@domain.org", 0, 1, 2, 3)
 }
+
+func TestNNSRoots(t *testing.T) {
+	tlds := []string{"hello", "world"}
+
+	inv := newNNSInvoker(t, false, tlds...)
+
+	stack, err := inv.TestInvoke(t, "roots")
+	require.NoError(t, err)
+	require.NotEmpty(t, stack)
+
+	it, ok := stack.Pop().Value().(*storage.Iterator)
+	require.True(t, ok)
+
+	var res []string
+
+	for it.Next() {
+		item := it.Value()
+
+		b, err := item.TryBytes()
+		require.NoError(t, err)
+
+		res = append(res, string(b))
+	}
+
+	require.ElementsMatch(t, tlds, res)
+}
