@@ -10,7 +10,9 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/nns"
 	"github.com/stretchr/testify/require"
 )
@@ -19,18 +21,25 @@ const nnsPath = "../nns"
 
 const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 
-func newNNSInvoker(t *testing.T, addRoot bool) *neotest.ContractInvoker {
+func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
 	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
-	e.DeployContract(t, ctr, nil)
+	if len(tldSet) > 0 {
+		_tldSet := make([]interface{}, len(tldSet))
+		for i := range tldSet {
+			_tldSet[i] = []interface{}{tldSet[i], "user@domain.org"}
+		}
+		e.DeployContract(t, ctr, []interface{}{_tldSet})
+	} else {
+		e.DeployContract(t, ctr, nil)
+	}
 
 	c := e.CommitteeInvoker(ctr.Hash)
 	if addRoot {
 		// Set expiration big enough to pass all tests.
 		refresh, retry, expire, ttl := int64(101), int64(102), int64(msPerYear/1000*100), int64(104)
-		c.Invoke(t, true, "register",
-			"com", c.CommitteeHash,
-			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, stackitem.Null{}, "registerTLD",
+			"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 	}
 	return c
 }
@@ -48,23 +57,19 @@ func TestNNSRegisterTLD(t *testing.T) {
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 
-	c.InvokeFail(t, "invalid domain name format", "register",
-		"0com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.InvokeFail(t, "invalid domain name format", "registerTLD",
+		"0com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "not witnessed by committee", "register",
-		"com", acc.ScriptHash(),
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	cAcc.InvokeFail(t, "not witnessed by committee", "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
-	c.Invoke(t, true, "register",
-		"com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 
-	c.InvokeFail(t, "TLD already exists", "register",
-		"com", c.CommitteeHash,
-		"email@nspcc.ru", refresh, retry, expire, ttl)
+	c.InvokeFail(t, "TLD already exists", "registerTLD",
+		"com", "email@nspcc.ru", refresh, retry, expire, ttl)
 }
 
 func TestNNSRegister(t *testing.T) {
@@ -73,15 +78,10 @@ func TestNNSRegister(t *testing.T) {
 	accTop := c.NewAccount(t)
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 	c1 := c.WithSigners(c.Committee, accTop)
-	c1.Invoke(t, true, "register",
-		"com", accTop.ScriptHash(),
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c1.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
-	c2 := c.WithSigners(c.Committee, acc)
-	c2.InvokeFail(t, "not witnessed by admin", "register",
-		"testdomain.com", acc.ScriptHash(),
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c3 := c.WithSigners(accTop, acc)
 	t.Run("domain names with hyphen", func(t *testing.T) {
@@ -125,15 +125,6 @@ func TestNNSRegister(t *testing.T) {
 		stackitem.NewByteArray([]byte("replaced first")),
 		stackitem.NewByteArray([]byte("second TXT record"))})
 	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.TXT))
-}
-
-func TestTLDRecord(t *testing.T) {
-	c := newNNSInvoker(t, true)
-	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"com", int64(nns.A), "1.2.3.4")
-
-	result := []stackitem.Item{stackitem.NewByteArray([]byte("1.2.3.4"))}
-	c.Invoke(t, result, "resolve", "com", int64(nns.A))
 }
 
 func TestNNSRegisterMulti(t *testing.T) {
@@ -316,9 +307,8 @@ func TestNNSIsAvailable(t *testing.T) {
 	c.InvokeFail(t, "TLD not found", "isAvailable", "domain.com")
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	c.Invoke(t, true, "register",
-		"com", c.CommitteeHash,
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c.Invoke(t, false, "isAvailable", "com")
 	c.Invoke(t, true, "isAvailable", "domain.com")
@@ -370,4 +360,120 @@ func TestNNSResolve(t *testing.T) {
 	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
 	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+}
+
+func TestNNSRegisterAccess(t *testing.T) {
+	inv := newNNSInvoker(t, false)
+	const email, refresh, retry, expire, ttl = "user@domain.org", 0, 1, 2, 3
+	const tld = "com"
+	const registerMethod = "register"
+	const registerTLDMethod = "registerTLD"
+	const tldDeniedFailMsg = "TLD denied"
+
+	// TLD
+	l2OwnerAcc := inv.NewAccount(t)
+	l2OwnerInv := inv.WithSigners(l2OwnerAcc)
+
+	l2OwnerInv.InvokeFail(t, tldDeniedFailMsg, registerMethod,
+		tld, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2OwnerInv.InvokeFail(t, tldDeniedFailMsg, registerMethod,
+		tld, nil, email, refresh, retry, expire, ttl)
+
+	inv.WithSigners(inv.Committee).InvokeFail(t, tldDeniedFailMsg, registerMethod,
+		tld, nil, email, refresh, retry, expire, ttl)
+	inv.WithSigners(inv.Committee).Invoke(t, stackitem.Null{}, registerTLDMethod,
+		tld, email, refresh, retry, expire, ttl)
+
+	// L2
+	const l2 = "l2." + tld
+
+	anonymousAcc := inv.NewAccount(t)
+	anonymousInv := inv.WithSigners(anonymousAcc)
+
+	l2OwnerInv.InvokeFail(t, "invalid owner", registerMethod,
+		l2, nil, email, refresh, retry, expire, ttl)
+	l2OwnerInv.InvokeFail(t, common.ErrOwnerWitnessFailed, registerMethod,
+		l2, anonymousAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2OwnerInv.Invoke(t, true, registerMethod,
+		l2, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+
+	// L3 (by L2 owner)
+	const l3ByL2Owner = "l3-owner." + l2
+
+	l2OwnerInv.Invoke(t, true, registerMethod,
+		l3ByL2Owner, l2OwnerAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+
+	// L3 (by L2 admin)
+	const l3ByL2Admin = "l3-admin." + l2
+
+	l2AdminAcc := inv.NewAccount(t)
+	l2AdminInv := inv.WithSigners(l2AdminAcc)
+
+	inv.WithSigners(l2OwnerAcc, l2AdminAcc).Invoke(t, stackitem.Null{}, "setAdmin", l2, l2AdminAcc.ScriptHash())
+
+	anonymousInv.InvokeFail(t, "not witnessed by admin", registerMethod,
+		l3ByL2Admin, anonymousAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+	l2AdminInv.Invoke(t, true, "register",
+		l3ByL2Admin, l2AdminAcc.ScriptHash(), email, refresh, retry, expire, ttl)
+}
+
+func TestPredefinedTLD(t *testing.T) {
+	predefined := []string{"hello", "world"}
+	const otherTLD = "goodbye"
+
+	inv := newNNSInvoker(t, false, predefined...)
+
+	inv.Invoke(t, true, "isAvailable", otherTLD)
+
+	for i := range predefined {
+		inv.Invoke(t, false, "isAvailable", predefined[i])
+	}
+}
+
+func TestNNSTLD(t *testing.T) {
+	const tld = "any-tld"
+	const tldFailMsg = "token not found"
+	const recTyp = int64(nns.TXT) // InvokeFail doesn't support nns.RecordType
+
+	inv := newNNSInvoker(t, false, tld)
+
+	inv.InvokeFail(t, tldFailMsg, "addRecord", tld, recTyp, "any data")
+	inv.InvokeFail(t, tldFailMsg, "deleteRecords", tld, recTyp)
+	inv.InvokeFail(t, tldFailMsg, "getAllRecords", tld)
+	inv.InvokeFail(t, tldFailMsg, "getRecords", tld, recTyp)
+	inv.Invoke(t, false, "isAvailable", tld)
+	inv.InvokeFail(t, tldFailMsg, "ownerOf", tld)
+	inv.InvokeFail(t, tldFailMsg, "properties", tld)
+	inv.InvokeAndCheck(t, func(t testing.TB, stack []stackitem.Item) {}, "renew", tld)
+	inv.InvokeFail(t, tldFailMsg, "resolve", tld, recTyp)
+	inv.InvokeFail(t, tldFailMsg, "setAdmin", tld, util.Uint160{})
+	inv.InvokeFail(t, tldFailMsg, "setRecord", tld, recTyp, 1, "any data")
+	inv.InvokeFail(t, tldFailMsg, "transfer", util.Uint160{}, tld, nil)
+	inv.Invoke(t, stackitem.Null{}, "updateSOA", tld, "user@domain.org", 0, 1, 2, 3)
+}
+
+func TestNNSRoots(t *testing.T) {
+	tlds := []string{"hello", "world"}
+
+	inv := newNNSInvoker(t, false, tlds...)
+
+	stack, err := inv.TestInvoke(t, "roots")
+	require.NoError(t, err)
+	require.NotEmpty(t, stack)
+
+	it, ok := stack.Pop().Value().(*storage.Iterator)
+	require.True(t, ok)
+
+	var res []string
+
+	for it.Next() {
+		item := it.Value()
+
+		b, err := item.TryBytes()
+		require.NoError(t, err)
+
+		res = append(res, string(b))
+	}
+
+	require.ElementsMatch(t, tlds, res)
 }

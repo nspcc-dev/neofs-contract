@@ -208,9 +208,8 @@ func TestContainerPut(t *testing.T) {
 			cnt.value[len(cnt.value)-1] = 10
 			cnt.id = sha256.Sum256(cnt.value)
 
-			cNNS.Invoke(t, true, "register",
-				"cdn", c.CommitteeHash,
-				"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
+			cNNS.Invoke(t, stackitem.Null{}, "registerTLD",
+				"cdn", "whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
 
 			cNNS.Invoke(t, true, "register",
 				"domain.cdn", c.CommitteeHash,

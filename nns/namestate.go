@@ -7,6 +7,7 @@ import (
 
 // NameState represents domain name state.
 type NameState struct {
+	// Domain name owner. Nil if owned by the committee.
 	Owner      interop.Hash160
 	Name       string
 	Expiration int64
@@ -22,6 +23,10 @@ func (n NameState) ensureNotExpired() {
 
 // checkAdmin panics if script container is not signed by the domain name admin.
 func (n NameState) checkAdmin() {
+	if len(n.Owner) == 0 {
+		checkCommittee()
+		return
+	}
 	if runtime.CheckWitness(n.Owner) {
 		return
 	}

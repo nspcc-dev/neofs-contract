@@ -152,7 +152,9 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	const nnsSourceCodeDir = "../nns"
 	exec.DeployContract(tb,
 		neotest.CompileFile(tb, exec.CommitteeHash, nnsSourceCodeDir, filepath.Join(nnsSourceCodeDir, "config.yml")),
-		[]interface{}{},
+		[]interface{}{
+			[]interface{}{[]interface{}{"neofs", "ops@morphbits.io"}},
+		},
 	)
 
 	// compile new contract version
@@ -244,16 +246,6 @@ func (x *Contract) GetStorageItem(key []byte) []byte {
 // See also nns.Register, nns.AddRecord.
 func (x *Contract) RegisterContractInNNS(tb testing.TB, name string, addr util.Uint160) {
 	nnsInvoker := x.exec.CommitteeInvoker(x.exec.ContractHash(tb, 1))
-	nnsInvoker.InvokeAndCheck(tb, checkSingleTrueInStack, "register",
-		"neofs",
-		x.exec.CommitteeHash,
-		"ops@morphbits.io",
-		int64(3600),
-		int64(600),
-		int64(10*365*24*time.Hour/time.Second),
-		int64(3600),
-	)
-
 	domain := name + ".neofs"
 
 	nnsInvoker.InvokeAndCheck(tb, checkSingleTrueInStack, "register",
