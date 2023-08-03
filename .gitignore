@@ -1,5 +1,6 @@
 *.avm
 *.nef
+*~
 bindings_config.yml
 config.json
 /vendor/
