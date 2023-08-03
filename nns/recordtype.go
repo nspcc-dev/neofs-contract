@@ -3,6 +3,9 @@ package nns
 // RecordType is domain name service record types.
 type RecordType byte
 
+// WARNING!
+// Always update RPC binding code when changing these.
+
 // Record types are defined in [RFC 1035](https://tools.ietf.org/html/rfc1035)
 const (
 	// A represents address record type.
