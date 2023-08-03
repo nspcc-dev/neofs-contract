@@ -7,7 +7,7 @@ export GOBIN ?= $(shell pwd)/bin
 export CGO_ENABLED=0
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
-NEOGOORIGMOD = github.com/nspcc-dev/neo-go
+NEOGOORIGMOD = github.com/nspcc-dev/neo-go@v0.101.5-0.20230802075307-afa4530c7d73
 NEOGOMOD = $(shell go list -f '{{.Path}}' -m $(NEOGOORIGMOD))
 NEOGOVER = $(shell go list -f '{{.Version}}' -m $(NEOGOORIGMOD) | tr -d v)
 
@@ -31,7 +31,9 @@ nns_sc = nns
 
 define sc_template
 $(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
-	$(NEOGO) contract compile -i $(2)$(1) -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json -o $(2)$(1)/$(1)_contract.nef
+	$(NEOGO) contract compile -i $(2)$(1) -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json -o $(2)$(1)/$(1)_contract.nef --bindings $(2)$(1)/bindings_config.yml
+	mkdir -p rpc/$(1)
+	$(NEOGO) contract generate-rpcwrapper -o rpc/$(1)/rpcbinding.go -m $(2)$(1)/config.json --config $(2)$(1)/bindings_config.yml
 
 $(if $(2),$(2)$(1)/$(1)_contract.go: alphabet/alphabet.go alphabet/alphabet.tpl
 	go run alphabet/alphabet.go
@@ -57,6 +59,8 @@ test:
 clean:
 	find . -name '*.nef' -exec rm -rf {} \;
 	find . -name 'config.json' -exec rm -rf {} \;
+	find . -name 'bindings_config.yml' -exec rm -rf {} \;
+	find . -name 'rpc' -type d -prune -exec rm -rf {} \;
 	rm -rf ./bin/
 
 mr_proper: clean
