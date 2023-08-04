@@ -60,7 +60,6 @@ clean:
 	find . -name '*.nef' -exec rm -rf {} \;
 	find . -name 'config.json' -exec rm -rf {} \;
 	find . -name 'bindings_config.yml' -exec rm -rf {} \;
-	find . -name 'rpc' -type d -prune -exec rm -rf {} \;
 	rm -rf ./bin/
 
 mr_proper: clean
