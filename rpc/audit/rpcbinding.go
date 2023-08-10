@@ -17,9 +17,9 @@ import (
 
 // AuditauditHeader is a contract-specific audit.auditHeader type used by its methods.
 type AuditauditHeader struct {
-	epoch *big.Int
-	cid []byte
-	from *keys.PublicKey
+	Epoch *big.Int
+	Cid []byte
+	From *keys.PublicKey
 }
 
 // CommonBallot is a contract-specific common.Ballot type used by its methods.
@@ -289,19 +289,19 @@ func (res *AuditauditHeader) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.epoch, err = arr[index].TryInteger()
+	res.Epoch, err = arr[index].TryInteger()
 	if err != nil {
-		return fmt.Errorf("field epoch: %w", err)
+		return fmt.Errorf("field Epoch: %w", err)
 	}
 
 	index++
-	res.cid, err = arr[index].TryBytes()
+	res.Cid, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field cid: %w", err)
+		return fmt.Errorf("field Cid: %w", err)
 	}
 
 	index++
-	res.from, err = func (item stackitem.Item) (*keys.PublicKey, error) {
+	res.From, err = func (item stackitem.Item) (*keys.PublicKey, error) {
 		b, err := item.TryBytes()
 		if err != nil {
 			return nil, err
@@ -313,7 +313,7 @@ func (res *AuditauditHeader) FromStackItem(item stackitem.Item) error {
 		return k, nil
 	} (arr[index])
 	if err != nil {
-		return fmt.Errorf("field from: %w", err)
+		return fmt.Errorf("field From: %w", err)
 	}
 
 	return nil

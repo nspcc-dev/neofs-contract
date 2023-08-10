@@ -149,8 +149,8 @@ type ManagementPermission struct {
 
 // Neofsrecord is a contract-specific neofs.record type used by its methods.
 type Neofsrecord struct {
-	key []byte
-	val []byte
+	Key []byte
+	Val []byte
 }
 
 // DepositEvent represents "Deposit" event emitted by the contract.
@@ -1869,15 +1869,15 @@ func (res *Neofsrecord) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.key, err = arr[index].TryBytes()
+	res.Key, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field key: %w", err)
+		return fmt.Errorf("field Key: %w", err)
 	}
 
 	index++
-	res.val, err = arr[index].TryBytes()
+	res.Val, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field val: %w", err)
+		return fmt.Errorf("field Val: %w", err)
 	}
 
 	return nil

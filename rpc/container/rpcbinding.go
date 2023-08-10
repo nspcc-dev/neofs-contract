@@ -25,10 +25,10 @@ type CommonBallot struct {
 
 // ContainerContainer is a contract-specific container.Container type used by its methods.
 type ContainerContainer struct {
-	value []byte
-	sig []byte
-	pub *keys.PublicKey
-	token []byte
+	Value []byte
+	Sig []byte
+	Pub *keys.PublicKey
+	Token []byte
 }
 
 // ContainerEstimation is a contract-specific container.Estimation type used by its methods.
@@ -39,16 +39,16 @@ type ContainerEstimation struct {
 
 // ContainerExtendedACL is a contract-specific container.ExtendedACL type used by its methods.
 type ContainerExtendedACL struct {
-	value []byte
-	sig []byte
-	pub *keys.PublicKey
-	token []byte
+	Value []byte
+	Sig []byte
+	Pub *keys.PublicKey
+	Token []byte
 }
 
 // ContainercontainerSizes is a contract-specific container.containerSizes type used by its methods.
 type ContainercontainerSizes struct {
-	cid []byte
-	estimations []*ContainerEstimation
+	Cid []byte
+	Estimations []*ContainerEstimation
 }
 
 // LedgerBlock is a contract-specific ledger.Block type used by its methods.
@@ -616,19 +616,19 @@ func (res *ContainerContainer) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.value, err = arr[index].TryBytes()
+	res.Value, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field value: %w", err)
+		return fmt.Errorf("field Value: %w", err)
 	}
 
 	index++
-	res.sig, err = arr[index].TryBytes()
+	res.Sig, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field sig: %w", err)
+		return fmt.Errorf("field Sig: %w", err)
 	}
 
 	index++
-	res.pub, err = func (item stackitem.Item) (*keys.PublicKey, error) {
+	res.Pub, err = func (item stackitem.Item) (*keys.PublicKey, error) {
 		b, err := item.TryBytes()
 		if err != nil {
 			return nil, err
@@ -640,13 +640,13 @@ func (res *ContainerContainer) FromStackItem(item stackitem.Item) error {
 		return k, nil
 	} (arr[index])
 	if err != nil {
-		return fmt.Errorf("field pub: %w", err)
+		return fmt.Errorf("field Pub: %w", err)
 	}
 
 	index++
-	res.token, err = arr[index].TryBytes()
+	res.Token, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field token: %w", err)
+		return fmt.Errorf("field Token: %w", err)
 	}
 
 	return nil
@@ -728,19 +728,19 @@ func (res *ContainerExtendedACL) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.value, err = arr[index].TryBytes()
+	res.Value, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field value: %w", err)
+		return fmt.Errorf("field Value: %w", err)
 	}
 
 	index++
-	res.sig, err = arr[index].TryBytes()
+	res.Sig, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field sig: %w", err)
+		return fmt.Errorf("field Sig: %w", err)
 	}
 
 	index++
-	res.pub, err = func (item stackitem.Item) (*keys.PublicKey, error) {
+	res.Pub, err = func (item stackitem.Item) (*keys.PublicKey, error) {
 		b, err := item.TryBytes()
 		if err != nil {
 			return nil, err
@@ -752,13 +752,13 @@ func (res *ContainerExtendedACL) FromStackItem(item stackitem.Item) error {
 		return k, nil
 	} (arr[index])
 	if err != nil {
-		return fmt.Errorf("field pub: %w", err)
+		return fmt.Errorf("field Pub: %w", err)
 	}
 
 	index++
-	res.token, err = arr[index].TryBytes()
+	res.Token, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field token: %w", err)
+		return fmt.Errorf("field Token: %w", err)
 	}
 
 	return nil
@@ -790,13 +790,13 @@ func (res *ContainercontainerSizes) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.cid, err = arr[index].TryBytes()
+	res.Cid, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field cid: %w", err)
+		return fmt.Errorf("field Cid: %w", err)
 	}
 
 	index++
-	res.estimations, err = func (item stackitem.Item) ([]*ContainerEstimation, error) {
+	res.Estimations, err = func (item stackitem.Item) ([]*ContainerEstimation, error) {
 		arr, ok := item.Value().([]stackitem.Item)
 		if !ok {
 			return nil, errors.New("not an array")
@@ -811,7 +811,7 @@ func (res *ContainercontainerSizes) FromStackItem(item stackitem.Item) error {
 		return res, nil
 	} (arr[index])
 	if err != nil {
-		return fmt.Errorf("field estimations: %w", err)
+		return fmt.Errorf("field Estimations: %w", err)
 	}
 
 	return nil
