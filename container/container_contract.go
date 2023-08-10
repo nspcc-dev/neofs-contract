@@ -14,22 +14,22 @@ import (
 )
 
 type (
-	storageNode struct {
-		info []byte
+	StorageNode struct {
+		Info []byte
 	}
 
 	Container struct {
-		value []byte
-		sig   interop.Signature
-		pub   interop.PublicKey
-		token []byte
+		Value []byte
+		Sig   interop.Signature
+		Pub   interop.PublicKey
+		Token []byte
 	}
 
 	ExtendedACL struct {
-		value []byte
-		sig   interop.Signature
-		pub   interop.PublicKey
-		token []byte
+		Value []byte
+		Sig   interop.Signature
+		Pub   interop.PublicKey
+		Token []byte
 	}
 
 	// Estimation contains the public key of the estimator (storage node) and
@@ -39,9 +39,9 @@ type (
 		Size int
 	}
 
-	containerSizes struct {
-		cid         []byte
-		estimations []Estimation
+	ContainerSizes struct {
+		CID         []byte
+		Estimations []Estimation
 	}
 )
 
@@ -248,10 +248,10 @@ func PutNamed(container []byte, signature interop.Signature,
 	containerID := crypto.Sha256(container)
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 	cnr := Container{
-		value: container,
-		sig:   signature,
-		pub:   publicKey,
-		token: token,
+		Value: container,
+		Sig:   signature,
+		Pub:   publicKey,
+		Token: token,
 	}
 
 	var (
@@ -399,7 +399,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	cnt := getContainer(ctx, containerID)
-	if len(cnt.value) == 0 {
+	if len(cnt.Value) == 0 {
 		panic(NotFoundError)
 	}
 	return cnt
@@ -496,10 +496,10 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	common.CheckAlphabetWitness(multiaddr)
 
 	rule := ExtendedACL{
-		value: eACL,
-		sig:   signature,
-		pub:   publicKey,
-		token: token,
+		Value: eACL,
+		Sig:   signature,
+		Pub:   publicKey,
+		Token: token,
 	}
 
 	key := append(eACLPrefix, containerID...)
@@ -568,7 +568,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 // Deprecated: please use IterateContainerSizes API, this one is not convenient
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
-func GetContainerSize(id []byte) containerSizes {
+func GetContainerSize(id []byte) ContainerSizes {
 	ctx := storage.GetReadOnlyContext()
 
 	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
@@ -728,7 +728,7 @@ func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 		return std.Deserialize(data.([]byte)).(ExtendedACL)
 	}
 
-	return ExtendedACL{value: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}, token: []byte{}}
+	return ExtendedACL{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
 func getContainer(ctx storage.Context, cid []byte) Container {
@@ -737,16 +737,16 @@ func getContainer(ctx storage.Context, cid []byte) Container {
 		return std.Deserialize(data.([]byte)).(Container)
 	}
 
-	return Container{value: []byte{}, sig: interop.Signature{}, pub: interop.PublicKey{}, token: []byte{}}
+	return Container{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
 func getOwnerByID(ctx storage.Context, cid []byte) []byte {
 	container := getContainer(ctx, cid)
-	if len(container.value) == 0 {
+	if len(container.Value) == 0 {
 		return nil
 	}
 
-	return ownerFromBinaryContainer(container.value)
+	return ownerFromBinaryContainer(container.Value)
 }
 
 func ownerFromBinaryContainer(container []byte) []byte {
@@ -768,7 +768,7 @@ func estimationKey(epoch int, cid []byte, key interop.PublicKey) []byte {
 	return append(result, hash[:estimatePostfixSize]...)
 }
 
-func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerSizes {
+func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) ContainerSizes {
 	var estimations []Estimation
 
 	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
@@ -777,9 +777,9 @@ func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerS
 		estimations = append(estimations, est)
 	}
 
-	return containerSizes{
-		cid:         cid,
-		estimations: estimations,
+	return ContainerSizes{
+		CID:         cid,
+		Estimations: estimations,
 	}
 }
 
@@ -787,11 +787,11 @@ func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) containerS
 // announces container size estimation of the previous epoch.
 func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]storageNode)
+	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]StorageNode)
 
 	for i := range snapshot {
 		// V2 format
-		nodeInfo := snapshot[i].info
+		nodeInfo := snapshot[i].Info
 		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 		if common.BytesEqual(key, nodeKey) {

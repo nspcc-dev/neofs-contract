@@ -147,8 +147,8 @@ type ManagementPermission struct {
 	Methods []string
 }
 
-// Neofsrecord is a contract-specific neofs.record type used by its methods.
-type Neofsrecord struct {
+// NeofsRecord is a contract-specific neofs.Record type used by its methods.
+type NeofsRecord struct {
 	Key []byte
 	Val []byte
 }
@@ -303,19 +303,19 @@ func (c *ContractReader) InnerRingCandidates() ([]*CommonIRNode, error) {
 }
 
 // ListConfig invokes `listConfig` method of contract.
-func (c *ContractReader) ListConfig() ([]*Neofsrecord, error) {
-	return func (item stackitem.Item, err error) ([]*Neofsrecord, error) {
+func (c *ContractReader) ListConfig() ([]*NeofsRecord, error) {
+	return func (item stackitem.Item, err error) ([]*NeofsRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		return func (item stackitem.Item) ([]*Neofsrecord, error) {
+		return func (item stackitem.Item) ([]*NeofsRecord, error) {
 			arr, ok := item.Value().([]stackitem.Item)
 			if !ok {
 				return nil, errors.New("not an array")
 			}
-			res := make([]*Neofsrecord, len(arr))
+			res := make([]*NeofsRecord, len(arr))
 			for i := range res {
-				res[i], err = itemToNeofsrecord(arr[i], nil)
+				res[i], err = itemToNeofsRecord(arr[i], nil)
 				if err != nil {
 					return nil, fmt.Errorf("item %d: %w", i, err)
 				}
@@ -1843,19 +1843,19 @@ func (res *ManagementPermission) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
-// itemToNeofsrecord converts stack item into *Neofsrecord.
-func itemToNeofsrecord(item stackitem.Item, err error) (*Neofsrecord, error) {
+// itemToNeofsRecord converts stack item into *NeofsRecord.
+func itemToNeofsRecord(item stackitem.Item, err error) (*NeofsRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	var res = new(Neofsrecord)
+	var res = new(NeofsRecord)
 	err = res.FromStackItem(item)
 	return res, err
 }
 
-// FromStackItem retrieves fields of Neofsrecord from the given
+// FromStackItem retrieves fields of NeofsRecord from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
-func (res *Neofsrecord) FromStackItem(item stackitem.Item) error {
+func (res *NeofsRecord) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
 		return errors.New("not an array")

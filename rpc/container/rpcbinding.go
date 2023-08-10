@@ -31,6 +31,12 @@ type ContainerContainer struct {
 	Token []byte
 }
 
+// ContainerContainerSizes is a contract-specific container.ContainerSizes type used by its methods.
+type ContainerContainerSizes struct {
+	CID []byte
+	Estimations []*ContainerEstimation
+}
+
 // ContainerEstimation is a contract-specific container.Estimation type used by its methods.
 type ContainerEstimation struct {
 	From *keys.PublicKey
@@ -43,12 +49,6 @@ type ContainerExtendedACL struct {
 	Sig []byte
 	Pub *keys.PublicKey
 	Token []byte
-}
-
-// ContainercontainerSizes is a contract-specific container.containerSizes type used by its methods.
-type ContainercontainerSizes struct {
-	Cid []byte
-	Estimations []*ContainerEstimation
 }
 
 // LedgerBlock is a contract-specific ledger.Block type used by its methods.
@@ -271,8 +271,8 @@ func (c *ContractReader) Get(containerID []byte) (*ContainerContainer, error) {
 }
 
 // GetContainerSize invokes `getContainerSize` method of contract.
-func (c *ContractReader) GetContainerSize(id []byte) (*ContainercontainerSizes, error) {
-	return itemToContainercontainerSizes(unwrap.Item(c.invoker.Call(c.hash, "getContainerSize", id)))
+func (c *ContractReader) GetContainerSize(id []byte) (*ContainerContainerSizes, error) {
+	return itemToContainerContainerSizes(unwrap.Item(c.invoker.Call(c.hash, "getContainerSize", id)))
 }
 
 // IterateAllContainerSizes invokes `iterateAllContainerSizes` method of contract.
@@ -652,6 +652,59 @@ func (res *ContainerContainer) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// itemToContainerContainerSizes converts stack item into *ContainerContainerSizes.
+func itemToContainerContainerSizes(item stackitem.Item, err error) (*ContainerContainerSizes, error) {
+	if err != nil {
+		return nil, err
+	}
+	var res = new(ContainerContainerSizes)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// FromStackItem retrieves fields of ContainerContainerSizes from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+func (res *ContainerContainerSizes) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err error
+	)
+	index++
+	res.CID, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field CID: %w", err)
+	}
+
+	index++
+	res.Estimations, err = func (item stackitem.Item) ([]*ContainerEstimation, error) {
+		arr, ok := item.Value().([]stackitem.Item)
+		if !ok {
+			return nil, errors.New("not an array")
+		}
+		res := make([]*ContainerEstimation, len(arr))
+		for i := range res {
+			res[i], err = itemToContainerEstimation(arr[i], nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+		}
+		return res, nil
+	} (arr[index])
+	if err != nil {
+		return fmt.Errorf("field Estimations: %w", err)
+	}
+
+	return nil
+}
+
 // itemToContainerEstimation converts stack item into *ContainerEstimation.
 func itemToContainerEstimation(item stackitem.Item, err error) (*ContainerEstimation, error) {
 	if err != nil {
@@ -759,59 +812,6 @@ func (res *ContainerExtendedACL) FromStackItem(item stackitem.Item) error {
 	res.Token, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field Token: %w", err)
-	}
-
-	return nil
-}
-
-// itemToContainercontainerSizes converts stack item into *ContainercontainerSizes.
-func itemToContainercontainerSizes(item stackitem.Item, err error) (*ContainercontainerSizes, error) {
-	if err != nil {
-		return nil, err
-	}
-	var res = new(ContainercontainerSizes)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// FromStackItem retrieves fields of ContainercontainerSizes from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-func (res *ContainercontainerSizes) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err error
-	)
-	index++
-	res.Cid, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Cid: %w", err)
-	}
-
-	index++
-	res.Estimations, err = func (item stackitem.Item) ([]*ContainerEstimation, error) {
-		arr, ok := item.Value().([]stackitem.Item)
-		if !ok {
-			return nil, errors.New("not an array")
-		}
-		res := make([]*ContainerEstimation, len(arr))
-		for i := range res {
-			res[i], err = itemToContainerEstimation(arr[i], nil)
-			if err != nil {
-				return nil, fmt.Errorf("item %d: %w", i, err)
-			}
-		}
-		return res, nil
-	} (arr[index])
-	if err != nil {
-		return fmt.Errorf("field Estimations: %w", err)
 	}
 
 	return nil
