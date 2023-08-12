@@ -16,9 +16,9 @@ import (
 )
 
 type (
-	record struct {
-		key []byte
-		val []byte
+	Record struct {
+		Key []byte
+		Val []byte
 	}
 )
 
@@ -509,10 +509,10 @@ func SetConfig(id, key, val []byte) {
 
 // ListConfig returns an array of structures that contain a key and a value of all
 // NeoFS configuration records. Key and value are both byte arrays.
-func ListConfig() []record {
+func ListConfig() []Record {
 	ctx := storage.GetReadOnlyContext()
 
-	var config []record
+	var config []Record
 
 	it := storage.Find(ctx, configPrefix, storage.None)
 	for iterator.Next(it) {
@@ -520,7 +520,7 @@ func ListConfig() []record {
 			key []byte
 			val []byte
 		})
-		r := record{key: pair.key[len(configPrefix):], val: pair.val}
+		r := Record{Key: pair.key[len(configPrefix):], Val: pair.val}
 
 		config = append(config, r)
 	}

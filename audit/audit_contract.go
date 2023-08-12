@@ -12,10 +12,10 @@ import (
 )
 
 type (
-	auditHeader struct {
-		epoch int
-		cid   []byte
-		from  interop.PublicKey
+	AuditHeader struct {
+		Epoch int
+		CID   []byte
+		From  interop.PublicKey
 	}
 )
 
@@ -27,13 +27,13 @@ type (
 // V2 format
 const maxKeySize = 24 // 24 + 32 (container ID length) + 8 (epoch length) = 64
 
-func (a auditHeader) ID() []byte {
-	var buf interface{} = a.epoch
+func (a AuditHeader) ID() []byte {
+	var buf interface{} = a.Epoch
 
-	hashedKey := crypto.Sha256(a.from)
+	hashedKey := crypto.Sha256(a.From)
 	shortedKey := hashedKey[:maxKeySize]
 
-	return append(buf.([]byte), append(a.cid, shortedKey...)...)
+	return append(buf.([]byte), append(a.CID, shortedKey...)...)
 }
 
 // nolint:deadcode,unused
@@ -113,14 +113,14 @@ func Put(rawAuditResult []byte) {
 
 	for i := range innerRing {
 		ir := innerRing[i]
-		if common.BytesEqual(ir, hdr.from) {
+		if common.BytesEqual(ir, hdr.From) {
 			presented = true
 
 			break
 		}
 	}
 
-	if !runtime.CheckWitness(hdr.from) || !presented {
+	if !runtime.CheckWitness(hdr.From) || !presented {
 		panic("put access denied")
 	}
 
@@ -173,10 +173,10 @@ func ListByCID(epoch int, cid []byte) [][]byte {
 // the specified epoch for the specified container by the specified Inner Ring node.
 func ListByNode(epoch int, cid []byte, key interop.PublicKey) [][]byte {
 	ctx := storage.GetReadOnlyContext()
-	hdr := auditHeader{
-		epoch: epoch,
-		cid:   cid,
-		from:  key,
+	hdr := AuditHeader{
+		Epoch: epoch,
+		CID:   cid,
+		From:  key,
 	}
 
 	it := storage.Find(ctx, hdr.ID(), storage.KeysOnly)
@@ -208,7 +208,7 @@ func readNext(input []byte) ([]byte, int) {
 	return input[1 : 1+ln], 1 + ln
 }
 
-func newAuditHeader(input []byte) auditHeader {
+func newAuditHeader(input []byte) AuditHeader {
 	// V2 format
 	offset := int(input[1])
 	offset = 2 + offset + 1 // version prefix + version len + epoch prefix
@@ -226,7 +226,7 @@ func newAuditHeader(input []byte) auditHeader {
 	// [ public key wireType (1 byte), ... ]
 	key, _ := readNext(input[offset+2+1+cidOffset+1:])
 
-	return auditHeader{
+	return AuditHeader{
 		epoch,
 		cid,
 		key,

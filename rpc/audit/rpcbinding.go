@@ -15,11 +15,11 @@ import (
 	"unicode/utf8"
 )
 
-// AuditauditHeader is a contract-specific audit.auditHeader type used by its methods.
-type AuditauditHeader struct {
-	epoch *big.Int
-	cid []byte
-	from *keys.PublicKey
+// AuditAuditHeader is a contract-specific audit.AuditHeader type used by its methods.
+type AuditAuditHeader struct {
+	Epoch *big.Int
+	CID []byte
+	From *keys.PublicKey
 }
 
 // CommonBallot is a contract-specific common.Ballot type used by its methods.
@@ -263,19 +263,19 @@ func (c *Contract) UpdateUnsigned(script []byte, manifest []byte, data any) (*tr
 	return c.actor.MakeUnsignedCall(c.hash, "update", nil, script, manifest, data)
 }
 
-// itemToAuditauditHeader converts stack item into *AuditauditHeader.
-func itemToAuditauditHeader(item stackitem.Item, err error) (*AuditauditHeader, error) {
+// itemToAuditAuditHeader converts stack item into *AuditAuditHeader.
+func itemToAuditAuditHeader(item stackitem.Item, err error) (*AuditAuditHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-	var res = new(AuditauditHeader)
+	var res = new(AuditAuditHeader)
 	err = res.FromStackItem(item)
 	return res, err
 }
 
-// FromStackItem retrieves fields of AuditauditHeader from the given
+// FromStackItem retrieves fields of AuditAuditHeader from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
-func (res *AuditauditHeader) FromStackItem(item stackitem.Item) error {
+func (res *AuditAuditHeader) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
 		return errors.New("not an array")
@@ -289,19 +289,19 @@ func (res *AuditauditHeader) FromStackItem(item stackitem.Item) error {
 		err error
 	)
 	index++
-	res.epoch, err = arr[index].TryInteger()
+	res.Epoch, err = arr[index].TryInteger()
 	if err != nil {
-		return fmt.Errorf("field epoch: %w", err)
+		return fmt.Errorf("field Epoch: %w", err)
 	}
 
 	index++
-	res.cid, err = arr[index].TryBytes()
+	res.CID, err = arr[index].TryBytes()
 	if err != nil {
-		return fmt.Errorf("field cid: %w", err)
+		return fmt.Errorf("field CID: %w", err)
 	}
 
 	index++
-	res.from, err = func (item stackitem.Item) (*keys.PublicKey, error) {
+	res.From, err = func (item stackitem.Item) (*keys.PublicKey, error) {
 		b, err := item.TryBytes()
 		if err != nil {
 			return nil, err
@@ -313,7 +313,7 @@ func (res *AuditauditHeader) FromStackItem(item stackitem.Item) error {
 		return k, nil
 	} (arr[index])
 	if err != nil {
-		return fmt.Errorf("field from: %w", err)
+		return fmt.Errorf("field From: %w", err)
 	}
 
 	return nil
