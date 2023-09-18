@@ -198,6 +198,20 @@ func New(actor Actor, hash util.Uint160) *Contract {
 	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, actor, hash}
 }
 
+// GetAllRecords invokes `getAllRecords` method of contract.
+func (c *ContractReader) GetAllRecords(name string) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "getAllRecords", name))
+}
+
+// GetAllRecordsExpanded is similar to GetAllRecords (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) GetAllRecordsExpanded(name string, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "getAllRecords", _numOfIteratorItems, name))
+}
+
 // GetPrice invokes `getPrice` method of contract.
 func (c *ContractReader) GetPrice() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getPrice"))
@@ -279,28 +293,6 @@ func (c *Contract) DeleteRecordsTransaction(name string, typ *big.Int) (*transac
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) DeleteRecordsUnsigned(name string, typ *big.Int) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "deleteRecords", nil, name, typ)
-}
-
-// GetAllRecords creates a transaction invoking `getAllRecords` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) GetAllRecords(name string) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "getAllRecords", name)
-}
-
-// GetAllRecordsTransaction creates a transaction invoking `getAllRecords` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) GetAllRecordsTransaction(name string) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "getAllRecords", name)
-}
-
-// GetAllRecordsUnsigned creates a transaction invoking `getAllRecords` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) GetAllRecordsUnsigned(name string) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "getAllRecords", nil, name)
 }
 
 func (c *Contract) scriptForRegister(name string, owner util.Uint160, email string, refresh *big.Int, retry *big.Int, expire *big.Int, ttl *big.Int) ([]byte, error) {
