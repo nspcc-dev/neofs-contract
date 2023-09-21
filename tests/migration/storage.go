@@ -78,14 +78,14 @@ type ContractOptions struct {
 func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOptions) *Contract {
 	lowLevelStore := storage.NewMemoryStore()
 	cachedStore := storage.NewMemCachedStore(lowLevelStore) // mem-cached store has sweeter interface
-	_dao := dao.NewSimple(lowLevelStore, false, true)
+	_dao := dao.NewSimple(lowLevelStore, false)
 
 	var id int32
 	found := false
 
 	nativeContracts := native.NewContracts(config.ProtocolConfiguration{})
 
-	err := nativeContracts.Management.InitializeCache(_dao)
+	err := nativeContracts.Management.InitializeCache(0, _dao)
 	require.NoError(tb, err)
 
 	mNameToID := make(map[string]int32)
