@@ -241,6 +241,11 @@ func New(actor Actor, hash util.Uint160) *Contract {
 	return &Contract{ContractReader{actor, hash}, actor, hash}
 }
 
+// Alias invokes `alias` method of contract.
+func (c *ContractReader) Alias(cid []byte) (string, error) {
+	return unwrap.UTF8String(c.invoker.Call(c.hash, "alias", cid))
+}
+
 // ContainersOf invokes `containersOf` method of contract.
 func (c *ContractReader) ContainersOf(owner []byte) (uuid.UUID, result.Iterator, error) {
 	return unwrap.SessionIterator(c.invoker.Call(c.hash, "containersOf", owner))

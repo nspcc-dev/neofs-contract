@@ -176,6 +176,7 @@ func TestContainerPut(t *testing.T) {
 	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
 
 	c.Invoke(t, stackitem.Null{}, "put", putArgs...)
+	c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
 
 	t.Run("with nice names", func(t *testing.T) {
 		ctrNNS := neotest.CompileFile(t, c.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
@@ -196,6 +197,7 @@ func TestContainerPut(t *testing.T) {
 		})
 		cNNS := c.CommitteeInvoker(nnsHash)
 		cNNS.Invoke(t, expected, "resolve", "mycnt.neofs", int64(nns.TXT))
+		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt.neofs")), "alias", cnt.id[:])
 
 		t.Run("name is already taken", func(t *testing.T) {
 			c.InvokeFail(t, "name is already taken", "putNamed", putArgs...)
