@@ -706,6 +706,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	storage.Delete(ctx, containerListKey)
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
+	storage.Delete(ctx, append(eACLPrefix, id...))
 }
 
 func getAllContainers(ctx storage.Context) [][]byte {

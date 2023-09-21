@@ -362,6 +362,8 @@ func TestContainerSetEACL(t *testing.T) {
 	checkInvalidEACL(prefix, missingContainerException)
 	checkInvalidEACL(append(prefix, make([]byte, len(cnt.id)-1)...), missingContainerException)
 	c.Invoke(t, stackitem.Null{}, "setEACL", replaceEACLArg(append(prefix, cnt.id[:]...))...)
+	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+	c.InvokeFail(t, container.NotFoundError, "eACL", cnt.id[:])
 }
 
 func TestContainerSizeEstimation(t *testing.T) {
