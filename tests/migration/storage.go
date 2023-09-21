@@ -41,11 +41,11 @@ import (
 //
 // Contract instances must be constructed using NewContract.
 type Contract struct {
+	*neotest.ContractInvoker
+
 	id int32
 
 	exec *neotest.Executor
-
-	invoker *neotest.ContractInvoker
 
 	bNEF      []byte
 	jManifest []byte
@@ -171,11 +171,11 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	require.NoError(tb, err)
 
 	return &Contract{
-		id:        id,
-		exec:      exec,
-		invoker:   exec.NewInvoker(exec.ContractHash(tb, id), alphabetSigner),
-		bNEF:      bNEF,
-		jManifest: jManifest,
+		ContractInvoker: exec.NewInvoker(exec.ContractHash(tb, id), alphabetSigner),
+		id:              id,
+		exec:            exec,
+		bNEF:            bNEF,
+		jManifest:       jManifest,
 	}
 }
 
@@ -183,12 +183,12 @@ func (x *Contract) checkUpdate(tb testing.TB, faultException string, args ...int
 	const updateMethod = "update"
 
 	if faultException != "" {
-		x.invoker.InvokeFail(tb, faultException, updateMethod, x.bNEF, x.jManifest, args)
+		x.InvokeFail(tb, faultException, updateMethod, x.bNEF, x.jManifest, args)
 		return
 	}
 
 	var noResult stackitem.Null
-	x.invoker.Invoke(tb, noResult, updateMethod, x.bNEF, x.jManifest, args)
+	x.Invoke(tb, noResult, updateMethod, x.bNEF, x.jManifest, args)
 }
 
 // CheckUpdateSuccess tests that contract update with given arguments succeeds.
@@ -227,7 +227,7 @@ func makeTestInvoke(tb testing.TB, inv *neotest.ContractInvoker, method string, 
 // Note that Call doesn't change the chain state, so only read (aka safe)
 // methods should be used.
 func (x *Contract) Call(tb testing.TB, method string, args ...interface{}) stackitem.Item {
-	return makeTestInvoke(tb, x.invoker, method, args...)
+	return makeTestInvoke(tb, x.ContractInvoker, method, args...)
 }
 
 // GetStorageItem returns value stored in the tested contract by key.
