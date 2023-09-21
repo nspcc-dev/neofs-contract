@@ -11,7 +11,7 @@ Changelog for NeoFS Contract
 - RPC bindings generation (#345)
 
 ### Updated
-- NNS TLD registration is possible for committee only now (#344)
+- NNS TLD registration is possible for committee only now (#344, #357)
 - NNS TLDs are no longer proper NFTs (#344)
 
 ### Removed
