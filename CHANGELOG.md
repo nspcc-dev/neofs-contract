@@ -4,16 +4,22 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- EACL validation in container.setEACL (#330)
+- Contract storage model documentation (#320)
 - bump minimum required go version up to 1.18 (#346)
+- ability to register predefined TLDs at NNS deployment (#344)
 - RPC bindings generation (#345)
 
 ### Updated
+- NNS TLD registration is possible for committee only now (#344)
+- NNS TLDs are no longer proper NFTs (#344)
 
 ### Removed
 - old unused (notary-disabled) events (#341)
 
 ### Fixed
 - migration of non-notary network to notarized one with stale votes (#333)
+- nns.getAllRecords missing 'safe' mark (#355)
 
 ### Updating from v0.17.0
 
