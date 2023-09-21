@@ -249,7 +249,7 @@ func NewEpoch(epochNum int) {
 // Mint is a method that transfers assets to a user account from an empty account.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 //
-// It produces Mint, Transfer and TransferX notifications.
+// It produces Transfer and TransferX notifications.
 //
 // Mint method is invoked by Alphabet nodes of the Inner Ring when they process
 // Deposit notification from NeoFS contract. Before that, Alphabet nodes should
@@ -272,13 +272,12 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	supply = supply + amount
 	storage.Put(ctx, token.CirculationKey, supply)
 	runtime.Log("assets were minted")
-	runtime.Notify("Mint", to, amount)
 }
 
 // Burn is a method that transfers assets from a user account to an empty account.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 //
-// It produces Burn, Transfer and TransferX notifications.
+// It produces Transfer and TransferX notifications.
 //
 // Burn method is invoked by Alphabet nodes of the Inner Ring when they process
 // Cheque notification from NeoFS contract. It means that locked assets have been
@@ -307,7 +306,6 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	supply = supply - amount
 	storage.Put(ctx, token.CirculationKey, supply)
 	runtime.Log("assets were burned")
-	runtime.Notify("Burn", from, amount)
 }
 
 // Version returns the version of the contract.

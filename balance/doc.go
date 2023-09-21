@@ -57,24 +57,6 @@ Cheque method invocation of NeoFS contract.
 	    type: Integer
 	  - name: until
 	    type: Integer
-
-Mint notification. This notification is produced when user balance is
-replenished from deposit in the mainchain.
-
-	Mint:
-	 - name: to
-	   type: Hash160
-	 - name: amount
-	   type: Integer
-
-Burn notification. This notification is produced after user balance is reduced
-when NeoFS contract has transferred GAS assets back to the user.
-
-	Burn:
-	  - name: from
-	    type: Hash160
-	  - name: amount
-	    type: Integer
 */
 package balance
 
