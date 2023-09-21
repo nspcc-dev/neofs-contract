@@ -148,10 +148,27 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 
 	exec := neotest.NewExecutor(tb, blockChain, alphabetSigner, alphabetSigner)
 
-	// compile and deploy NNS contract
+	// deal with NNS
 	const nnsSourceCodeDir = "../nns"
-	exec.DeployContract(tb,
-		neotest.CompileFile(tb, exec.CommitteeHash, nnsSourceCodeDir, filepath.Join(nnsSourceCodeDir, "config.yml")),
+	nnsCtr := neotest.CompileFile(tb, exec.CommitteeHash, nnsSourceCodeDir, filepath.Join(nnsSourceCodeDir, "config.yml"))
+
+	// Testing NNS.
+	if name == "nns" {
+		bNEF, err := nnsCtr.NEF.Bytes()
+		require.NoError(tb, err)
+
+		jManifest, err := json.Marshal(nnsCtr.Manifest)
+		require.NoError(tb, err)
+		return &Contract{
+			ContractInvoker: exec.NewInvoker(exec.ContractHash(tb, 1), alphabetSigner),
+			id:              1,
+			exec:            exec,
+			bNEF:            bNEF,
+			jManifest:       jManifest,
+		}
+	}
+	// Testing non-NNS. deploy it then.
+	exec.DeployContract(tb, nnsCtr,
 		[]interface{}{
 			[]interface{}{[]interface{}{"neofs", "ops@morphbits.io"}},
 		},
