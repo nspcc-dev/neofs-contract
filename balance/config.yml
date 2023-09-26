@@ -34,15 +34,3 @@ events:
         type: Integer
       - name: details
         type: ByteArray
-  - name: Mint
-    parameters:
-      - name: to
-        type: Hash160
-      - name: amount
-        type: Integer
-  - name: Burn
-    parameters:
-      - name: from
-        type: Hash160
-      - name: amount
-        type: Integer
