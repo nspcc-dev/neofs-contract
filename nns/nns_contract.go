@@ -76,6 +76,13 @@ type RecordState struct {
 	ID   byte
 }
 
+// nsIteratorValue is used for upgrade from 0.17.0 to 0.18.0.
+// nolint:deadcode,unused
+type nsIteratorValue struct {
+	k []byte
+	v NameState
+}
+
 // Update updates NameService contract.
 func Update(nef []byte, manifest string, data interface{}) {
 	checkCommittee()
@@ -93,7 +100,32 @@ func Update(nef []byte, manifest string, data interface{}) {
 func _deploy(data interface{}, isUpdate bool) {
 	if isUpdate {
 		args := data.([]interface{})
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+		common.CheckVersion(version)
+
+		if version >= 18_000 {
+			return
+		}
+
+		// From 0.17.0 to 0.18.0.
+		// Upgrade TLD owners to nil value, they're committee-owned.
+		var (
+			ctx  = storage.GetContext()
+			iter = storage.Find(ctx, []byte{prefixName}, storage.DeserializeValues)
+			rec  nsIteratorValue
+			ser  []byte
+		)
+		for iterator.Next(iter) {
+			rec = iterator.Value(iter).(nsIteratorValue)
+			if std.MemorySearch([]byte(rec.v.Name), []byte{'.'}) != -1 { // Non-TLD
+				continue
+			}
+			updateBalance(ctx, []byte(rec.v.Name), rec.v.Owner, -1)
+			rec.v.Owner = nil
+			ser = std.Serialize(rec.v)
+			storage.Put(ctx, rec.k, ser)
+		}
+
 		return
 	}
 

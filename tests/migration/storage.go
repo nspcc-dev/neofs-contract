@@ -41,11 +41,11 @@ import (
 //
 // Contract instances must be constructed using NewContract.
 type Contract struct {
+	*neotest.ContractInvoker
+
 	id int32
 
 	exec *neotest.Executor
-
-	invoker *neotest.ContractInvoker
 
 	bNEF      []byte
 	jManifest []byte
@@ -78,14 +78,14 @@ type ContractOptions struct {
 func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOptions) *Contract {
 	lowLevelStore := storage.NewMemoryStore()
 	cachedStore := storage.NewMemCachedStore(lowLevelStore) // mem-cached store has sweeter interface
-	_dao := dao.NewSimple(lowLevelStore, false, true)
+	_dao := dao.NewSimple(lowLevelStore, false)
 
 	var id int32
 	found := false
 
 	nativeContracts := native.NewContracts(config.ProtocolConfiguration{})
 
-	err := nativeContracts.Management.InitializeCache(_dao)
+	err := nativeContracts.Management.InitializeCache(0, _dao)
 	require.NoError(tb, err)
 
 	mNameToID := make(map[string]int32)
@@ -148,10 +148,27 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 
 	exec := neotest.NewExecutor(tb, blockChain, alphabetSigner, alphabetSigner)
 
-	// compile and deploy NNS contract
+	// deal with NNS
 	const nnsSourceCodeDir = "../nns"
-	exec.DeployContract(tb,
-		neotest.CompileFile(tb, exec.CommitteeHash, nnsSourceCodeDir, filepath.Join(nnsSourceCodeDir, "config.yml")),
+	nnsCtr := neotest.CompileFile(tb, exec.CommitteeHash, nnsSourceCodeDir, filepath.Join(nnsSourceCodeDir, "config.yml"))
+
+	// Testing NNS.
+	if name == "nns" {
+		bNEF, err := nnsCtr.NEF.Bytes()
+		require.NoError(tb, err)
+
+		jManifest, err := json.Marshal(nnsCtr.Manifest)
+		require.NoError(tb, err)
+		return &Contract{
+			ContractInvoker: exec.NewInvoker(exec.ContractHash(tb, 1), alphabetSigner),
+			id:              1,
+			exec:            exec,
+			bNEF:            bNEF,
+			jManifest:       jManifest,
+		}
+	}
+	// Testing non-NNS. deploy it then.
+	exec.DeployContract(tb, nnsCtr,
 		[]interface{}{
 			[]interface{}{[]interface{}{"neofs", "ops@morphbits.io"}},
 		},
@@ -171,11 +188,11 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	require.NoError(tb, err)
 
 	return &Contract{
-		id:        id,
-		exec:      exec,
-		invoker:   exec.NewInvoker(exec.ContractHash(tb, id), alphabetSigner),
-		bNEF:      bNEF,
-		jManifest: jManifest,
+		ContractInvoker: exec.NewInvoker(exec.ContractHash(tb, id), alphabetSigner),
+		id:              id,
+		exec:            exec,
+		bNEF:            bNEF,
+		jManifest:       jManifest,
 	}
 }
 
@@ -183,12 +200,12 @@ func (x *Contract) checkUpdate(tb testing.TB, faultException string, args ...int
 	const updateMethod = "update"
 
 	if faultException != "" {
-		x.invoker.InvokeFail(tb, faultException, updateMethod, x.bNEF, x.jManifest, args)
+		x.InvokeFail(tb, faultException, updateMethod, x.bNEF, x.jManifest, args)
 		return
 	}
 
 	var noResult stackitem.Null
-	x.invoker.Invoke(tb, noResult, updateMethod, x.bNEF, x.jManifest, args)
+	x.Invoke(tb, noResult, updateMethod, x.bNEF, x.jManifest, args)
 }
 
 // CheckUpdateSuccess tests that contract update with given arguments succeeds.
@@ -227,7 +244,7 @@ func makeTestInvoke(tb testing.TB, inv *neotest.ContractInvoker, method string, 
 // Note that Call doesn't change the chain state, so only read (aka safe)
 // methods should be used.
 func (x *Contract) Call(tb testing.TB, method string, args ...interface{}) stackitem.Item {
-	return makeTestInvoke(tb, x.invoker, method, args...)
+	return makeTestInvoke(tb, x.ContractInvoker, method, args...)
 }
 
 // GetStorageItem returns value stored in the tested contract by key.
