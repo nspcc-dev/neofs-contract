@@ -417,6 +417,19 @@ func Owner(containerID []byte) []byte {
 	return owner
 }
 
+// Alias method returns a string with an alias of the container if it's set
+// (Null otherwise).
+//
+// If the container doesn't exist, it panics with NotFoundError.
+func Alias(cid []byte) string {
+	ctx := storage.GetReadOnlyContext()
+	owner := getOwnerByID(ctx, cid)
+	if owner == nil {
+		panic(NotFoundError)
+	}
+	return storage.Get(ctx, append([]byte(nnsHasAliasKey), cid...)).(string)
+}
+
 // Count method returns the number of registered containers.
 func Count() int {
 	count := 0
