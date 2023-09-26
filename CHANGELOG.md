@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- Obsolete subnet contract (#364)
 
 ### Fixed
 
