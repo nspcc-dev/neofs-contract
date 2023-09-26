@@ -4,11 +4,25 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+
+### Updated
+
+### Removed
+
+### Fixed
+
+### Updating from v0.18.0
+
+## [0.18.0] - 2023-09-26
+
+### Added
 - EACL validation in container.setEACL (#330)
 - Contract storage model documentation (#320)
 - Bump minimum required go version up to 1.18 (#346)
 - Ability to register predefined TLDs at NNS deployment (#344)
 - RPC bindings generation (#345)
+- Method to get container name by its ID (#360)
+- Convenience methods for NNS contract (#361)
 
 ### Updated
 - NNS TLD registration is possible for committee only now (#344, #357)
@@ -16,12 +30,12 @@ Changelog for NeoFS Contract
 
 ### Removed
 - Old unused (notary-disabled) events (#341)
+- Unused Burn/Mint balance contract events (#358)
 
 ### Fixed
 - Migration of non-notary network to notarized one with stale votes (#333)
 - nns.getAllRecords missing 'safe' mark (#355)
-
-### Updating from v0.17.0
+- Stale EACL record left after container deletion (#359)
 
 ## [0.17.0] - 2023-04-06
 
@@ -448,7 +462,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...master
+[0.18.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.4...v0.15.5
