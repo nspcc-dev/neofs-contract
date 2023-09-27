@@ -31,4 +31,3 @@ Description: NeoFS-Contract contains all NeoFS related contracts.
  - nns
  - proxy
  - reputation
- - subnet

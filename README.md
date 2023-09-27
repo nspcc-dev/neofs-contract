@@ -29,7 +29,6 @@ Sidechain contracts:
 - nns
 - proxy
 - reputation
-- subnet
 
 # Getting started 
 

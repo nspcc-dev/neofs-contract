@@ -77,7 +77,6 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 		"neofsid",
 		"netmap",
 		"reputation",
-		"subnet",
 	} {
 		log.Printf("Processing contract '%s'...\n", name)
 
