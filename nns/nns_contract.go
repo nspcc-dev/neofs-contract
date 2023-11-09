@@ -422,7 +422,7 @@ func saveCommitteeDomain(ctx storage.Context, name, email string, refresh, retry
 	}
 
 	tldKey := makeTLDKey(name)
-	if storage.Get(ctx, tldKey) != nil {
+	if storage.Get(ctx, tldKey) != nil && !parentExpired(ctx, 0, fragments) {
 		panic("TLD already exists")
 	}
 
