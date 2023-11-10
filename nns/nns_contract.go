@@ -84,7 +84,7 @@ type nsIteratorValue struct {
 }
 
 // Update updates NameService contract.
-func Update(nef []byte, manifest string, data interface{}) {
+func Update(nef []byte, manifest string, data any) {
 	checkCommittee()
 	// Calculating keys and serializing requires calling
 	// std and crypto contracts. This can be helpful on update
@@ -97,9 +97,9 @@ func Update(nef []byte, manifest string, data interface{}) {
 
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
@@ -190,7 +190,7 @@ func OwnerOf(tokenID []byte) interop.Hash160 {
 
 // Properties returns a domain name and an expiration date of the specified domain.
 // The tokenID MUST NOT be a TLD.
-func Properties(tokenID []byte) map[string]interface{} {
+func Properties(tokenID []byte) map[string]any {
 	fragments := std.StringSplit(string(tokenID), ".")
 	if len(fragments) == 1 {
 		panic("token not found")
@@ -198,7 +198,7 @@ func Properties(tokenID []byte) map[string]interface{} {
 
 	ctx := storage.GetReadOnlyContext()
 	ns := getFragmentedNameState(ctx, tokenID, fragments)
-	return map[string]interface{}{
+	return map[string]any{
 		"name":       ns.Name,
 		"expiration": ns.Expiration,
 	}
@@ -234,7 +234,7 @@ func TokensOf(owner interop.Hash160) iterator.Iterator {
 
 // Transfer transfers the domain with the specified name to a new owner.
 // The tokenID MUST NOT be a TLD.
-func Transfer(to interop.Hash160, tokenID []byte, data interface{}) bool {
+func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 	if !isValid(to) {
 		panic(`invalid receiver`)
 	}
@@ -640,7 +640,7 @@ func updateBalance(ctx storage.Context, tokenId []byte, acc interop.Hash160, dif
 
 // postTransfer sends Transfer notification to the network and calls onNEP11Payment
 // method.
-func postTransfer(from, to interop.Hash160, tokenID []byte, data interface{}) {
+func postTransfer(from, to interop.Hash160, tokenID []byte, data any) {
 	runtime.Notify("Transfer", from, to, 1, tokenID)
 	if management.GetContract(to) != nil {
 		contract.Call(to, "onNEP11Payment", contract.All, from, 1, tokenID, data)

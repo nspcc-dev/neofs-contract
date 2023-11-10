@@ -46,11 +46,11 @@ var (
 
 // _deploy sets up initial alphabet node keys.
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		common.CheckVersion(args[len(args)-1].(int))
 		return
 	}
@@ -106,7 +106,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by sidechain committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	blockHeight := ledger.CurrentIndex()
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
 	alphabetCommittee := common.Multiaddress(alphabetKeys, true)
@@ -234,7 +234,7 @@ func InnerRingCandidateAdd(key interop.PublicKey) {
 // It takes no more than 9000.0 GAS. Native GAS has precision 8, and
 // NeoFS balance contract has precision 12. Values bigger than 9000.0 can
 // break JSON limits for integers when precision is converted.
-func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
+func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	rcv := data.(interop.Hash160)
 	if rcv.Equals(ignoreDepositNotification) {
 		return
@@ -463,7 +463,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 
 // Config returns configuration value of NeoFS configuration. If the key does
 // not exist, returns nil.
-func Config(key []byte) interface{} {
+func Config(key []byte) any {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
@@ -544,7 +544,7 @@ func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
 }
 
 // getConfig returns the installed neofs configuration value or nil if it is not set.
-func getConfig(ctx storage.Context, key interface{}) interface{} {
+func getConfig(ctx storage.Context, key any) any {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
 
@@ -552,7 +552,7 @@ func getConfig(ctx storage.Context, key interface{}) interface{} {
 }
 
 // setConfig sets a neofs configuration value in the contract storage.
-func setConfig(ctx storage.Context, key, val interface{}) {
+func setConfig(ctx storage.Context, key, val any) {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
 

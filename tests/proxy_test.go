@@ -12,7 +12,7 @@ import (
 const proxyPath = "../proxy"
 
 func deployProxyContract(t *testing.T, e *neotest.Executor, addrNetmap util.Uint160) util.Uint160 {
-	args := make([]interface{}, 1)
+	args := make([]any, 1)
 	args[0] = addrNetmap
 
 	c := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))

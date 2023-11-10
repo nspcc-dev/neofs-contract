@@ -21,24 +21,24 @@ import (
 const neofsPath = "../neofs"
 
 func deployNeoFSContract(t *testing.T, e *neotest.Executor, addrProc util.Uint160,
-	pubs keys.PublicKeys, config ...interface{}) util.Uint160 {
-	args := make([]interface{}, 5)
+	pubs keys.PublicKeys, config ...any) util.Uint160 {
+	args := make([]any, 5)
 	args[0] = false
 	args[1] = addrProc
 
-	arr := make([]interface{}, len(pubs))
+	arr := make([]any, len(pubs))
 	for i := range pubs {
 		arr[i] = pubs[i].Bytes()
 	}
 	args[2] = arr
-	args[3] = append([]interface{}{}, config...)
+	args[3] = append([]any{}, config...)
 
 	c := neotest.CompileFile(t, e.CommitteeHash, neofsPath, path.Join(neofsPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	return c.Hash
 }
 
-func newNeoFSInvoker(t *testing.T, n int, config ...interface{}) (*neotest.ContractInvoker, neotest.Signer, keys.PublicKeys) {
+func newNeoFSInvoker(t *testing.T, n int, config ...any) (*neotest.ContractInvoker, neotest.Signer, keys.PublicKeys) {
 	e := newExecutor(t)
 
 	accounts := make([]*wallet.Account, n)

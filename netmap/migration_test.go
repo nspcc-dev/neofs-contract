@@ -31,12 +31,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
 
 	var notary bool
-	updPrm := []interface{}{
+	updPrm := []any{
 		!notary,
 		util.Uint160{},  // Balance contract
 		util.Uint160{},  // Container contract
-		[]interface{}{}, // Key list, unused
-		[]interface{}{}, // Config
+		[]any{}, // Key list, unused
+		[]any{}, // Config
 	}
 
 	migration.SkipUnsupportedVersions(t, c, updPrm...)

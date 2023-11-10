@@ -21,23 +21,23 @@ import (
 
 const netmapPath = "../netmap"
 
-func deployNetmapContract(t *testing.T, e *neotest.Executor, addrBalance, addrContainer util.Uint160, config ...interface{}) util.Uint160 {
+func deployNetmapContract(t *testing.T, e *neotest.Executor, addrBalance, addrContainer util.Uint160, config ...any) util.Uint160 {
 	_, pubs, ok := vm.ParseMultiSigContract(e.Committee.Script())
 	require.True(t, ok)
 
-	args := make([]interface{}, 5)
+	args := make([]any, 5)
 	args[0] = false
 	args[1] = addrBalance
 	args[2] = addrContainer
-	args[3] = []interface{}{pubs[0]}
-	args[4] = append([]interface{}{}, config...)
+	args[3] = []any{pubs[0]}
+	args[4] = append([]any{}, config...)
 
 	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	return c.Hash
 }
 
-func newNetmapInvoker(t *testing.T, config ...interface{}) *neotest.ContractInvoker {
+func newNetmapInvoker(t *testing.T, config ...any) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
 	ctrNNS := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))

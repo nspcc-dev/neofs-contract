@@ -28,7 +28,7 @@ type (
 const maxKeySize = 24 // 24 + 32 (container ID length) + 8 (epoch length) = 64
 
 func (a AuditHeader) ID() []byte {
-	var buf interface{} = a.Epoch
+	var buf any = a.Epoch
 
 	hashedKey := crypto.Sha256(a.From)
 	shortedKey := hashedKey[:maxKeySize]
@@ -37,10 +37,10 @@ func (a AuditHeader) ID() []byte {
 }
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
@@ -89,7 +89,7 @@ func switchToNotary(ctx storage.Context) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
@@ -150,7 +150,7 @@ func List() [][]byte {
 // the specified epoch.
 func ListByEpoch(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
-	var buf interface{} = epoch
+	var buf any = epoch
 	it := storage.Find(ctx, buf.([]byte), storage.KeysOnly)
 
 	return list(it)
@@ -161,7 +161,7 @@ func ListByEpoch(epoch int) [][]byte {
 func ListByCID(epoch int, cid []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	prefix := append(buf.([]byte), cid...)
 	it := storage.Find(ctx, prefix, storage.KeysOnly)
@@ -202,7 +202,7 @@ func Version() int {
 
 // readNext reads the length from the first byte, and then reads data (max 127 bytes).
 func readNext(input []byte) ([]byte, int) {
-	var buf interface{} = input[0]
+	var buf any = input[0]
 	ln := buf.(int)
 
 	return input[1 : 1+ln], 1 + ln
@@ -213,7 +213,7 @@ func newAuditHeader(input []byte) AuditHeader {
 	offset := int(input[1])
 	offset = 2 + offset + 1 // version prefix + version len + epoch prefix
 
-	var buf interface{} = input[offset : offset+8] // [ 8 integer bytes ]
+	var buf any = input[offset : offset+8] // [ 8 integer bytes ]
 	epoch := buf.(int)
 
 	offset = offset + 8

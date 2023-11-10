@@ -95,14 +95,14 @@ var (
 )
 
 // OnNEP11Payment is needed for registration with contract as the owner to work.
-func OnNEP11Payment(a interop.Hash160, b int, c []byte, d interface{}) {
+func OnNEP11Payment(a interop.Hash160, b int, c []byte, d any) {
 }
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
@@ -215,7 +215,7 @@ func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // by committee only.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
@@ -382,7 +382,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		// and inability to delete a container. We should also check if we own the record in case.
 		nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
 		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
-		if res != nil && std.Base58Encode(containerID) == string(res.([]interface{})[0].(string)) {
+		if res != nil && std.Base58Encode(containerID) == string(res.([]any)[0].(string)) {
 			contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
 		}
 	}
@@ -607,7 +607,7 @@ func GetContainerSize(id []byte) ContainerSizes {
 func ListContainerSizes(epoch int) [][]byte {
 	ctx := storage.GetReadOnlyContext()
 
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	key := []byte(estimateKeyPrefix)
 	key = append(key, buf.([]byte)...)
@@ -644,7 +644,7 @@ func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 
 	ctx := storage.GetReadOnlyContext()
 
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	key := []byte(estimateKeyPrefix)
 	key = append(key, buf.([]byte)...)
@@ -660,7 +660,7 @@ func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 func IterateAllContainerSizes(epoch int) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	key := []byte(estimateKeyPrefix)
 	key = append(key, buf.([]byte)...)
@@ -771,7 +771,7 @@ func ownerFromBinaryContainer(container []byte) []byte {
 }
 
 func estimationKey(epoch int, cid []byte, key interop.PublicKey) []byte {
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	hash := crypto.Ripemd160(key)
 
@@ -849,7 +849,7 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 		// V2 format
 		nbytes := k[len(estimateKeyPrefix) : len(k)-containerIDSize-estimatePostfixSize]
 
-		var n interface{} = nbytes
+		var n any = nbytes
 
 		if epoch-n.(int) > TotalCleanupDelta {
 			storage.Delete(ctx, k)

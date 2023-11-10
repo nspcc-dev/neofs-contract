@@ -27,7 +27,7 @@ const (
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO
 // contracts.
-func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
+func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	caller := runtime.GetCallingScriptHash()
 	if !caller.Equals(gas.Hash) && !caller.Equals(neo.Hash) {
 		common.AbortWithMessage("alphabet contract accepts GAS and NEO only")
@@ -35,10 +35,10 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
@@ -98,7 +98,7 @@ func _deploy(data interface{}, isUpdate bool) {
 // switchToNotary removes value stored by 'notary' key.
 //
 // nolint:unused
-func switchToNotary(ctx storage.Context, args []interface{}) {
+func switchToNotary(ctx storage.Context, args []any) {
 	const notaryDisabledKey = "notary" // non-notary legacy
 	contractName := args[3].(string)
 
@@ -185,7 +185,7 @@ func switchToNotary(ctx storage.Context, args []interface{}) {
 
 		// see https://github.com/nspcc-dev/neo-go/blob/v0.101.0/docs/notary.md#1-notary-deposit
 		const lockInterval = 6 * 30 * 24 * 60 * 4 // 6 months blocks of 15s
-		notaryTransferData := []interface{}{
+		notaryTransferData := []any{
 			nil,                                  // receiver account (set in loop)
 			ledger.CurrentIndex() + lockInterval, // till
 		}
@@ -227,7 +227,7 @@ func switchToNotary(ctx storage.Context, args []interface{}) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}

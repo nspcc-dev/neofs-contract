@@ -24,8 +24,8 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func replaceArgI(vs []interface{}, i int, v interface{}) []interface{} {
-	res := make([]interface{}, len(vs))
+func replaceArgI(vs []any, i int, v any) []any {
+	res := make([]any, len(vs))
 	copy(res, vs)
 	res[i] = v
 	return res
@@ -77,7 +77,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	// try to update the contract
 	proxyContract := randUint160()
-	updPrm := []interface{}{
+	updPrm := []any{
 		false,         // non-notary mode
 		randUint160(), // unused
 		[]byte{},      // Proxy contract (custom)

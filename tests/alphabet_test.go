@@ -20,7 +20,7 @@ const alphabetPath = "../alphabet"
 func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy util.Uint160, name string, index, total int64) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
 
-	args := make([]interface{}, 6)
+	args := make([]any, 6)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrProxy
@@ -87,8 +87,8 @@ func TestVote(t *testing.T) {
 	require.True(t, ok)
 	cNewAlphabet := c.WithSigners(newAlphabet)
 
-	cNewAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, method, int64(0), []interface{}{newAlphabetPub})
-	c.InvokeFail(t, "invalid epoch", method, int64(1), []interface{}{newAlphabetPub})
+	cNewAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, method, int64(0), []any{newAlphabetPub})
+	c.InvokeFail(t, "invalid epoch", method, int64(1), []any{newAlphabetPub})
 
 	setAlphabetRole(t, e, newAlphabetPub)
 	transferNeoToContract(t, c)
@@ -108,7 +108,7 @@ func TestVote(t *testing.T) {
 	newInvoker := neoInvoker.WithSigners(newAlphabet)
 
 	newInvoker.Invoke(t, stackitem.NewBool(true), "registerCandidate", newAlphabetPub)
-	c.Invoke(t, stackitem.Null{}, method, int64(0), []interface{}{newAlphabetPub})
+	c.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
 
 	// wait one block util
 	// a new committee is accepted

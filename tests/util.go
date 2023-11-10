@@ -75,7 +75,7 @@ func setAlphabetRole(tb testing.TB, e *neotest.Executor, key []byte) {
 }
 
 func _setAlphabetRole(tb testing.TB, e *neotest.Executor, _keys [][]byte) {
-	keysArg := make([]interface{}, len(_keys))
+	keysArg := make([]any, len(_keys))
 	for i := range _keys {
 		keysArg[i] = _keys[i]
 	}
