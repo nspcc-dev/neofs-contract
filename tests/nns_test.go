@@ -246,6 +246,8 @@ func TestExpiration(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(msPerYear/1000*10), int64(104)
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"newtld", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 	c.Invoke(t, true, "register",
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
@@ -278,6 +280,13 @@ func TestExpiration(t *testing.T) {
 
 	c.InvokeFail(t, "name has expired", "getAllRecords", "testdomain.com")
 	c.InvokeFail(t, "name has expired", "ownerOf", "testdomain.com")
+
+	c.InvokeFail(t, "name has expired", "renew", "newtld")
+	c.Invoke(t, stackitem.Null{}, "registerTLD",
+		"newtld", "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 }
 
 func TestNNSSetAdmin(t *testing.T) {
