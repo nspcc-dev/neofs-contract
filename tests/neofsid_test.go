@@ -19,7 +19,7 @@ import (
 const neofsidPath = "../neofsid"
 
 func deployNeoFSIDContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
-	args := make([]interface{}, 5)
+	args := make([]any, 5)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrContainer
@@ -59,7 +59,7 @@ func TestNeoFSID_AddKey(t *testing.T) {
 	acc := e.NewAccount(t)
 	owner, _ := base58.Decode(address.Uint160ToString(acc.ScriptHash()))
 	e.Invoke(t, stackitem.Null{}, "addKey", owner,
-		[]interface{}{pubs[0], pubs[1]})
+		[]any{pubs[0], pubs[1]})
 
 	sort.Slice(pubs[:2], func(i, j int) bool {
 		return bytes.Compare(pubs[i], pubs[j]) == -1
@@ -71,8 +71,8 @@ func TestNeoFSID_AddKey(t *testing.T) {
 	e.Invoke(t, stackitem.NewArray(arr), "key", owner)
 
 	t.Run("multiple addKey per block", func(t *testing.T) {
-		tx1 := e.PrepareInvoke(t, "addKey", owner, []interface{}{pubs[2]})
-		tx2 := e.PrepareInvoke(t, "addKey", owner, []interface{}{pubs[3], pubs[4]})
+		tx1 := e.PrepareInvoke(t, "addKey", owner, []any{pubs[2]})
+		tx2 := e.PrepareInvoke(t, "addKey", owner, []any{pubs[3], pubs[4]})
 		e.AddNewBlock(t, tx1, tx2)
 		e.CheckHalt(t, tx1.Hash(), stackitem.Null{})
 		e.CheckHalt(t, tx2.Hash(), stackitem.Null{})
@@ -91,7 +91,7 @@ func TestNeoFSID_AddKey(t *testing.T) {
 	})
 
 	e.Invoke(t, stackitem.Null{}, "removeKey", owner,
-		[]interface{}{pubs[1], pubs[5]})
+		[]any{pubs[1], pubs[5]})
 	arr = []stackitem.Item{
 		stackitem.NewBuffer(pubs[0]),
 		stackitem.NewBuffer(pubs[2]),
@@ -101,8 +101,8 @@ func TestNeoFSID_AddKey(t *testing.T) {
 	e.Invoke(t, stackitem.NewArray(arr), "key", owner)
 
 	t.Run("multiple removeKey per block", func(t *testing.T) {
-		tx1 := e.PrepareInvoke(t, "removeKey", owner, []interface{}{pubs[2]})
-		tx2 := e.PrepareInvoke(t, "removeKey", owner, []interface{}{pubs[0], pubs[4]})
+		tx1 := e.PrepareInvoke(t, "removeKey", owner, []any{pubs[2]})
+		tx2 := e.PrepareInvoke(t, "removeKey", owner, []any{pubs[0], pubs[4]})
 		e.AddNewBlock(t, tx1, tx2)
 		e.CheckHalt(t, tx1.Hash(), stackitem.Null{})
 		e.CheckHalt(t, tx2.Hash(), stackitem.Null{})

@@ -90,7 +90,7 @@ var (
 
 // _deploy function sets up initial list of inner ring public keys.
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	var args = data.(struct {
@@ -217,7 +217,7 @@ func switchToNotary(ctx storage.Context) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
@@ -557,7 +557,7 @@ func SnapshotByEpoch(epoch int) []Node {
 
 // Config returns configuration value of NeoFS configuration. If key does
 // not exist, returns nil.
-func Config(key []byte) interface{} {
+func Config(key []byte) any {
 	ctx := storage.GetReadOnlyContext()
 	return getConfig(ctx, key)
 }
@@ -670,14 +670,14 @@ func getSnapshot(ctx storage.Context, key string) []Node {
 	return []Node{}
 }
 
-func getConfig(ctx storage.Context, key interface{}) interface{} {
+func getConfig(ctx storage.Context, key any) any {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
 
 	return storage.Get(ctx, storageKey)
 }
 
-func setConfig(ctx storage.Context, key, val interface{}) {
+func setConfig(ctx storage.Context, key, val any) {
 	postfix := key.([]byte)
 	storageKey := append(configPrefix, postfix...)
 

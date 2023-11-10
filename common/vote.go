@@ -134,7 +134,7 @@ func BytesEqual(a []byte, b []byte) bool {
 
 // InvokeID returns hashed value of prefix and args concatenation. Iy is used to
 // identify different ballots.
-func InvokeID(args []interface{}, prefix []byte) []byte {
+func InvokeID(args []any, prefix []byte) []byte {
 	for i := range args {
 		arg := args[i].([]byte)
 		prefix = append(prefix, arg...)

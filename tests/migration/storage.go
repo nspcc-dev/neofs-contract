@@ -169,8 +169,8 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	}
 	// Testing non-NNS. deploy it then.
 	exec.DeployContract(tb, nnsCtr,
-		[]interface{}{
-			[]interface{}{[]interface{}{"neofs", "ops@morphbits.io"}},
+		[]any{
+			[]any{[]any{"neofs", "ops@morphbits.io"}},
 		},
 	)
 
@@ -196,7 +196,7 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	}
 }
 
-func (x *Contract) checkUpdate(tb testing.TB, faultException string, args ...interface{}) {
+func (x *Contract) checkUpdate(tb testing.TB, faultException string, args ...any) {
 	const updateMethod = "update"
 
 	if faultException != "" {
@@ -211,7 +211,7 @@ func (x *Contract) checkUpdate(tb testing.TB, faultException string, args ...int
 // CheckUpdateSuccess tests that contract update with given arguments succeeds.
 // Contract executable (NEF and manifest) is compiled from source code (see
 // NewContract for details).
-func (x *Contract) CheckUpdateSuccess(tb testing.TB, args ...interface{}) {
+func (x *Contract) CheckUpdateSuccess(tb testing.TB, args ...any) {
 	x.checkUpdate(tb, "", args...)
 }
 
@@ -219,11 +219,11 @@ func (x *Contract) CheckUpdateSuccess(tb testing.TB, args ...interface{}) {
 // exception.
 //
 // See also CheckUpdateSuccess.
-func (x *Contract) CheckUpdateFail(tb testing.TB, faultException string, args ...interface{}) {
+func (x *Contract) CheckUpdateFail(tb testing.TB, faultException string, args ...any) {
 	x.checkUpdate(tb, faultException, args...)
 }
 
-func makeTestInvoke(tb testing.TB, inv *neotest.ContractInvoker, method string, args ...interface{}) stackitem.Item {
+func makeTestInvoke(tb testing.TB, inv *neotest.ContractInvoker, method string, args ...any) stackitem.Item {
 	vmStack, err := inv.TestInvoke(tb, method, args...)
 	require.NoError(tb, err, "method '%s'", method)
 
@@ -243,7 +243,7 @@ func makeTestInvoke(tb testing.TB, inv *neotest.ContractInvoker, method string, 
 //
 // Note that Call doesn't change the chain state, so only read (aka safe)
 // methods should be used.
-func (x *Contract) Call(tb testing.TB, method string, args ...interface{}) stackitem.Item {
+func (x *Contract) Call(tb testing.TB, method string, args ...any) stackitem.Item {
 	return makeTestInvoke(tb, x.ContractInvoker, method, args...)
 }
 

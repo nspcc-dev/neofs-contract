@@ -42,9 +42,9 @@ func CheckVersion(from int) {
 }
 
 // AppendVersion appends current contract version to the list of deploy arguments.
-func AppendVersion(data interface{}) []interface{} {
+func AppendVersion(data any) []any {
 	if data == nil {
-		return []interface{}{Version}
+		return []any{Version}
 	}
-	return append(data.([]interface{}), Version)
+	return append(data.([]any), Version)
 }

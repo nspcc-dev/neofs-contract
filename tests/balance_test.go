@@ -14,7 +14,7 @@ const balancePath = "../balance"
 func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
 
-	args := make([]interface{}, 3)
+	args := make([]any, 3)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrContainer

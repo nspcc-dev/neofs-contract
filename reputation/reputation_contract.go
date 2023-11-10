@@ -17,11 +17,11 @@ const (
 )
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
@@ -74,7 +74,7 @@ func switchToNotary(ctx storage.Context) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
@@ -160,7 +160,7 @@ func Version() int {
 }
 
 func storageID(epoch int, peerID []byte) []byte {
-	var buf interface{} = epoch
+	var buf any = epoch
 
 	return append(buf.([]byte), peerID...)
 }

@@ -25,11 +25,11 @@ func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.Contra
 	e := newExecutor(t)
 	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
 	if len(tldSet) > 0 {
-		_tldSet := make([]interface{}, len(tldSet))
+		_tldSet := make([]any, len(tldSet))
 		for i := range tldSet {
-			_tldSet[i] = []interface{}{tldSet[i], "user@domain.org"}
+			_tldSet[i] = []any{tldSet[i], "user@domain.org"}
 		}
-		e.DeployContract(t, ctr, []interface{}{_tldSet})
+		e.DeployContract(t, ctr, []any{_tldSet})
 	} else {
 		e.DeployContract(t, ctr, nil)
 	}
@@ -130,8 +130,8 @@ func TestNNSRegister(t *testing.T) {
 func TestNNSRegisterMulti(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
-	newArgs := func(domain string, account neotest.Signer) []interface{} {
-		return []interface{}{
+	newArgs := func(domain string, account neotest.Signer) []any {
+		return []any{
 			domain, account.ScriptHash(), "doesnt@matter.com",
 			int64(101), int64(102), int64(103), int64(104),
 		}

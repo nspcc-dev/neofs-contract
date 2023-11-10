@@ -14,7 +14,7 @@ const processingPath = "../processing"
 func deployProcessingContract(t *testing.T, e *neotest.Executor, addrNeoFS util.Uint160) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, processingPath, path.Join(processingPath, "config.yml"))
 
-	args := make([]interface{}, 1)
+	args := make([]any, 1)
 	args[0] = addrNeoFS
 
 	e.DeployContract(t, c, args)

@@ -11,7 +11,7 @@ import (
 )
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
-func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
+func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	caller := runtime.GetCallingScriptHash()
 	if !caller.Equals(gas.Hash) {
 		common.AbortWithMessage("proxy contract accepts GAS only")
@@ -19,9 +19,9 @@ func OnNEP17Payment(from interop.Hash160, amount int, data interface{}) {
 }
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		common.CheckVersion(args[len(args)-1].(int))
 		return
 	}
@@ -31,7 +31,7 @@ func _deploy(data interface{}, isUpdate bool) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}

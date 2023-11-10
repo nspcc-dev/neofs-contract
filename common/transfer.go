@@ -31,7 +31,7 @@ func LockTransferDetails(txDetails []byte) []byte {
 }
 
 func UnlockTransferDetails(epoch int) []byte {
-	var buf interface{} = epoch
+	var buf any = epoch
 	return append(unlockPrefix, buf.([]byte)...)
 }
 

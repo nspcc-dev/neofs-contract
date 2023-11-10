@@ -37,7 +37,7 @@ func (x nopCloseStore) Close() error {
 // 'version' method and checks can the Contract be updated similar to
 // common.CheckVersion. If not, SkipUnsupportedVersions skips corresponding
 // test.
-func SkipUnsupportedVersions(tb testing.TB, c *Contract, updPrms ...interface{}) {
+func SkipUnsupportedVersions(tb testing.TB, c *Contract, updPrms ...any) {
 	n, err := c.Call(tb, "version").TryInteger()
 	require.NoError(tb, err, "version response must be integer-convertible")
 

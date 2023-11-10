@@ -55,10 +55,10 @@ func init() {
 }
 
 // nolint:deadcode,unused
-func _deploy(data interface{}, isUpdate bool) {
+func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
-		args := data.([]interface{})
+		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
@@ -114,7 +114,7 @@ func switchToNotary(ctx storage.Context) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data interface{}) {
+func Update(script []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
@@ -154,7 +154,7 @@ func BalanceOf(account interop.Hash160) int {
 //
 // It produces Transfer and TransferX notifications. TransferX notification
 // will have empty details field.
-func Transfer(from, to interop.Hash160, amount int, data interface{}) bool {
+func Transfer(from, to interop.Hash160, amount int, data any) bool {
 	ctx := storage.GetContext()
 	return token.transfer(ctx, from, to, amount, false, nil)
 }
@@ -399,7 +399,7 @@ func isUsableAddress(addr interop.Hash160) bool {
 	return false
 }
 
-func getAccount(ctx storage.Context, key interface{}) Account {
+func getAccount(ctx storage.Context, key any) Account {
 	data := storage.Get(ctx, key)
 	if data != nil {
 		return std.Deserialize(data.([]byte)).(Account)

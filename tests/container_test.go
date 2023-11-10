@@ -27,7 +27,7 @@ const (
 )
 
 func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addrBalance, addrNNS util.Uint160) util.Uint160 {
-	args := make([]interface{}, 6)
+	args := make([]any, 6)
 	args[0] = int64(0)
 	args[1] = addrNetmap
 	args[2] = addrBalance
@@ -167,7 +167,7 @@ func TestContainerPut(t *testing.T) {
 	acc := c.NewAccount(t)
 	cnt := dummyContainer(acc)
 
-	putArgs := []interface{}{cnt.value, cnt.sig, cnt.pub, cnt.token}
+	putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token}
 	c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
 
 	balanceMint(t, cBal, acc, containerFee*1, []byte{})
@@ -184,7 +184,7 @@ func TestContainerPut(t *testing.T) {
 
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
 
-		putArgs := []interface{}{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
+		putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
 		t.Run("no fee for alias", func(t *testing.T) {
 			c.InvokeFail(t, "insufficient balance to create container", "putNamed", putArgs...)
 		})
@@ -219,7 +219,7 @@ func TestContainerPut(t *testing.T) {
 
 			balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
 
-			putArgs := []interface{}{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
+			putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
 			c2 := c.WithSigners(c.Committee, acc)
 			c2.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
 
@@ -324,7 +324,7 @@ func TestContainerSetEACL(t *testing.T) {
 	})
 
 	e := dummyEACL(cnt.id)
-	setArgs := []interface{}{e.value, e.sig, e.pub, e.token}
+	setArgs := []any{e.value, e.sig, e.pub, e.token}
 	cAcc := c.WithSigners(acc)
 	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "setEACL", setArgs...)
 
@@ -338,8 +338,8 @@ func TestContainerSetEACL(t *testing.T) {
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
 
-	replaceEACLArg := func(eACL []byte) []interface{} {
-		res := make([]interface{}, len(setArgs))
+	replaceEACLArg := func(eACL []byte) []any {
+		res := make([]any, len(setArgs))
 		copy(res, setArgs)
 		res[0] = eACL
 		return res

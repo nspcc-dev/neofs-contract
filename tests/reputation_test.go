@@ -16,7 +16,7 @@ func deployReputationContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, reputationPath,
 		path.Join(reputationPath, "config.yml"))
 
-	args := make([]interface{}, 1)
+	args := make([]any, 1)
 	args[0] = false
 
 	e.DeployContract(t, c, args)
