@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Updated
+- `neo-go` to `v0.103.1`
 
 ### Removed
 - Obsolete subnet contract (#364)
