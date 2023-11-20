@@ -37,7 +37,7 @@ Sidechain contracts:
 
 To compile smart contracts you need:
 
--   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.102.0
+-   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.103.1
 
 ## Compilation
 

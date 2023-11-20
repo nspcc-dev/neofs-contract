@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 - RPC bindings generation (#345)
 
 ### Updated
+- `neo-go` to `v0.103.1`
 
 ### Removed
 - old unused (notary-disabled) events (#341)
