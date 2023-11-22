@@ -2,14 +2,9 @@
 Package reputation contains implementation of Reputation contract deployed in NeoFS
 sidechain.
 
-Inner Ring nodes produce data audit for each container during each epoch. In the end,
-nodes produce DataAuditResult structure that contains information about audit
-progress. Reputation contract provides storage for such structures and simple
-interface to iterate over available DataAuditResults on specified epoch.
-
-During settlement process, Alphabet nodes fetch all DataAuditResult structures
-from the epoch and execute balance transfers from data owners to Storage and
-Inner Ring nodes if data audit succeeds.
+Storage nodes collect reputation data while communicating with other nodes.
+This data is exchanged and the end result (global trust values) is stored in
+the contract as opaque data.
 
 # Contract notifications
 

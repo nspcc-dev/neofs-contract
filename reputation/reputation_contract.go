@@ -84,12 +84,12 @@ func Update(script []byte, manifest []byte, data any) {
 	runtime.Log("reputation contract updated")
 }
 
-// Put method saves DataAuditResult in contract storage. It can be invoked only by
+// Put method saves global trust data in contract storage. It can be invoked only by
 // storage nodes with Alphabet assistance (multisignature witness).
 //
-// Epoch is the epoch number when DataAuditResult structure was generated.
-// PeerID contains public keys of the Inner Ring node that has produced DataAuditResult.
-// Value contains a stable marshaled structure of DataAuditResult.
+// Epoch is the epoch number when GlobalTrust structure was generated.
+// PeerID contains public key of the storage node that is the subject of the GlobalTrust.
+// Value contains a stable marshaled structure of GlobalTrust.
 func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
 
@@ -112,14 +112,14 @@ func Put(epoch int, peerID []byte, value []byte) {
 	storage.Put(ctx, key, value)
 }
 
-// Get method returns a list of all stable marshaled DataAuditResult structures
-// produced by the specified Inner Ring node during the specified epoch.
+// Get method returns a list of all stable marshaled GlobalTrust structures
+// known for the given peer during the specified epoch.
 func Get(epoch int, peerID []byte) [][]byte {
 	id := storageID(epoch, peerID)
 	return GetByID(id)
 }
 
-// GetByID method returns a list of all stable marshaled DataAuditResult with
+// GetByID method returns a list of all stable marshaled GlobalTrust with
 // the specified id. Use ListByEpoch method to obtain the id.
 func GetByID(id []byte) [][]byte {
 	ctx := storage.GetReadOnlyContext()
