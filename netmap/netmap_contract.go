@@ -98,10 +98,10 @@ func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	var args = data.(struct {
-		_       bool            // notaryDisabled
-		_       interop.Hash160 // Balance contract not used legacy
-		_       interop.Hash160 // Container contract not used legacy
-		keys    []interop.PublicKey
+		_       bool                // notaryDisabled
+		_       interop.Hash160     // Balance contract not used legacy
+		_       interop.Hash160     // Container contract not used legacy
+		_       []interop.PublicKey // keys
 		config  [][]byte
 		version int
 	})
