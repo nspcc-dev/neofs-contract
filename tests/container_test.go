@@ -34,7 +34,6 @@ func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addr
 	args[2] = addrBalance
 	args[3] = util.Uint160{} // not needed for now
 	args[4] = addrNNS
-	args[5] = containerDomain
 
 	c := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	e.DeployContract(t, c, args)
