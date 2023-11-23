@@ -58,6 +58,9 @@ const (
 	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
 	AliasFeeKey = "ContainerAliasFee"
 
+	// nolint:deadcode,unused
+	nnsDefaultTLD = "container"
+
 	// V2 format
 	containerIDSize = interop.Hash256Len // SHA256 size
 
@@ -165,6 +168,9 @@ func _deploy(data any, isUpdate bool) {
 	}
 	if len(args.addrID) != interop.Hash160Len {
 		args.addrID = common.ResolveFSContract("neofsid")
+	}
+	if len(args.nnsRoot) == 0 {
+		args.nnsRoot = nnsDefaultTLD
 	}
 
 	storage.Put(ctx, netmapContractKey, args.addrNetmap)
