@@ -203,7 +203,7 @@ func switchToNotary(ctx storage.Context) {
 // nolint:deadcode,unused
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
-		"container").(bool)
+		nnsRoot).(bool)
 	if !isAvail {
 		return
 	}

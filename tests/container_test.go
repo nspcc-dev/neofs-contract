@@ -33,7 +33,7 @@ func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addr
 	args[2] = addrBalance
 	args[3] = util.Uint160{} // not needed for now
 	args[4] = addrNNS
-	args[5] = "neofs"
+	args[5] = "container"
 
 	c := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	e.DeployContract(t, c, args)
@@ -196,15 +196,15 @@ func TestContainerPut(t *testing.T) {
 			stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
 		})
 		cNNS := c.CommitteeInvoker(nnsHash)
-		cNNS.Invoke(t, expected, "resolve", "mycnt.neofs", int64(nns.TXT))
-		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt.neofs")), "alias", cnt.id[:])
+		cNNS.Invoke(t, expected, "resolve", "mycnt.container", int64(nns.TXT))
+		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt.container")), "alias", cnt.id[:])
 
 		t.Run("name is already taken", func(t *testing.T) {
 			c.InvokeFail(t, "name is already taken", "putNamed", putArgs...)
 		})
 
 		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-		cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt.neofs", int64(nns.TXT))
+		cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt.container", int64(nns.TXT))
 
 		t.Run("register in advance", func(t *testing.T) {
 			cnt.value[len(cnt.value)-1] = 10
