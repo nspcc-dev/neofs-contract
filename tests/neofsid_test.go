@@ -12,17 +12,14 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
-	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/stretchr/testify/require"
 )
 
 const neofsidPath = "../neofsid"
 
-func deployNeoFSIDContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
+func deployNeoFSIDContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	args := make([]any, 5)
 	args[0] = false
-	args[1] = addrNetmap
-	args[2] = addrContainer
 
 	c := neotest.CompileFile(t, e.CommitteeHash, neofsidPath, path.Join(neofsidPath, "config.yml"))
 	e.DeployContract(t, c, args)
@@ -32,17 +29,7 @@ func deployNeoFSIDContract(t *testing.T, e *neotest.Executor, addrNetmap, addrCo
 func newNeoFSIDInvoker(t *testing.T) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash,
-		container.RegistrationFeeKey, int64(containerFee),
-		container.AliasFeeKey, int64(containerAliasFee))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
-	h := deployNeoFSIDContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	h := deployNeoFSIDContract(t, e)
 	return e.CommitteeInvoker(h)
 }
 

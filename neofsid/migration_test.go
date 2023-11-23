@@ -86,6 +86,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("containerScriptHash")), "Container contract address should be removed")
+	require.Nil(t, c.GetStorageItem([]byte("netmapScriptHash")), "Netmap contract address should be removed")
 	require.False(t, newPendingVotes, "there should be no more pending votes")
 
 	require.Equal(t, len(prevOwnersToKeys), len(newOwnersToKeys))

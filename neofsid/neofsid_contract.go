@@ -21,8 +21,7 @@ const (
 )
 
 const (
-	netmapContractKey = "netmapScriptHash"
-	ownerKeysPrefix   = 'o'
+	ownerKeysPrefix = 'o'
 )
 
 // nolint:deadcode,unused
@@ -47,24 +46,22 @@ func _deploy(data any, isUpdate bool) {
 			switchToNotary(ctx)
 		}
 
+		// netmap is not used for quite some time and deleted in 0.19.0.
+		if version < 19_000 {
+			storage.Delete(ctx, "netmapScriptHash")
+		}
 		return
 	}
 
 	args := data.(struct {
 		notaryDisabled bool
-		addrNetmap     interop.Hash160
+		_              interop.Hash160 // Netmap contract from legacy.
 		_              interop.Hash160 // Container contract from non-notary legacy
 	})
 
 	if args.notaryDisabled {
 		panic("non-notary mode is not supported anymore")
 	}
-
-	if len(args.addrNetmap) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
-	}
-
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
 
 	runtime.Log("neofsid contract initialized")
 }
