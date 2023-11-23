@@ -109,10 +109,6 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if args[0].(bool) {
-			panic("update to non-notary mode is not supported anymore")
-		}
-
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
 			item := iterator.Value(it).(struct {
@@ -145,17 +141,13 @@ func _deploy(data any, isUpdate bool) {
 	}
 
 	args := data.(struct {
-		notaryDisabled bool
-		addrNetmap     interop.Hash160
-		addrBalance    interop.Hash160
-		addrID         interop.Hash160
-		addrNNS        interop.Hash160
-		nnsRoot        string
+		_           bool // notaryDisabled
+		addrNetmap  interop.Hash160
+		addrBalance interop.Hash160
+		addrID      interop.Hash160
+		addrNNS     interop.Hash160
+		nnsRoot     string
 	})
-
-	if args.notaryDisabled {
-		panic("non-notary mode is not supported anymore")
-	}
 
 	if len(args.addrNNS) != interop.Hash160Len {
 		args.addrNNS = common.InferNNSHash()
