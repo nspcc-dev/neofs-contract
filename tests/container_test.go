@@ -35,6 +35,10 @@ func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addr
 	args[3] = util.Uint160{} // not needed for now
 	args[4] = addrNNS
 
+	return deployContainerContractInt(t, e, args)
+}
+
+func deployContainerContractInt(t *testing.T, e *neotest.Executor, args []any) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	regContractNNS(t, e, "container", c.Hash)
@@ -52,11 +56,12 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	deployNetmapContract(t, e, container.RegistrationFeeKey, int64(containerFee),
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	var addrNetmap, addrBalance, addrNNS *util.Uint160
 	if !autohashes {
-		addrNetmap, addrBalance, addrNNS = &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash
+		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	} else {
+		_ = deployNeoFSIDContract(t, e) // Needed in this case to autoresolve.
+		deployContainerContractInt(t, e, nil)
 	}
-	deployContainerContract(t, e, addrNetmap, addrBalance, addrNNS)
 	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
 }
 
