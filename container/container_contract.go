@@ -104,8 +104,8 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d any) {
 // nolint:deadcode,unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
+	args := data.([]any)
 	if isUpdate {
-		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
@@ -140,39 +140,50 @@ func _deploy(data any, isUpdate bool) {
 		return
 	}
 
-	args := data.(struct {
-		_           bool // notaryDisabled
+	var (
 		addrNetmap  interop.Hash160
 		addrBalance interop.Hash160
 		addrID      interop.Hash160
 		addrNNS     interop.Hash160
 		nnsRoot     string
-	})
+	)
+	// args[0] is notaryDisabled flag
 
-	if len(args.addrNNS) != interop.Hash160Len {
-		args.addrNNS = common.InferNNSHash()
-	}
-	if len(args.addrNetmap) != interop.Hash160Len {
-		args.addrNetmap = common.ResolveFSContract("netmap")
-	}
-	if len(args.addrBalance) != interop.Hash160Len {
-		args.addrBalance = common.ResolveFSContract("balance")
-	}
-	if len(args.addrID) != interop.Hash160Len {
-		args.addrID = common.ResolveFSContract("neofsid")
-	}
-	if len(args.nnsRoot) == 0 {
-		args.nnsRoot = nnsDefaultTLD
+	if len(args) >= 2 && len(args[1].(interop.Hash160)) == interop.Hash160Len {
+		addrNetmap = args[1].(interop.Hash160)
+	} else {
+		addrNetmap = common.ResolveFSContract("netmap")
 	}
 
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
-	storage.Put(ctx, balanceContractKey, args.addrBalance)
-	storage.Put(ctx, neofsIDContractKey, args.addrID)
-	storage.Put(ctx, nnsContractKey, args.addrNNS)
-	storage.Put(ctx, nnsRootKey, args.nnsRoot)
+	if len(args) >= 3 && len(args[2].(interop.Hash160)) == interop.Hash160Len {
+		addrBalance = args[2].(interop.Hash160)
+	} else {
+		addrBalance = common.ResolveFSContract("balance")
+	}
+	if len(args) >= 4 && len(args[3].(interop.Hash160)) == interop.Hash160Len {
+		addrID = args[3].(interop.Hash160)
+	} else {
+		addrID = common.ResolveFSContract("neofsid")
+	}
+	if len(args) >= 5 && len(args[4].(interop.Hash160)) == interop.Hash160Len {
+		addrNNS = args[4].(interop.Hash160)
+	} else {
+		addrNNS = common.InferNNSHash()
+	}
+	if len(args) >= 6 && len(args[5].(string)) > 0 {
+		nnsRoot = args[5].(string)
+	} else {
+		nnsRoot = nnsDefaultTLD
+	}
+
+	storage.Put(ctx, netmapContractKey, addrNetmap)
+	storage.Put(ctx, balanceContractKey, addrBalance)
+	storage.Put(ctx, neofsIDContractKey, addrID)
+	storage.Put(ctx, nnsContractKey, addrNNS)
+	storage.Put(ctx, nnsRootKey, nnsRoot)
 
 	// add NNS root for container alias domains
-	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
+	registerNiceNameTLD(addrNNS, nnsRoot)
 
 	common.SubscribeForNewEpoch()
 
