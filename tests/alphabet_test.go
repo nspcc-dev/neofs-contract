@@ -46,7 +46,7 @@ func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvok
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
-	deployProxyContract(t, e, ctrNetmap.Hash)
+	deployProxyContract(t, e)
 	hash := deployAlphabetContract(t, e, ctrNetmap.Hash, ctrProxy.Hash, "Az", 0, 1)
 
 	alphabet := getAlphabetAcc(t, e)
