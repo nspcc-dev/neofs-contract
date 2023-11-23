@@ -60,9 +60,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
 	require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
 
-	var notary bool
 	updPrm := []any{
-		!notary,
+		false,
 		util.Uint160{}, // Balance contract
 		util.Uint160{}, // Container contract
 		[]any{},        // Key list, unused
@@ -177,9 +176,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	c.SetInnerRing(t, ir)
 
 	// try to update the contract
-	c.CheckUpdateFail(t, "update to non-notary mode is not supported anymore", updPrm...)
-	updPrm[0] = notary
-
 	if notaryDisabled && prevPendingVote {
 		c.CheckUpdateFail(t, "pending vote detected", updPrm...)
 		return

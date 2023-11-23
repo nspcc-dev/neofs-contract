@@ -98,12 +98,12 @@ func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
 	var args = data.(struct {
-		notaryDisabled bool
-		_              interop.Hash160 // Balance contract not used legacy
-		_              interop.Hash160 // Container contract not used legacy
-		keys           []interop.PublicKey
-		config         [][]byte
-		version        int
+		_       bool            // notaryDisabled
+		_       interop.Hash160 // Balance contract not used legacy
+		_       interop.Hash160 // Container contract not used legacy
+		keys    []interop.PublicKey
+		config  [][]byte
+		version int
 	})
 
 	ln := len(args.config)
@@ -120,10 +120,6 @@ func _deploy(data any, isUpdate bool) {
 
 	if isUpdate {
 		common.CheckVersion(args.version)
-
-		if args.notaryDisabled {
-			panic("update to non-notary mode is not supported anymore")
-		}
 
 		if args.version < 16*1_000 {
 			count := getSnapshotCount(ctx)
