@@ -63,10 +63,6 @@ func _deploy(data any, isUpdate bool) {
 
 		common.CheckVersion(version)
 
-		if args[0].(bool) {
-			panic("update to non-notary mode is not supported anymore")
-		}
-
 		// switch to notary mode if version of the current contract deployment is
 		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
 		// use)

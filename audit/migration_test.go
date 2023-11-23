@@ -49,9 +49,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevAuditResults := readAllAuditResults()
 
 	// try to update the contract
-	var notary bool
-	c.CheckUpdateFail(t, "update to non-notary mode is not supported anymore", !notary)
-	c.CheckUpdateSuccess(t, notary)
+	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
 	newAuditResults := readAllAuditResults()
