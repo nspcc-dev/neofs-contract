@@ -1,6 +1,7 @@
 package netmap_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -24,19 +25,48 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var notaryDisabledKey = []byte("notary")
+var (
+	notaryDisabledKey = []byte("notary")
+
+	newEpochSubsNewPrefix = []byte("e")
+	containerHashOldKey   = []byte("containerScriptHash")
+	balanceHashOldKey     = []byte("balanceScriptHash")
+)
 
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
+	var containerHash util.Uint160
+	var balanceHash util.Uint160
+	var err error
+
 	// init test contract shell
-	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
+	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{
+		StorageDumpHandler: func(key, value []byte) {
+			if bytes.Equal(containerHashOldKey, key) {
+				containerHash, err = util.Uint160DecodeBytesLE(value)
+				require.NoError(t, err)
+
+				return
+			}
+
+			if bytes.Equal(balanceHashOldKey, key) {
+				balanceHash, err = util.Uint160DecodeBytesLE(value)
+				require.NoError(t, err)
+
+				return
+			}
+		},
+	})
+
+	require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
+	require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
 
 	var notary bool
 	updPrm := []any{
 		!notary,
-		util.Uint160{},  // Balance contract
-		util.Uint160{},  // Container contract
-		[]any{}, // Key list, unused
-		[]any{}, // Config
+		util.Uint160{}, // Balance contract
+		util.Uint160{}, // Container contract
+		[]any{},        // Key list, unused
+		[]any{},        // Config
 	}
 
 	migration.SkipUnsupportedVersions(t, c, updPrm...)
@@ -157,6 +187,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.CheckUpdateSuccess(t, updPrm...)
 
+	checkNewEpochSubscribers(t, c, balanceHash, containerHash)
+
 	// check that contract was updates as expected
 	newPendingVotes := readPendingVotes()
 	newVersion := readVersion()
@@ -183,4 +215,37 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.True(t, ok)
 		require.ElementsMatch(t, vPrev, vNew, "%d-th past netmap snapshot should remain", k)
 	}
+}
+
+func checkNewEpochSubscribers(t *testing.T, contract *migration.Contract, balanceWant, containerWant util.Uint160) {
+	require.Nil(t, contract.GetStorageItem(balanceHashOldKey))
+	require.Nil(t, contract.GetStorageItem(containerHashOldKey))
+
+	// contracts are migrated in alphabetical order at least for now
+
+	var balanceMigrated bool
+	var containerMigrated bool
+
+	contract.SeekStorage(append(newEpochSubsNewPrefix, 0), func(k, v []byte) bool {
+		balanceGot, err := util.Uint160DecodeBytesLE(k)
+		require.NoError(t, err)
+		require.Equal(t, balanceWant, balanceGot)
+
+		balanceMigrated = true
+
+		return true
+	})
+
+	contract.SeekStorage(append(newEpochSubsNewPrefix, 1), func(k, v []byte) bool {
+		containerGot, err := util.Uint160DecodeBytesLE(k)
+		require.NoError(t, err)
+		require.Equal(t, containerWant, containerGot)
+
+		containerMigrated = true
+
+		return true
+	})
+
+	require.True(t, balanceMigrated, "balance contact hash migration")
+	require.True(t, containerMigrated, "container contact hash migration")
 }

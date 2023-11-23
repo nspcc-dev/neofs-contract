@@ -78,6 +78,8 @@ func _deploy(data any, isUpdate bool) {
 		return
 	}
 
+	common.SubscribeForNewEpoch()
+
 	runtime.Log("balance contract initialized")
 }
 

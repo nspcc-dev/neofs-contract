@@ -169,6 +169,8 @@ func _deploy(data any, isUpdate bool) {
 	// add NNS root for container alias domains
 	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 
+	common.SubscribeForNewEpoch()
+
 	runtime.Log("container contract initialized")
 }
 

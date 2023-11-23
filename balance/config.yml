@@ -2,7 +2,7 @@ name: "NeoFS Balance"
 supportedstandards: ["NEP-17"]
 safemethods: ["balanceOf", "decimals", "symbol", "totalSupply", "version"]
 permissions:
-  - methods: ["update"]
+  - methods: ["update", "subscribeForNewEpoch"]
 events:
   - name: Lock
     parameters:

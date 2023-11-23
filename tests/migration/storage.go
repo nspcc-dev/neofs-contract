@@ -252,6 +252,13 @@ func (x *Contract) GetStorageItem(key []byte) []byte {
 	return x.exec.Chain.GetStorageItem(x.id, key)
 }
 
+// SeekStorage calls a provided handler against every stored item that starts
+// with a provided prefix. On handler's `false` return stops iteration. prefix
+// is removed from the resulting pair's key.
+func (x *Contract) SeekStorage(prefix []byte, handler func(k, v []byte) bool) {
+	x.exec.Chain.SeekStorage(x.id, prefix, handler)
+}
+
 // RegisterContractInNNS binds given address to the contract referenced by
 // provided name via additional record for the 'name.neofs' domain in the NeoFS
 // NNS contract. The method is useful when tested contract uses NNS to access
