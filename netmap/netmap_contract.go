@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/lib/address"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -615,6 +616,10 @@ func ListConfig() []record {
 // registered recipient in a success case.
 func SubscribeForNewEpoch(contract interop.Hash160) {
 	common.CheckAlphabetWitness(common.AlphabetAddress())
+
+	if !management.HasMethod(contract, "newEpoch", 1) {
+		panic(address.FromHash160(contract) + " contract does not have `newEpoch(epoch)` method")
+	}
 
 	ctx := storage.GetContext()
 	var num byte
