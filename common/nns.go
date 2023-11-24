@@ -26,13 +26,19 @@ func InferNNSHash() interop.Hash160 {
 	return nns.Hash
 }
 
-// ResolveFSContract resolves contract hash by its well-known NeoFS name.
-// Contract name should be lowercased, should not include [ContractTLD]. Example
-// values: "netmap", "container", etc. Relies on NeoFS-specific NNS setup, see
-// [NNSID].
-func ResolveFSContract(contractName string) interop.Hash160 {
-	var nns = InferNNSHash()
+// ResolveFSContract returns contract hash by name as registered in NNS or
+// panics if it can't be resolved. It's similar to [ResolveFSContractWithNNS],
+// but retrieves NNS hash automatically (see [InferNNSHash]).
+func ResolveFSContract(name string) interop.Hash160 {
+	return ResolveFSContractWithNNS(InferNNSHash(), name)
+}
 
+// ResolveFSContractWithNNS uses given NNS contract and returns target contract
+// hash by name as registered in NNS (assuming NeoFS-specific NNS setup, see
+// [NNSID]) or panics if it can't be resolved. Contract name should be
+// lowercased and should not include [ContractTLD]. Example values: "netmap",
+// "container", etc.
+func ResolveFSContractWithNNS(nns interop.Hash160, contractName string) interop.Hash160 {
 	resResolve := contract.Call(nns, "resolve", contract.ReadOnly, contractName+"."+ContractTLD, 16 /*TXT*/)
 	records := resResolve.([]string)
 
