@@ -149,26 +149,29 @@ func _deploy(data any, isUpdate bool) {
 	)
 	// args[0] is notaryDisabled flag
 
+	// Do this out of order since NNS has to be present anyway and it can
+	// be used to resolve other contracts.
+	if len(args) >= 5 && len(args[4].(interop.Hash160)) == interop.Hash160Len {
+		addrNNS = args[4].(interop.Hash160)
+	} else {
+		addrNNS = common.InferNNSHash()
+	}
+
 	if len(args) >= 2 && len(args[1].(interop.Hash160)) == interop.Hash160Len {
 		addrNetmap = args[1].(interop.Hash160)
 	} else {
-		addrNetmap = common.ResolveFSContract("netmap")
+		addrNetmap = common.ResolveFSContractWithNNS(addrNNS, "netmap")
 	}
 
 	if len(args) >= 3 && len(args[2].(interop.Hash160)) == interop.Hash160Len {
 		addrBalance = args[2].(interop.Hash160)
 	} else {
-		addrBalance = common.ResolveFSContract("balance")
+		addrBalance = common.ResolveFSContractWithNNS(addrNNS, "balance")
 	}
 	if len(args) >= 4 && len(args[3].(interop.Hash160)) == interop.Hash160Len {
 		addrID = args[3].(interop.Hash160)
 	} else {
-		addrID = common.ResolveFSContract("neofsid")
-	}
-	if len(args) >= 5 && len(args[4].(interop.Hash160)) == interop.Hash160Len {
-		addrNNS = args[4].(interop.Hash160)
-	} else {
-		addrNNS = common.InferNNSHash()
+		addrID = common.ResolveFSContractWithNNS(addrNNS, "neofsid")
 	}
 	if len(args) >= 6 && len(args[5].(string)) > 0 {
 		nnsRoot = args[5].(string)
