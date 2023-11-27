@@ -71,8 +71,10 @@ const (
 	snapshotEpoch        = "snapshotEpoch"
 	snapshotBlockKey     = "snapshotBlock"
 
+	// nolint:unused // used only in _deploy func which is nolinted too
 	containerContractKey = "containerScriptHash"
-	balanceContractKey   = "balanceScriptHash"
+	// nolint:unused // used only in _deploy func which is nolinted too
+	balanceContractKey = "balanceScriptHash"
 
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
