@@ -110,7 +110,7 @@ func switchToNotary(ctx storage.Context, args []any) {
 				panic("address of the Proxy contract is missing or invalid")
 			}
 		} else {
-			proxyContract = common.ResolveContractHash("proxy")
+			proxyContract = common.ResolveFSContract("proxy")
 		}
 
 		if !common.TryPurgeVotes(ctx) {
