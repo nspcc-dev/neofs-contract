@@ -3,14 +3,11 @@ package alphabet
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
-	"github.com/nspcc-dev/neo-go/pkg/interop/lib/address"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/notary"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -113,26 +110,7 @@ func switchToNotary(ctx storage.Context, args []any) {
 				panic("address of the Proxy contract is missing or invalid")
 			}
 		} else {
-			// get NNS contract (it always has ID=1 in the NeoFS Sidechain)
-			nnsContract := management.GetContractByID(1)
-			if nnsContract == nil {
-				panic("missing NNS contract")
-			}
-
-			resResolve := contract.Call(nnsContract.Hash, "resolve", contract.ReadOnly,
-				"proxy.neofs", 16, // TXT
-			)
-
-			records := resResolve.([]string)
-			if len(records) == 0 {
-				panic("did not find a record of the Proxy contract in the NNS")
-			}
-
-			if len(records[0]) == 2*interop.Hash160Len {
-				proxyContract = convert.ToBytes(std.Atoi(records[0], 16))
-			} else {
-				proxyContract = address.ToHash160(records[0])
-			}
+			proxyContract = common.ResolveContractHash("proxy")
 		}
 
 		if !common.TryPurgeVotes(ctx) {

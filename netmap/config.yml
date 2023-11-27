@@ -17,3 +17,7 @@ events:
     parameters:
       - name: epoch
         type: Integer
+  - name: NewEpochSubscription
+    parameters:
+      - name: contract
+        type: Hash160

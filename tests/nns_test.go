@@ -21,6 +21,17 @@ const nnsPath = "../nns"
 
 const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 
+func deployNNSWithTLDs(t *testing.T, e *neotest.Executor, tlds ...string) *neotest.ContractInvoker {
+	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	_tldSet := make([]any, len(tlds))
+	for i := range tlds {
+		_tldSet[i] = []any{tlds[i], "user@domain.org"}
+	}
+	e.DeployContract(t, ctr, []any{_tldSet})
+
+	return e.CommitteeInvoker(ctr.Hash)
+}
+
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
 	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))

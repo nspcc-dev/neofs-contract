@@ -177,6 +177,11 @@ type NewEpochEvent struct {
 	Epoch *big.Int
 }
 
+// NewEpochSubscriptionEvent represents "NewEpochSubscription" event emitted by the contract.
+type NewEpochSubscriptionEvent struct {
+	Contract util.Uint160
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
@@ -483,6 +488,28 @@ func (c *Contract) SetConfigTransaction(id []byte, key []byte, val []byte) (*tra
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetConfigUnsigned(id []byte, key []byte, val []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setConfig", nil, id, key, val)
+}
+
+// SubscribeForNewEpoch creates a transaction invoking `subscribeForNewEpoch` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SubscribeForNewEpoch(contract util.Uint160) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "subscribeForNewEpoch", contract)
+}
+
+// SubscribeForNewEpochTransaction creates a transaction invoking `subscribeForNewEpoch` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SubscribeForNewEpochTransaction(contract util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "subscribeForNewEpoch", contract)
+}
+
+// SubscribeForNewEpochUnsigned creates a transaction invoking `subscribeForNewEpoch` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SubscribeForNewEpochUnsigned(contract util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "subscribeForNewEpoch", nil, contract)
 }
 
 // Update creates a transaction invoking `update` method of the contract.
@@ -2145,6 +2172,68 @@ func (e *NewEpochEvent) FromStackItem(item *stackitem.Array) error {
 	e.Epoch, err = arr[index].TryInteger()
 	if err != nil {
 		return fmt.Errorf("field Epoch: %w", err)
+	}
+
+	return nil
+}
+
+// NewEpochSubscriptionEventsFromApplicationLog retrieves a set of all emitted events
+// with "NewEpochSubscription" name from the provided [result.ApplicationLog].
+func NewEpochSubscriptionEventsFromApplicationLog(log *result.ApplicationLog) ([]*NewEpochSubscriptionEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*NewEpochSubscriptionEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "NewEpochSubscription" {
+				continue
+			}
+			event := new(NewEpochSubscriptionEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize NewEpochSubscriptionEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to NewEpochSubscriptionEvent or
+// returns an error if it's not possible to do to so.
+func (e *NewEpochSubscriptionEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 1 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Contract, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Contract: %w", err)
 	}
 
 	return nil

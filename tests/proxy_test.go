@@ -24,11 +24,10 @@ func newProxyInvoker(t *testing.T) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 
-	deployNetmapContract(t, e, ctrBalance.Hash, ctrContainer.Hash)
+	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
+	deployNetmapContract(t, e, nnsInvoker.Hash)
 	deployProxyContract(t, e, ctrNetmap.Hash)
 
 	return e.CommitteeInvoker(ctrProxy.Hash)

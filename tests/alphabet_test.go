@@ -35,18 +35,17 @@ func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrP
 func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
-	ctrNNS := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 
-	e.DeployContract(t, ctrNNS, nil)
-	deployNetmapContract(t, e, ctrBalance.Hash, ctrContainer.Hash,
+	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
+	deployNetmapContract(t, e, nnsInvoker.Hash,
 		container.RegistrationFeeKey, int64(containerFee),
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, ctrNNS.Hash)
+	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
 	deployProxyContract(t, e, ctrNetmap.Hash)
 	hash := deployAlphabetContract(t, e, ctrNetmap.Hash, ctrProxy.Hash, "Az", 0, 1)
 

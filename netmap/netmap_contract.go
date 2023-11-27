@@ -4,6 +4,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
+	"github.com/nspcc-dev/neo-go/pkg/interop/lib/address"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -70,10 +71,13 @@ const (
 	snapshotEpoch        = "snapshotEpoch"
 	snapshotBlockKey     = "snapshotBlock"
 
+	// nolint:unused // used only in _deploy func which is nolinted too
 	containerContractKey = "containerScriptHash"
-	balanceContractKey   = "balanceScriptHash"
+	// nolint:unused // used only in _deploy func which is nolinted too
+	balanceContractKey = "balanceScriptHash"
 
-	cleanupEpochMethod = "newEpoch"
+	newEpochSubscribersPrefix = "e"
+	cleanupEpochMethod        = "newEpoch"
 
 	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
 	// marking the start of the node's public key.
@@ -95,8 +99,8 @@ func _deploy(data any, isUpdate bool) {
 
 	var args = data.(struct {
 		notaryDisabled bool
-		addrBalance    interop.Hash160
-		addrContainer  interop.Hash160
+		_              interop.Hash160 // Balance contract not used legacy
+		_              interop.Hash160 // Container contract not used legacy
 		keys           []interop.PublicKey
 		config         [][]byte
 		version        int
@@ -162,11 +166,19 @@ func _deploy(data any, isUpdate bool) {
 			switchToNotary(ctx)
 		}
 
-		return
-	}
+		if args.version < 19_000 {
+			balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
+			key := append([]byte(newEpochSubscribersPrefix), append([]byte{byte(0)}, balanceContract...)...)
+			storage.Put(ctx, key, []byte{})
+			storage.Delete(ctx, balanceContractKey)
 
-	if len(args.addrBalance) != interop.Hash160Len || len(args.addrContainer) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
+			containerContract := storage.Get(ctx, containerContractKey).(interop.Hash160)
+			key = append([]byte(newEpochSubscribersPrefix), append([]byte{byte(1)}, containerContract...)...)
+			storage.Put(ctx, key, []byte{})
+			storage.Delete(ctx, containerContractKey)
+		}
+
+		return
 	}
 
 	// epoch number is a little endian int, it doesn't need to be serialized
@@ -179,9 +191,6 @@ func _deploy(data any, isUpdate bool) {
 		common.SetSerialized(ctx, append(prefix, byte(i)), []Node{})
 	}
 	storage.Put(ctx, snapshotCurrentIDKey, 0)
-
-	storage.Put(ctx, balanceContractKey, args.addrBalance)
-	storage.Put(ctx, containerContractKey, args.addrContainer)
 
 	runtime.Log("netmap contract initialized")
 }
@@ -601,6 +610,41 @@ func ListConfig() []record {
 	return config
 }
 
+// SubscribeForNewEpoch registers passed contract as a NewEpoch event
+// subscriber. Such a contract must have a `NewEpoch` method with a single
+// numeric parameter. Transactions that call SubscribeForNewEpoch must be
+// witnessed by the Alphabet.
+// Produces `NewEpochSubscription` notification event with a just
+// registered recipient in a success case.
+func SubscribeForNewEpoch(contract interop.Hash160) {
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+
+	if !management.HasMethod(contract, "newEpoch", 1) {
+		panic(address.FromHash160(contract) + " contract does not have `newEpoch(epoch)` method")
+	}
+
+	ctx := storage.GetContext()
+	var num byte
+	it := storage.Find(ctx, []byte(newEpochSubscribersPrefix), storage.KeysOnly|storage.RemovePrefix)
+	for iterator.Next(it) {
+		raw := iterator.Value(it).([]byte)[1:] // 1 byte is an index
+		if contract.Equals(raw) {
+			return
+		}
+
+		num += 1
+	}
+
+	var key []byte
+	key = append(key, []byte(newEpochSubscribersPrefix)...)
+	key = append(key, num)
+	key = append(key, contract...)
+
+	storage.Put(ctx, key, []byte{})
+
+	runtime.Notify("NewEpochSubscription", contract)
+}
+
 // Version returns the version of the contract.
 func Version() int {
 	return common.Version
@@ -685,9 +729,9 @@ func setConfig(ctx storage.Context, key, val any) {
 }
 
 func cleanup(ctx storage.Context, epoch int) {
-	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
-	contract.Call(balanceContractAddr, cleanupEpochMethod, contract.All, epoch)
-
-	containerContractAddr := storage.Get(ctx, containerContractKey).(interop.Hash160)
-	contract.Call(containerContractAddr, cleanupEpochMethod, contract.All, epoch)
+	it := storage.Find(ctx, newEpochSubscribersPrefix, storage.RemovePrefix|storage.KeysOnly)
+	for iterator.Next(it) {
+		contractHash := interop.Hash160(iterator.Value(it).([]byte)[1:]) // one byte is for number prefix
+		contract.Call(contractHash, cleanupEpochMethod, contract.All, epoch)
+	}
 }

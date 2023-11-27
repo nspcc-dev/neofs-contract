@@ -169,6 +169,8 @@ func _deploy(data any, isUpdate bool) {
 	// add NNS root for container alias domains
 	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
 
+	common.SubscribeForNewEpoch()
+
 	runtime.Log("container contract initialized")
 }
 
@@ -203,7 +205,7 @@ func switchToNotary(ctx storage.Context) {
 // nolint:deadcode,unused
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
-		"container").(bool)
+		nnsRoot).(bool)
 	if !isAvail {
 		return
 	}
