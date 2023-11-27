@@ -106,18 +106,6 @@ func _deploy(data any, isUpdate bool) {
 		version int
 	})
 
-	ln := len(args.config)
-	if ln%2 != 0 {
-		panic("bad configuration")
-	}
-
-	for i := 0; i < ln/2; i++ {
-		key := args.config[i*2]
-		val := args.config[i*2+1]
-
-		setConfig(ctx, key, val)
-	}
-
 	if isUpdate {
 		common.CheckVersion(args.version)
 
@@ -175,6 +163,18 @@ func _deploy(data any, isUpdate bool) {
 		}
 
 		return
+	}
+
+	ln := len(args.config)
+	if ln%2 != 0 {
+		panic("bad configuration")
+	}
+
+	for i := 0; i < ln/2; i++ {
+		key := args.config[i*2]
+		val := args.config[i*2+1]
+
+		setConfig(ctx, key, val)
 	}
 
 	// epoch number is a little endian int, it doesn't need to be serialized
