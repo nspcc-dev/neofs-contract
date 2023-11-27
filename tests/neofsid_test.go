@@ -23,12 +23,14 @@ func deployNeoFSIDContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 
 	c := neotest.CompileFile(t, e.CommitteeHash, neofsidPath, path.Join(neofsidPath, "config.yml"))
 	e.DeployContract(t, c, args)
+	regContractNNS(t, e, "neofsid", c.Hash)
 	return c.Hash
 }
 
 func newNeoFSIDInvoker(t *testing.T) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
+	_ = deployDefaultNNS(t, e)
 	h := deployNeoFSIDContract(t, e)
 	return e.CommitteeInvoker(h)
 }

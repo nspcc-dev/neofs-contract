@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
@@ -20,17 +21,6 @@ import (
 const nnsPath = "../nns"
 
 const msPerYear = 365 * 24 * time.Hour / time.Millisecond
-
-func deployNNSWithTLDs(t *testing.T, e *neotest.Executor, tlds ...string) *neotest.ContractInvoker {
-	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
-	_tldSet := make([]any, len(tlds))
-	for i := range tlds {
-		_tldSet[i] = []any{tlds[i], "user@domain.org"}
-	}
-	e.DeployContract(t, ctr, []any{_tldSet})
-
-	return e.CommitteeInvoker(ctr.Hash)
-}
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
@@ -53,6 +43,24 @@ func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.Contra
 			"com", "myemail@nspcc.ru", refresh, retry, expire, ttl)
 	}
 	return c
+}
+
+func deployDefaultNNS(t *testing.T, e *neotest.Executor) util.Uint160 {
+	ctrNNS := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	e.DeployContract(t, ctrNNS, []any{[]any{[]any{"neofs", "ops@nspcc.io"}}})
+	return ctrNNS.Hash
+}
+
+func regContractNNS(t *testing.T, e *neotest.Executor, name string, h util.Uint160) {
+	nnsHash, err := e.Chain.GetContractScriptHash(1)
+	require.NoError(t, err)
+	nnsInv := e.CommitteeInvoker(nnsHash)
+	nnsInv.Invoke(t, true, "register", name+".neofs", e.CommitteeHash, "ops@nspcc.ru", int64(3600), int64(600), int64(10*msPerYear), int64(3600))
+	var addr = h.StringLE()
+	if h[0] > 127 {
+		addr = address.Uint160ToString(h) // There are two valid representations, so alternate between them.
+	}
+	nnsInv.Invoke(t, nil, "addRecord", name+".neofs", 16, addr)
 }
 
 func TestNNSGeneric(t *testing.T) {

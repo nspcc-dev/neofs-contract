@@ -154,10 +154,17 @@ func _deploy(data any, isUpdate bool) {
 		panic("non-notary mode is not supported anymore")
 	}
 
-	if len(args.addrNetmap) != interop.Hash160Len ||
-		len(args.addrBalance) != interop.Hash160Len ||
-		len(args.addrID) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
+	if len(args.addrNNS) != interop.Hash160Len {
+		args.addrNNS = common.InferNNSHash()
+	}
+	if len(args.addrNetmap) != interop.Hash160Len {
+		args.addrNetmap = common.ResolveFSContract("netmap")
+	}
+	if len(args.addrBalance) != interop.Hash160Len {
+		args.addrBalance = common.ResolveFSContract("balance")
+	}
+	if len(args.addrID) != interop.Hash160Len {
+		args.addrID = common.ResolveFSContract("neofsid")
 	}
 
 	storage.Put(ctx, netmapContractKey, args.addrNetmap)
