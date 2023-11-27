@@ -623,8 +623,13 @@ func SubscribeForNewEpoch(contract interop.Hash160) {
 
 	ctx := storage.GetContext()
 	var num byte
-	it := storage.Find(ctx, []byte(newEpochSubscribersPrefix), storage.None)
+	it := storage.Find(ctx, []byte(newEpochSubscribersPrefix), storage.KeysOnly|storage.RemovePrefix)
 	for iterator.Next(it) {
+		raw := iterator.Value(it).([]byte)[1:] // 1 byte is an index
+		if contract.Equals(raw) {
+			return
+		}
+
 		num += 1
 	}
 

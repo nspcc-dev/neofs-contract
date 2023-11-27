@@ -177,6 +177,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	netmapInvoker := e.CommitteeInvoker(ctrNetmap.Hash)
 
 	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
 	deployNetmapContract(t, e, nnsInvoker.Hash)
@@ -185,8 +186,38 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 
-	netmapInvoker := e.CommitteeInvoker(ctrNetmap.Hash)
-	netmapInvoker.Invoke(t, stackitem.Null{}, "newEpoch", 1) // no panic so registrations and calls are OK
+	t.Run("new epoch", func(t *testing.T) {
+		netmapInvoker.Invoke(t, stackitem.Null{}, "newEpoch", 1) // no panic so registrations and calls are OK
+	})
+
+	t.Run("double subscription", func(t *testing.T) {
+		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
+		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
+
+		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
+
+		const subscribersPrefix = "e"
+		var foundThirdSubscriber bool
+		var balanceSubscribers int
+		var containerSubscribers int
+
+		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 0), func(k, v []byte) bool {
+			balanceSubscribers++
+			return false
+		})
+		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 1), func(k, v []byte) bool {
+			containerSubscribers++
+			return false
+		})
+		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 2), func(k, v []byte) bool {
+			foundThirdSubscriber = true
+			return false
+		})
+
+		require.Equal(t, 1, balanceSubscribers)
+		require.Equal(t, 1, containerSubscribers)
+		require.False(t, foundThirdSubscriber)
+	})
 }
 
 func TestUpdateSnapshotCount(t *testing.T) {
