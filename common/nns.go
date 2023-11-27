@@ -3,7 +3,6 @@ package common
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/lib/address"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -46,7 +45,12 @@ func ResolveFSContractWithNNS(nns interop.Hash160, contractName string) interop.
 		panic("did not find a record of the " + contractName + " contract in the NNS")
 	}
 	if len(records[0]) == 2*interop.Hash160Len {
-		return convert.ToBytes(std.Atoi(records[0], 16))
+		var h = make([]byte, interop.Hash160Len)
+		for i := 0; i < interop.Hash160Len; i++ {
+			ii := (interop.Hash160Len - i - 1) * 2
+			h[i] = byte(std.Atoi(records[0][ii:ii+2], 16))
+		}
+		return h
 	}
 	return address.ToHash160(records[0])
 }
