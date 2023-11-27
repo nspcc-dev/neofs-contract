@@ -97,19 +97,12 @@ var (
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 
-	var args = data.(struct {
-		_       bool                // notaryDisabled
-		_       interop.Hash160     // Balance contract not used legacy
-		_       interop.Hash160     // Container contract not used legacy
-		_       []interop.PublicKey // keys
-		config  [][]byte
-		version int
-	})
-
 	if isUpdate {
-		common.CheckVersion(args.version)
+		args := data.([]any)
+		version := args[len(args)-1].(int)
+		common.CheckVersion(version)
 
-		if args.version < 16*1_000 {
+		if version < 16*1_000 {
 			count := getSnapshotCount(ctx)
 			prefix := []byte(snapshotKeyPrefix)
 			for i := 0; i < count; i++ {
@@ -146,11 +139,11 @@ func _deploy(data any, isUpdate bool) {
 		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
 		// use)
 		// TODO: avoid number magic, add function for version comparison to common package
-		if args.version < 17_000 {
+		if version < 17_000 {
 			switchToNotary(ctx)
 		}
 
-		if args.version < 19_000 {
+		if version < 19_000 {
 			balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 			key := append([]byte(newEpochSubscribersPrefix), append([]byte{byte(0)}, balanceContract...)...)
 			storage.Put(ctx, key, []byte{})
@@ -164,6 +157,15 @@ func _deploy(data any, isUpdate bool) {
 
 		return
 	}
+
+	var args = data.(struct {
+		_       bool                // notaryDisabled
+		_       interop.Hash160     // Balance contract not used legacy
+		_       interop.Hash160     // Container contract not used legacy
+		_       []interop.PublicKey // keys
+		config  [][]byte
+		version int
+	})
 
 	ln := len(args.config)
 	if ln%2 != 0 {
