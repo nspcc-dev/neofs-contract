@@ -20,6 +20,7 @@ func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrCo
 	args[2] = addrContainer
 
 	e.DeployContract(t, c, args)
+	regContractNNS(t, e, "balance", c.Hash)
 	return c.Hash
 }
 
