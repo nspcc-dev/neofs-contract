@@ -9,35 +9,38 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 )
 
-// ResolveContractHash resolves contract hash by its well-known NeoFS name.
-// Contract name should be lowercased, should not include `.neofs` TLD. Example
-// values: "netmap", "container", etc.
-// Relies on some NeoFS specifics:
-//  1. NNS contract should be deployed first (and should have `1` contract ID)
-//  2. It should be prefilled with contract hashes by their names (no
-//     capitalized chars; no `neofs` TLD)
-func ResolveContractHash(contractName string) interop.Hash160 {
-	// get NNS contract (it always has ID=1 in the NeoFS Sidechain)
-	nnsContract := management.GetContractByID(1)
-	if nnsContract == nil {
-		panic("missing NNS contract")
+// NNSID is the ID of the NNS contract in NeoFS networks. It's always deployed
+// first.
+const NNSID = 1
+
+// ContractTLD is the default domain used by NeoFS contracts.
+const ContractTLD = "neofs"
+
+// InferNNSHash returns NNS contract hash by [NNSID] or panics if
+// it can't be resolved.
+func InferNNSHash() interop.Hash160 {
+	var nns = management.GetContractByID(NNSID)
+	if nns == nil {
+		panic("no NNS contract")
 	}
+	return nns.Hash
+}
 
-	resResolve := contract.Call(nnsContract.Hash, "resolve", contract.ReadOnly,
-		contractName+".neofs", 16, // TXT
-	)
+// ResolveFSContract resolves contract hash by its well-known NeoFS name.
+// Contract name should be lowercased, should not include [ContractTLD]. Example
+// values: "netmap", "container", etc. Relies on NeoFS-specific NNS setup, see
+// [NNSID].
+func ResolveFSContract(contractName string) interop.Hash160 {
+	var nns = InferNNSHash()
 
+	resResolve := contract.Call(nns, "resolve", contract.ReadOnly, contractName+"."+ContractTLD, 16 /*TXT*/)
 	records := resResolve.([]string)
+
 	if len(records) == 0 {
 		panic("did not find a record of the " + contractName + " contract in the NNS")
 	}
-
-	var hash interop.Hash160
 	if len(records[0]) == 2*interop.Hash160Len {
-		hash = convert.ToBytes(std.Atoi(records[0], 16))
-	} else {
-		hash = address.ToHash160(records[0])
+		return convert.ToBytes(std.Atoi(records[0], 16))
 	}
-
-	return hash
+	return address.ToHash160(records[0])
 }
