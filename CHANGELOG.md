@@ -13,6 +13,11 @@ Changelog for NeoFS Contract
 
 ### Updating from v0.19.0
 
+## [0.19.1] - 2023-11-28
+
+### Fixed
+- Version to 0.19.1 (#376)
+
 ## [0.19.0] - 2023-11-28
 
 ### Added
@@ -479,7 +484,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...master
+[0.19.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...v0.17.0
