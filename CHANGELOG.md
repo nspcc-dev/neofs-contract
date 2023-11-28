@@ -6,14 +6,29 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Updated
-- `neo-go` to `v0.103.1`
 
 ### Removed
-- Obsolete subnet contract (#364)
 
 ### Fixed
 
-### Updating from v0.18.0
+### Updating from v0.19.0
+
+## [0.19.0] - 2023-11-28
+
+### Added
+- Subscription to new epoch events in netmap contract (#368)
+
+### Updated
+- `neo-go` to `v0.104.0` (#367, #374)
+
+### Removed
+- Obsolete subnet contract (#364)
+- Unused deployment/update options (#373)
+- Most of deploy configurations (#373)
+
+### Fixed
+- Expired TLD registration (#366)
+- reputation contract documentation (#369)
 
 ## [0.18.0] - 2023-09-26
 
@@ -464,7 +479,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...master
+[0.19.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.15.5...v0.16.0
