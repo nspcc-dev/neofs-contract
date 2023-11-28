@@ -11,24 +11,20 @@ import (
 
 const proxyPath = "../proxy"
 
-func deployProxyContract(t *testing.T, e *neotest.Executor, addrNetmap util.Uint160) util.Uint160 {
-	args := make([]any, 1)
-	args[0] = addrNetmap
-
+func deployProxyContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
-	e.DeployContract(t, c, args)
+	e.DeployContract(t, c, nil)
+	regContractNNS(t, e, "proxy", c.Hash)
 	return c.Hash
 }
 
 func newProxyInvoker(t *testing.T) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash)
-	deployProxyContract(t, e, ctrNetmap.Hash)
+	_ = deployDefaultNNS(t, e)
+	deployProxyContract(t, e)
 
 	return e.CommitteeInvoker(ctrProxy.Hash)
 }

@@ -16,13 +16,12 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/container"
 	"github.com/nspcc-dev/neofs-contract/netmap"
-	"github.com/nspcc-dev/neofs-contract/nns"
 	"github.com/stretchr/testify/require"
 )
 
 const netmapPath = "../netmap"
 
-func deployNetmapContract(t *testing.T, e *neotest.Executor, nnsHash util.Uint160, config ...any) util.Uint160 {
+func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util.Uint160 {
 	_, pubs, ok := vm.ParseMultiSigContract(e.Committee.Script())
 	require.True(t, ok)
 
@@ -33,24 +32,18 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, nnsHash util.Uint16
 	args[3] = []any{pubs[0]}
 	args[4] = append([]any{}, config...)
 
-	cNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	e.DeployContract(t, cNetmap, args)
-
-	nnsInvoker := e.CommitteeInvoker(nnsHash)
-	nnsInvoker.Invoke(t, stackitem.NewBool(true), "register", "netmap.neofs", e.CommitteeHash,
-		"myemail@nspcc.ru", int64(101), int64(102), int64(103), int64(104))
-	nnsInvoker.Invoke(t, stackitem.Null{}, "addRecord", "netmap.neofs", int64(nns.TXT), cNetmap.Hash.StringLE())
-
-	return cNetmap.Hash
+	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
+	e.DeployContract(t, c, args)
+	regContractNNS(t, e, "netmap", c.Hash)
+	return c.Hash
 }
 
 func newNetmapInvoker(t *testing.T, config ...any) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash, config...)
-
+	deployDefaultNNS(t, e)
+	deployNetmapContract(t, e, config...)
 	return e.CommitteeInvoker(ctrNetmap.Hash)
 }
 
@@ -179,11 +172,11 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	netmapInvoker := e.CommitteeInvoker(ctrNetmap.Hash)
 
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash)
+	nnsHash := deployDefaultNNS(t, e)
+	deployNetmapContract(t, e)
 
 	// balance and container contracts subscribe to NewEpoch on their deployments
-	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
+	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 
 	t.Run("new epoch", func(t *testing.T) {
@@ -474,8 +467,8 @@ func TestInnerRing(t *testing.T) {
 		ir[i] = k.PublicKey()
 	}
 
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash)
+	deployDefaultNNS(t, e)
+	deployNetmapContract(t, e)
 
 	SetInnerRing(t, e, ir)
 	require.ElementsMatch(t, ir, InnerRing(t, e))

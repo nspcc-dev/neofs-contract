@@ -86,9 +86,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		0,             // unused
 	}
 
-	c.CheckUpdateFail(t, "update to non-notary mode is not supported anymore",
-		replaceArgI(updPrm, 0, true)...)
-
 	if notaryDisabled {
 		c.CheckUpdateFail(t, "address of the Proxy contract is missing or invalid",
 			replaceArgI(updPrm, 2, make([]byte, interop.Hash160Len+1))...)

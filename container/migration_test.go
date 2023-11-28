@@ -89,15 +89,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevOwnersToContainers := readOwnersToContainers()
 
 	// try to update the contract
-	var notary bool
-	c.CheckUpdateFail(t, "update to non-notary mode is not supported anymore", !notary)
-
 	if notaryDisabled && prevPendingVote {
-		c.CheckUpdateFail(t, "pending vote detected", notary)
+		c.CheckUpdateFail(t, "pending vote detected")
 		return
 	}
 
-	c.CheckUpdateSuccess(t, notary)
+	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
 	newPendingVote := readPendingVotes()

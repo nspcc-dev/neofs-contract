@@ -70,15 +70,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevOwnersToKeys := readOwnersToKeys()
 
 	// try to update the contract
-	var notary bool
-	c.CheckUpdateFail(t, "update to non-notary mode is not supported anymore", !notary)
-
 	if notaryDisabled && prevPendingVote {
-		c.CheckUpdateFail(t, "pending vote detected", notary)
+		c.CheckUpdateFail(t, "pending vote detected")
 		return
 	}
 
-	c.CheckUpdateSuccess(t, notary)
+	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
 	newPendingVotes := readPendingVotes()
@@ -86,6 +83,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("containerScriptHash")), "Container contract address should be removed")
+	require.Nil(t, c.GetStorageItem([]byte("netmapScriptHash")), "Netmap contract address should be removed")
 	require.False(t, newPendingVotes, "there should be no more pending votes")
 
 	require.Equal(t, len(prevOwnersToKeys), len(newOwnersToKeys))

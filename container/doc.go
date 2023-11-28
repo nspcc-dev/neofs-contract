@@ -111,7 +111,8 @@ presented in the NeoFS network for which the contract is deployed. For
 performance optimization, container are additionally indexed by their owners.
 
 # NNS
-Contract tracks container-related domains registered in the NNS.
+Contract tracks container-related domains registered in the NNS. By default
+"container" TLD is used (unless overridden on deploy).
 
 # Size estimations
 Contract stores containers' size estimations came from NeoFS storage nodes.

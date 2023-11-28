@@ -40,10 +40,6 @@ func _deploy(data any, isUpdate bool) {
 
 		common.CheckVersion(version)
 
-		if args[0].(bool) {
-			panic("update to non-notary mode is not supported anymore")
-		}
-
 		// switch to notary mode if version of the current contract deployment is
 		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
 		// use)
@@ -56,20 +52,19 @@ func _deploy(data any, isUpdate bool) {
 	}
 
 	args := data.(struct {
-		notaryDisabled bool
-		addrNetmap     interop.Hash160
-		addrProxy      interop.Hash160
-		name           string
-		index          int
-		total          int
+		_          bool // notaryDisabled
+		addrNetmap interop.Hash160
+		addrProxy  interop.Hash160
+		name       string
+		index      int
+		total      int
 	})
 
-	if args.notaryDisabled {
-		panic("non-notary mode is not supported anymore")
+	if len(args.addrNetmap) != interop.Hash160Len {
+		args.addrNetmap = common.ResolveFSContract("netmap")
 	}
-
-	if len(args.addrNetmap) != interop.Hash160Len || len(args.addrProxy) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
+	if len(args.addrProxy) != interop.Hash160Len {
+		args.addrProxy = common.ResolveFSContract("proxy")
 	}
 
 	storage.Put(ctx, netmapKey, args.addrNetmap)
@@ -110,7 +105,7 @@ func switchToNotary(ctx storage.Context, args []any) {
 				panic("address of the Proxy contract is missing or invalid")
 			}
 		} else {
-			proxyContract = common.ResolveContractHash("proxy")
+			proxyContract = common.ResolveFSContract("proxy")
 		}
 
 		if !common.TryPurgeVotes(ctx) {

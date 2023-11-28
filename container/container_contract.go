@@ -58,6 +58,9 @@ const (
 	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
 	AliasFeeKey = "ContainerAliasFee"
 
+	// nolint:deadcode,unused
+	nnsDefaultTLD = "container"
+
 	// V2 format
 	containerIDSize = interop.Hash256Len // SHA256 size
 
@@ -101,14 +104,10 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d any) {
 // nolint:deadcode,unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
+	args := data.([]any)
 	if isUpdate {
-		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
-
-		if args[0].(bool) {
-			panic("update to non-notary mode is not supported anymore")
-		}
 
 		it := storage.Find(ctx, []byte{}, storage.None)
 		for iterator.Next(it) {
@@ -141,33 +140,53 @@ func _deploy(data any, isUpdate bool) {
 		return
 	}
 
-	args := data.(struct {
-		notaryDisabled bool
-		addrNetmap     interop.Hash160
-		addrBalance    interop.Hash160
-		addrID         interop.Hash160
-		addrNNS        interop.Hash160
-		nnsRoot        string
-	})
+	var (
+		addrNetmap  interop.Hash160
+		addrBalance interop.Hash160
+		addrID      interop.Hash160
+		addrNNS     interop.Hash160
+		nnsRoot     string
+	)
+	// args[0] is notaryDisabled flag
 
-	if args.notaryDisabled {
-		panic("non-notary mode is not supported anymore")
+	// Do this out of order since NNS has to be present anyway and it can
+	// be used to resolve other contracts.
+	if len(args) >= 5 && len(args[4].(interop.Hash160)) == interop.Hash160Len {
+		addrNNS = args[4].(interop.Hash160)
+	} else {
+		addrNNS = common.InferNNSHash()
 	}
 
-	if len(args.addrNetmap) != interop.Hash160Len ||
-		len(args.addrBalance) != interop.Hash160Len ||
-		len(args.addrID) != interop.Hash160Len {
-		panic("incorrect length of contract script hash")
+	if len(args) >= 2 && len(args[1].(interop.Hash160)) == interop.Hash160Len {
+		addrNetmap = args[1].(interop.Hash160)
+	} else {
+		addrNetmap = common.ResolveFSContractWithNNS(addrNNS, "netmap")
 	}
 
-	storage.Put(ctx, netmapContractKey, args.addrNetmap)
-	storage.Put(ctx, balanceContractKey, args.addrBalance)
-	storage.Put(ctx, neofsIDContractKey, args.addrID)
-	storage.Put(ctx, nnsContractKey, args.addrNNS)
-	storage.Put(ctx, nnsRootKey, args.nnsRoot)
+	if len(args) >= 3 && len(args[2].(interop.Hash160)) == interop.Hash160Len {
+		addrBalance = args[2].(interop.Hash160)
+	} else {
+		addrBalance = common.ResolveFSContractWithNNS(addrNNS, "balance")
+	}
+	if len(args) >= 4 && len(args[3].(interop.Hash160)) == interop.Hash160Len {
+		addrID = args[3].(interop.Hash160)
+	} else {
+		addrID = common.ResolveFSContractWithNNS(addrNNS, "neofsid")
+	}
+	if len(args) >= 6 && len(args[5].(string)) > 0 {
+		nnsRoot = args[5].(string)
+	} else {
+		nnsRoot = nnsDefaultTLD
+	}
+
+	storage.Put(ctx, netmapContractKey, addrNetmap)
+	storage.Put(ctx, balanceContractKey, addrBalance)
+	storage.Put(ctx, neofsIDContractKey, addrID)
+	storage.Put(ctx, nnsContractKey, addrNNS)
+	storage.Put(ctx, nnsRootKey, nnsRoot)
 
 	// add NNS root for container alias domains
-	registerNiceNameTLD(args.addrNNS, args.nnsRoot)
+	registerNiceNameTLD(addrNNS, nnsRoot)
 
 	common.SubscribeForNewEpoch()
 

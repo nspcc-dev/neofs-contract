@@ -20,39 +20,48 @@ import (
 )
 
 const containerPath = "../container"
+const containerDomain = "container"
 
 const (
 	containerFee      = 0_0100_0000
 	containerAliasFee = 0_0050_0000
 )
 
-func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addrBalance, addrNNS util.Uint160) util.Uint160 {
+func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addrBalance, addrNNS *util.Uint160) util.Uint160 {
 	args := make([]any, 6)
 	args[0] = int64(0)
 	args[1] = addrNetmap
 	args[2] = addrBalance
 	args[3] = util.Uint160{} // not needed for now
 	args[4] = addrNNS
-	args[5] = "container"
 
+	return deployContainerContractInternal(t, e, args)
+}
+
+func deployContainerContractInternal(t *testing.T, e *neotest.Executor, args []any) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	e.DeployContract(t, c, args)
+	regContractNNS(t, e, "container", c.Hash)
 	return c.Hash
 }
 
-func newContainerInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
+func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash,
-		container.RegistrationFeeKey, int64(containerFee),
+	nnsHash := deployDefaultNNS(t, e)
+	deployNetmapContract(t, e, container.RegistrationFeeKey, int64(containerFee),
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
+	if !autohashes {
+		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	} else {
+		_ = deployNeoFSIDContract(t, e) // Needed in this case to autoresolve.
+		deployContainerContractInternal(t, e, nil)
+	}
 	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
 }
 
@@ -81,7 +90,7 @@ func dummyContainer(owner neotest.Signer) testContainer {
 }
 
 func TestContainerCount(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t, false)
 
 	checkCount := func(t *testing.T, expected int64) {
 		s, err := c.TestInvoke(t, "count")
@@ -161,72 +170,79 @@ func checkContainerList(t *testing.T, c *neotest.ContractInvoker, expected [][]b
 }
 
 func TestContainerPut(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	for autohashes, name := range map[bool]string{
+		false: "standard deploy",
+		true:  "deploy with no hashes",
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, cBal, _ := newContainerInvoker(t, autohashes)
 
-	acc := c.NewAccount(t)
-	cnt := dummyContainer(acc)
+			acc := c.NewAccount(t)
+			cnt := dummyContainer(acc)
 
-	putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token}
-	c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
+			putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token}
+			c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
 
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
+			balanceMint(t, cBal, acc, containerFee*1, []byte{})
 
-	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
+			cAcc := c.WithSigners(acc)
+			cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
 
-	c.Invoke(t, stackitem.Null{}, "put", putArgs...)
-	c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
+			c.Invoke(t, stackitem.Null{}, "put", putArgs...)
+			c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
 
-	t.Run("with nice names", func(t *testing.T) {
-		ctrNNS := neotest.CompileFile(t, c.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
-		nnsHash := ctrNNS.Hash
+			t.Run("with nice names", func(t *testing.T) {
+				ctrNNS := neotest.CompileFile(t, c.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+				nnsHash := ctrNNS.Hash
 
-		balanceMint(t, cBal, acc, containerFee*1, []byte{})
+				balanceMint(t, cBal, acc, containerFee*1, []byte{})
 
-		putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
-		t.Run("no fee for alias", func(t *testing.T) {
-			c.InvokeFail(t, "insufficient balance to create container", "putNamed", putArgs...)
+				putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
+				t.Run("no fee for alias", func(t *testing.T) {
+					c.InvokeFail(t, "insufficient balance to create container", "putNamed", putArgs...)
+				})
+
+				balanceMint(t, cBal, acc, containerAliasFee*1, []byte{})
+				c.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
+
+				expected := stackitem.NewArray([]stackitem.Item{
+					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
+				})
+				cNNS := c.CommitteeInvoker(nnsHash)
+				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
+
+				t.Run("name is already taken", func(t *testing.T) {
+					c.InvokeFail(t, "name is already taken", "putNamed", putArgs...)
+				})
+
+				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+
+				t.Run("register in advance", func(t *testing.T) {
+					cnt.value[len(cnt.value)-1] = 10
+					cnt.id = sha256.Sum256(cnt.value)
+
+					cNNS.Invoke(t, stackitem.Null{}, "registerTLD",
+						"cdn", "whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
+
+					cNNS.Invoke(t, true, "register",
+						"domain.cdn", c.CommitteeHash,
+						"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
+
+					balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
+
+					putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
+					c2 := c.WithSigners(c.Committee, acc)
+					c2.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
+
+					expected = stackitem.NewArray([]stackitem.Item{
+						stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
+					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(nns.TXT))
+				})
+			})
 		})
-
-		balanceMint(t, cBal, acc, containerAliasFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
-
-		expected := stackitem.NewArray([]stackitem.Item{
-			stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
-		})
-		cNNS := c.CommitteeInvoker(nnsHash)
-		cNNS.Invoke(t, expected, "resolve", "mycnt.container", int64(nns.TXT))
-		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt.container")), "alias", cnt.id[:])
-
-		t.Run("name is already taken", func(t *testing.T) {
-			c.InvokeFail(t, "name is already taken", "putNamed", putArgs...)
-		})
-
-		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-		cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt.container", int64(nns.TXT))
-
-		t.Run("register in advance", func(t *testing.T) {
-			cnt.value[len(cnt.value)-1] = 10
-			cnt.id = sha256.Sum256(cnt.value)
-
-			cNNS.Invoke(t, stackitem.Null{}, "registerTLD",
-				"cdn", "whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
-
-			cNNS.Invoke(t, true, "register",
-				"domain.cdn", c.CommitteeHash,
-				"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
-
-			balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
-
-			putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
-			c2 := c.WithSigners(c.Committee, acc)
-			c2.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
-
-			expected = stackitem.NewArray([]stackitem.Item{
-				stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
-			cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(nns.TXT))
-		})
-	})
+	}
 }
 
 func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signer, testContainer) {
@@ -239,7 +255,7 @@ func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signe
 }
 
 func TestContainerDelete(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 	cAcc := c.WithSigners(acc)
@@ -258,7 +274,7 @@ func TestContainerDelete(t *testing.T) {
 }
 
 func TestContainerOwner(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -273,7 +289,7 @@ func TestContainerOwner(t *testing.T) {
 }
 
 func TestContainerGet(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t, false)
 
 	_, cnt := addContainer(t, c, cBal)
 
@@ -311,7 +327,7 @@ func dummyEACL(containerID [32]byte) eacl {
 }
 
 func TestContainerSetEACL(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t)
+	c, cBal, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -368,7 +384,7 @@ func TestContainerSetEACL(t *testing.T) {
 }
 
 func TestContainerSizeEstimation(t *testing.T) {
-	c, cBal, cNm := newContainerInvoker(t)
+	c, cBal, cNm := newContainerInvoker(t, false)
 
 	_, cnt := addContainer(t, c, cBal)
 	nodes := []testNodeInfo{

@@ -12,6 +12,6 @@ import (
 // a successive call is not guaranteed.
 // Caller must have `NewEpoch` method with a single numeric argument.
 func SubscribeForNewEpoch() {
-	netmapContract := ResolveContractHash("netmap")
+	netmapContract := ResolveFSContract("netmap")
 	contract.Call(netmapContract, "subscribeForNewEpoch", contract.All, runtime.GetExecutingScriptHash())
 }

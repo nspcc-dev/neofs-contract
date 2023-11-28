@@ -17,7 +17,7 @@ import (
 
 const alphabetPath = "../alphabet"
 
-func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy util.Uint160, name string, index, total int64) util.Uint160 {
+func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy *util.Uint160, name string, index, total int64) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
 
 	args := make([]any, 6)
@@ -32,7 +32,7 @@ func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrP
 	return c.Hash
 }
 
-func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvoker) {
+func newAlphabetInvoker(t *testing.T, autohashes bool) (*neotest.Executor, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
 	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
@@ -40,14 +40,18 @@ func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvok
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 
-	nnsInvoker := deployNNSWithTLDs(t, e, "neofs")
-	deployNetmapContract(t, e, nnsInvoker.Hash,
-		container.RegistrationFeeKey, int64(containerFee),
+	nnsHash := deployDefaultNNS(t, e)
+	deployNetmapContract(t, e, container.RegistrationFeeKey, int64(containerFee),
 		container.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployContainerContract(t, e, ctrNetmap.Hash, ctrBalance.Hash, nnsInvoker.Hash)
-	deployProxyContract(t, e, ctrNetmap.Hash)
-	hash := deployAlphabetContract(t, e, ctrNetmap.Hash, ctrProxy.Hash, "Az", 0, 1)
+	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	deployProxyContract(t, e)
+
+	var addrNetmap, addrProxy *util.Uint160
+	if !autohashes {
+		addrNetmap, addrProxy = &ctrNetmap.Hash, &ctrProxy.Hash
+	}
+	hash := deployAlphabetContract(t, e, addrNetmap, addrProxy, "Az", 0, 1)
 
 	alphabet := getAlphabetAcc(t, e)
 
@@ -57,64 +61,78 @@ func newAlphabetInvoker(t *testing.T) (*neotest.Executor, *neotest.ContractInvok
 }
 
 func TestEmit(t *testing.T) {
-	_, c := newAlphabetInvoker(t)
+	for autohashes, name := range map[bool]string{
+		false: "standard deploy",
+		true:  "deploy with no hashes",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, c := newAlphabetInvoker(t, autohashes)
 
-	const method = "emit"
+			const method = "emit"
 
-	alphabet := getAlphabetAcc(t, c.Executor)
+			alphabet := getAlphabetAcc(t, c.Executor)
 
-	cCommittee := c.WithSigners(neotest.NewSingleSigner(alphabet))
-	cCommittee.InvokeFail(t, "no gas to emit", method)
+			cCommittee := c.WithSigners(neotest.NewSingleSigner(alphabet))
+			cCommittee.InvokeFail(t, "no gas to emit", method)
 
-	transferNeoToContract(t, c)
+			transferNeoToContract(t, c)
 
-	cCommittee.Invoke(t, stackitem.Null{}, method)
+			cCommittee.Invoke(t, stackitem.Null{}, method)
 
-	notAlphabet := c.NewAccount(t)
-	cNotAlphabet := c.WithSigners(notAlphabet)
+			notAlphabet := c.NewAccount(t)
+			cNotAlphabet := c.WithSigners(notAlphabet)
 
-	cNotAlphabet.InvokeFail(t, "invalid invoker", method)
+			cNotAlphabet.InvokeFail(t, "invalid invoker", method)
+		})
+	}
 }
 
 func TestVote(t *testing.T) {
-	e, c := newAlphabetInvoker(t)
+	for autohashes, name := range map[bool]string{
+		false: "standard deploy",
+		true:  "deploy with no hashes",
+	} {
+		t.Run(name, func(t *testing.T) {
+			e, c := newAlphabetInvoker(t, autohashes)
 
-	const method = "vote"
+			const method = "vote"
 
-	newAlphabet := c.NewAccount(t)
-	newAlphabetPub, ok := vm.ParseSignatureContract(newAlphabet.Script())
-	require.True(t, ok)
-	cNewAlphabet := c.WithSigners(newAlphabet)
+			newAlphabet := c.NewAccount(t)
+			newAlphabetPub, ok := vm.ParseSignatureContract(newAlphabet.Script())
+			require.True(t, ok)
+			cNewAlphabet := c.WithSigners(newAlphabet)
 
-	cNewAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, method, int64(0), []any{newAlphabetPub})
-	c.InvokeFail(t, "invalid epoch", method, int64(1), []any{newAlphabetPub})
+			cNewAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, method, int64(0), []any{newAlphabetPub})
+			c.InvokeFail(t, "invalid epoch", method, int64(1), []any{newAlphabetPub})
 
-	setAlphabetRole(t, e, newAlphabetPub)
-	transferNeoToContract(t, c)
+			setAlphabetRole(t, e, newAlphabetPub)
+			transferNeoToContract(t, c)
 
-	neoSH := e.NativeHash(t, nativenames.Neo)
-	neoInvoker := c.CommitteeInvoker(neoSH)
+			neoSH := e.NativeHash(t, nativenames.Neo)
+			neoInvoker := c.CommitteeInvoker(neoSH)
 
-	gasSH := e.NativeHash(t, nativenames.Gas)
-	gasInvoker := e.CommitteeInvoker(gasSH)
+			gasSH := e.NativeHash(t, nativenames.Gas)
+			gasInvoker := e.CommitteeInvoker(gasSH)
 
-	res, err := gasInvoker.TestInvoke(t, "balanceOf", gasInvoker.Committee.ScriptHash())
-	require.NoError(t, err)
+			res, err := gasInvoker.TestInvoke(t, "balanceOf", gasInvoker.Committee.ScriptHash())
+			require.NoError(t, err)
 
-	// transfer some GAS to the new alphabet node
-	gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Committee.ScriptHash(), newAlphabet.ScriptHash(), res.Top().BigInt().Int64()/2, nil)
+			// transfer some GAS to the new alphabet node
+			gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Committee.ScriptHash(), newAlphabet.ScriptHash(), res.Top().BigInt().Int64()/2, nil)
 
-	newInvoker := neoInvoker.WithSigners(newAlphabet)
+			newInvoker := neoInvoker.WithSigners(newAlphabet)
 
-	newInvoker.Invoke(t, stackitem.NewBool(true), "registerCandidate", newAlphabetPub)
-	c.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
+			newInvoker.Invoke(t, stackitem.NewBool(true), "registerCandidate", newAlphabetPub)
+			c.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
 
-	// wait one block util
-	// a new committee is accepted
-	c.AddNewBlock(t)
+			// wait one block util
+			// a new committee is accepted
+			c.AddNewBlock(t)
 
-	cNewAlphabet.Invoke(t, stackitem.Null{}, "emit")
-	c.InvokeFail(t, "invalid invoker", "emit")
+			cNewAlphabet.Invoke(t, stackitem.Null{}, "emit")
+			c.InvokeFail(t, "invalid invoker", "emit")
+		})
+	}
 }
 
 func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker) {
