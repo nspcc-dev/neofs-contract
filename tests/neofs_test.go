@@ -14,11 +14,11 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
-	"github.com/nspcc-dev/neofs-contract/neofs"
+	"github.com/nspcc-dev/neofs-contract/contracts/neofs"
 	"github.com/stretchr/testify/require"
 )
 
-const neofsPath = "../neofs"
+const neofsPath = "../contracts/neofs"
 
 func deployNeoFSContract(t *testing.T, e *neotest.Executor, addrProc util.Uint160,
 	pubs keys.PublicKeys, config ...any) util.Uint160 {

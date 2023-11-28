@@ -9,7 +9,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
-const proxyPath = "../proxy"
+const proxyPath = "../contracts/proxy"
 
 func deployProxyContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))

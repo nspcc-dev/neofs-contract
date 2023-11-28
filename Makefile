@@ -31,24 +31,20 @@ nns_sc = nns
 
 define sc_template
 $(2)$(1)/$(1)_contract.nef: $(2)$(1)/$(1)_contract.go
-	$(NEOGO) contract compile -i $(2)$(1) -c $(if $(2),$(2),$(1)/)config.yml -m $(2)$(1)/config.json -o $(2)$(1)/$(1)_contract.nef --bindings $(2)$(1)/bindings_config.yml
+	$(NEOGO) contract compile -i $(2)$(1) -c $(2)$(1)/config.yml -m $(2)$(1)/config.json -o $(2)$(1)/$(1)_contract.nef --bindings $(2)$(1)/bindings_config.yml
 	mkdir -p rpc/$(1)
 	$(NEOGO) contract generate-rpcwrapper -o rpc/$(1)/rpcbinding.go -m $(2)$(1)/config.json --config $(2)$(1)/bindings_config.yml
-
-$(if $(2),$(2)$(1)/$(1)_contract.go: alphabet/alphabet.go alphabet/alphabet.tpl
-	go run alphabet/alphabet.go
-)
 endef
 
-$(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc))))
-$(foreach sc,$(morph_sc),$(eval $(call sc_template,$(sc))))
-$(foreach sc,$(mainnet_sc),$(eval $(call sc_template,$(sc))))
-$(foreach sc,$(nns_sc),$(eval $(call sc_template,$(sc))))
+$(foreach sc,$(alphabet_sc),$(eval $(call sc_template,$(sc),contracts/)))
+$(foreach sc,$(morph_sc),$(eval $(call sc_template,$(sc),contracts/)))
+$(foreach sc,$(mainnet_sc),$(eval $(call sc_template,$(sc),contracts/)))
+$(foreach sc,$(nns_sc),$(eval $(call sc_template,$(sc),contracts/)))
 
-alphabet: $(foreach sc,$(alphabet_sc),$(sc)/$(sc)_contract.nef)
-morph: $(foreach sc,$(morph_sc),$(sc)/$(sc)_contract.nef)
-mainnet: $(foreach sc,$(mainnet_sc),$(sc)/$(sc)_contract.nef)
-nns: $(foreach sc,$(nns_sc),$(sc)/$(sc)_contract.nef)
+alphabet: $(foreach sc,$(alphabet_sc),contracts/$(sc)/$(sc)_contract.nef)
+morph: $(foreach sc,$(morph_sc),contracts/$(sc)/$(sc)_contract.nef)
+mainnet: $(foreach sc,$(mainnet_sc),contracts/$(sc)/$(sc)_contract.nef)
+nns: $(foreach sc,$(nns_sc),contracts/$(sc)/$(sc)_contract.nef)
 
 neo-go:
 	@go install -trimpath -v -ldflags "-X '$(NEOGOMOD)/pkg/config.Version=$(NEOGOVER)'" $(NEOGOMOD)/cli@v$(NEOGOVER)
@@ -64,13 +60,13 @@ clean:
 
 mr_proper: clean
 	for sc in $(alphabet_sc); do\
-	  rm -rf alphabet/$$sc; \
+	  rm -rf contracts/alphabet/$$sc; \
 	done
 
 archive: build
 	@tar --transform "s|^./|neofs-contract-$(VERSION)/|" \
-		-czf neofs-contract-$(VERSION).tar.gz \
-		$(shell find . -name '*.nef' -o -name 'config.json')
+		-C contracts -czf neofs-contract-$(VERSION).tar.gz \
+		$(shell cd contracts && find . -name '*.nef' -o -name 'config.json')
 
 # Package for Debian
 debpackage:

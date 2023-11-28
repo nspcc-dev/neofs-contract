@@ -10,7 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
-const reputationPath = "../reputation"
+const reputationPath = "../contracts/reputation"
 
 func deployReputationContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, reputationPath,

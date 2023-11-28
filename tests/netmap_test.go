@@ -14,12 +14,12 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/container"
-	"github.com/nspcc-dev/neofs-contract/netmap"
+	"github.com/nspcc-dev/neofs-contract/contracts/container"
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap"
 	"github.com/stretchr/testify/require"
 )
 
-const netmapPath = "../netmap"
+const netmapPath = "../contracts/netmap"
 
 func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util.Uint160 {
 	_, pubs, ok := vm.ParseMultiSigContract(e.Committee.Script())
