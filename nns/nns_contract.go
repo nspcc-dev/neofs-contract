@@ -133,24 +133,32 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, []byte{prefixTotalSupply}, 0)
 	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
 
-	if data != nil { // for backward compatibility
-		args := data.(struct {
-			tldSet []struct {
-				name  string
-				email string
-			}
-		})
+	if data == nil { // TLDs are optional.
+		return
+	}
 
-		for i := range args.tldSet {
-			const (
-				refresh = 3600
-				retry   = 600
-				expire  = 10 * 365 * 24 * 60 * 60 // 10 years
-				ttl     = 3600
-			)
-			saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email, refresh, retry, expire, ttl)
-			runtime.Log("registered committee domain " + args.tldSet[i].name)
+	s := data.([]any)
+
+	if len(s) == 0 { // pre-0.39.0 neofs-adm happily pushes an empty slice into data
+		return
+	}
+
+	args := data.(struct {
+		tldSet []struct {
+			name  string
+			email string
 		}
+	})
+
+	for i := range args.tldSet {
+		const (
+			refresh = 3600
+			retry   = 600
+			expire  = 10 * 365 * 24 * 60 * 60 // 10 years
+			ttl     = 3600
+		)
+		saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email, refresh, retry, expire, ttl)
+		runtime.Log("registered committee domain " + args.tldSet[i].name)
 	}
 }
 

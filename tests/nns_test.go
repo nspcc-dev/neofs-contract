@@ -71,6 +71,12 @@ func TestNNSGeneric(t *testing.T) {
 	c.Invoke(t, 0, "totalSupply")
 }
 
+func TestOldAdmDeploy(t *testing.T) {
+	e := newExecutor(t)
+	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	e.DeployContract(t, ctr, []any{})
+}
+
 func TestNNSRegisterTLD(t *testing.T) {
 	c := newNNSInvoker(t, false)
 
