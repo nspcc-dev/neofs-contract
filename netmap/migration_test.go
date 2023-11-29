@@ -2,13 +2,14 @@ package netmap_test
 
 import (
 	"bytes"
+	"math/big"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
-	"github.com/nspcc-dev/neofs-contract/netmap"
+	"github.com/nspcc-dev/neofs-contract/rpc/netmap"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/nspcc-dev/neofs-contract/tests/migration"
 	"github.com/stretchr/testify/require"
@@ -101,8 +102,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return n.Uint64()
 	}
 
-	parseNetmapNodes := func(version uint64, items []stackitem.Item) []netmap.Node {
-		res := make([]netmap.Node, len(items))
+	parseNetmapNodes := func(version uint64, items []stackitem.Item) []netmap.NetmapNode {
+		res := make([]netmap.NetmapNode, len(items))
 		var err error
 		for i := range items {
 			arr := items[i].Value().([]stackitem.Item)
@@ -110,18 +111,18 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 			require.NoError(t, err)
 
 			if version <= 15_004 {
-				res[i].State = netmap.NodeStateOnline
+				res[i].State = big.NewInt(1)
 			} else {
 				n, err := arr[1].TryInteger()
 				require.NoError(t, err)
-				res[i].State = netmap.NodeState(n.Int64())
+				res[i].State = n
 			}
 		}
 		return res
 	}
 
-	readDiffToSnapshots := func(version uint64) map[int][]netmap.Node {
-		m := make(map[int][]netmap.Node)
+	readDiffToSnapshots := func(version uint64) map[int][]netmap.NetmapNode {
+		m := make(map[int][]netmap.NetmapNode)
 		for i := 0; uint64(i) < snapshotCount; i++ {
 			m[i] = parseNetmapNodes(version, c.Call(t, "snapshot", int64(i)).Value().([]stackitem.Item))
 		}
@@ -130,12 +131,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	readVersion := func() uint64 { return readUint64("version") }
 	readCurrentEpoch := func() uint64 { return readUint64("epoch") }
 	readCurrentEpochBlock := func() uint64 { return readUint64("lastEpochBlock") }
-	readCurrentNetmap := func(version uint64) []netmap.Node {
+	readCurrentNetmap := func(version uint64) []netmap.NetmapNode {
 		return parseNetmapNodes(version, c.Call(t, "netmap").Value().([]stackitem.Item))
 	}
-	readNetmapCandidates := func(version uint64) []netmap.Node {
+	readNetmapCandidates := func(version uint64) []netmap.NetmapNode {
 		items := c.Call(t, "netmapCandidates").Value().([]stackitem.Item)
-		res := make([]netmap.Node, len(items))
+		res := make([]netmap.NetmapNode, len(items))
 		var err error
 		for i := range items {
 			arr := items[i].Value().([]stackitem.Item)
@@ -149,7 +150,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 			n, err := arr[1].TryInteger()
 			require.NoError(t, err)
-			res[i].State = netmap.NodeState(n.Int64())
+			res[i].State = n
 		}
 		return res
 	}
