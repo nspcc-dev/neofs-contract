@@ -58,11 +58,6 @@ clean:
 	find . -name 'bindings_config.yml' -exec rm -rf {} \;
 	rm -rf ./bin/
 
-mr_proper: clean
-	for sc in $(alphabet_sc); do\
-	  rm -rf contracts/alphabet/$$sc; \
-	done
-
 archive: build
 	@tar --transform "s|^./|neofs-contract-$(VERSION)/|" \
 		-C contracts -czf neofs-contract-$(VERSION).tar.gz \

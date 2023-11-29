@@ -32,7 +32,7 @@ Press the "Publish release" button.
 
 ## Add neofs-contract tarball
 
-Fetch the new tag from the GitHub, do `make mr_proper && make archive` locally.
+Fetch the new tag from the GitHub, do `make clean && make archive` locally.
 It should produce neofs-contract-vX.Y.Z.tar.gz tarball.
 
 ## Close GitHub milestone
