@@ -54,7 +54,7 @@ jobs:
           go-version: '${{ matrix.go_versions }}'
 
       - name: Clear built RPC bindings
-        run: make mr_proper
+        run: make clean
 
       - name: Compile contracts and build RPC bindings
         run: make build

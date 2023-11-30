@@ -59,7 +59,7 @@ You can specify path to the `neo-go` binary with `NEOGO` environment variable:
 $ NEOGO=/home/user/neo-go/bin/neo-go make all
 ```
 
-Remove compiled files with `make clean` or `make mr_proper` command.
+Remove compiled files with `make clean` command.
 
 ## Building Debian package
 

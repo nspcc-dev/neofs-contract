@@ -14,11 +14,11 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/nns"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns"
 	"github.com/stretchr/testify/require"
 )
 
-const nnsPath = "../nns"
+const nnsPath = "../contracts/nns"
 
 const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 

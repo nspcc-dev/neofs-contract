@@ -14,12 +14,12 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/container"
-	"github.com/nspcc-dev/neofs-contract/nns"
+	"github.com/nspcc-dev/neofs-contract/contracts/container"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns"
 	"github.com/stretchr/testify/require"
 )
 
-const containerPath = "../container"
+const containerPath = "../contracts/container"
 const containerDomain = "container"
 
 const (

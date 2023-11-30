@@ -6,42 +6,16 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
-	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
-	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/actor"
-	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
-	"github.com/nspcc-dev/neofs-contract/nns"
+	"github.com/nspcc-dev/neofs-contract/rpc/nns"
 )
-
-// rpcNeo represents Neo blockchain service provided via RPC needed for NeoFS
-// test purposes.
-type rpcNeo interface {
-	// Close closes RPC connection and frees internal resources.
-	Close()
-
-	// GetContractStateByID receives state.Contract of the smart contract by its ID.
-	GetContractStateByID(int32) (*state.Contract, error)
-
-	// GetContractStateByHash receives state.Contract of the smart contract by its
-	// address.
-	GetContractStateByHash(util.Uint160) (*state.Contract, error)
-
-	// GetStateRootByHeight returns state.MPTRoot at specified blockchain height.
-	GetStateRootByHeight(block uint32) (*state.MPTRoot, error)
-
-	// FindStates returns historical contract storage item states at the given state
-	// root. The contract is referenced by specified address. Zero values of rest
-	// parameters mean full storage history.
-	FindStates(stateRoot util.Uint256, contract util.Uint160, historicalPrefix, start []byte, maxCount *int) (result.FindStates, error)
-}
 
 // wrapper over rpcNeo providing NeoFS blockchain services needed for current command.
 type remoteBlockchain struct {
-	rpc   rpcNeo
+	rpc   *rpcclient.Client
 	actor *actor.Actor
 
 	currentBlock uint32
@@ -90,36 +64,14 @@ func (x *remoteBlockchain) close() {
 //
 // See also nns.Resolve.
 func (x *remoteBlockchain) getNeoFSContractByName(name string) (res state.Contract, err error) {
-	nnsContract, err := x.rpc.GetContractStateByID(1)
+	nnsHash, err := nns.InferHash(x.rpc)
 	if err != nil {
-		return res, fmt.Errorf("get state of the NNS contract by ID=1: %w", err)
+		return res, fmt.Errorf("inferring nns: %w", err)
 	}
-
-	const method = "resolve"
-	callRes, err := x.actor.Call(nnsContract.Hash, method, name+".neofs", int64(nns.TXT))
+	r := nns.NewReader(x.actor, nnsHash)
+	h, err := r.ResolveFSContract(name)
 	if err != nil {
-		return res, fmt.Errorf("call '%s' method of the NNS contract: %w", method, err)
-	}
-
-	records, err := unwrap.Array(callRes, nil)
-	if err != nil {
-		return res, fmt.Errorf("fetch stack item array from '%s' method's response of the NNS contract: %w", method, err)
-	}
-
-	strContractHash, err := unwrap.UTF8String(&result.Invoke{
-		State: vmstate.Halt.String(),
-		Stack: records,
-	}, nil)
-	if err != nil {
-		return res, fmt.Errorf("fetch single UTF-8 string from '%s' method's response of the NNS contract: %w", method, err)
-	}
-
-	h, err := address.StringToUint160(strContractHash)
-	if err != nil {
-		h, err = util.Uint160DecodeStringLE(strContractHash)
-		if err != nil {
-			return res, fmt.Errorf("expected NNS record about the contract to be its address in Neo or Hex format '%s'", strContractHash)
-		}
+		return res, fmt.Errorf("resolving %s: %w", name, err)
 	}
 
 	contractState, err := x.rpc.GetContractStateByHash(h)

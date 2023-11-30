@@ -9,7 +9,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
-const processingPath = "../processing"
+const processingPath = "../contracts/processing"
 
 func deployProcessingContract(t *testing.T, e *neotest.Executor, addrNeoFS util.Uint160) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, processingPath, path.Join(processingPath, "config.yml"))

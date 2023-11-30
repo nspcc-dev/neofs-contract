@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const neofsidPath = "../neofsid"
+const neofsidPath = "../contracts/neofsid"
 
 func deployNeoFSIDContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	args := make([]any, 5)

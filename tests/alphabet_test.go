@@ -11,11 +11,11 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/container"
+	"github.com/nspcc-dev/neofs-contract/contracts/container"
 	"github.com/stretchr/testify/require"
 )
 
-const alphabetPath = "../alphabet"
+const alphabetPath = "../contracts/alphabet"
 
 func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy *util.Uint160, name string, index, total int64) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
