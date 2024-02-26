@@ -59,8 +59,7 @@ jobs:
       - name: Compile contracts and build RPC bindings
         run: make build
 
-      - name: Check that fresh version of RPC bindings is committed (for minimum supported Go version only)
-        if: ${{ matrix.go_versions == '1.19' }}
+      - name: Check that committed RPC bindings match generated ones
         run: |
           if [[ $(git diff --name-only | grep '^rpc/*' -c) != 0 ]]; then
           echo "Fresh version of RPC bindings should be committed for the following contracts:";
