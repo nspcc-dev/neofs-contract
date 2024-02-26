@@ -63,7 +63,7 @@ type testNodeInfo struct {
 
 func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 	ni := make([]byte, 66)
-	rand.Read(ni)
+	rand.Read(ni) //nolint:staticcheck // SA1019: rand.Read has been deprecated since Go 1.20
 
 	s := acc.(neotest.SingleSigner)
 	pub := s.Account().PrivateKey().PublicKey().Bytes()
@@ -105,7 +105,7 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestNewEpoch(t *testing.T) {
-	rand.Seed(42)
+	rand.Seed(42) //nolint:staticcheck // SA1019: rand.Seed has been deprecated since Go 1.20
 
 	const epochCount = netmap.DefaultSnapshotCount * 2
 
@@ -214,7 +214,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 }
 
 func TestUpdateSnapshotCount(t *testing.T) {
-	rand.Seed(42)
+	rand.Seed(42) //nolint:staticcheck // SA1019: rand.Seed has been deprecated since Go 1.20
 
 	require.True(t, netmap.DefaultSnapshotCount > 5) // sanity check, adjust tests if false.
 

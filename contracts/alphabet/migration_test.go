@@ -32,7 +32,7 @@ func replaceArgI(vs []any, i int, v any) []any {
 }
 
 func randUint160() (u util.Uint160) {
-	rand.Read(u[:])
+	rand.Read(u[:]) //nolint:staticcheck // SA1019: rand.Read has been deprecated since Go 1.20
 	return
 }
 
