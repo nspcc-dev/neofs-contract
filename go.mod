@@ -3,7 +3,7 @@ module github.com/nspcc-dev/neofs-contract
 go 1.20
 
 require (
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/nspcc-dev/neo-go v0.104.0
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20231121104256-0493ddbd70b2
