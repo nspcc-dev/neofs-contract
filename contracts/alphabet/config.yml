@@ -1,4 +1,4 @@
 name: "NeoFS Alphabet"
-safemethods: ["gas", "neo", "name", "version"]
+safemethods: ["gas", "neo", "name", "version", "verify"]
 permissions:
   - methods: ["update", "transfer", "vote"]

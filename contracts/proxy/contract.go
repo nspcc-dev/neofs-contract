@@ -5,7 +5,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neofs-contract/common"
 )
@@ -41,18 +40,10 @@ func Update(script []byte, manifest []byte, data any) {
 	runtime.Log("proxy contract updated")
 }
 
-// Verify method returns true if transaction contains valid multisignature of
-// Alphabet nodes of the Inner Ring.
+// Verify checks whether carrier transaction contains either (2/3N + 1) or
+// (N/2 + 1) valid multi-signature of the NeoFS Alphabet.
 func Verify() bool {
-	alphabet := neo.GetCommittee()
-	sig := common.Multiaddress(alphabet, false)
-
-	if !runtime.CheckWitness(sig) {
-		sig = common.Multiaddress(alphabet, true)
-		return runtime.CheckWitness(sig)
-	}
-
-	return true
+	return common.ContainsAlphabetWitness()
 }
 
 // Version returns the version of the contract.
