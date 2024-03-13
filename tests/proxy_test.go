@@ -6,7 +6,6 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
 const proxyPath = "../contracts/proxy"
@@ -29,15 +28,6 @@ func newProxyInvoker(t *testing.T) *neotest.ContractInvoker {
 	return e.CommitteeInvoker(ctrProxy.Hash)
 }
 
-func TestVerify(t *testing.T) {
-	e := newProxyInvoker(t)
-
-	const method = "verify"
-
-	e.Invoke(t, stackitem.NewBool(true), method)
-
-	notAlphabet := e.NewAccount(t)
-	cNotAlphabet := e.WithSigners(notAlphabet)
-
-	cNotAlphabet.Invoke(t, stackitem.NewBool(false), method)
+func TestProxyVerify(t *testing.T) {
+	testVerify(t, newProxyInvoker(t))
 }

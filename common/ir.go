@@ -74,3 +74,13 @@ func Multiaddress(n []interop.PublicKey, committee bool) []byte {
 
 	return contract.CreateMultisigAccount(threshold, n)
 }
+
+// ContainsAlphabetWitness checks whether carrier transaction contains either
+// (2/3N + 1) or (N/2 + 1) valid multi-signature of the NeoFS Alphabet.
+func ContainsAlphabetWitness() bool {
+	alphabet := neo.GetCommittee()
+	if runtime.CheckWitness(Multiaddress(alphabet, false)) {
+		return true
+	}
+	return runtime.CheckWitness(Multiaddress(alphabet, true))
+}

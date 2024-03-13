@@ -4,6 +4,7 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- `verify` method for Alphabet contracts (#386)
 
 ### Updated
 

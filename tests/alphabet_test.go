@@ -154,3 +154,8 @@ func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
 
 	return multi.Single(0).Account()
 }
+
+func TestAlphabetVerify(t *testing.T) {
+	_, contract := newAlphabetInvoker(t, false)
+	testVerify(t, contract)
+}

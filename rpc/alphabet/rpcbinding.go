@@ -78,6 +78,11 @@ func (c *ContractReader) Neo() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "neo"))
 }
 
+// Verify invokes `verify` method of contract.
+func (c *ContractReader) Verify() (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "verify"))
+}
+
 // Version invokes `version` method of contract.
 func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))

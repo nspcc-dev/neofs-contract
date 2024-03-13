@@ -340,3 +340,9 @@ func Name() string {
 func Version() int {
 	return common.Version
 }
+
+// Verify checks whether carrier transaction contains either (2/3N + 1) or
+// (N/2 + 1) valid multi-signature of the NeoFS Alphabet.
+func Verify() bool {
+	return common.ContainsAlphabetWitness()
+}
