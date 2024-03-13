@@ -2,6 +2,7 @@ package nns
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
@@ -17,6 +18,9 @@ const ID = 1
 // is not likely to be used by any non-NeoFS networks, but for NeoFS ones it
 // allows to find contract hashes more easily.
 const ContractTLD = "neofs"
+
+// nep18Prefix is the string prefix containing NEP-18 address attribute name.
+const nep18Prefix = "address="
 
 // ContractStateGetter is the interface required for contract state resolution
 // using a known contract ID.
@@ -57,8 +61,9 @@ func NewInferred(sg ContractStateGetter, actor Actor) (*Contract, error) {
 
 // AddressFromRecord extracts [util.Uint160] hash from the string using one of
 // the following formats:
-//   - hex-encoded LE (reversed) string
-//   - Neo address ("Nxxxx")
+//   - hex-encoded LE (reversed) hash (the oldest historically)
+//   - plain Neo address string ("Nxxxx")
+//   - attribute-based NEP-18 string
 //
 // NeoFS used both for contract hashes stored in NNS at various stages of its
 // development.
@@ -70,7 +75,7 @@ func AddressFromRecord(s string) (util.Uint160, error) {
 		return h, nil
 	}
 
-	h, err = address.StringToUint160(s)
+	h, err = address.StringToUint160(strings.TrimPrefix(s, nep18Prefix))
 	if err == nil {
 		return h, nil
 	}

@@ -89,6 +89,18 @@ func TestBaseErrors(t *testing.T) {
 	require.Error(t, err)
 
 	h := util.Uint160{1, 2, 3, 4, 5}
+
+	ti.res = &result.Invoke{
+		State: "HALT",
+		Stack: []stackitem.Item{
+			stackitem.Make([]stackitem.Item{
+				stackitem.Make("addr=" + address.Uint160ToString(h)), // Wrong prefix
+			}),
+		},
+	}
+	_, err = r.ResolveFSContract("blah")
+	require.Error(t, err)
+
 	ti.res = &result.Invoke{
 		State: "HALT",
 		Stack: []stackitem.Item{
@@ -106,6 +118,18 @@ func TestBaseErrors(t *testing.T) {
 		Stack: []stackitem.Item{
 			stackitem.Make([]stackitem.Item{
 				stackitem.Make(address.Uint160ToString(h)),
+			}),
+		},
+	}
+	res, err = r.ResolveFSContract("blah")
+	require.NoError(t, err)
+	require.Equal(t, h, res)
+
+	ti.res = &result.Invoke{
+		State: "HALT",
+		Stack: []stackitem.Item{
+			stackitem.Make([]stackitem.Item{
+				stackitem.Make("address=" + address.Uint160ToString(h)), // NEP-18
 			}),
 		},
 	}
