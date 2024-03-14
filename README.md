@@ -96,5 +96,5 @@ ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 
 # License
 
-This project is licensed under the GPLv3 License - see the 
-[LICENSE.md](LICENSE.md) file for details
+Contracts are licensed under the GPLv3 license, bindings and other integration
+code is provided under the Apache 2.0 license - see [LICENSE.md](LICENSE.md) for details.
