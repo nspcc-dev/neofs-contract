@@ -37,6 +37,7 @@ type blockchainMonitor struct {
 	height atomic.Uint32
 
 	chConnLost chan struct{}
+	chExit     chan struct{}
 }
 
 // newBlockchainMonitor constructs and runs monitor for the given Blockchain.
@@ -61,6 +62,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 		blockchain:    b,
 		blockInterval: time.Duration(ver.Protocol.MillisecondsPerBlock) * time.Millisecond,
 		chConnLost:    make(chan struct{}),
+		chExit:        make(chan struct{}),
 	}
 
 	res.height.Store(initialBlock)
@@ -72,6 +74,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 			if !ok {
 				close(chNewBlock)
 				close(res.chConnLost)
+				close(res.chExit)
 				l.Info("new blocks channel is closed, listening stopped")
 				return
 			}
@@ -80,6 +83,9 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 
 			select {
 			case chNewBlock <- struct{}{}:
+			case <-res.chExit:
+				l.Info("monitoring new blocks channel is closed, listening stopped")
+				return
 			default:
 			}
 
@@ -93,6 +99,12 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 // currentHeight returns current blockchain height.
 func (x *blockchainMonitor) currentHeight() uint32 {
 	return x.height.Load()
+}
+
+// currentHeight returns current blockchain height.
+func (x *blockchainMonitor) stop() {
+	x.chExit <- struct{}{}
+	close(x.chExit)
 }
 
 // waitForNextBlock blocks until blockchainMonitor encounters new block on the

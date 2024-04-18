@@ -171,6 +171,8 @@ func Contract(ctx context.Context, prm ContractPrm) (util.Uint160, error) {
 		return util.Uint160{}, fmt.Errorf("init blockchain monitor: %w", err)
 	}
 
+	defer monitor.stop()
+
 	syncPrm := syncNeoFSContractPrm{
 		logger:               prm.Logger,
 		blockchain:           prm.Blockchain,
