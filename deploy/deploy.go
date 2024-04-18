@@ -469,7 +469,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 	syncPrm.localNEF = prm.BalanceContract.Common.NEF
 	syncPrm.localManifest = prm.BalanceContract.Common.Manifest
 	syncPrm.domainName = domainBalance
-	syncPrm.deployWitness = witnessValidators
+	syncPrm.deployWitness = WitnessValidators
 	syncPrm.validatorsDeployAllowedContracts = []util.Uint160{netmapContractAddress}
 	syncPrm.buildExtraDeployArgs = noExtraDeployArgs
 
@@ -519,7 +519,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 	syncPrm.localNEF = prm.ContainerContract.Common.NEF
 	syncPrm.localManifest = prm.ContainerContract.Common.Manifest
 	syncPrm.domainName = domainContainer
-	syncPrm.deployWitness = witnessValidatorsAndCommittee
+	syncPrm.deployWitness = WitnessValidatorsAndCommittee
 	syncPrm.validatorsDeployAllowedContracts = []util.Uint160{netmapContractAddress}
 	syncPrm.buildExtraDeployArgs = func() ([]any, error) {
 		return []any{

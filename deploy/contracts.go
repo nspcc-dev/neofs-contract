@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
@@ -26,10 +27,16 @@ const (
 )
 
 const (
-	_ uint8 = iota
-	witnessValidators
-	witnessValidatorsAndCommittee
+	// WitnessSet is not needed
+	_ WitnessSet = iota
+	// WitnessValidators requires committee 2/3n+1.
+	WitnessValidators
+	// WitnessValidatorsAndCommittee requires WitnessValidators + committee n/2+1 with allowed NNS contract calls.
+	WitnessValidatorsAndCommittee
 )
+
+// WitnessSet type describes witnesses for contract.
+type WitnessSet uint8
 
 // syncNeoFSContractPrm groups parameters of syncNeoFSContract.
 type syncNeoFSContractPrm struct {
@@ -63,9 +70,9 @@ type syncNeoFSContractPrm struct {
 	// missing on the chain
 	tryDeploy bool
 	// 0: committee witness is not needed
-	// witnessValidators: committee 2/3n+1 with validatorsDeployAllowedContracts
-	// witnessValidatorsAndCommittee: witnessValidators + committee n/2+1 with allowed NNS contract calls
-	deployWitness uint8
+	// WitnessValidators: committee 2/3n+1 with validatorsDeployAllowedContracts
+	// WitnessValidatorsAndCommittee: WitnessValidators + committee n/2+1 with allowed NNS contract calls
+	deployWitness WitnessSet
 	// contracts that are allowed to be called for the validators-witnessed deployment
 	validatorsDeployAllowedContracts []util.Uint160
 	// additional option for unset tryDeploy to specify deployer of the contract
@@ -86,6 +93,109 @@ type syncNeoFSContractPrm struct {
 	// proxyContract field is unused because address is dynamically resolved within
 	// syncNeoFSContract.
 	isProxy bool
+}
+
+// ContractPrm describes parameters required to configure user's contract deployment routine.
+type ContractPrm struct {
+	// Writes progress into the log.
+	Logger *zap.Logger
+	// Particular Neo blockchain instance to be used as NeoFS Sidechain.
+	Blockchain Blockchain
+	// Local process account used for transaction signing (must be unlocked).
+	LocalAccount *wallet.Account
+	// Validator multi-sig account to spread initial GAS to network
+	// participants (must be unlocked).
+	ValidatorMultiSigAccount *wallet.Account
+	// NNSContractAddress contains address of NNS contract in chain.
+	NNSContractAddress util.Uint160
+	// NNSContractAddress contains address of Proxy contract in chain.
+	ProxyContractAddress util.Uint160
+	// SystemEmail which will be set to NNS record after contract deploy.
+	SystemEmail string
+	// DomainName for the deploying contract.
+	DomainName string
+	// NEFFile for deploying contract.
+	NEFFile nef.File
+	// ManifestFile for deploying contract (json).
+	ManifestFile manifest.Manifest
+	// DesignatedDeployer is a deployer account for case when contracts deploys by another node.
+	DesignatedDeployer *util.Uint160
+	// DeployWitness allows to configure witnesses.
+	// 0: committee witness is not needed
+	// [WitnessValidators]: committee 2/3n+1 with validatorsDeployAllowedContracts
+	// [WitnessValidatorsAndCommittee]: [WitnessValidators] + committee n/2+1 with allowed NNS contract calls
+	DeployWitness WitnessSet
+	// BuildExtraDeployArgs allows to pass extra parameters to deployment routine.
+	BuildExtraDeployArgs func() ([]any, error)
+}
+
+// Contract allows to deploy users contract in chain.
+func Contract(ctx context.Context, prm ContractPrm) (util.Uint160, error) {
+	simpleLocalActor, err := actor.NewSimple(prm.Blockchain, prm.LocalAccount)
+	if err != nil {
+		return util.Uint160{}, fmt.Errorf("init transaction sender from single local account: %w", err)
+	}
+
+	committee, err := prm.Blockchain.GetCommittee()
+	if err != nil {
+		return util.Uint160{}, fmt.Errorf("get Neo committee of the network: %w", err)
+	}
+
+	sort.Sort(committee)
+
+	// determine a leader
+	localPrivateKey := prm.LocalAccount.PrivateKey()
+	localPublicKey := localPrivateKey.PublicKey()
+	localAccCommitteeIndex := -1
+
+	for i := range committee {
+		if committee[i].Equal(localPublicKey) {
+			localAccCommitteeIndex = i
+			break
+		}
+	}
+
+	if localAccCommitteeIndex < 0 {
+		return util.Uint160{}, errors.New("local account does not belong to any Neo committee member")
+	}
+
+	committeeLocalActor, err := newCommitteeNotaryActor(prm.Blockchain, prm.LocalAccount, committee)
+	if err != nil {
+		return util.Uint160{}, fmt.Errorf("create Notary service client sending transactions to be signed by the committee: %w", err)
+	}
+
+	chNewBlock := make(chan struct{}, 1)
+
+	monitor, err := newBlockchainMonitor(prm.Logger, prm.Blockchain, chNewBlock)
+	if err != nil {
+		return util.Uint160{}, fmt.Errorf("init blockchain monitor: %w", err)
+	}
+
+	syncPrm := syncNeoFSContractPrm{
+		logger:               prm.Logger,
+		blockchain:           prm.Blockchain,
+		monitor:              monitor,
+		localAcc:             prm.LocalAccount,
+		committee:            committee,
+		simpleLocalActor:     simpleLocalActor,
+		committeeLocalActor:  committeeLocalActor,
+		tryDeploy:            localAccCommitteeIndex == 0,
+		designatedDeployer:   prm.DesignatedDeployer,
+		nnsContract:          prm.NNSContractAddress,
+		systemEmail:          prm.SystemEmail,
+		deployWitness:        prm.DeployWitness,
+		proxyContract:        prm.ProxyContractAddress,
+		localNEF:             prm.NEFFile,
+		localManifest:        prm.ManifestFile,
+		domainName:           prm.DomainName,
+		buildExtraDeployArgs: prm.BuildExtraDeployArgs,
+	}
+
+	if syncPrm.buildExtraDeployArgs == nil {
+		syncPrm.buildExtraDeployArgs = noExtraDeployArgs
+	}
+
+	return syncNeoFSContract(ctx, syncPrm)
 }
 
 // syncNeoFSContract behaves similar to updateNNSContract but also attempts to
@@ -138,7 +248,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 	}
 	var managementContract *management.Contract
 	if prm.deployWitness > 0 {
-		if prm.deployWitness != witnessValidators && prm.deployWitness != witnessValidatorsAndCommittee {
+		if prm.deployWitness != WitnessValidators && prm.deployWitness != WitnessValidatorsAndCommittee {
 			panic(fmt.Sprintf("unexpected deploy witness mode value %v", prm.deployWitness))
 		}
 
@@ -159,7 +269,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 		signers[1].Signer.Scopes = transaction.CustomContracts
 		signers[1].Signer.AllowedContracts = prm.validatorsDeployAllowedContracts
 
-		if prm.deployWitness == witnessValidatorsAndCommittee {
+		if prm.deployWitness == WitnessValidatorsAndCommittee {
 			committeeMultiSigAcc := wallet.NewAccountFromPrivateKey(prm.localAcc.PrivateKey())
 			err := committeeMultiSigAcc.ConvertMultisig(smartcontract.GetMajorityHonestNodeCount(len(prm.committee)), prm.committee)
 			if err != nil {
