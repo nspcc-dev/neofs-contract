@@ -22,10 +22,21 @@ jobs:
 
   tests:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go_versions: [ '1.20', '1.21', '1.22' ]
+        go: [ '1.20', '1.21', '1.22' ]
+        os: [ubuntu-latest, windows-2022, macos-14]
+        exclude:
+          # Only latest Go version for Windows and MacOS.
+          - os: windows-2022
+            go: '1.20'
+          - os: windows-2022
+            go: '1.21'
+          - os: macos-14
+            go: '1.20'
+          - os: macos-14
+            go: '1.21'
       fail-fast: false
     steps:
     - uses: actions/checkout@v4
@@ -33,7 +44,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '${{ matrix.go_versions }}'
+        go-version: '${{ matrix.go }}'
 
     - name: Test
       run: go test -v ./...
