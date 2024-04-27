@@ -12,3 +12,4 @@ Specifically, GPLv3 is used by code in these folders:
 
 Apache 2.0 is used in:
  * rpc
+ * deploy
