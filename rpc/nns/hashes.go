@@ -36,6 +36,25 @@ func InferHash(sg ContractStateGetter) (util.Uint160, error) {
 	return c.Hash, nil
 }
 
+// NewInferredReader creates an instance of [ContractReader] using hash obtained via
+// [InferHash].
+func NewInferredReader(sg ContractStateGetter, invoker Invoker) (*ContractReader, error) {
+	h, err := InferHash(sg)
+	if err != nil {
+		return nil, err
+	}
+	return NewReader(invoker, h), nil
+}
+
+// NewInferred creates an instance of [Contract] using hash obtained via [InferHash].
+func NewInferred(sg ContractStateGetter, actor Actor) (*Contract, error) {
+	h, err := InferHash(sg)
+	if err != nil {
+		return nil, err
+	}
+	return New(actor, h), nil
+}
+
 // AddressFromRecord extracts [util.Uint160] hash from the string using one of
 // the following formats:
 //   - hex-encoded LE (reversed) string
