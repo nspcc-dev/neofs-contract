@@ -36,27 +36,50 @@ func InferHash(sg ContractStateGetter) (util.Uint160, error) {
 	return c.Hash, nil
 }
 
+// AddressFromRecord extracts [util.Uint160] hash from the string using one of
+// the following formats:
+//   - hex-encoded LE (reversed) string
+//   - Neo address ("Nxxxx")
+//
+// NeoFS used both for contract hashes stored in NNS at various stages of its
+// development.
+//
+// See also: [AddressFromRecords].
+func AddressFromRecord(s string) (util.Uint160, error) {
+	h, err := util.Uint160DecodeStringLE(s)
+	if err == nil {
+		return h, nil
+	}
+
+	h, err = address.StringToUint160(s)
+	if err == nil {
+		return h, nil
+	}
+	return util.Uint160{}, errors.New("no valid address found")
+}
+
+// AddressFromRecords extracts [util.Uint160] hash from the set of given
+// strings using [AddressFromRecord]. Returns the first result that can be
+// interpreted as address.
+func AddressFromRecords(strs []string) (util.Uint160, error) {
+	for i := range strs {
+		h, err := AddressFromRecord(strs[i])
+		if err == nil {
+			return h, nil
+		}
+	}
+	return util.Uint160{}, errors.New("no valid addresses are found")
+}
+
 // ResolveFSContract is a convenience method that doesn't exist in the NNS
 // contract itself (it doesn't care which data is stored there). It assumes
 // that contracts follow the [ContractTLD] convention, gets simple contract
 // names (like "container" or "netmap") and extracts the hash for the
-// respective NNS record in any of the formats (of which historically there's
-// been a few).
+// respective NNS record using [AddressFromRecords].
 func (c *ContractReader) ResolveFSContract(name string) (util.Uint160, error) {
 	strs, err := c.Resolve(name+"."+ContractTLD, TXT)
 	if err != nil {
 		return util.Uint160{}, err
 	}
-	for i := range strs {
-		h, err := util.Uint160DecodeStringLE(strs[i])
-		if err == nil {
-			return h, nil
-		}
-
-		h, err = address.StringToUint160(strs[i])
-		if err == nil {
-			return h, nil
-		}
-	}
-	return util.Uint160{}, errors.New("no valid hashes are found")
+	return AddressFromRecords(strs)
 }
