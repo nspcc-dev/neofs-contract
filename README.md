@@ -93,6 +93,11 @@ ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 |        v0.15.x         |                                  [v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0), [v2.12.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.12.0)                                  |
 |        v0.16.x         |                                                                      [v2.14.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.14.0)                       |        v0.17.x         |                                                                      [v2.14.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.14.0)                                                                      |
 
+# Comparing contracts content of NeoFS chains
+`scripts` directory contains CLI utilities to compare some of the NeoFS contract
+contents between two RPC nodes:
+ * `compare-fscontent` performs comparison of container blobs and NetMap contract
+   entries.
 
 # License
 

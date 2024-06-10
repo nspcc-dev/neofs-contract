@@ -5,6 +5,7 @@ Changelog for NeoFS Contract
 
 ### Added
 - `verify` method for Alphabet contracts (#386)
+- script comparing some of NeoFS contract states (#399)
 
 ### Updated
 - NeoGo dependency to 0.106.0 (#398)

@@ -9,6 +9,7 @@ Specifically, GPLv3 is used by code in these folders:
  * common
  * contracts
  * tests
+ * scripts
 
 Apache 2.0 is used in:
  * rpc
