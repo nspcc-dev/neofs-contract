@@ -98,6 +98,8 @@ ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 contents between two RPC nodes:
  * `compare-fscontent` performs comparison of container blobs and NetMap contract
    entries.
+ * `compare-deposits` performs comparison of mainnet deposits and FS chain balance
+   mints.
 
 # License
 

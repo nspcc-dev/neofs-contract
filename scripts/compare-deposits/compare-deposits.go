@@ -1,0 +1,240 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/big"
+	"os"
+	"slices"
+	"sort"
+	"time"
+
+	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
+	"github.com/nspcc-dev/neo-go/pkg/encoding/fixedn"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/gas"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep17"
+	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/rpc/nns"
+	"github.com/urfave/cli"
+)
+
+func initClient(addr string, name string) (*rpcclient.Client, error) {
+	c, err := rpcclient.New(context.Background(), addr, rpcclient.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("RPC %s: %w", name, err)
+	}
+	err = c.Init()
+	if err != nil {
+		return nil, fmt.Errorf("RPC %s init: %w", name, err)
+	}
+	return c, nil
+}
+
+type deposit struct {
+	from   string
+	amount *big.Int
+	tx     util.Uint256
+}
+
+type mint struct {
+	tx        util.Uint256
+	to        util.Uint160
+	amount    int64
+	depositTx util.Uint256
+	data      []byte
+}
+
+func getSupply(c *rpcclient.Client, h util.Uint160, height uint32) int64 {
+	inv := invoker.NewHistoricAtHeight(height, c, nil)
+	n17 := nep17.NewReader(inv, h)
+	s, err := n17.TotalSupply()
+	if err != nil {
+		return 0
+	}
+	return s.Int64()
+}
+
+func cliMain(c *cli.Context) error {
+	rpcMain := c.Args().Get(0)
+	neoFSContract := c.Args().Get(1)
+	rpcFS := c.Args().Get(2)
+	if rpcMain == "" {
+		return errors.New("no arguments given")
+	}
+	if neoFSContract == "" {
+		return errors.New("missing second argument")
+	}
+	if rpcFS == "" {
+		return errors.New("missing third argument")
+	}
+	fsCont, err := address.StringToUint160(neoFSContract)
+	if err != nil {
+		return fmt.Errorf("bad contract address: %w", err)
+	}
+	cMain, err := initClient(rpcMain, "main")
+	if err != nil {
+		return err
+	}
+	cFS, err := initClient(rpcFS, "FS")
+	if err != nil {
+		return err
+	}
+
+	now := uint64(time.Now().Unix()) * 1000 // Milliseconds.
+
+	var (
+		deposits []deposit
+		mints    []mint
+	)
+	for i := 0; ; i++ {
+		var from uint64
+		var limit = 100
+		trans, err := cMain.GetNEP17Transfers(fsCont, &from, &now, &limit, &i)
+		if err != nil {
+			return fmt.Errorf("can't get transfers: %w", err)
+		}
+		for _, d := range trans.Received {
+			amount, err := fixedn.FromString(d.Amount, 8)
+			if err != nil {
+				return fmt.Errorf("amount conversion error: %w", err)
+			}
+			deposits = append(deposits, deposit{d.Address, amount, d.TxHash})
+		}
+		if len(trans.Received)+len(trans.Sent) < 100 {
+			break
+		}
+	}
+	slices.Reverse(deposits)
+
+	gasR := gas.NewReader(invoker.New(cMain, nil))
+	bMain, err := gasR.BalanceOf(fsCont)
+	if err != nil {
+		return err
+	}
+	fmt.Println(len(deposits), "deposits, main balance:", fixedn.ToString(bMain, 8))
+
+	nnsHash, err := nns.InferHash(cFS)
+	if err != nil {
+		return err
+	}
+	nnsR := nns.NewReader(invoker.New(cFS, nil), nnsHash)
+	balanceHash, err := nnsR.ResolveFSContract("balance")
+	if err != nil {
+		return err
+	}
+
+	maxH, err := cFS.GetBlockCount()
+	if err != nil {
+		return err
+	}
+	maxH-- // blockCount to height
+
+	var (
+		maxSupply   = getSupply(cFS, balanceHash, maxH)
+		nextSupply  int64
+		knownBlocks = make(map[uint32]int64)
+	)
+
+	fmt.Println("FS supply:", fixedn.ToString(big.NewInt(maxSupply), 12))
+	for nextSupply < maxSupply {
+		var (
+			minBlock  uint32
+			maxBlock  = maxH
+			tmpSupply int64
+		)
+		for h, s := range knownBlocks {
+			if s < nextSupply && minBlock < h {
+				minBlock = h
+			}
+			if s > nextSupply && maxBlock > h {
+				maxBlock = h
+			}
+		}
+		n := sort.Search(int(maxBlock-minBlock), func(i int) bool {
+			var h = minBlock + uint32(i)
+			s := getSupply(cFS, balanceHash, h)
+			knownBlocks[h] = s
+			return s > nextSupply
+		})
+		for _, s := range knownBlocks {
+			if s > nextSupply && (s < tmpSupply || tmpSupply == 0) {
+				tmpSupply = s
+			}
+		}
+		nextSupply = tmpSupply
+		n = int(minBlock) + n
+		fmt.Println("FS block", n, "supply", fixedn.ToString(big.NewInt(nextSupply), 12))
+		b, err := cFS.GetBlockByIndex(uint32(n))
+		if err != nil {
+			return err
+		}
+		for _, t := range b.Transactions {
+			l, err := cFS.GetApplicationLog(t.Hash(), nil)
+			if err != nil {
+				return err
+			}
+			for _, e := range l.Executions[0].Events {
+				if e.ScriptHash.Equals(balanceHash) && e.Name == "TransferX" {
+					itms := e.Item.Value().([]stackitem.Item)
+					_, ok := itms[0].(stackitem.Null)
+					if !ok { // Non-mint.
+						continue
+					}
+					var to util.Uint160
+					toB, _ := itms[1].TryBytes()
+					if len(toB) == 20 {
+						to, _ = util.Uint160DecodeBytesBE(toB)
+					}
+					amount, _ := itms[2].TryInteger()
+					data, _ := itms[3].TryBytes()
+					var h util.Uint256
+					if len(data) == 33 {
+						h, _ = util.Uint256DecodeBytesBE(data[1:33])
+					} else if len(data) == 32 {
+						h, _ = util.Uint256DecodeBytesBE(data)
+					}
+					mints = append(mints, mint{t.Hash(), to, amount.Int64(), h, data})
+				}
+			}
+		}
+	}
+	failedDeposits := slices.Clone(deposits)
+	unmatchedMints := slices.Clone(mints)
+	for _, m := range mints {
+		// Won't detect duplicated mints for the same deposit.
+		failedDeposits = slices.DeleteFunc(failedDeposits, func(d deposit) bool {
+			return d.tx.Equals(m.depositTx)
+		})
+	}
+	for _, d := range deposits {
+		unmatchedMints = slices.DeleteFunc(unmatchedMints, func(m mint) bool {
+			return d.tx.Equals(m.depositTx)
+		})
+	}
+
+	for _, d := range failedDeposits {
+		fmt.Println("0x"+d.tx.StringLE(), d.from, fixedn.ToString(d.amount, 8))
+	}
+	for _, m := range unmatchedMints {
+		fmt.Println("0x"+m.tx.StringLE(), address.Uint160ToString(m.to), m.amount, m.depositTx.StringLE(), m.data)
+	}
+
+	return nil
+}
+
+func main() {
+	ctl := cli.NewApp()
+	ctl.Name = "compare-deposits"
+	ctl.Version = "1.0"
+	ctl.Usage = "compare-deposits RPC_MAIN NEOFS_CONTRACT_ADDRESS RPC_FS"
+	ctl.Action = cliMain
+
+	if err := ctl.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
