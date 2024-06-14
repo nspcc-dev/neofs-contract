@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container"
 	"github.com/nspcc-dev/neofs-contract/contracts/netmap"
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +59,7 @@ type testNodeInfo struct {
 	signer neotest.SingleSigner
 	pub    []byte
 	raw    []byte
-	state  netmap.NodeState
+	state  nodestate.Type
 }
 
 func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
@@ -72,7 +73,7 @@ func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 		signer: s,
 		pub:    pub,
 		raw:    ni,
-		state:  netmap.NodeStateOnline,
+		state:  nodestate.Online,
 	}
 }
 
@@ -134,7 +135,7 @@ func TestNewEpoch(t *testing.T) {
 			for j := range nodes[i-1] {
 				if rand.Int()%3 == 0 {
 					cNm.Invoke(t, stackitem.Null{}, "updateStateIR",
-						int64(netmap.NodeStateOffline), nodes[i-1][j].pub)
+						int64(nodestate.Offline), nodes[i-1][j].pub)
 				} else {
 					current = append(current, nodes[i-1][j])
 				}
@@ -349,7 +350,7 @@ func checkSnapshot(t *testing.T, s *vm.Stack, nodes []testNodeInfo) {
 		require.NoError(t, err)
 
 		actual[i].BLOB = n[0].Value().([]byte)
-		actual[i].State = netmap.NodeState(state.Int64())
+		actual[i].State = nodestate.Type(state.Int64())
 		expected[i].BLOB = nodes[i].raw
 		expected[i].State = nodes[i].state
 	}
@@ -364,7 +365,7 @@ func TestUpdateStateIR(t *testing.T) {
 	pub := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 
 	t.Run("can't move online, need addPeerIR", func(t *testing.T) {
-		cNm.InvokeFail(t, "peer is missing", "updateStateIR", int64(netmap.NodeStateOnline), pub)
+		cNm.InvokeFail(t, "peer is missing", "updateStateIR", int64(nodestate.Online), pub)
 	})
 
 	dummyInfo := dummyNodeInfo(acc)
@@ -376,7 +377,7 @@ func TestUpdateStateIR(t *testing.T) {
 
 	t.Run("must be signed by the alphabet", func(t *testing.T) {
 		cAcc := cNm.WithSigners(acc)
-		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(netmap.NodeStateOffline), pub)
+		cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "updateStateIR", int64(nodestate.Offline), pub)
 	})
 	t.Run("invalid state", func(t *testing.T) {
 		cNm.InvokeFail(t, "unsupported state", "updateStateIR", int64(42), pub)
@@ -385,10 +386,10 @@ func TestUpdateStateIR(t *testing.T) {
 	checkNetmapCandidates(t, cNm, 2)
 
 	// Move the first node offline.
-	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateOffline), pub)
+	cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(nodestate.Offline), pub)
 	checkNetmapCandidates(t, cNm, 1)
 
-	checkState := func(expected netmap.NodeState) {
+	checkState := func(expected nodestate.Type) {
 		arr := checkNetmapCandidates(t, cNm, 1)
 		nn := arr[0].Value().([]stackitem.Item)
 		state, err := nn[1].TryInteger()
@@ -399,16 +400,16 @@ func TestUpdateStateIR(t *testing.T) {
 	// Move the second node in the maintenance state.
 	pub1 := acc1.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
 	t.Run("maintenance -> add peer", func(t *testing.T) {
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateMaintenance), pub1)
-		checkState(netmap.NodeStateMaintenance)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(nodestate.Maintenance), pub1)
+		checkState(nodestate.Maintenance)
 		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo1.raw)
-		checkState(netmap.NodeStateOnline)
+		checkState(nodestate.Online)
 	})
 	t.Run("maintenance -> online", func(t *testing.T) {
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateMaintenance), pub1)
-		checkState(netmap.NodeStateMaintenance)
-		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(netmap.NodeStateOnline), pub1)
-		checkState(netmap.NodeStateOnline)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(nodestate.Maintenance), pub1)
+		checkState(nodestate.Maintenance)
+		cNm.Invoke(t, stackitem.Null{}, "updateStateIR", int64(nodestate.Online), pub1)
+		checkState(nodestate.Online)
 	})
 }
 
