@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/google/uuid v1.6.0
 	github.com/mr-tron/base58 v1.2.0
-	github.com/nspcc-dev/neo-go v0.106.0
+	github.com/nspcc-dev/neo-go v0.106.2
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20240521124852-5cbfe215a4e9
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
@@ -38,7 +38,7 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/urfave/cli v1.22.5 // indirect
 	go.etcd.io/bbolt v1.3.9 // indirect
-	go.uber.org/multierr v1.10.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/mod v0.16.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
