@@ -2,7 +2,7 @@
 *.nef
 *~
 bindings_config.yml
-config.json
+manifest.json
 /vendor/
 .idea
 /bin/
