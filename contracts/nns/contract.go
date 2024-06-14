@@ -20,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 )
 
 // Prefixes used for contract data storage.
@@ -71,7 +72,7 @@ const (
 // RecordState is a type that registered entities are saved to.
 type RecordState struct {
 	Name string
-	Type RecordType
+	Type recordtype.Type
 	Data string
 	ID   byte
 }
@@ -495,7 +496,7 @@ func SetAdmin(name string, admin interop.Hash160) {
 
 // SetRecord adds a new record of the specified type to the provided domain.
 // The name MUST NOT be a TLD.
-func SetRecord(name string, typ RecordType, id byte, data string) {
+func SetRecord(name string, typ recordtype.Type, id byte, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
 		panic("invalid record data")
@@ -513,15 +514,15 @@ func SetRecord(name string, typ RecordType, id byte, data string) {
 	updateSoaSerial(ctx, tokenID)
 }
 
-func checkBaseRecords(typ RecordType, data string) bool {
+func checkBaseRecords(typ recordtype.Type, data string) bool {
 	switch typ {
-	case A:
+	case recordtype.A:
 		return checkIPv4(data)
-	case CNAME:
+	case recordtype.CNAME:
 		return splitAndCheck(data, true) != nil
-	case TXT:
+	case recordtype.TXT:
 		return len(data) <= maxTXTRecordLength
-	case AAAA:
+	case recordtype.AAAA:
 		return checkIPv6(data)
 	default:
 		panic("unsupported record type")
@@ -530,7 +531,7 @@ func checkBaseRecords(typ RecordType, data string) bool {
 
 // AddRecord adds a new record of the specified type to the provided domain.
 // The name MUST NOT be a TLD.
-func AddRecord(name string, typ RecordType, data string) {
+func AddRecord(name string, typ recordtype.Type, data string) {
 	tokenID := []byte(tokenIDFromName(name))
 	if !checkBaseRecords(typ, data) {
 		panic("invalid record data")
@@ -550,7 +551,7 @@ func AddRecord(name string, typ RecordType, data string) {
 
 // GetRecords returns domain record of the specified type if it exists or an empty
 // string if not. The name MUST NOT be a TLD.
-func GetRecords(name string, typ RecordType) []string {
+func GetRecords(name string, typ recordtype.Type) []string {
 	fragments := std.StringSplit(name, ".")
 	if len(fragments) == 1 {
 		panic("token not found")
@@ -564,8 +565,8 @@ func GetRecords(name string, typ RecordType) []string {
 
 // DeleteRecords removes domain records with the specified type. The name MUST
 // NOT be a TLD.
-func DeleteRecords(name string, typ RecordType) {
-	if typ == SOA {
+func DeleteRecords(name string, typ recordtype.Type) {
+	if typ == recordtype.SOA {
 		panic("you cannot delete soa record")
 	}
 
@@ -590,7 +591,7 @@ func DeleteRecords(name string, typ RecordType) {
 
 // Resolve resolves given name (not more then three redirects are allowed).
 // The name MUST NOT be a TLD.
-func Resolve(name string, typ RecordType) []string {
+func Resolve(name string, typ recordtype.Type) []string {
 	fragments := std.StringSplit(name, ".")
 	if len(fragments) == 1 {
 		panic("token not found")
@@ -711,7 +712,7 @@ func putNameStateWithKey(ctx storage.Context, tokenKey []byte, ns NameState) {
 }
 
 // getRecordsByType returns domain record.
-func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ RecordType) []string {
+func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type) []string {
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
 	var result []string
@@ -726,7 +727,7 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ Reco
 }
 
 // putRecord stores domain record.
-func putRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType, id byte, data string) {
+func putRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
 	recordKey := getIdRecordKey(tokenId, name, typ, id)
 	recBytes := storage.Get(ctx, recordKey)
 	if recBytes == nil {
@@ -737,7 +738,7 @@ func putRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 }
 
 // addRecord stores domain record.
-func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType, data string) {
+func addRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, data string) {
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
 	var id byte
@@ -751,7 +752,7 @@ func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 		}
 	}
 
-	if typ == CNAME && id != 0 {
+	if typ == recordtype.CNAME && id != 0 {
 		panic("you shouldn't have more than one CNAME record")
 	}
 
@@ -760,7 +761,7 @@ func addRecord(ctx storage.Context, tokenId []byte, name string, typ RecordType,
 }
 
 // storeRecord puts record to storage.
-func storeRecord(ctx storage.Context, recordKey []byte, name string, typ RecordType, id byte, data string) {
+func storeRecord(ctx storage.Context, recordKey []byte, name string, typ recordtype.Type, id byte, data string) {
 	rs := RecordState{
 		Name: name,
 		Type: typ,
@@ -775,10 +776,10 @@ func storeRecord(ctx storage.Context, recordKey []byte, name string, typ RecordT
 func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
 	var id byte
 	tokenId := []byte(tokenIDFromName(name))
-	recordKey := getIdRecordKey(tokenId, name, SOA, id)
+	recordKey := getIdRecordKey(tokenId, name, recordtype.SOA, id)
 	rs := RecordState{
 		Name: name,
-		Type: SOA,
+		Type: recordtype.SOA,
 		ID:   id,
 		Data: name + " " + email + " " +
 			std.Itoa(runtime.GetTime(), 10) + " " +
@@ -794,7 +795,7 @@ func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expir
 // updateSoaSerial stores soa domain record.
 func updateSoaSerial(ctx storage.Context, tokenId []byte) {
 	var id byte
-	recordKey := getIdRecordKey(tokenId, string(tokenId), SOA, id)
+	recordKey := getIdRecordKey(tokenId, string(tokenId), recordtype.SOA, id)
 
 	recBytes := storage.Get(ctx, recordKey)
 	if recBytes == nil {
@@ -823,13 +824,13 @@ func getRecordsKey(tokenId []byte, name string) []byte {
 }
 
 // getRecordsKeyByType returns the key used to store domain records.
-func getRecordsKeyByType(tokenId []byte, name string, typ RecordType) []byte {
+func getRecordsKeyByType(tokenId []byte, name string, typ recordtype.Type) []byte {
 	recordKey := getRecordsKey(tokenId, name)
 	return append(recordKey, byte(typ))
 }
 
 // getIdRecordKey returns the key used to store domain records.
-func getIdRecordKey(tokenId []byte, name string, typ RecordType, id byte) []byte {
+func getIdRecordKey(tokenId []byte, name string, typ recordtype.Type, id byte) []byte {
 	recordKey := getRecordsKey(tokenId, name)
 	return append(recordKey, byte(typ), id)
 }
@@ -1042,7 +1043,7 @@ func tokenIDFromName(name string) string {
 
 // resolve resolves the provided name using record with the specified type and given
 // maximum redirections constraint.
-func resolve(ctx storage.Context, res []string, name string, typ RecordType, redirect int) []string {
+func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type, redirect int) []string {
 	if redirect < 0 {
 		panic("invalid redirect")
 	}
@@ -1059,11 +1060,11 @@ func resolve(ctx storage.Context, res []string, name string, typ RecordType, red
 		if r.Type == typ {
 			res = append(res, r.Data)
 		}
-		if r.Type == CNAME {
+		if r.Type == recordtype.CNAME {
 			cname = r.Data
 		}
 	}
-	if cname == "" || typ == CNAME {
+	if cname == "" || typ == recordtype.CNAME {
 		return res
 	}
 

@@ -15,7 +15,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
-	"github.com/nspcc-dev/neofs-contract/contracts/nns"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -209,7 +209,7 @@ func TestContainerPut(t *testing.T) {
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
 				})
 				cNNS := c.CommitteeInvoker(nnsHash)
-				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 
 				t.Run("name is already taken", func(t *testing.T) {
@@ -217,7 +217,7 @@ func TestContainerPut(t *testing.T) {
 				})
 
 				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 
 				t.Run("register in advance", func(t *testing.T) {
 					cnt.value[len(cnt.value)-1] = 10
@@ -238,7 +238,7 @@ func TestContainerPut(t *testing.T) {
 
 					expected = stackitem.NewArray([]stackitem.Item{
 						stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
-					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(nns.TXT))
+					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(recordtype.TXT))
 				})
 			})
 		})

@@ -14,7 +14,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/contracts/nns"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -122,28 +122,28 @@ func TestNNSRegister(t *testing.T) {
 	expected := stackitem.NewArray([]stackitem.Item{stackitem.NewBuffer(
 		[]byte(fmt.Sprintf("testdomain.com myemail@nspcc.ru %d %d %d %d %d",
 			b.Timestamp, refresh, retry, expire, ttl)))})
-	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.SOA))
+	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.SOA))
 
 	cAcc := c.WithSigners(acc)
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
-		"testdomain.com", int64(nns.TXT), "first TXT record")
+		"testdomain.com", int64(recordtype.TXT), "first TXT record")
 	cAcc.InvokeFail(t, "record already exists", "addRecord",
-		"testdomain.com", int64(nns.TXT), "first TXT record")
+		"testdomain.com", int64(recordtype.TXT), "first TXT record")
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
-		"testdomain.com", int64(nns.TXT), "second TXT record")
+		"testdomain.com", int64(recordtype.TXT), "second TXT record")
 
 	expected = stackitem.NewArray([]stackitem.Item{
 		stackitem.NewByteArray([]byte("first TXT record")),
 		stackitem.NewByteArray([]byte("second TXT record"))})
-	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.TXT))
+	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.TXT))
 
 	cAcc.Invoke(t, stackitem.Null{}, "setRecord",
-		"testdomain.com", int64(nns.TXT), int64(0), "replaced first")
+		"testdomain.com", int64(recordtype.TXT), int64(0), "replaced first")
 
 	expected = stackitem.NewArray([]stackitem.Item{
 		stackitem.NewByteArray([]byte("replaced first")),
 		stackitem.NewByteArray([]byte("second TXT record"))})
-	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.TXT))
+	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.TXT))
 }
 
 func TestNNSRegisterMulti(t *testing.T) {
@@ -179,24 +179,24 @@ func TestNNSRegisterMulti(t *testing.T) {
 	c2.InvokeFail(t, "not witnessed by admin", "register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"something.mainnet.fs.neo.com", int64(nns.A), "1.2.3.4")
+		"something.mainnet.fs.neo.com", int64(recordtype.A), "1.2.3.4")
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
-		"another.fs.neo.com", int64(nns.A), "4.3.2.1")
+		"another.fs.neo.com", int64(recordtype.A), "4.3.2.1")
 
 	c2 = c.WithSigners(acc, acc2)
 	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.fs.neo.com",
 		"register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "deleteRecords",
-		"something.mainnet.fs.neo.com", int64(nns.A))
+		"something.mainnet.fs.neo.com", int64(recordtype.A))
 	c2.Invoke(t, true, "register", args...)
 
 	c2 = c.WithSigners(acc2)
 	c2.Invoke(t, stackitem.Null{}, "addRecord",
-		"cdn.mainnet.fs.neo.com", int64(nns.A), "166.15.14.13")
+		"cdn.mainnet.fs.neo.com", int64(recordtype.A), "166.15.14.13")
 	result := stackitem.NewArray([]stackitem.Item{
 		stackitem.NewByteArray([]byte("166.15.14.13"))})
-	c2.Invoke(t, result, "resolve", "cdn.mainnet.fs.neo.com", int64(nns.A))
+	c2.Invoke(t, result, "resolve", "cdn.mainnet.fs.neo.com", int64(recordtype.A))
 }
 
 func TestNNSUpdateSOA(t *testing.T) {
@@ -218,7 +218,7 @@ func TestNNSUpdateSOA(t *testing.T) {
 	expected := stackitem.NewArray([]stackitem.Item{stackitem.NewBuffer(
 		[]byte(fmt.Sprintf("testdomain.com newemail@nspcc.ru %d %d %d %d %d",
 			b.Timestamp, refresh, retry, expire, ttl)))})
-	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(nns.SOA))
+	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.SOA))
 }
 
 func TestNNSGetAllRecords(t *testing.T) {
@@ -229,8 +229,8 @@ func TestNNSGetAllRecords(t *testing.T) {
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
-	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.TXT), "first TXT record")
-	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(nns.A), "1.2.3.4")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), "first TXT record")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.A), "1.2.3.4")
 
 	b := c.TopBlock(t)
 	expSOA := fmt.Sprintf("testdomain.com myemail@nspcc.ru %d %d %d %d %d",
@@ -242,19 +242,19 @@ func TestNNSGetAllRecords(t *testing.T) {
 	iter := s.Pop().Value().(*storage.Iterator)
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(nns.A)),
+		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.A)),
 		stackitem.Make("1.2.3.4"), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(nns.SOA)),
+		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.SOA)),
 		stackitem.NewBuffer([]byte(expSOA)), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(nns.TXT)),
+		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.TXT)),
 		stackitem.Make("first TXT record"), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
@@ -319,13 +319,13 @@ func TestNNSSetAdmin(t *testing.T) {
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
 	cAcc.InvokeFail(t, "not witnessed by admin", "addRecord",
-		"testdomain.com", int64(nns.TXT), "won't be added")
+		"testdomain.com", int64(recordtype.TXT), "won't be added")
 
 	c1 := c.WithSigners(c.Committee, acc)
 	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
 
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
-		"testdomain.com", int64(nns.TXT), "will be added")
+		"testdomain.com", int64(recordtype.TXT), "will be added")
 }
 
 func TestNNSIsAvailable(t *testing.T) {
@@ -382,12 +382,12 @@ func TestNNSResolve(t *testing.T) {
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
 
 	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"test.com", int64(nns.TXT), "expected result")
+		"test.com", int64(recordtype.TXT), "expected result")
 
 	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
-	c.Invoke(t, records, "resolve", "test.com", int64(nns.TXT))
-	c.Invoke(t, records, "resolve", "test.com.", int64(nns.TXT))
-	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(nns.TXT))
+	c.Invoke(t, records, "resolve", "test.com", int64(recordtype.TXT))
+	c.Invoke(t, records, "resolve", "test.com.", int64(recordtype.TXT))
+	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(recordtype.TXT))
 }
 
 func TestNNSRegisterAccess(t *testing.T) {
@@ -461,7 +461,7 @@ func TestPredefinedTLD(t *testing.T) {
 func TestNNSTLD(t *testing.T) {
 	const tld = "any-tld"
 	const tldFailMsg = "token not found"
-	const recTyp = int64(nns.TXT) // InvokeFail doesn't support nns.RecordType
+	const recTyp = int64(recordtype.TXT) // InvokeFail doesn't support recordtype.Type
 
 	inv := newNNSInvoker(t, false, tld)
 
