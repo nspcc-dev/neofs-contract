@@ -1,8 +1,5 @@
-*.avm
-*.nef
 *~
 bindings_config.yml
-manifest.json
 /vendor/
 .idea
 /bin/

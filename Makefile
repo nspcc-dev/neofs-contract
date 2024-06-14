@@ -52,7 +52,7 @@ test:
 	@go test ./...
 
 clean:
-	rm -rf ./bin $(foreach sc,$(all_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json contracts/$(sc)/bindings_config.yml)
+	rm -rf ./bin $(foreach sc,$(all_sc),contracts/$(sc)/bindings_config.yml)
 
 archive: neofs-contract-$(VERSION).tar.gz
 
