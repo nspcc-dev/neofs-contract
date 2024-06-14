@@ -14,7 +14,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/contracts/container"
+	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/netmap"
 	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 	"github.com/stretchr/testify/require"
@@ -49,10 +49,10 @@ func newNetmapInvoker(t *testing.T, config ...any) *neotest.ContractInvoker {
 }
 
 func TestDeploySetConfig(t *testing.T) {
-	c := newNetmapInvoker(t, "SomeKey", "TheValue", container.AliasFeeKey, int64(123))
+	c := newNetmapInvoker(t, "SomeKey", "TheValue", containerconst.AliasFeeKey, int64(123))
 	c.Invoke(t, "TheValue", "config", "SomeKey")
 	c.Invoke(t, stackitem.NewByteArray(bigint.ToBytes(big.NewInt(123))),
-		"config", container.AliasFeeKey)
+		"config", containerconst.AliasFeeKey)
 }
 
 type testNodeInfo struct {

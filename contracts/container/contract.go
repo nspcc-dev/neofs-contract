@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
+	cst "github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 )
 
 type (
@@ -53,11 +54,6 @@ const (
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
 
-	// RegistrationFeeKey is a key in netmap config which contains fee for container registration.
-	RegistrationFeeKey = "ContainerFee"
-	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
-	AliasFeeKey = "ContainerAliasFee"
-
 	// nolint:deadcode,unused
 	nnsDefaultTLD = "container"
 
@@ -69,15 +65,6 @@ const (
 	containerKeyPrefix   = 'x'
 	ownerKeyPrefix       = 'o'
 	estimatePostfixSize  = 10
-	// CleanupDelta contains the number of the last epochs for which container estimations are present.
-	CleanupDelta = 3
-	// TotalCleanupDelta contains the number of the epochs after which estimation
-	// will be removed by epoch tick cleanup if any of the nodes hasn't updated
-	// container size and/or container has been removed. It must be greater than CleanupDelta.
-	TotalCleanupDelta = CleanupDelta + 1
-
-	// NotFoundError is returned if container is missing.
-	NotFoundError = "container does not exist"
 
 	// default SOA record field values
 	defaultRefresh = 3600                 // 1 hour
@@ -293,10 +280,10 @@ func PutNamed(container []byte, signature interop.Signature,
 	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
-	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, RegistrationFeeKey).(int)
+	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
 	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
 	if name != "" {
-		aliasFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, AliasFeeKey).(int)
+		aliasFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
 		containerFee += aliasFee
 	}
 
@@ -431,7 +418,7 @@ func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	cnt := getContainer(ctx, containerID)
 	if len(cnt.Value) == 0 {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 	return cnt
 }
@@ -443,7 +430,7 @@ func Owner(containerID []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
 	owner := getOwnerByID(ctx, containerID)
 	if owner == nil {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 	return owner
 }
@@ -456,7 +443,7 @@ func Alias(cid []byte) string {
 	ctx := storage.GetReadOnlyContext()
 	owner := getOwnerByID(ctx, cid)
 	if owner == nil {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 	return storage.Get(ctx, append([]byte(nnsHasAliasKey), cid...)).(string)
 }
@@ -533,7 +520,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if ownerID == nil {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 
 	multiaddr := common.AlphabetAddress()
@@ -564,7 +551,7 @@ func EACL(containerID []byte) ExtendedACL {
 
 	ownerID := getOwnerByID(ctx, containerID)
 	if ownerID == nil {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 
 	return getEACL(ctx, containerID)
@@ -579,7 +566,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	ctx := storage.GetContext()
 
 	if getOwnerByID(ctx, cid) == nil {
-		panic(NotFoundError)
+		panic(cst.NotFoundError)
 	}
 
 	common.CheckWitness(pubKey)
@@ -858,7 +845,7 @@ func updateEstimations(ctx storage.Context, epoch int, cid []byte, pub interop.P
 	if rawList != nil {
 		epochs := std.Deserialize(rawList).([]int)
 		for _, oldEpoch := range epochs {
-			if !isUpdate && epoch-oldEpoch > CleanupDelta {
+			if !isUpdate && epoch-oldEpoch > cst.CleanupDelta {
 				key := append([]byte(estimateKeyPrefix), convert.ToBytes(oldEpoch)...)
 				key = append(key, cid...)
 				key = append(key, h[:estimatePostfixSize]...)
@@ -882,7 +869,7 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 
 		var n any = nbytes
 
-		if epoch-n.(int) > TotalCleanupDelta {
+		if epoch-n.(int) > cst.TotalCleanupDelta {
 			storage.Delete(ctx, k)
 		}
 	}
