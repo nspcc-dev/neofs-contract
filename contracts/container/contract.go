@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 	cst "github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 )
 
 type (
@@ -323,7 +324,7 @@ func PutNamed(container []byte, signature interop.Signature,
 			}
 		}
 		contract.Call(nnsContractAddr, "addRecord", contract.All,
-			domain, 16 /* TXT */, std.Base58Encode(containerID))
+			domain, recordtype.TXT, std.Base58Encode(containerID))
 
 		key := append([]byte(nnsHasAliasKey), containerID...)
 		storage.Put(ctx, key, domain)
@@ -353,7 +354,7 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	}
 
 	res := contract.Call(nnsContractAddr, "getRecords",
-		contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
+		contract.ReadStates|contract.AllowCall, domain, recordtype.TXT)
 	if res != nil {
 		panic("name is already taken")
 	}
@@ -406,7 +407,7 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 	}()
 
 	nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
-	contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
+	contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, recordtype.TXT)
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
