@@ -271,6 +271,9 @@ func TestContainerDelete(t *testing.T) {
 	})
 
 	c.InvokeFail(t, containerconst.NotFoundError, "get", cnt.id[:])
+	// Try to put the same container again (replay attack).
+	balanceMint(t, cBal, acc, containerFee*1, []byte{})
+	c.InvokeFail(t, containerconst.ErrorDeleted, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 }
 
 func TestContainerOwner(t *testing.T) {

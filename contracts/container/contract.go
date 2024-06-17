@@ -65,6 +65,7 @@ const (
 	estimateKeyPrefix    = "cnr"
 	containerKeyPrefix   = 'x'
 	ownerKeyPrefix       = 'o'
+	deletedKeyPrefix     = 'd'
 	estimatePostfixSize  = 10
 
 	// default SOA record field values
@@ -255,6 +256,9 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	ownerID := ownerFromBinaryContainer(container)
 	containerID := crypto.Sha256(container)
+	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
+		panic(cst.ErrorDeleted)
+	}
 	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
 	cnr := Container{
 		Value: container,
@@ -294,8 +298,6 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	multiaddr := common.AlphabetAddress()
 	common.CheckAlphabetWitness(multiaddr)
-
-	// todo: check if new container with unique container id
 
 	details := common.ContainerFeeTransferDetails(containerID)
 
@@ -739,6 +741,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
+	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
 }
 
 func getAllContainers(ctx storage.Context) [][]byte {
