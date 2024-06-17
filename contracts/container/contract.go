@@ -398,18 +398,28 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	domain := storage.Get(ctx, key).(string)
 	if len(domain) != 0 {
 		storage.Delete(ctx, key)
-		// We should do `getRecord` first because NNS record could be deleted
-		// by other means (expiration, manual), thus leading to failing `deleteRecord`
-		// and inability to delete a container. We should also check if we own the record in case.
-		nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
-		res := contract.Call(nnsContractAddr, "getRecords", contract.ReadStates|contract.AllowCall, domain, 16 /* TXT */)
-		if res != nil && std.Base58Encode(containerID) == string(res.([]any)[0].(string)) {
-			contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
-		}
+		deleteNNSRecords(ctx, domain)
 	}
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
+}
+
+func deleteNNSRecords(ctx storage.Context, domain string) {
+	defer func() {
+		// Exception happened.
+		if r := recover(); r != nil {
+			var msg = r.([]byte)
+			// Expired or deleted entries are OK.
+			if std.MemorySearch(msg, []byte("has expired")) == -1 &&
+				std.MemorySearch(msg, []byte("not found")) == -1 {
+				panic("unable to delete NNS record: " + string(msg))
+			}
+		}
+	}()
+
+	nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+	contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, 16 /* TXT */)
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
