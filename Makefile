@@ -7,7 +7,7 @@ export GOBIN ?= $(shell pwd)/bin
 export CGO_ENABLED=0
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
-NEOGOORIGMOD = github.com/nspcc-dev/neo-go@v0.104.0
+NEOGOORIGMOD = github.com/nspcc-dev/neo-go@v0.106.2
 NEOGOMOD = $(shell go list -f '{{.Path}}' -m $(NEOGOORIGMOD))
 NEOGOVER = $(shell go list -f '{{.Version}}' -m $(NEOGOORIGMOD) | tr -d v)
 
@@ -31,17 +31,17 @@ nns_sc = nns
 
 all_sc = $(alphabet_sc) $(morph_sc) $(mainnet_sc) $(nns_sc)
 
-%/contract.nef %/bindings_config.yml %/config.json: $(NEOGO) %/contract.go %/config.yml
-	$(NEOGO) contract compile -i $* -c $*/config.yml -m $*/config.json -o $*/contract.nef --bindings $*/bindings_config.yml
+%/contract.nef %/bindings_config.yml %/manifest.json: $(NEOGO) %/contract.go %/config.yml
+	$(NEOGO) contract compile -i $* -c $*/config.yml -m $*/manifest.json -o $*/contract.nef --bindings $*/bindings_config.yml
 
-rpc/%/rpcbinding.go: contracts/%/config.json contracts/%/bindings_config.yml
+rpc/%/rpcbinding.go: contracts/%/manifest.json contracts/%/bindings_config.yml
 	mkdir -p rpc/$*
-	$(NEOGO) contract generate-rpcwrapper -o rpc/$*/rpcbinding.go -m contracts/$*/config.json --config contracts/$*/bindings_config.yml
+	$(NEOGO) contract generate-rpcwrapper -o rpc/$*/rpcbinding.go -m contracts/$*/manifest.json --config contracts/$*/bindings_config.yml
 
-alphabet: $(foreach sc,$(alphabet_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json rpc/$(sc)/rpcbinding.go)
-morph: $(foreach sc,$(morph_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json rpc/$(sc)/rpcbinding.go)
-mainnet: $(foreach sc,$(mainnet_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json rpc/$(sc)/rpcbinding.go)
-nns: $(foreach sc,$(nns_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json rpc/$(sc)/rpcbinding.go)
+alphabet: $(foreach sc,$(alphabet_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json rpc/$(sc)/rpcbinding.go)
+morph: $(foreach sc,$(morph_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json rpc/$(sc)/rpcbinding.go)
+mainnet: $(foreach sc,$(mainnet_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json rpc/$(sc)/rpcbinding.go)
+nns: $(foreach sc,$(nns_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json rpc/$(sc)/rpcbinding.go)
 
 neo-go: $(NEOGO)
 
@@ -52,15 +52,14 @@ test:
 	@go test ./...
 
 clean:
-	rm -rf ./bin $(foreach sc,$(all_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json contracts/$(sc)/bindings_config.yml)
+	rm -rf ./bin $(foreach sc,$(all_sc),contracts/$(sc)/bindings_config.yml)
 
 archive: neofs-contract-$(VERSION).tar.gz
 
-neofs-contract-$(VERSION).tar.gz: $(foreach sc,$(all_sc),contracts/$(sc)/contract.nef contracts/$(sc)/config.json)
-	@tar --transform "s|^\(contracts\)/\([a-z]\+\)/\(contract.nef\)$$|\\1/\\2/\\2_\\3|" \
-		--transform "s|^contracts/|neofs-contract-$(VERSION)/|" \
+neofs-contract-$(VERSION).tar.gz: $(foreach sc,$(all_sc),contracts/$(sc)/contract.nef contracts/$(sc)/manifest.json)
+	@tar --transform "s|^contracts/|neofs-contract-$(VERSION)/|" \
 		-czf $@ \
-		$(shell find contracts -name '*.nef' -o -name 'config.json')
+		$(shell find contracts -name 'contract.nef' -o -name 'manifest.json')
 
 # Package for Debian
 debpackage:

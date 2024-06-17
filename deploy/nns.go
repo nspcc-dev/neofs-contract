@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -190,7 +191,7 @@ func lookupNNSDomainRecord(inv *invoker.Invoker, nnsContract util.Uint160, domai
 	item, err := unwrap.Item(inv.Call(nnsContract, methodNNSResolve, domainName, int64(nns.TXT)))
 	if err != nil {
 		var except unwrap.Exception
-		if errors.As(err, &except) && string(except) == "token not found" {
+		if errors.As(err, &except) && strings.Contains(string(except), "token not found") {
 			return "", errMissingDomain
 		}
 

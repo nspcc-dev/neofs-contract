@@ -41,15 +41,15 @@ To compile smart contracts you need:
 ## Compilation
 
 To build and compile smart contract, run `make all` command. Compiled contracts
-`*_contract.nef` and manifest `config.json` files are placed in the 
+`contract.nef` and manifest `manifest.json` files are placed in the
 corresponding directories. Generated RPC binding files `rpcbinding.go` are
 placed in the corresponding `rpc` directories.
 
 ```
 $ make all
-/home/user/go/bin/cli contract compile -i alphabet -c alphabet/config.yml -m alphabet/config.json -o alphabet/alphabet_contract.nef --bindings alphabet/bindings_config.yml
+/home/user/go/bin/cli contract compile -i contracts/alphabet -c contracts/alphabet/config.yml -m contracts/alphabet/manifest.json -o contracts/alphabet/contract.nef --bindings contracts/alphabet/bindings_config.yml
 mkdir -p rpc/alphabet
-/home/user/go/bin/cli contract generate-rpcwrapper -o rpc/alphabet/rpcbinding.go -m alphabet/config.json --config alphabet/bindings_config.yml
+/home/user/go/bin/cli contract generate-rpcwrapper -o rpc/alphabet/rpcbinding.go -m contracts/alphabet/manifest.json --config contracts/alphabet/bindings_config.yml
 ...
 ```
 
@@ -64,8 +64,8 @@ Remove compiled files with `make clean` command.
 ## Building Debian package
 
 To build Debian package containing compiled contracts, run `make debpackage`
-command. Package will install compiled contracts `*_contract.nef` and manifest 
-`config.json` with corresponding directories to `/var/lib/neofs/contract` for 
+command. Package will install compiled contracts `contract.nef` and manifest
+`manifest.json` with corresponding directories to `/var/lib/neofs/contract` for
 further usage.
 It will download and build neo-go, if needed.
 

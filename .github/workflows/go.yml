@@ -77,3 +77,11 @@ jobs:
           git diff --name-only;
           exit 1;
           fi
+
+      - name: Check that committed binary contracts match generated ones
+        run: |
+          if [[ $(git diff --name-only | grep '^contracts/*' -c) != 0 ]]; then
+          echo "Fresh version of binaries/manifests should be committed for the following contracts:";
+          git diff --name-only;
+          exit 1;
+          fi
