@@ -59,13 +59,13 @@ type ChequeEvent struct {
 
 // BindEvent represents "Bind" event emitted by the contract.
 type BindEvent struct {
-	User []byte
+	User util.Uint160
 	Keys keys.PublicKeys
 }
 
 // UnbindEvent represents "Unbind" event emitted by the contract.
 type UnbindEvent struct {
-	User []byte
+	User util.Uint160
 	Keys keys.PublicKeys
 }
 
@@ -236,14 +236,14 @@ func (c *Contract) AlphabetUpdateUnsigned(id []byte, args keys.PublicKeys) (*tra
 // Bind creates a transaction invoking `bind` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Bind(user []byte, keys keys.PublicKeys) (util.Uint256, uint32, error) {
+func (c *Contract) Bind(user util.Uint160, keys keys.PublicKeys) (util.Uint256, uint32, error) {
 	return c.actor.SendCall(c.hash, "bind", user, keys)
 }
 
 // BindTransaction creates a transaction invoking `bind` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
-func (c *Contract) BindTransaction(user []byte, keys keys.PublicKeys) (*transaction.Transaction, error) {
+func (c *Contract) BindTransaction(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
 	return c.actor.MakeCall(c.hash, "bind", user, keys)
 }
 
@@ -251,7 +251,7 @@ func (c *Contract) BindTransaction(user []byte, keys keys.PublicKeys) (*transact
 // This transaction is not signed, it's simply returned to the caller.
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) BindUnsigned(user []byte, keys keys.PublicKeys) (*transaction.Transaction, error) {
+func (c *Contract) BindUnsigned(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "bind", nil, user, keys)
 }
 
@@ -346,14 +346,14 @@ func (c *Contract) SetConfigUnsigned(id []byte, key []byte, val []byte) (*transa
 // Unbind creates a transaction invoking `unbind` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Unbind(user []byte, keys keys.PublicKeys) (util.Uint256, uint32, error) {
+func (c *Contract) Unbind(user util.Uint160, keys keys.PublicKeys) (util.Uint256, uint32, error) {
 	return c.actor.SendCall(c.hash, "unbind", user, keys)
 }
 
 // UnbindTransaction creates a transaction invoking `unbind` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
-func (c *Contract) UnbindTransaction(user []byte, keys keys.PublicKeys) (*transaction.Transaction, error) {
+func (c *Contract) UnbindTransaction(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
 	return c.actor.MakeCall(c.hash, "unbind", user, keys)
 }
 
@@ -361,7 +361,7 @@ func (c *Contract) UnbindTransaction(user []byte, keys keys.PublicKeys) (*transa
 // This transaction is not signed, it's simply returned to the caller.
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) UnbindUnsigned(user []byte, keys keys.PublicKeys) (*transaction.Transaction, error) {
+func (c *Contract) UnbindUnsigned(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "unbind", nil, user, keys)
 }
 
@@ -870,7 +870,17 @@ func (e *BindEvent) FromStackItem(item *stackitem.Array) error {
 		err   error
 	)
 	index++
-	e.User, err = arr[index].TryBytes()
+	e.User, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field User: %w", err)
 	}
@@ -951,7 +961,17 @@ func (e *UnbindEvent) FromStackItem(item *stackitem.Array) error {
 		err   error
 	)
 	index++
-	e.User, err = arr[index].TryBytes()
+	e.User, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field User: %w", err)
 	}

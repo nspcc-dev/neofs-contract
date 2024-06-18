@@ -108,8 +108,7 @@ func Put(rawAuditResult []byte) {
 	presented := false
 
 	for i := range innerRing {
-		ir := innerRing[i]
-		if common.BytesEqual(ir, hdr.From) {
+		if hdr.From.Equals(innerRing[i]) {
 			presented = true
 
 			break
