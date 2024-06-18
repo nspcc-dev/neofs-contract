@@ -14,8 +14,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/contracts/container"
-	"github.com/nspcc-dev/neofs-contract/contracts/nns"
+	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
+	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,8 +53,8 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, container.RegistrationFeeKey, int64(containerFee),
-		container.AliasFeeKey, int64(containerAliasFee))
+	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+		containerconst.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 	if !autohashes {
 		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
@@ -209,7 +209,7 @@ func TestContainerPut(t *testing.T) {
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
 				})
 				cNNS := c.CommitteeInvoker(nnsHash)
-				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 
 				t.Run("name is already taken", func(t *testing.T) {
@@ -217,7 +217,7 @@ func TestContainerPut(t *testing.T) {
 				})
 
 				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(nns.TXT))
+				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 
 				t.Run("register in advance", func(t *testing.T) {
 					cnt.value[len(cnt.value)-1] = 10
@@ -238,7 +238,7 @@ func TestContainerPut(t *testing.T) {
 
 					expected = stackitem.NewArray([]stackitem.Item{
 						stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
-					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(nns.TXT))
+					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(recordtype.TXT))
 				})
 			})
 		})
@@ -270,7 +270,7 @@ func TestContainerDelete(t *testing.T) {
 		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
 	})
 
-	c.InvokeFail(t, container.NotFoundError, "get", cnt.id[:])
+	c.InvokeFail(t, containerconst.NotFoundError, "get", cnt.id[:])
 }
 
 func TestContainerOwner(t *testing.T) {
@@ -281,7 +281,7 @@ func TestContainerOwner(t *testing.T) {
 	t.Run("missing container", func(t *testing.T) {
 		id := cnt.id
 		id[0] ^= 0xFF
-		c.InvokeFail(t, container.NotFoundError, "owner", id[:])
+		c.InvokeFail(t, containerconst.NotFoundError, "owner", id[:])
 	})
 
 	owner, _ := base58.Decode(address.Uint160ToString(acc.ScriptHash()))
@@ -296,7 +296,7 @@ func TestContainerGet(t *testing.T) {
 	t.Run("missing container", func(t *testing.T) {
 		id := cnt.id
 		id[0] ^= 0xFF
-		c.InvokeFail(t, container.NotFoundError, "get", id[:])
+		c.InvokeFail(t, containerconst.NotFoundError, "get", id[:])
 	})
 
 	expected := stackitem.NewStruct([]stackitem.Item{
@@ -335,7 +335,7 @@ func TestContainerSetEACL(t *testing.T) {
 		id := cnt.id
 		id[0] ^= 0xFF
 		e := dummyEACL(id)
-		c.InvokeFail(t, container.NotFoundError, "setEACL", e.value, e.sig, e.pub, e.token)
+		c.InvokeFail(t, containerconst.NotFoundError, "setEACL", e.value, e.sig, e.pub, e.token)
 	})
 
 	e := dummyEACL(cnt.id)
@@ -380,7 +380,7 @@ func TestContainerSetEACL(t *testing.T) {
 	checkInvalidEACL(append(prefix, make([]byte, len(cnt.id)-1)...), missingContainerException)
 	c.Invoke(t, stackitem.Null{}, "setEACL", replaceEACLArg(append(prefix, cnt.id[:]...))...)
 	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-	c.InvokeFail(t, container.NotFoundError, "eACL", cnt.id[:])
+	c.InvokeFail(t, containerconst.NotFoundError, "eACL", cnt.id[:])
 }
 
 func TestContainerSizeEstimation(t *testing.T) {
@@ -435,13 +435,13 @@ func TestContainerSizeEstimation(t *testing.T) {
 	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
 
 	// Remove old estimations.
-	for i := int64(1); i <= container.CleanupDelta; i++ {
+	for i := int64(1); i <= containerconst.CleanupDelta; i++ {
 		cNm.Invoke(t, stackitem.Null{}, "newEpoch", 2+i)
 		checkEstimations(t, c, 2, cnt, estimations...)
 		checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
 	}
 
-	epoch := int64(2 + container.CleanupDelta + 1)
+	epoch := int64(2 + containerconst.CleanupDelta + 1)
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
 	checkEstimations(t, c, 2, cnt, estimations...) // not yet removed
 	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
@@ -453,7 +453,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 	checkEstimations(t, c, epoch, cnt, estimation{nodes[1].pub, int64(999)})
 
 	// Estimation from node 0 should be cleaned during epoch tick.
-	for i := int64(1); i <= container.TotalCleanupDelta-container.CleanupDelta; i++ {
+	for i := int64(1); i <= containerconst.TotalCleanupDelta-containerconst.CleanupDelta; i++ {
 		cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch+i)
 	}
 	checkEstimations(t, c, 2, cnt)

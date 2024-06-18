@@ -11,7 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-contract/common"
-	"github.com/nspcc-dev/neofs-contract/contracts/container"
+	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,8 +41,8 @@ func newAlphabetInvoker(t *testing.T, autohashes bool) (*neotest.Executor, *neot
 	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, container.RegistrationFeeKey, int64(containerFee),
-		container.AliasFeeKey, int64(containerAliasFee))
+	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+		containerconst.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	deployProxyContract(t, e)

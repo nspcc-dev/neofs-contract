@@ -11,25 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
-)
-
-// NodeState is an enumeration for node states.
-type NodeState int
-
-// Various Node states
-const (
-	_ NodeState = iota
-
-	// NodeStateOnline stands for nodes that are in full network and
-	// operational availability.
-	NodeStateOnline
-
-	// NodeStateOffline stands for nodes that are in network unavailability.
-	NodeStateOffline
-
-	// NodeStateMaintenance stands for nodes under maintenance with partial
-	// network availability.
-	NodeStateMaintenance
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 )
 
 // Node groups data related to NeoFS storage nodes registered in the NeoFS
@@ -40,7 +22,7 @@ type Node struct {
 	BLOB []byte
 
 	// Current node state.
-	State NodeState
+	State nodestate.Type
 }
 
 // Temporary migration-related types.
@@ -52,7 +34,7 @@ type oldNode struct {
 // nolint:deadcode,unused
 type oldCandidate struct {
 	f1 oldNode
-	f2 NodeState
+	f2 nodestate.Type
 }
 
 // nolint:deadcode,unused
@@ -116,7 +98,7 @@ func _deploy(data any, isUpdate bool) {
 						// second is implicitly assumed to be Online.
 						newnodes = append(newnodes, Node{
 							BLOB:  nodes[j].BLOB,
-							State: NodeStateOnline,
+							State: nodestate.Online,
 						})
 					}
 					common.SetSerialized(ctx, key, newnodes)
@@ -266,7 +248,7 @@ func AddPeerIR(nodeInfo []byte) {
 
 	addToNetmap(ctx, publicKey, Node{
 		BLOB:  nodeInfo,
-		State: NodeStateOnline,
+		State: nodestate.Online,
 	})
 }
 
@@ -298,7 +280,7 @@ func AddPeer(nodeInfo []byte) {
 	if runtime.CheckWitness(common.AlphabetAddress()) {
 		addToNetmap(ctx, publicKey, Node{
 			BLOB:  nodeInfo,
-			State: NodeStateOnline,
+			State: nodestate.Online,
 		})
 	}
 }
@@ -306,13 +288,13 @@ func AddPeer(nodeInfo []byte) {
 // updates state of the network map candidate by its public key in the contract
 // storage, and throws UpdateStateSuccess notification after this.
 //
-// State MUST be from the NodeState enum.
-func updateCandidateState(ctx storage.Context, publicKey interop.PublicKey, state NodeState) {
+// State MUST be from the [nodestate.Type] enum.
+func updateCandidateState(ctx storage.Context, publicKey interop.PublicKey, state nodestate.Type) {
 	switch state {
-	case NodeStateOffline:
+	case nodestate.Offline:
 		removeFromNetmap(ctx, publicKey)
 		runtime.Log("remove storage node from the network map")
-	case NodeStateOnline, NodeStateMaintenance:
+	case nodestate.Online, nodestate.Maintenance:
 		updateNetmapState(ctx, publicKey, state)
 		runtime.Log("update state of the network map candidate")
 	default:
@@ -332,11 +314,11 @@ func updateCandidateState(ctx storage.Context, publicKey interop.PublicKey, stat
 //
 // UpdateState panics if requested candidate is missing in the current candidate
 // set. UpdateState drops candidate from the candidate set if it is switched to
-// NodeStateOffline.
+// [nodestate.Offline].
 //
-// State MUST be from the NodeState enum. Public key MUST be
+// State MUST be from the [nodestate.Type] enum. Public key MUST be
 // interop.PublicKeyCompressedLen bytes.
-func UpdateState(state NodeState, publicKey interop.PublicKey) {
+func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 	if len(publicKey) != interop.PublicKeyCompressedLen {
 		panic("incorrect public key")
 	}
@@ -355,7 +337,7 @@ func UpdateState(state NodeState, publicKey interop.PublicKey) {
 // signature of the network candidate is inaccessible. In such cases, a new
 // transaction will be required and therefore the candidate's signature is not
 // verified by UpdateStateIR. Besides this, the behavior is similar.
-func UpdateStateIR(state NodeState, publicKey interop.PublicKey) {
+func UpdateStateIR(state nodestate.Type, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	common.CheckAlphabetWitness(common.AlphabetAddress())
@@ -664,7 +646,7 @@ func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 	storage.Delete(ctx, storageKey)
 }
 
-func updateNetmapState(ctx storage.Context, key interop.PublicKey, state NodeState) {
+func updateNetmapState(ctx storage.Context, key interop.PublicKey, state nodestate.Type) {
 	storageKey := append(candidatePrefix, key...)
 	raw := storage.Get(ctx, storageKey).([]byte)
 	if raw == nil {
@@ -683,7 +665,7 @@ func filterNetmap(ctx storage.Context) []Node {
 
 	for i := 0; i < len(netmap); i++ {
 		item := netmap[i]
-		if item.State != NodeStateOffline {
+		if item.State != nodestate.Offline {
 			result = append(result, item)
 		}
 	}
