@@ -34,7 +34,7 @@ events:
   - name: Bind
     parameters:
       - name: user
-        type: ByteArray
+        type: Hash160
       - name: keys
         type: Array
         extendedtype:
@@ -44,7 +44,7 @@ events:
   - name: Unbind
     parameters:
       - name: user
-        type: ByteArray
+        type: Hash160
       - name: keys
         type: Array
         extendedtype:

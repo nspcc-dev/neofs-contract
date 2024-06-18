@@ -369,7 +369,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 //
 // This method produces Bind notification. This method panics if keys are not
 // 33 byte long. User argument must be a valid 20 byte script hash.
-func Bind(user []byte, keys []interop.PublicKey) {
+func Bind(user interop.Hash160, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("you should be the owner of the wallet")
 	}
@@ -389,7 +389,7 @@ func Bind(user []byte, keys []interop.PublicKey) {
 //
 // This method produces Unbind notification. This method panics if keys are not
 // 33 byte long. User argument must be a valid 20 byte script hash.
-func Unbind(user []byte, keys []interop.PublicKey) {
+func Unbind(user interop.Hash160, keys []interop.PublicKey) {
 	if !runtime.CheckWitness(user) {
 		panic("you should be the owner of the wallet")
 	}
