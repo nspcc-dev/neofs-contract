@@ -15,4 +15,7 @@ const (
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
+
+	// ErrorDeleted is returned on attempt to create previously deleted container.
+	ErrorDeleted = "container was previously deleted"
 )
