@@ -830,7 +830,7 @@ func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 		nodeInfo := snapshot[i].Info
 		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
-		if common.BytesEqual(key, nodeKey) {
+		if key.Equals(nodeKey) {
 			return true
 		}
 	}

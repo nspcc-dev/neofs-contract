@@ -45,11 +45,11 @@ func Vote(ctx storage.Context, id, from []byte) int {
 			continue
 		}
 
-		if BytesEqual(cnd.ID, id) {
+		if bytesEqual(cnd.ID, id) {
 			voters := cnd.Voters
 
 			for j := range voters {
-				if BytesEqual(voters[j], from) {
+				if bytesEqual(voters[j], from) {
 					return len(voters)
 				}
 			}
@@ -86,7 +86,7 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 
 	for i := 0; i < len(candidates); i++ {
 		cnd := candidates[i]
-		if BytesEqual(cnd.ID, id) {
+		if bytesEqual(cnd.ID, id) {
 			index = i
 			break
 		}
@@ -126,9 +126,9 @@ func getBallots(ctx storage.Context) []Ballot {
 	return []Ballot{}
 }
 
-// BytesEqual compares two slices of bytes by wrapping them into strings,
+// bytesEqual compares two slices of bytes by wrapping them into strings,
 // which is necessary with new util.Equals interop behaviour, see neo-go#1176.
-func BytesEqual(a []byte, b []byte) bool {
+func bytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
 }
 
