@@ -38,6 +38,7 @@ const (
 	symbol      = "NEOFS"
 	decimals    = 12
 	circulation = "MainnetGAS"
+	accPrefix   = 'a'
 )
 
 var token Token
@@ -69,6 +70,9 @@ func _deploy(data any, isUpdate bool) {
 		// TODO: avoid number magic, add function for version comparison to common package
 		if version < 17_000 {
 			switchToNotary(ctx)
+		}
+		if version < 20_000 {
+			switchToAccPrefixes(ctx)
 		}
 
 		return
@@ -107,6 +111,27 @@ func switchToNotary(ctx storage.Context) {
 
 	if notaryVal.(bool) {
 		runtime.Log("contract successfully notarized")
+	}
+}
+
+// switchToAccPrefixes moves account data to a specific prefix to avoid any
+// collisions with other things stored in the contract.
+//
+// nolint:unused
+func switchToAccPrefixes(ctx storage.Context) {
+	it := storage.Find(ctx, []byte{}, storage.None)
+	for iterator.Next(it) {
+		item := iterator.Value(it).(struct {
+			key   []byte
+			value []byte
+		})
+
+		if len(item.key) != interop.Hash160Len {
+			continue
+		}
+
+		storage.Put(ctx, append([]byte{accPrefix}, item.key...), item.value)
+		storage.Delete(ctx, item.key)
 	}
 }
 
@@ -201,7 +226,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		Parent:  from,
 	}
 
-	common.SetSerialized(ctx, to, lockAccount)
+	common.SetSerialized(ctx, append([]byte{accPrefix}, to...), lockAccount)
 
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
@@ -224,7 +249,7 @@ func NewEpoch(epochNum int) {
 	multiaddr := common.AlphabetAddress()
 	common.CheckAlphabetWitness(multiaddr)
 
-	it := storage.Find(ctx, []byte{}, storage.KeysOnly)
+	it := storage.Find(ctx, []byte{accPrefix}, storage.KeysOnly|storage.RemovePrefix)
 	for iterator.Next(it) {
 		addr := iterator.Value(it).(interop.Hash160) // it MUST BE `storage.KeysOnly`
 		if len(addr) != interop.Hash160Len {
@@ -335,18 +360,22 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 	}
 
 	if len(from) == interop.Hash160Len {
+		var fromKey = append([]byte{accPrefix}, from...)
+
 		if amountFrom.Balance == amount {
-			storage.Delete(ctx, from)
+			storage.Delete(ctx, fromKey)
 		} else {
 			amountFrom.Balance -= amount
-			common.SetSerialized(ctx, from, amountFrom)
+			common.SetSerialized(ctx, fromKey, amountFrom)
 		}
 	}
 
 	if len(to) == interop.Hash160Len {
+		var toKey = append([]byte{accPrefix}, to...)
+
 		amountTo := getAccount(ctx, to)
 		amountTo.Balance += amount
-		common.SetSerialized(ctx, to, amountTo)
+		common.SetSerialized(ctx, toKey, amountTo)
 	}
 
 	runtime.Notify("Transfer", from, to, amount)
@@ -397,8 +426,8 @@ func isUsableAddress(addr interop.Hash160) bool {
 	return false
 }
 
-func getAccount(ctx storage.Context, key any) Account {
-	data := storage.Get(ctx, key)
+func getAccount(ctx storage.Context, key interop.Hash160) Account {
+	data := storage.Get(ctx, append([]byte{accPrefix}, key...))
 	if data != nil {
 		return std.Deserialize(data.([]byte)).(Account)
 	}

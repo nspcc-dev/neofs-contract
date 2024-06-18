@@ -1,8 +1,10 @@
 package balance_test
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/nspcc-dev/neofs-contract/tests/migration"
@@ -63,6 +65,24 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return
 	}
 
+	var accounts []util.Uint160
+
+	c.SeekStorage([]byte{}, func(k, v []byte) bool {
+		if len(k) == util.Uint160Size {
+			a, err := util.Uint160DecodeBytesBE(k)
+			require.NoError(t, err)
+			accounts = append(accounts, a)
+		}
+		return true
+	})
+
+	var balances = make([]*big.Int, 0, len(accounts))
+	for i := range accounts {
+		n, err := c.Call(t, "balanceOf", accounts[i]).TryInteger()
+		require.NoError(t, err)
+		balances = append(balances, n)
+	}
+
 	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
@@ -75,4 +95,17 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.Nil(t, c.GetStorageItem([]byte("netmapScriptHash")), "Netmap contract address should be removed")
 
 	require.Equal(t, prevTotalSupply, newTotalSupply)
+
+	for i := range accounts {
+		// Balances are the same.
+		n, err := c.Call(t, "balanceOf", accounts[i]).TryInteger()
+		require.NoError(t, err)
+		require.Equal(t, balances[i], n)
+	}
+
+	c.SeekStorage([]byte{}, func(k, v []byte) bool {
+		// Every account migrated.
+		require.NotEqual(t, len(k), util.Uint160Size)
+		return true
+	})
 }
