@@ -338,14 +338,14 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 		if amountFrom.Balance == amount {
 			storage.Delete(ctx, from)
 		} else {
-			amountFrom.Balance = amountFrom.Balance - amount // neo-go#953
+			amountFrom.Balance -= amount
 			common.SetSerialized(ctx, from, amountFrom)
 		}
 	}
 
 	if len(to) == interop.Hash160Len {
 		amountTo := getAccount(ctx, to)
-		amountTo.Balance = amountTo.Balance + amount // neo-go#953
+		amountTo.Balance += amount
 		common.SetSerialized(ctx, to, amountTo)
 	}
 
