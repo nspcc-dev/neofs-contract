@@ -67,7 +67,7 @@ Contract storage model.
 Key-value storage format:
  - 'MainnetGAS' -> int
    total amount of Mainchain GAS deployed in the NeoFS network in Fixed12
- - interop.Hash160 -> std.Serialize(Account)
+ - a<interop.Hash160> -> std.Serialize(Account)
    balance sheet of all NeoFS users (here Account is a structure defined in current package)
 
 # Accounting
