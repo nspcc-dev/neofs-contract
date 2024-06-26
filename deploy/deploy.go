@@ -225,12 +225,12 @@ func Deploy(ctx context.Context, prm Prm) error {
 		return fmt.Errorf("init blockchain monitor: %w", err)
 	}
 
-	rolesAreSet, err := checkCommitteeRoles(prm.Logger, prm.Blockchain, monitor, committee)
+	notaryRolesSet, alphaRolesSet, err := checkCommitteeRoles(prm.Blockchain, monitor, committee)
 	if err != nil {
 		return fmt.Errorf("pre-check committee roles: %w", err)
 	}
-	transfersDone := rolesAreSet // currently the same
-	if rolesAreSet {
+	transfersDone := notaryRolesSet // currently the same
+	if notaryRolesSet {
 		// if it is possible to transfer GAS before any network settings,
 		// it should be done as it speeds up expensive operations
 
@@ -277,7 +277,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("NNS contract successfully initialized on the chain", zap.Stringer("address", nnsOnChainAddress))
 
-	if !rolesAreSet {
+	if !notaryRolesSet {
 		prm.Logger.Info("enable Notary service for the committee...")
 
 		err = enableNotary(ctx, enableNotaryPrm{
@@ -318,7 +318,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 		prm.Logger.Info("initial transfer to the committee successfully done")
 	}
 
-	if !rolesAreSet {
+	if !alphaRolesSet {
 		prm.Logger.Info("initializing NeoFS Alphabet...")
 
 		err = designateNeoFSAlphabet(ctx, initAlphabetPrm{
@@ -685,48 +685,38 @@ func neoFSRuntimeTransactionModifier(getBlockchainHeight func() uint32) actor.Tr
 	}
 }
 
-func checkCommitteeRoles(logger *zap.Logger, b Blockchain, m *blockchainMonitor, committee keys.PublicKeys) (bool, error) {
-	currHeight := m.currentHeight()
-
+// first is for notary, second is for alphabet.
+func checkCommitteeRoles(b Blockchain, m *blockchainMonitor, committee keys.PublicKeys) (bool, bool, error) {
 	roleContract := rolemgmt.NewReader(invoker.New(b, nil))
 
-	currNotaries, err := roleContract.GetDesignatedByRole(noderoles.P2PNotary, currHeight)
+	notaryRole, err := checkRole(noderoles.P2PNotary, roleContract, m, committee)
 	if err != nil {
-		return false, fmt.Errorf("reading notary role: %w", err)
-	}
-	sort.Sort(currNotaries)
-	if !keysAreEqual(currNotaries, committee) {
-		logger.Debug("notaries and committee mismatch",
-			zap.Stringers("notaries", currNotaries), zap.Stringers("committee", committee))
-
-		return false, nil
+		return false, false, fmt.Errorf("%s role check: %w", noderoles.P2PNotary, err)
 	}
 
-	currAlphas, err := roleContract.GetDesignatedByRole(noderoles.NeoFSAlphabet, currHeight)
+	alphaRole, err := checkRole(noderoles.NeoFSAlphabet, roleContract, m, committee)
 	if err != nil {
-		return false, fmt.Errorf("reading alphabet role: %w", err)
-	}
-	sort.Sort(currAlphas)
-	if !keysAreEqual(currAlphas, committee) {
-		logger.Debug("alphabet and committee mismatch",
-			zap.Stringers("alphabet", currAlphas), zap.Stringers("committee", committee))
-
-		return false, nil
+		return false, false, fmt.Errorf("%s role check: %w", noderoles.NeoFSAlphabet, err)
 	}
 
-	return true, nil
+	return notaryRole, alphaRole, nil
 }
 
-func keysAreEqual(a, b keys.PublicKeys) bool {
-	if len(a) != len(b) {
-		return false
+func checkRole(role noderoles.Role, roleContract *rolemgmt.ContractReader, m *blockchainMonitor, committee keys.PublicKeys) (bool, error) {
+	currentRoles, err := roleContract.GetDesignatedByRole(role, m.currentHeight())
+	if err != nil {
+		return false, fmt.Errorf("reading role: %w", err)
 	}
 
-	for i := range a {
-		if !a[i].Equal(b[i]) {
-			return false
+	if len(currentRoles) < len(committee) {
+		return false, nil
+	}
+
+	for i := range committee {
+		if !currentRoles.Contains(committee[i]) {
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }

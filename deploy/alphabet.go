@@ -55,22 +55,13 @@ func designateNeoFSAlphabet(ctx context.Context, prm initAlphabetPrm) error {
 
 		prm.logger.Info("checking NeoFS Alphabet role of the committee members...")
 
-		accsWithAlphabetRole, err := roleContract.GetDesignatedByRole(noderoles.NeoFSAlphabet, prm.monitor.currentHeight())
+		ok, err := checkRole(noderoles.NeoFSAlphabet, &roleContract.ContractReader, prm.monitor, prm.committee)
 		if err != nil {
-			prm.logger.Error("failed to check role of the committee, will try again later", zap.Error(err))
+			prm.logger.Error("failed to check NeoFS Alphabet role of the committee, will try again later", zap.Error(err))
 			continue
 		}
 
-		someoneWithoutRole := len(accsWithAlphabetRole) < len(prm.committee)
-		if !someoneWithoutRole {
-			for i := range prm.committee {
-				if !accsWithAlphabetRole.Contains(prm.committee[i]) {
-					someoneWithoutRole = true
-					break
-				}
-			}
-		}
-		if !someoneWithoutRole {
+		if ok {
 			prm.logger.Info("all committee members have a NeoFS Alphabet role")
 			return nil
 		}
