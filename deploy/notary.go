@@ -93,22 +93,13 @@ func enableNotary(ctx context.Context, prm enableNotaryPrm) error {
 
 		prm.logger.Info("checking Notary role of the committee members...")
 
-		accsWithNotaryRole, err := roleContract.GetDesignatedByRole(noderoles.P2PNotary, prm.monitor.currentHeight())
+		ok, err := checkRole(noderoles.P2PNotary, roleContract, prm.monitor, prm.committee)
 		if err != nil {
-			prm.logger.Error("failed to check role of the committee, will try again later", zap.Error(err))
+			prm.logger.Error("failed to check Notary role of the committee, will try again later", zap.Error(err))
 			continue
 		}
 
-		someoneWithoutNotaryRole := len(accsWithNotaryRole) < len(prm.committee)
-		if !someoneWithoutNotaryRole {
-			for i := range prm.committee {
-				if !accsWithNotaryRole.Contains(prm.committee[i]) {
-					someoneWithoutNotaryRole = true
-					break
-				}
-			}
-		}
-		if !someoneWithoutNotaryRole {
+		if ok {
 			prm.logger.Info("all committee members have a Notary role")
 			return nil
 		}

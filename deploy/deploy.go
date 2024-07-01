@@ -10,12 +10,15 @@ import (
 	"strconv"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
+	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/actor"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/notary"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/rolemgmt"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/nef"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -205,9 +208,48 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	chNewBlock := make(chan struct{}, 1)
 
+	err = listenCommitteeNotaryRequests(ctx, listenCommitteeNotaryRequestsPrm{
+		logger:               prm.Logger,
+		blockchain:           prm.Blockchain,
+		localAcc:             prm.LocalAccount,
+		committee:            committee,
+		validatorMultiSigAcc: prm.ValidatorMultiSigAccount,
+	})
+	if err != nil {
+		return fmt.Errorf("start listener of committee notary requests: %w", err)
+	}
+	go autoReplenishNotaryBalance(ctx, prm.Logger, prm.Blockchain, prm.LocalAccount, chNewBlock)
+
 	monitor, err := newBlockchainMonitor(prm.Logger, prm.Blockchain, chNewBlock)
 	if err != nil {
 		return fmt.Errorf("init blockchain monitor: %w", err)
+	}
+
+	notaryRolesSet, alphaRolesSet, err := checkCommitteeRoles(prm.Blockchain, monitor, committee)
+	if err != nil {
+		return fmt.Errorf("pre-check committee roles: %w", err)
+	}
+	transfersDone := notaryRolesSet // currently the same
+	if notaryRolesSet {
+		// if it is possible to transfer GAS before any network settings,
+		// it should be done as it speeds up expensive operations
+
+		prm.Logger.Info("making initial transfer of funds to the committee...")
+
+		err = makeInitialTransferToCommittee(ctx, makeInitialGASTransferToCommitteePrm{
+			logger:               prm.Logger,
+			blockchain:           prm.Blockchain,
+			monitor:              monitor,
+			committee:            committee,
+			localAcc:             prm.LocalAccount,
+			validatorMultiSigAcc: prm.ValidatorMultiSigAccount,
+			tryTransfer:          localAccCommitteeIndex == 0,
+		})
+		if err != nil {
+			return fmt.Errorf("initial transfer funds to the committee: %w", err)
+		}
+
+		prm.Logger.Info("initial transfer to the committee successfully done")
 	}
 
 	deployNNSPrm := deployNNSContractPrm{
@@ -235,68 +277,65 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("NNS contract successfully initialized on the chain", zap.Stringer("address", nnsOnChainAddress))
 
-	prm.Logger.Info("enable Notary service for the committee...")
+	if !notaryRolesSet {
+		prm.Logger.Info("enable Notary service for the committee...")
 
-	err = enableNotary(ctx, enableNotaryPrm{
-		logger:                 prm.Logger,
-		blockchain:             prm.Blockchain,
-		monitor:                monitor,
-		nnsOnChainAddress:      nnsOnChainAddress,
-		systemEmail:            prm.NNS.SystemEmail,
-		committee:              committee,
-		localAcc:               prm.LocalAccount,
-		localAccCommitteeIndex: localAccCommitteeIndex,
-	})
-	if err != nil {
-		return fmt.Errorf("enable Notary service for the committee: %w", err)
+		err = enableNotary(ctx, enableNotaryPrm{
+			logger:                 prm.Logger,
+			blockchain:             prm.Blockchain,
+			monitor:                monitor,
+			nnsOnChainAddress:      nnsOnChainAddress,
+			systemEmail:            prm.NNS.SystemEmail,
+			committee:              committee,
+			localAcc:               prm.LocalAccount,
+			localAccCommitteeIndex: localAccCommitteeIndex,
+		})
+		if err != nil {
+			return fmt.Errorf("enable Notary service for the committee: %w", err)
+		}
+
+		prm.Logger.Info("Notary service successfully enabled for the committee")
+	} else {
+		prm.Logger.Debug("notary roles are already set")
 	}
 
-	prm.Logger.Info("Notary service successfully enabled for the committee")
+	if !transfersDone {
+		prm.Logger.Info("making initial transfer of funds to the committee...")
 
-	go autoReplenishNotaryBalance(ctx, prm.Logger, prm.Blockchain, prm.LocalAccount, chNewBlock)
+		err = makeInitialTransferToCommittee(ctx, makeInitialGASTransferToCommitteePrm{
+			logger:               prm.Logger,
+			blockchain:           prm.Blockchain,
+			monitor:              monitor,
+			committee:            committee,
+			localAcc:             prm.LocalAccount,
+			validatorMultiSigAcc: prm.ValidatorMultiSigAccount,
+			tryTransfer:          localAccCommitteeIndex == 0,
+		})
+		if err != nil {
+			return fmt.Errorf("initial transfer funds to the committee: %w", err)
+		}
 
-	err = listenCommitteeNotaryRequests(ctx, listenCommitteeNotaryRequestsPrm{
-		logger:               prm.Logger,
-		blockchain:           prm.Blockchain,
-		localAcc:             prm.LocalAccount,
-		committee:            committee,
-		validatorMultiSigAcc: prm.ValidatorMultiSigAccount,
-	})
-	if err != nil {
-		return fmt.Errorf("start listener of committee notary requests: %w", err)
+		prm.Logger.Info("initial transfer to the committee successfully done")
 	}
 
-	prm.Logger.Info("making initial transfer of funds to the committee...")
+	if !alphaRolesSet {
+		prm.Logger.Info("initializing NeoFS Alphabet...")
 
-	err = makeInitialTransferToCommittee(ctx, makeInitialGASTransferToCommitteePrm{
-		logger:               prm.Logger,
-		blockchain:           prm.Blockchain,
-		monitor:              monitor,
-		committee:            committee,
-		localAcc:             prm.LocalAccount,
-		validatorMultiSigAcc: prm.ValidatorMultiSigAccount,
-		tryTransfer:          localAccCommitteeIndex == 0,
-	})
-	if err != nil {
-		return fmt.Errorf("initial transfer funds to the committee: %w", err)
+		err = designateNeoFSAlphabet(ctx, initAlphabetPrm{
+			logger:     prm.Logger,
+			blockchain: prm.Blockchain,
+			monitor:    monitor,
+			committee:  committee,
+			localAcc:   prm.LocalAccount,
+		})
+		if err != nil {
+			return fmt.Errorf("init NeoFS Alphabet: %w", err)
+		}
+
+		prm.Logger.Info("NeoFS Alphabet successfully initialized")
+	} else {
+		prm.Logger.Debug("alphabet roles are already set")
 	}
-
-	prm.Logger.Info("initial transfer to the committee successfully done")
-
-	prm.Logger.Info("initializing NeoFS Alphabet...")
-
-	err = designateNeoFSAlphabet(ctx, initAlphabetPrm{
-		logger:     prm.Logger,
-		blockchain: prm.Blockchain,
-		monitor:    monitor,
-		committee:  committee,
-		localAcc:   prm.LocalAccount,
-	})
-	if err != nil {
-		return fmt.Errorf("init NeoFS Alphabet: %w", err)
-	}
-
-	prm.Logger.Info("NeoFS Alphabet successfully initialized")
 
 	syncPrm := syncNeoFSContractPrm{
 		logger:              prm.Logger,
@@ -644,4 +683,40 @@ func neoFSRuntimeTransactionModifier(getBlockchainHeight func() uint32) actor.Tr
 
 		return nil
 	}
+}
+
+// first is for notary, second is for alphabet.
+func checkCommitteeRoles(b Blockchain, m *blockchainMonitor, committee keys.PublicKeys) (bool, bool, error) {
+	roleContract := rolemgmt.NewReader(invoker.New(b, nil))
+
+	notaryRole, err := checkRole(noderoles.P2PNotary, roleContract, m, committee)
+	if err != nil {
+		return false, false, fmt.Errorf("%s role check: %w", noderoles.P2PNotary, err)
+	}
+
+	alphaRole, err := checkRole(noderoles.NeoFSAlphabet, roleContract, m, committee)
+	if err != nil {
+		return false, false, fmt.Errorf("%s role check: %w", noderoles.NeoFSAlphabet, err)
+	}
+
+	return notaryRole, alphaRole, nil
+}
+
+func checkRole(role noderoles.Role, roleContract *rolemgmt.ContractReader, m *blockchainMonitor, committee keys.PublicKeys) (bool, error) {
+	currentRoles, err := roleContract.GetDesignatedByRole(role, m.currentHeight())
+	if err != nil {
+		return false, fmt.Errorf("reading role: %w", err)
+	}
+
+	if len(currentRoles) < len(committee) {
+		return false, nil
+	}
+
+	for i := range committee {
+		if !currentRoles.Contains(committee[i]) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
