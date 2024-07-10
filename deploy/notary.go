@@ -556,6 +556,15 @@ func initDesignateNotaryRoleAsSignerTick(ctx context.Context, prm enableNotaryPr
 		},
 	}
 
+	prm.logger.Debug("initial committee signers",
+		zap.Stringer("[0].Signer.Account", committeeSigners[0].Signer.Account),
+		zap.Stringer("[0].Account.PrivateKey", committeeSigners[0].Account.PrivateKey()),
+		zap.Stringer("[0].Account.PublicKey", committeeSigners[0].Account.PublicKey()),
+		zap.Stringer("[1].Signer.Account", committeeSigners[1].Signer.Account),
+		zap.Stringer("[1].Account.PrivateKey", committeeSigners[1].Account.PrivateKey()),
+		zap.Stringer("[1].Account.PublicKey", committeeSigners[1].Account.PublicKey()),
+	)
+
 	committeeActor, err := actor.New(prm.blockchain, committeeSigners)
 	if err != nil {
 		return nil, fmt.Errorf("init transaction sender with committee signers: %w", err)
@@ -620,6 +629,17 @@ func initDesignateNotaryRoleAsSignerTick(ctx context.Context, prm enableNotaryPr
 			if err != nil {
 				prm.logger.Error("failed to make unsigned transaction designating Notary role to the committee, will try again later",
 					zap.Error(err))
+
+				prm.logger.Debug("committee signers after error",
+					zap.Stringer("[0].Signer.Account", committeeSigners[0].Signer.Account),
+					zap.Stringer("[0].Account.PrivateKey", committeeSigners[0].Account.PrivateKey()),
+					zap.Stringer("[0].Account.PublicKey", committeeSigners[0].Account.PublicKey()),
+					zap.Stringer("[1].Signer.Account", committeeSigners[1].Signer.Account),
+					zap.Stringer("[1].Account.PrivateKey", committeeSigners[1].Account.PrivateKey()),
+					zap.Stringer("[1].Account.PublicKey", committeeSigners[1].Account.PublicKey()),
+					zap.Error(err),
+				)
+
 				return
 			}
 
