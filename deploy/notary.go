@@ -831,6 +831,8 @@ func makeUnsignedDesignateCommitteeNotaryTx(roleContract *rolemgmt.Contract, com
 		return nil, err
 	}
 
+	tx = tx.Copy()
+
 	tx.ValidUntilBlock = sharedTxData.validUntilBlock
 	tx.Nonce = sharedTxData.nonce
 	tx.Signers[0].Account = sharedTxData.sender
