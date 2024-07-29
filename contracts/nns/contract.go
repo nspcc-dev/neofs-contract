@@ -470,7 +470,7 @@ func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire,
 // Renew increases domain expiration date.
 func Renew(name string) int64 {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 	runtime.BurnGas(GetPrice())
 	ctx := storage.GetContext()
@@ -484,7 +484,7 @@ func Renew(name string) int64 {
 // UpdateSOA updates soa record.
 func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
@@ -495,7 +495,7 @@ func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 // SetAdmin updates domain admin. The name MUST NOT be a TLD.
 func SetAdmin(name string, admin interop.Hash160) {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 
 	fragments := std.StringSplit(name, ".")
