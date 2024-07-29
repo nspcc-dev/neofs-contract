@@ -184,6 +184,10 @@ func TestNNSRegisterMulti(t *testing.T) {
 
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
 		"something.mainnet.fs.neo.com", int64(recordtype.A), "1.2.3.4")
+	c1.Invoke(t, stackitem.Null{}, "setRecord",
+		"something.mainnet.fs.neo.com", int64(recordtype.A), 0, "2.3.4.5")
+	c1.InvokeFail(t, "invalid record id", "setRecord",
+		"something.mainnet.fs.neo.com", int64(recordtype.A), 1, "2.3.4.5")
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
 		"another.fs.neo.com", int64(recordtype.A), "4.3.2.1")
 

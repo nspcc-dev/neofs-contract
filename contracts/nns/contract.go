@@ -506,7 +506,7 @@ func SetRecord(name string, typ recordtype.Type, id byte, data string) {
 		panic("invalid record data")
 	}
 
-	fragments := std.StringSplit(name, ".")
+	fragments := std.StringSplit(string(tokenID), ".")
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
