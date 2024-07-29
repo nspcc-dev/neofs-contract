@@ -60,7 +60,7 @@ const (
 	maxTXTRecordLength = 255
 	// maxRecordID is the maximum value of record ID (the upper bound for the number
 	// of records with the same type).
-	maxRecordID = 255
+	maxRecordID = 15
 )
 
 // Other constants.

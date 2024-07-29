@@ -23,7 +23,7 @@ const nnsPath = "../contracts/nns"
 
 const (
 	msPerYear   = 365 * 24 * time.Hour / time.Millisecond
-	maxRecordID = 255 // value from the contract.
+	maxRecordID = 15 // value from the contract.
 )
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
