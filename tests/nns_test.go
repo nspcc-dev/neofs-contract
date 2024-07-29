@@ -80,8 +80,11 @@ func TestNNSRegisterTLD(t *testing.T) {
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 
-	c.InvokeFail(t, "invalid domain name format", "registerTLD",
+	c.InvokeFail(t, "invalid domain fragment", "registerTLD",
 		"0com", "email@nspcc.ru", refresh, retry, expire, ttl)
+
+	c.InvokeFail(t, "not a TLD", "registerTLD",
+		"neo.org", "email@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
@@ -108,10 +111,10 @@ func TestNNSRegister(t *testing.T) {
 
 	c3 := c.WithSigners(accTop, acc)
 	t.Run("domain names with hyphen", func(t *testing.T) {
-		c3.InvokeFail(t, "invalid domain name format", "register",
+		c3.InvokeFail(t, "invalid domain fragment", "register",
 			"-testdomain.com", acc.ScriptHash(),
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
-		c3.InvokeFail(t, "invalid domain name format", "register",
+		c3.InvokeFail(t, "invalid domain fragment", "register",
 			"testdomain-.com", acc.ScriptHash(),
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
 		c3.Invoke(t, true, "register",
@@ -411,7 +414,7 @@ func TestNNSResolve(t *testing.T) {
 	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
 	c.Invoke(t, records, "resolve", "test.com", int64(recordtype.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(recordtype.TXT))
-	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(recordtype.TXT))
+	c.InvokeFail(t, "invalid domain fragment", "resolve", "test.com..", int64(recordtype.TXT))
 
 	// Check CNAME is properly resolved and is not included into the result list.
 	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("1.2.3.4"), stackitem.Make("5.6.7.8")}), "resolve", "test.com", int64(recordtype.A))

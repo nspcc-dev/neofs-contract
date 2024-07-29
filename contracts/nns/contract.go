@@ -301,10 +301,7 @@ func GetPrice() int {
 // IsAvailable checks whether the provided domain name is available. Notice that
 // TLD is available for the committee only.
 func IsAvailable(name string) bool {
-	fragments := splitAndCheck(name, true)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+	fragments := splitAndCheck(name)
 	ctx := storage.GetReadOnlyContext()
 	l := len(fragments)
 	if storage.Get(ctx, append([]byte{prefixRoot}, []byte(fragments[l-1])...)) == nil {
@@ -367,10 +364,7 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 //   - starting from the 3rd level, the domain can only be registered by the
 //     owner or administrator (if any) of the previous level domain
 func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
-	fragments := splitAndCheck(name, true)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+	fragments := splitAndCheck(name)
 
 	l := len(fragments)
 	if l == 1 {
@@ -436,9 +430,9 @@ func RegisterTLD(name, email string, refresh, retry, expire, ttl int) {
 // record and saves domain state calling saveDomain with given parameters and
 // empty owner. The name MUST be a valid TLD name.
 func saveCommitteeDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	fragments := splitAndCheck(name, false)
+	fragments := splitAndCheck(name)
 	if len(fragments) != 1 {
-		panic("invalid domain name format")
+		panic("not a TLD")
 	}
 
 	tldKey := makeTLDKey(name)
@@ -535,7 +529,8 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 	case recordtype.A:
 		ok = checkIPv4(data)
 	case recordtype.CNAME:
-		ok = splitAndCheck(data, true) != nil
+		_, msg := safeSplitAndCheck(data)
+		ok = len(msg) == 0
 	case recordtype.TXT:
 		ok = len(data) <= maxTXTRecordLength
 	case recordtype.AAAA:
@@ -884,23 +879,31 @@ func isAlNum(c uint8) bool {
 	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
-// splitAndCheck splits domain name into parts and validates it.
-func splitAndCheck(name string, allowMultipleFragments bool) []string {
+// safeSplitAndCheck validates the name and splits it into parts, if anything
+// is wrong it returns a non-empty string in the second result.
+func safeSplitAndCheck(name string) ([]string, string) {
 	l := len(name)
 	if l < minDomainNameLength || maxDomainNameLength < l {
-		return nil
+		return nil, "invalid domain name length"
 	}
 	fragments := std.StringSplit(name, ".")
 	l = len(fragments)
-	if l > 2 && !allowMultipleFragments {
-		return nil
-	}
 	for i := 0; i < l; i++ {
 		if !checkFragment(fragments[i], i == l-1) {
-			return nil
+			return nil, "invalid domain fragment"
 		}
 	}
-	return fragments
+	return fragments, ""
+}
+
+// splitAndCheck splits domain name into parts and validates it. It panics
+// if anything is wrong.
+func splitAndCheck(name string) []string {
+	r, err := safeSplitAndCheck(name)
+	if len(err) != 0 {
+		panic(err)
+	}
+	return r
 }
 
 // checkIPv4 checks record on IPv4 compliance.
@@ -1015,10 +1018,7 @@ func checkIPv6(data string) bool {
 
 // tokenIDFromName returns token ID (domain.root) from the provided name.
 func tokenIDFromName(ctx storage.Context, name string) string {
-	fragments := splitAndCheck(name, true)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+	fragments := splitAndCheck(name)
 
 	sum := 0
 	l := len(fragments) - 1
