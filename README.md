@@ -73,20 +73,6 @@ $ make test
 ok      github.com/nspcc-dev/neofs-contract/tests       0.462s
 ```
 
-# NeoFS API compatibility
-
-| neofs-contract version |                                                                                           supported NeoFS API versions                                                                                           |
-|:----------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-|         v0.9.x         |                                    [v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)                                    |
-|        v0.10.x         |                                    [v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0)                                    |
-|        v0.11.x         | [v2.7.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.7.0), [v2.8.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.8.0), [v2.9.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.9.0) |
-|        v0.12.x         |                                                                      [v2.10.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.10.0)                                                                      |
-|        v0.13.x         |                                                                      [v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0)                                                                      |
-|        v0.14.x         |                                                                      [v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0)                                                                      |
-|        v0.15.x         |                                  [v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0), [v2.12.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.12.0)                                  |
-|        v0.15.x         |                                  [v2.11.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.11.0), [v2.12.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.12.0)                                  |
-|        v0.16.x         |                                                                      [v2.14.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.14.0)                       |        v0.17.x         |                                                                      [v2.14.0](https://github.com/nspcc-dev/neofs-api/releases/tag/v2.14.0)                                                                      |
-
 # Comparing contracts content of NeoFS chains
 `scripts` directory contains CLI utilities to compare some of the NeoFS contract
 contents between two RPC nodes:
