@@ -32,12 +32,6 @@ Sidechain contracts:
 
 # Getting started 
 
-## Prerequisites
-
-To compile smart contracts you need:
-
--   [neo-go](https://github.com/nspcc-dev/neo-go) >= 0.104.0
-
 ## Compilation
 
 To build and compile smart contract, run `make all` command. Compiled contracts
