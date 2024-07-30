@@ -58,6 +58,9 @@ const (
 	maxDomainNameLength = 255
 	// maxTXTRecordLength is the maximum length of the TXT domain record.
 	maxTXTRecordLength = 255
+	// maxRecordID is the maximum value of record ID (the upper bound for the number
+	// of records with the same type).
+	maxRecordID = 15
 )
 
 // Other constants.
@@ -65,8 +68,10 @@ const (
 	// defaultRegisterPrice is the default price for new domain registration.
 	// nolint:unused
 	defaultRegisterPrice = 10_0000_0000
+	// millisecondsInSecond is the amount of milliseconds per second.
+	millisecondsInSecond = 1000
 	// millisecondsInYear is amount of milliseconds per year.
-	millisecondsInYear = int64(365 * 24 * 3600 * 1000)
+	millisecondsInYear = int64(365 * 24 * 3600 * millisecondsInSecond)
 )
 
 // RecordState is a type that registered entities are saved to.
@@ -202,6 +207,7 @@ func Properties(tokenID []byte) map[string]any {
 	return map[string]any{
 		"name":       ns.Name,
 		"expiration": ns.Expiration,
+		"admin":      ns.Admin,
 	}
 }
 
@@ -295,10 +301,7 @@ func GetPrice() int {
 // IsAvailable checks whether the provided domain name is available. Notice that
 // TLD is available for the committee only.
 func IsAvailable(name string) bool {
-	fragments := splitAndCheck(name, false)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+	fragments := splitAndCheck(name)
 	ctx := storage.GetReadOnlyContext()
 	l := len(fragments)
 	if storage.Get(ctx, append([]byte{prefixRoot}, []byte(fragments[l-1])...)) == nil {
@@ -307,7 +310,27 @@ func IsAvailable(name string) bool {
 		}
 		return true
 	}
-	return parentExpired(ctx, 0, fragments)
+	if !parentExpired(ctx, 0, fragments) {
+		return false
+	}
+	return len(getParentConflictingRecord(ctx, name, fragments)) == 0
+}
+
+// getPrentConflictingRecord returns record of '*.name' format if they are presented.
+// These records conflict with domain name to be registered.
+func getParentConflictingRecord(ctx storage.Context, name string, fragments []string) string {
+	parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
+	parentRecKey := append([]byte{prefixRecord}, parentKey...)
+	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
+	suffix := []byte(name)
+	for iterator.Next(it) {
+		r := iterator.Value(it).(RecordState)
+		ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
+		if ind > 0 && ind+len(suffix) == len(r.Name) {
+			return r.Name
+		}
+	}
+	return ""
 }
 
 // parentExpired returns true if any domain from fragments doesn't exist or is expired.
@@ -341,10 +364,7 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 //   - starting from the 3rd level, the domain can only be registered by the
 //     owner or administrator (if any) of the previous level domain
 func Register(name string, owner interop.Hash160, email string, refresh, retry, expire, ttl int) bool {
-	fragments := splitAndCheck(name, true)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+	fragments := splitAndCheck(name)
 
 	l := len(fragments)
 	if l == 1 {
@@ -367,15 +387,8 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		ns.checkAdmin()
 	}
 
-	parentRecKey := append([]byte{prefixRecord}, parentKey...)
-	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
-	suffix := []byte(name)
-	for iterator.Next(it) {
-		r := iterator.Value(it).(RecordState)
-		ind := std.MemorySearchLastIndex([]byte(r.Name), suffix, len(r.Name))
-		if ind > 0 && ind+len(suffix) == len(r.Name) {
-			panic("parent domain has conflicting records: " + r.Name)
-		}
+	if conflict := getParentConflictingRecord(ctx, name, fragments); len(conflict) != 0 {
+		panic("parent domain has conflicting records: " + conflict)
 	}
 
 	if !isValid(owner) {
@@ -417,9 +430,9 @@ func RegisterTLD(name, email string, refresh, retry, expire, ttl int) {
 // record and saves domain state calling saveDomain with given parameters and
 // empty owner. The name MUST be a valid TLD name.
 func saveCommitteeDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	fragments := splitAndCheck(name, false)
+	fragments := splitAndCheck(name)
 	if len(fragments) != 1 {
-		panic("invalid domain name format")
+		panic("not a TLD")
 	}
 
 	tldKey := makeTLDKey(name)
@@ -443,7 +456,7 @@ func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire,
 		Owner: owner,
 		Name:  name,
 		// NNS expiration is in milliseconds
-		Expiration: int64(runtime.GetTime() + expire*1000),
+		Expiration: int64(runtime.GetTime() + expire*millisecondsInSecond),
 	})
 	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
 }
@@ -451,7 +464,7 @@ func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire,
 // Renew increases domain expiration date.
 func Renew(name string) int64 {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 	runtime.BurnGas(GetPrice())
 	ctx := storage.GetContext()
@@ -465,7 +478,7 @@ func Renew(name string) int64 {
 // UpdateSOA updates soa record.
 func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 	ctx := storage.GetContext()
 	ns := getNameState(ctx, []byte(name))
@@ -476,7 +489,7 @@ func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 // SetAdmin updates domain admin. The name MUST NOT be a TLD.
 func SetAdmin(name string, admin interop.Hash160) {
 	if len(name) > maxDomainNameLength {
-		panic("invalid domain name format")
+		panic("too long name")
 	}
 
 	fragments := std.StringSplit(name, ".")
@@ -494,46 +507,38 @@ func SetAdmin(name string, admin interop.Hash160) {
 	putNameState(ctx, ns)
 }
 
-// SetRecord adds a new record of the specified type to the provided domain.
+// SetRecord updates existing domain record with the specified type and ID.
 // The name MUST NOT be a TLD.
 func SetRecord(name string, typ recordtype.Type, id byte, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
-		panic("invalid record data")
-	}
-
-	fragments := std.StringSplit(name, ".")
-	if len(fragments) == 1 {
-		panic("token not found")
-	}
-
 	ctx := storage.GetContext()
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
-	ns.checkAdmin()
-	putRecord(ctx, tokenID, name, typ, id, data)
+	tokenID := checkRecord(ctx, name, typ, data)
+	recordKey := getIdRecordKey(tokenID, name, typ, id)
+	recBytes := storage.Get(ctx, recordKey)
+	if recBytes == nil {
+		panic("invalid record id")
+	}
+	storeRecord(ctx, tokenID, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
-func checkBaseRecords(typ recordtype.Type, data string) bool {
+// checkRecord performs record validness check and returns token ID.
+func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data string) []byte {
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	var ok bool
 	switch typ {
 	case recordtype.A:
-		return checkIPv4(data)
+		ok = checkIPv4(data)
 	case recordtype.CNAME:
-		return splitAndCheck(data, true) != nil
+		_, msg := safeSplitAndCheck(data)
+		ok = len(msg) == 0
 	case recordtype.TXT:
-		return len(data) <= maxTXTRecordLength
+		ok = len(data) <= maxTXTRecordLength
 	case recordtype.AAAA:
-		return checkIPv6(data)
+		ok = checkIPv6(data)
 	default:
 		panic("unsupported record type")
 	}
-}
-
-// AddRecord adds a new record of the specified type to the provided domain.
-// The name MUST NOT be a TLD.
-func AddRecord(name string, typ recordtype.Type, data string) {
-	tokenID := []byte(tokenIDFromName(name))
-	if !checkBaseRecords(typ, data) {
+	if !ok {
 		panic("invalid record data")
 	}
 
@@ -542,10 +547,36 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 		panic("token not found")
 	}
 
-	ctx := storage.GetContext()
 	ns := getFragmentedNameState(ctx, tokenID, fragments)
 	ns.checkAdmin()
-	addRecord(ctx, tokenID, name, typ, data)
+	return tokenID
+}
+
+// AddRecord appends domain record to the list of domain records with the specified type
+// if it doesn't exist yet. The name MUST NOT be a TLD.
+func AddRecord(name string, typ recordtype.Type, data string) {
+	ctx := storage.GetContext()
+	tokenID := checkRecord(ctx, name, typ, data)
+	recordsKey := getRecordsKeyByType(tokenID, name, typ)
+	var id byte
+	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	for iterator.Next(records) {
+		id++
+
+		r := iterator.Value(records).(RecordState)
+		if r.Name == name && r.Type == typ && r.Data == data {
+			panic("record already exists")
+		}
+	}
+	if id > maxRecordID {
+		panic("maximum number of records reached")
+	}
+
+	if typ == recordtype.CNAME && id != 0 {
+		panic("you shouldn't have more than one CNAME record")
+	}
+
+	storeRecord(ctx, tokenID, name, typ, id, data)
 	updateSoaSerial(ctx, tokenID)
 }
 
@@ -557,8 +588,8 @@ func GetRecords(name string, typ recordtype.Type) []string {
 		panic("token not found")
 	}
 
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
 	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
 	return getRecordsByType(ctx, tokenID, name, typ)
 }
@@ -570,14 +601,14 @@ func DeleteRecords(name string, typ recordtype.Type) {
 		panic("you cannot delete soa record")
 	}
 
-	tokenID := []byte(tokenIDFromName(name))
+	ctx := storage.GetContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
 
 	fragments := std.StringSplit(string(tokenID), ".")
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
 
-	ctx := storage.GetContext()
 	ns := getFragmentedNameState(ctx, tokenID, fragments)
 	ns.checkAdmin()
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
@@ -589,7 +620,7 @@ func DeleteRecords(name string, typ recordtype.Type) {
 	updateSoaSerial(ctx, tokenID)
 }
 
-// Resolve resolves given name (not more then three redirects are allowed).
+// Resolve resolves given name (not more than three redirects are allowed).
 // The name MUST NOT be a TLD.
 func Resolve(name string, typ recordtype.Type) []string {
 	fragments := std.StringSplit(name, ".")
@@ -609,11 +640,8 @@ func GetAllRecords(name string) iterator.Iterator {
 		panic("token not found")
 	}
 
-	tokenID := []byte(tokenIDFromName(name))
 	ctx := storage.GetReadOnlyContext()
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
-	recordsKey := getRecordsKey(tokenID, name)
-	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	return getAllRecords(ctx, name, fragments)
 }
 
 // updateBalance updates account's balance and account's tokens.
@@ -688,7 +716,7 @@ func getFragmentedNameState(ctx storage.Context, tokenID []byte, fragments []str
 
 // getNameStateWithKey returns domain name state by the specified token key.
 func getNameStateWithKey(ctx storage.Context, tokenKey []byte) NameState {
-	nameKey := append([]byte{prefixName}, tokenKey...)
+	nameKey := getNameStateKey(tokenKey)
 	nsBytes := storage.Get(ctx, nameKey)
 	if nsBytes == nil {
 		panic("token not found")
@@ -696,6 +724,11 @@ func getNameStateWithKey(ctx storage.Context, tokenKey []byte) NameState {
 	ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 	ns.ensureNotExpired()
 	return ns
+}
+
+// getNameStateKey returns NameState key for the provided token key.
+func getNameStateKey(tokenKey []byte) []byte {
+	return append([]byte{prefixName}, tokenKey...)
 }
 
 // putNameState stores domain name state.
@@ -726,42 +759,9 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ reco
 	return result
 }
 
-// putRecord stores domain record.
-func putRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
+// storeRecord puts record to storage and performs no additional checks.
+func storeRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
 	recordKey := getIdRecordKey(tokenId, name, typ, id)
-	recBytes := storage.Get(ctx, recordKey)
-	if recBytes == nil {
-		panic("invalid record id")
-	}
-
-	storeRecord(ctx, recordKey, name, typ, id, data)
-}
-
-// addRecord stores domain record.
-func addRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, data string) {
-	recordsKey := getRecordsKeyByType(tokenId, name, typ)
-
-	var id byte
-	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
-	for iterator.Next(records) {
-		id++
-
-		r := iterator.Value(records).(RecordState)
-		if r.Name == name && r.Type == typ && r.Data == data {
-			panic("record already exists")
-		}
-	}
-
-	if typ == recordtype.CNAME && id != 0 {
-		panic("you shouldn't have more than one CNAME record")
-	}
-
-	recordKey := append(recordsKey, id) // the same as getIdRecordKey
-	storeRecord(ctx, recordKey, name, typ, id, data)
-}
-
-// storeRecord puts record to storage.
-func storeRecord(ctx storage.Context, recordKey []byte, name string, typ recordtype.Type, id byte, data string) {
 	rs := RecordState{
 		Name: name,
 		Type: typ,
@@ -774,22 +774,14 @@ func storeRecord(ctx storage.Context, recordKey []byte, name string, typ recordt
 
 // putSoaRecord stores soa domain record.
 func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	var id byte
-	tokenId := []byte(tokenIDFromName(name))
-	recordKey := getIdRecordKey(tokenId, name, recordtype.SOA, id)
-	rs := RecordState{
-		Name: name,
-		Type: recordtype.SOA,
-		ID:   id,
-		Data: name + " " + email + " " +
-			std.Itoa(runtime.GetTime(), 10) + " " +
-			std.Itoa(refresh, 10) + " " +
-			std.Itoa(retry, 10) + " " +
-			std.Itoa(expire, 10) + " " +
-			std.Itoa(ttl, 10),
-	}
-	recBytes := std.Serialize(rs)
-	storage.Put(ctx, recordKey, recBytes)
+	tokenId := []byte(tokenIDFromName(ctx, name))
+	data := name + " " + email + " " +
+		std.Itoa(runtime.GetTime(), 10) + " " +
+		std.Itoa(refresh, 10) + " " +
+		std.Itoa(retry, 10) + " " +
+		std.Itoa(expire, 10) + " " +
+		std.Itoa(ttl, 10)
+	storeRecord(ctx, tokenId, name, recordtype.SOA, 0, data)
 }
 
 // updateSoaSerial stores soa domain record.
@@ -887,23 +879,31 @@ func isAlNum(c uint8) bool {
 	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
-// splitAndCheck splits domain name into parts and validates it.
-func splitAndCheck(name string, allowMultipleFragments bool) []string {
+// safeSplitAndCheck validates the name and splits it into parts, if anything
+// is wrong it returns a non-empty string in the second result.
+func safeSplitAndCheck(name string) ([]string, string) {
 	l := len(name)
 	if l < minDomainNameLength || maxDomainNameLength < l {
-		return nil
+		return nil, "invalid domain name length"
 	}
 	fragments := std.StringSplit(name, ".")
 	l = len(fragments)
-	if l > 2 && !allowMultipleFragments {
-		return nil
-	}
 	for i := 0; i < l; i++ {
 		if !checkFragment(fragments[i], i == l-1) {
-			return nil
+			return nil, "invalid domain fragment"
 		}
 	}
-	return fragments
+	return fragments, ""
+}
+
+// splitAndCheck splits domain name into parts and validates it. It panics
+// if anything is wrong.
+func splitAndCheck(name string) []string {
+	r, err := safeSplitAndCheck(name)
+	if len(err) != 0 {
+		panic(err)
+	}
+	return r
 }
 
 // checkIPv4 checks record on IPv4 compliance.
@@ -1017,18 +1017,14 @@ func checkIPv6(data string) bool {
 }
 
 // tokenIDFromName returns token ID (domain.root) from the provided name.
-func tokenIDFromName(name string) string {
-	fragments := splitAndCheck(name, true)
-	if fragments == nil {
-		panic("invalid domain name format")
-	}
+func tokenIDFromName(ctx storage.Context, name string) string {
+	fragments := splitAndCheck(name)
 
-	ctx := storage.GetReadOnlyContext()
 	sum := 0
 	l := len(fragments) - 1
 	for i := 0; i < l; i++ {
 		tokenKey := getTokenKey([]byte(name[sum:]))
-		nameKey := append([]byte{prefixName}, tokenKey...)
+		nameKey := getNameStateKey(tokenKey)
 		nsBytes := storage.Get(ctx, nameKey)
 		if nsBytes != nil {
 			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
@@ -1053,7 +1049,7 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 	if name[len(name)-1] == '.' {
 		name = name[:len(name)-1]
 	}
-	records := getAllRecords(ctx, name)
+	records := getAllRecords(ctx, name, nil)
 	cname := ""
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
@@ -1068,15 +1064,15 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 		return res
 	}
 
-	res = append(res, cname)
 	return resolve(ctx, res, cname, typ, redirect-1)
 }
 
 // getAllRecords returns iterator over the set of records corresponded with the
-// specified name.
-func getAllRecords(ctx storage.Context, name string) iterator.Iterator {
-	tokenID := []byte(tokenIDFromName(name))
-	_ = getNameState(ctx, tokenID)
+// specified name. Optional fragments parameter allows to pass pre-calculated
+// elements of the domain name path: if empty, splits name on its own.
+func getAllRecords(ctx storage.Context, name string, fragments []string) iterator.Iterator {
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
 	recordsKey := getRecordsKey(tokenID, name)
 	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 }

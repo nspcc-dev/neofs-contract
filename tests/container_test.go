@@ -220,7 +220,7 @@ func TestContainerPut(t *testing.T) {
 				cNNS.Invoke(t, stackitem.Null{}, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 
 				t.Run("register in advance", func(t *testing.T) {
-					cnt.value[len(cnt.value)-1] = 10
+					cnt.value[len(cnt.value)-1]++
 					cnt.id = sha256.Sum256(cnt.value)
 
 					cNNS.Invoke(t, stackitem.Null{}, "registerTLD",

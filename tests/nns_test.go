@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,10 @@ import (
 
 const nnsPath = "../contracts/nns"
 
-const msPerYear = 365 * 24 * time.Hour / time.Millisecond
+const (
+	msPerYear   = 365 * 24 * time.Hour / time.Millisecond
+	maxRecordID = 15 // value from the contract.
+)
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
@@ -76,8 +80,11 @@ func TestNNSRegisterTLD(t *testing.T) {
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
 
-	c.InvokeFail(t, "invalid domain name format", "registerTLD",
+	c.InvokeFail(t, "invalid domain fragment", "registerTLD",
 		"0com", "email@nspcc.ru", refresh, retry, expire, ttl)
+
+	c.InvokeFail(t, "not a TLD", "registerTLD",
+		"neo.org", "email@nspcc.ru", refresh, retry, expire, ttl)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
@@ -104,10 +111,10 @@ func TestNNSRegister(t *testing.T) {
 
 	c3 := c.WithSigners(accTop, acc)
 	t.Run("domain names with hyphen", func(t *testing.T) {
-		c3.InvokeFail(t, "invalid domain name format", "register",
+		c3.InvokeFail(t, "invalid domain fragment", "register",
 			"-testdomain.com", acc.ScriptHash(),
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
-		c3.InvokeFail(t, "invalid domain name format", "register",
+		c3.InvokeFail(t, "invalid domain fragment", "register",
 			"testdomain-.com", acc.ScriptHash(),
 			"myemail@nspcc.ru", refresh, retry, expire, ttl)
 		c3.Invoke(t, true, "register",
@@ -180,15 +187,21 @@ func TestNNSRegisterMulti(t *testing.T) {
 
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
 		"something.mainnet.fs.neo.com", int64(recordtype.A), "1.2.3.4")
+	c1.Invoke(t, stackitem.Null{}, "setRecord",
+		"something.mainnet.fs.neo.com", int64(recordtype.A), 0, "2.3.4.5")
+	c1.InvokeFail(t, "invalid record id", "setRecord",
+		"something.mainnet.fs.neo.com", int64(recordtype.A), 1, "2.3.4.5")
 	c1.Invoke(t, stackitem.Null{}, "addRecord",
 		"another.fs.neo.com", int64(recordtype.A), "4.3.2.1")
 
 	c2 = c.WithSigners(acc, acc2)
+	c2.Invoke(t, stackitem.NewBool(false), "isAvailable", "mainnet.fs.neo.com")
 	c2.InvokeFail(t, "parent domain has conflicting records: something.mainnet.fs.neo.com",
 		"register", args...)
 
 	c1.Invoke(t, stackitem.Null{}, "deleteRecords",
 		"something.mainnet.fs.neo.com", int64(recordtype.A))
+	c2.Invoke(t, stackitem.NewBool(true), "isAvailable", "mainnet.fs.neo.com")
 	c2.Invoke(t, true, "register", args...)
 
 	c2 = c.WithSigners(acc2)
@@ -274,7 +287,8 @@ func TestExpiration(t *testing.T) {
 	checkProperties := func(t *testing.T, expiration uint64) {
 		expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 			{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)}})
+			{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+			{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 		s, err := c.TestInvoke(t, "properties", "testdomain.com")
 		require.NoError(t, err)
 		require.Equal(t, expected.Value(), s.Top().Item().Value())
@@ -315,6 +329,7 @@ func TestNNSSetAdmin(t *testing.T) {
 	c.Invoke(t, true, "register",
 		"testdomain.com", c.CommitteeHash,
 		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	top := c.TopBlock(t)
 
 	acc := c.NewAccount(t)
 	cAcc := c.WithSigners(acc)
@@ -323,6 +338,13 @@ func TestNNSSetAdmin(t *testing.T) {
 
 	c1 := c.WithSigners(c.Committee, acc)
 	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+
+	expiration := top.Timestamp + uint64(expire*1000)
+	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{
+		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Make(acc.ScriptHash().BytesBE())}})
+	cAcc.Invoke(t, expectedProps, "properties", "testdomain.com")
 
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
 		"testdomain.com", int64(recordtype.TXT), "will be added")
@@ -369,7 +391,8 @@ func TestNNSRenew(t *testing.T) {
 	c1.Invoke(t, ts, "renew", "testdomain.com")
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
-		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)}})
+		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)},
+		{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
 }
 
@@ -377,17 +400,26 @@ func TestNNSResolve(t *testing.T) {
 	c := newNNSInvoker(t, true)
 
 	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
-	c.Invoke(t, true, "register",
-		"test.com", c.CommitteeHash,
-		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, true, "register", "test.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(recordtype.TXT), "expected result")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "test.com", int64(recordtype.CNAME), "alias.com")
 
-	c.Invoke(t, stackitem.Null{}, "addRecord",
-		"test.com", int64(recordtype.TXT), "expected result")
+	c.Invoke(t, true, "register", "alias.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(recordtype.A), "1.2.3.4")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias.com", int64(recordtype.CNAME), "alias2.com")
+
+	c.Invoke(t, true, "register", "alias2.com", c.CommitteeHash, "myemail@nspcc.ru", refresh, retry, expire, ttl)
+	c.Invoke(t, stackitem.Null{}, "addRecord", "alias2.com", int64(recordtype.A), "5.6.7.8")
 
 	records := stackitem.NewArray([]stackitem.Item{stackitem.Make("expected result")})
 	c.Invoke(t, records, "resolve", "test.com", int64(recordtype.TXT))
 	c.Invoke(t, records, "resolve", "test.com.", int64(recordtype.TXT))
-	c.InvokeFail(t, "invalid domain name format", "resolve", "test.com..", int64(recordtype.TXT))
+	c.InvokeFail(t, "invalid domain fragment", "resolve", "test.com..", int64(recordtype.TXT))
+
+	// Check CNAME is properly resolved and is not included into the result list.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("1.2.3.4"), stackitem.Make("5.6.7.8")}), "resolve", "test.com", int64(recordtype.A))
+	// And this time it should be properly included without resolution.
+	c.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make("alias.com")}), "resolve", "test.com", int64(recordtype.CNAME))
 }
 
 func TestNNSRegisterAccess(t *testing.T) {
@@ -504,4 +536,20 @@ func TestNNSRoots(t *testing.T) {
 	}
 
 	require.ElementsMatch(t, tlds, res)
+}
+
+func TestNNSAddRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+	for i := 0; i <= maxRecordID+1; i++ {
+		if i == maxRecordID+1 {
+			c.InvokeFail(t, "maximum number of records reached", "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
+		} else {
+			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
+		}
+	}
 }
