@@ -4,17 +4,47 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
-- `verify` method for Alphabet contracts (#386)
-- script comparing some of NeoFS contract states (#399)
+
+### Changed
 
 ### Updated
-- NeoGo dependency to 0.106.0 (#398)
 
 ### Removed
 
 ### Fixed
 
-### Updating from v0.19.0
+## [0.20.0] - 2024-07-30
+
+### Added
+- `verify` method for Alphabet contracts (#386)
+- Contract deployment code (#395, #410, #417)
+- Functions to deal with address records and New* constructors for nns wrapper (#397)
+- Script comparing some of NeoFS contract states (#399)
+- Script to compare main/fs chain deposit state (#400)
+- Binary contracts provided as Go package (#401)
+- Support for NEP-18 addresses in NNS wrapper (#392)
+- Contract-specific constants and some types to RPC bindings (#402)
+- Prefixes to balance contract storage scheme (#406)
+- `admin` to `properties()` result of NNS (#419)
+
+### Changed
+- Contracts moved into a separate directory (#378)
+- Licensing documentation (#391, #395, #401)
+- Release archive uses contract.nef and manifest.json file names (#401)
+- NNS now returns more specific errors for invalid domains (#419)
+
+### Updated
+- NeoGo dependency to 0.106.3 (#389, #398, #401, #421)
+- golang.org/x/crypto dependency from 0.14.0 to 0.17.0 (#383)
+- Minimal Go version to 1.20 (#389)
+- google.golang.org/protobuf dependency from 1.31.0 to 1.33.0 (#393)
+
+### Fixed
+- Outdated NNS record preventing container deletion (#403)
+- Container contract allowed for Put replays (#404)
+- Potential overflow of NNS record IDs (now limited to 16 entries, #419)
+- CNAME resolve results included CNAME record itself (#419)
+- NNS `isAvailable` returning `true` when conflicting records are known (#419)
 
 ## [0.19.1] - 2023-11-28
 
@@ -487,7 +517,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...master
+[0.20.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.17.0...v0.18.0
