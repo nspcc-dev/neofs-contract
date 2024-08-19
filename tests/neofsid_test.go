@@ -3,7 +3,7 @@ package tests
 import (
 	"bytes"
 	"path"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/mr-tron/base58"
@@ -49,9 +49,7 @@ func TestNeoFSID_AddKey(t *testing.T) {
 	e.Invoke(t, stackitem.Null{}, "addKey", owner,
 		[]any{pubs[0], pubs[1]})
 
-	sort.Slice(pubs[:2], func(i, j int) bool {
-		return bytes.Compare(pubs[i], pubs[j]) == -1
-	})
+	slices.SortFunc(pubs[:2], bytes.Compare)
 	arr := []stackitem.Item{
 		stackitem.NewBuffer(pubs[0]),
 		stackitem.NewBuffer(pubs[1]),
@@ -65,9 +63,7 @@ func TestNeoFSID_AddKey(t *testing.T) {
 		e.CheckHalt(t, tx1.Hash(), stackitem.Null{})
 		e.CheckHalt(t, tx2.Hash(), stackitem.Null{})
 
-		sort.Slice(pubs[:5], func(i, j int) bool {
-			return bytes.Compare(pubs[i], pubs[j]) == -1
-		})
+		slices.SortFunc(pubs[:5], bytes.Compare)
 		arr = []stackitem.Item{
 			stackitem.NewBuffer(pubs[0]),
 			stackitem.NewBuffer(pubs[1]),
