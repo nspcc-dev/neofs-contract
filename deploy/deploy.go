@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
@@ -178,7 +178,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 		return fmt.Errorf("get Neo committee of the network: %w", err)
 	}
 
-	sort.Sort(committee)
+	slices.SortFunc(committee, (*keys.PublicKey).Cmp)
 
 	// determine a leader
 	localPrivateKey := prm.LocalAccount.PrivateKey()

@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Minimal Go version to 1.21 (#353)
 
 ### Updated
 

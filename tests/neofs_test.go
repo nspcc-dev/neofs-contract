@@ -3,7 +3,7 @@ package tests
 import (
 	"bytes"
 	"path"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
@@ -49,10 +49,8 @@ func newNeoFSInvoker(t *testing.T, n int, config ...any) (*neotest.ContractInvok
 		accounts[i] = acc
 	}
 
-	sort.Slice(accounts, func(i, j int) bool {
-		p1 := accounts[i].PrivateKey().PublicKey()
-		p2 := accounts[j].PrivateKey().PublicKey()
-		return p1.Cmp(p2) == -1
+	slices.SortFunc(accounts, func(a, b *wallet.Account) int {
+		return a.PublicKey().Cmp(b.PublicKey())
 	})
 
 	pubs := make(keys.PublicKeys, n)
@@ -105,10 +103,8 @@ func TestNeoFS_InnerRingCandidate(t *testing.T) {
 
 	arr := make([]stackitem.Item, candidateCount)
 	pubs := make([][]byte, candidateCount)
-	sort.Slice(accs, func(i, j int) bool {
-		s1 := accs[i].Script()
-		s2 := accs[j].Script()
-		return bytes.Compare(s1, s2) == -1
+	slices.SortFunc(accs, func(a, b neotest.Signer) int {
+		return bytes.Compare(a.Script(), b.Script())
 	})
 
 	for i, acc := range accs {

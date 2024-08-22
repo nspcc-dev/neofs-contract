@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
@@ -141,7 +141,7 @@ func Contract(ctx context.Context, prm ContractPrm) (util.Uint160, error) {
 		return util.Uint160{}, fmt.Errorf("get Neo committee of the network: %w", err)
 	}
 
-	sort.Sort(committee)
+	slices.SortFunc(committee, (*keys.PublicKey).Cmp)
 
 	// determine a leader
 	localPrivateKey := prm.LocalAccount.PrivateKey()
