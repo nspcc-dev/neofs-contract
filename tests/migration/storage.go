@@ -3,7 +3,7 @@ package migration
 import (
 	"encoding/binary"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"path/filepath"
 	"testing"
 	"time"
@@ -283,7 +283,7 @@ func (x *Contract) RegisterContractInNNS(tb testing.TB, name string, addr util.U
 	)
 
 	var rec string
-	if rand.Int()%2 == 0 {
+	if rand.IntN(2) == 0 {
 		rec = address.Uint160ToString(addr)
 	} else {
 		rec = addr.StringLE()

@@ -1,7 +1,8 @@
 package tests
 
 import (
-	"math/rand"
+	"encoding/binary"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
@@ -9,8 +10,11 @@ import (
 )
 
 func randomBytes(n int) []byte {
+	if n < 8 {
+		panic("too small request")
+	}
 	a := make([]byte, n)
-	rand.Read(a) //nolint:staticcheck // SA1019: rand.Read has been deprecated since Go 1.20
+	binary.LittleEndian.PutUint64(a, rand.Uint64())
 	return a
 }
 
