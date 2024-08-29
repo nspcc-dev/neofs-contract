@@ -1,6 +1,6 @@
 module github.com/nspcc-dev/neo-go/scripts/compare-deposits
 
-go 1.21
+go 1.22
 
 require (
 	github.com/nspcc-dev/neo-go v0.106.0
