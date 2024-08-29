@@ -464,7 +464,7 @@ func divideFundsEvenly(fullAmount uint64, n int, f func(ind int, amount uint64))
 	quot := fullAmount / uint64(n)
 	rem := fullAmount % uint64(n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		amount := quot
 		if rem > 0 {
 			amount++
