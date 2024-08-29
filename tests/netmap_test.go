@@ -31,7 +31,7 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 	args[1] = util.Uint160{} // legacy contract hashes
 	args[2] = util.Uint160{} // legacy contract hashes
 	args[3] = []any{pubs[0]}
-	args[4] = append([]any{}, config...)
+	args[4] = config
 
 	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	e.DeployContract(t, c, args)
