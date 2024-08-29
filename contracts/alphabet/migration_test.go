@@ -1,7 +1,6 @@
 package alphabet_test
 
 import (
-	"math/rand"
 	"path/filepath"
 	"testing"
 
@@ -29,11 +28,6 @@ func replaceArgI(vs []any, i int, v any) []any {
 	copy(res, vs)
 	res[i] = v
 	return res
-}
-
-func randUint160() (u util.Uint160) {
-	rand.Read(u[:]) //nolint:staticcheck // SA1019: rand.Read has been deprecated since Go 1.20
-	return
 }
 
 var notaryDisabledKey = []byte("notary")
@@ -76,14 +70,14 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevName := readName()
 
 	// try to update the contract
-	proxyContract := randUint160()
+	proxyContract := util.Uint160{1, 2, 3}
 	updPrm := []any{
-		false,         // non-notary mode
-		randUint160(), // unused
-		[]byte{},      // Proxy contract (custom)
-		"",            // unused
-		0,             // unused
-		0,             // unused
+		false,                 // non-notary mode
+		util.Uint160{3, 2, 1}, // unused
+		[]byte{},              // Proxy contract (custom)
+		"",                    // unused
+		0,                     // unused
+		0,                     // unused
 	}
 
 	if notaryDisabled {
