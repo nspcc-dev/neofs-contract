@@ -31,7 +31,7 @@ func deployNeoFSContract(t *testing.T, e *neotest.Executor, addrProc util.Uint16
 		arr[i] = pubs[i].Bytes()
 	}
 	args[2] = arr
-	args[3] = append([]any{}, config...)
+	args[3] = config
 
 	c := neotest.CompileFile(t, e.CommitteeHash, neofsPath, path.Join(neofsPath, "config.yml"))
 	e.DeployContract(t, c, args)

@@ -2,7 +2,7 @@ package tests
 
 import (
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"path"
 	"strings"
 	"testing"
@@ -31,7 +31,7 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 	args[1] = util.Uint160{} // legacy contract hashes
 	args[2] = util.Uint160{} // legacy contract hashes
 	args[3] = []any{pubs[0]}
-	args[4] = append([]any{}, config...)
+	args[4] = config
 
 	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	e.DeployContract(t, c, args)
@@ -64,7 +64,7 @@ type testNodeInfo struct {
 
 func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 	ni := make([]byte, 66)
-	rand.Read(ni) //nolint:staticcheck // SA1019: rand.Read has been deprecated since Go 1.20
+	ni[0] = byte(rand.Int())
 
 	s := acc.(neotest.SingleSigner)
 	pub := s.Account().PrivateKey().PublicKey().Bytes()
@@ -106,14 +106,12 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestNewEpoch(t *testing.T) {
-	rand.Seed(42) //nolint:staticcheck // SA1019: rand.Seed has been deprecated since Go 1.20
-
 	const epochCount = netmap.DefaultSnapshotCount * 2
 
 	cNm := newNetmapInvoker(t)
 	nodes := make([][]testNodeInfo, epochCount)
 	for i := range nodes {
-		size := rand.Int()%5 + 1
+		size := rand.IntN(5) + 1
 		arr := make([]testNodeInfo, size)
 		for j := 0; j < size; j++ {
 			arr[j] = newStorageNode(t, cNm)
@@ -133,7 +131,7 @@ func TestNewEpoch(t *testing.T) {
 			current = append(current, nodes[i]...)
 
 			for j := range nodes[i-1] {
-				if rand.Int()%3 == 0 {
+				if rand.IntN(3) == 0 {
 					cNm.Invoke(t, stackitem.Null{}, "updateStateIR",
 						int64(nodestate.Offline), nodes[i-1][j].pub)
 				} else {
@@ -215,8 +213,6 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 }
 
 func TestUpdateSnapshotCount(t *testing.T) {
-	rand.Seed(42) //nolint:staticcheck // SA1019: rand.Seed has been deprecated since Go 1.20
-
 	require.True(t, netmap.DefaultSnapshotCount > 5) // sanity check, adjust tests if false.
 
 	prepare := func(t *testing.T, cNm *neotest.ContractInvoker, epochCount int) [][]testNodeInfo {
