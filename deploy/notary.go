@@ -212,9 +212,7 @@ func initDesignateNotaryRoleAsLeaderTick(ctx context.Context, prm enableNotaryPr
 
 	resetTx := func() {
 		tx = nil
-		for k := range mCommitteeIndexToSignature {
-			delete(mCommitteeIndexToSignature, k)
-		}
+		clear(mCommitteeIndexToSignature)
 		txFullySigned = false
 		setDomainRecordTxMonitor.reset()
 		designateRoleTxMonitor.reset()
