@@ -80,9 +80,7 @@ func (x *Reader) fromDumpStreams(rContracts, rStorageItems io.Reader) error {
 	_csv.ReuseRecord = true
 
 	if x.mStorage != nil {
-		for k := range x.mStorage {
-			delete(x.mStorage, k)
-		}
+		clear(x.mStorage)
 	} else {
 		x.mStorage = make(map[string][]kv)
 	}

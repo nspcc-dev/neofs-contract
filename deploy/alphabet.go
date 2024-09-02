@@ -151,9 +151,7 @@ mainLoop:
 			continue
 		}
 
-		for k := range mRegisteredAlphabetIndices {
-			delete(mRegisteredAlphabetIndices, k)
-		}
+		clear(mRegisteredAlphabetIndices)
 
 		for {
 			candidates, err := iterCandidates.Next(len(alphabet) - len(mRegisteredAlphabetIndices))
