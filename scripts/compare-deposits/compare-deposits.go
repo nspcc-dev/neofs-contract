@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"math/big"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/rpc/nns"
-	"github.com/urfave/cli"
 )
 
 func initClient(addr string, name string) (*rpcclient.Client, error) {
@@ -58,28 +58,27 @@ func getSupply(c *rpcclient.Client, h util.Uint160, height uint32) int64 {
 	return s.Int64()
 }
 
-func cliMain(c *cli.Context) error {
-	rpcMain := c.Args().Get(0)
-	neoFSContract := c.Args().Get(1)
-	rpcFS := c.Args().Get(2)
-	if rpcMain == "" {
-		return errors.New("no arguments given")
+func cliMain() error {
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 3 {
+		return errors.New("usage: program <RPC_MAINNET> <NEOFS_CONTRACT> <RPC_FSCHAIN>")
 	}
-	if neoFSContract == "" {
-		return errors.New("missing second argument")
-	}
-	if rpcFS == "" {
-		return errors.New("missing third argument")
-	}
-	fsCont, err := address.StringToUint160(neoFSContract)
+
+	rpcMainAddress := args[0]
+	neoFSContractAddress := args[1]
+	rpcFSAddress := args[2]
+
+	fsCont, err := address.StringToUint160(neoFSContractAddress)
 	if err != nil {
 		return fmt.Errorf("bad contract address: %w", err)
 	}
-	cMain, err := initClient(rpcMain, "main")
+	cMain, err := initClient(rpcMainAddress, "main")
 	if err != nil {
 		return err
 	}
-	cFS, err := initClient(rpcFS, "FS")
+	cFS, err := initClient(rpcFSAddress, "FS")
 	if err != nil {
 		return err
 	}
@@ -227,13 +226,7 @@ func cliMain(c *cli.Context) error {
 }
 
 func main() {
-	ctl := cli.NewApp()
-	ctl.Name = "compare-deposits"
-	ctl.Version = "1.0"
-	ctl.Usage = "compare-deposits RPC_MAIN NEOFS_CONTRACT_ADDRESS RPC_FS"
-	ctl.Action = cliMain
-
-	if err := ctl.Run(os.Args); err != nil {
+	if err := cliMain(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

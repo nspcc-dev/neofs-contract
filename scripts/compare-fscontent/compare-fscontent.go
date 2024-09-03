@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/nspcc-dev/neofs-contract/rpc/netmap"
 	"github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/urfave/cli"
 )
 
 func initClient(addr string, name string) (*rpcclient.Client, uint32, error) {
@@ -63,20 +63,24 @@ func getFSContent(c *rpcclient.Client) ([][]byte, []*netmap.NetmapNode, error) {
 	return containers, netmap, nil
 }
 
-func cliMain(c *cli.Context) error {
-	a := c.Args().Get(0)
-	b := c.Args().Get(1)
-	if a == "" {
-		return errors.New("no arguments given")
+func cliMain() error {
+	var ignoreHeightFlag bool
+	flag.BoolVar(&ignoreHeightFlag, "ignore-height", false, "ignore height difference")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 2 {
+		return errors.New("usage: program [--ignore-height] <FIRST_RPC_NODE> <SECOND_RPC_NODE>")
 	}
-	if b == "" {
-		return errors.New("missing second argument")
-	}
-	ca, ha, err := initClient(a, "A")
+
+	firstNodeAddress := args[0]
+	secondNodeAddress := args[1]
+
+	ca, ha, err := initClient(firstNodeAddress, "A")
 	if err != nil {
 		return err
 	}
-	cb, hb, err := initClient(b, "B")
+	cb, hb, err := initClient(secondNodeAddress, "B")
 	if err != nil {
 		return err
 	}
@@ -85,19 +89,19 @@ func cliMain(c *cli.Context) error {
 		if ha > hb {
 			diff = ha - hb
 		}
-		if diff > 10 && !c.Bool("ignore-height") { // Allow some height drift.
+		if diff > 10 && !ignoreHeightFlag { // Allow some height drift.
 			return fmt.Errorf("chains have different heights: %d vs %d", ha, hb)
 		}
 	}
-	fmt.Printf("RPC %s height: %d\nRPC %s height: %d\n", a, ha, b, hb)
+	fmt.Printf("RPC %s height: %d\nRPC %s height: %d\n", firstNodeAddress, ha, secondNodeAddress, hb)
 
 	containersA, netmapA, err := getFSContent(ca)
 	if err != nil {
-		return fmt.Errorf("RPC %s: %w", a, err)
+		return fmt.Errorf("RPC %s: %w", firstNodeAddress, err)
 	}
 	containersB, netmapB, err := getFSContent(cb)
 	if err != nil {
-		return fmt.Errorf("RPC %s: %w", b, err)
+		return fmt.Errorf("RPC %s: %w", secondNodeAddress, err)
 	}
 
 	var (
@@ -111,7 +115,7 @@ func cliMain(c *cli.Context) error {
 		for i := range containersA {
 			if !bytes.Equal(containersA[i], containersB[i]) {
 				containersDiff++
-				dumpContentDiff("container", i, a, b, containersA[i], containersB[i])
+				dumpContentDiff("container", i, firstNodeAddress, secondNodeAddress, containersA[i], containersB[i])
 			}
 		}
 	}
@@ -132,7 +136,7 @@ func cliMain(c *cli.Context) error {
 		for i := range netmapA {
 			if netmapA[i].State.Cmp(netmapB[i].State) != 0 || !bytes.Equal(netmapA[i].BLOB, netmapB[i].BLOB) {
 				netmapDiff++
-				dumpContentDiff("netmap entry", i, a, b, netmapA[i], netmapB[i])
+				dumpContentDiff("netmap entry", i, firstNodeAddress, secondNodeAddress, netmapA[i], netmapB[i])
 			}
 		}
 	}
@@ -164,19 +168,7 @@ func dumpContentDiff(itemName string, i int, a string, b string, itemA any, item
 }
 
 func main() {
-	ctl := cli.NewApp()
-	ctl.Name = "compare-fscontent"
-	ctl.Version = "1.0"
-	ctl.Usage = "compare-fscontent RPC_A RPC_B"
-	ctl.Action = cliMain
-	ctl.Flags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "ignore-height, g",
-			Usage: "ignore height difference",
-		},
-	}
-
-	if err := ctl.Run(os.Args); err != nil {
+	if err := cliMain(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
