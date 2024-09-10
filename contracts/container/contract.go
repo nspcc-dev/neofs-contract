@@ -301,8 +301,7 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	details := common.ContainerFeeTransferDetails(containerID)
 
-	for i := 0; i < len(alphabet); i++ {
-		node := alphabet[i]
+	for _, node := range alphabet {
 		to := contract.CreateStandardAccount(node)
 
 		contract.Call(balanceContractAddr, "transferX",

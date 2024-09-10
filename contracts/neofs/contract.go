@@ -70,8 +70,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("incorrect length of contract script hash")
 	}
 
-	for i := 0; i < len(args.keys); i++ {
-		pub := args.keys[i]
+	for _, pub := range args.keys {
 		if len(pub) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key length")
 		}
@@ -374,8 +373,7 @@ func Bind(user interop.Hash160, keys []interop.PublicKey) {
 		panic("you should be the owner of the wallet")
 	}
 
-	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i]
+	for _, pubKey := range keys {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
@@ -394,8 +392,7 @@ func Unbind(user interop.Hash160, keys []interop.PublicKey) {
 		panic("you should be the owner of the wallet")
 	}
 
-	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i]
+	for _, pubKey := range keys {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
@@ -435,8 +432,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 
 	newAlphabet := []interop.PublicKey{}
 
-	for i := 0; i < len(args); i++ {
-		pubKey := args[i]
+	for _, pubKey := range args {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("invalid public key in alphabet list")
 		}

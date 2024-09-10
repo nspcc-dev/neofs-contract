@@ -18,8 +18,7 @@ const irListMethod = "innerRingList"
 // InnerRingInvoker returns the public key of the inner ring node that has invoked the contract.
 // Work around for environments without notary support.
 func InnerRingInvoker(ir []interop.PublicKey) interop.PublicKey {
-	for i := 0; i < len(ir); i++ {
-		node := ir[i]
+	for _, node := range ir {
 		if runtime.CheckWitness(node) {
 			return node
 		}

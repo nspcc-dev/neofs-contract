@@ -663,8 +663,7 @@ func filterNetmap(ctx storage.Context) []Node {
 		result = []Node{}
 	)
 
-	for i := 0; i < len(netmap); i++ {
-		item := netmap[i]
+	for _, item := range netmap {
 		if item.State != nodestate.Offline {
 			result = append(result, item)
 		}

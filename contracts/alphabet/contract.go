@@ -163,7 +163,7 @@ func switchToNotary(ctx storage.Context, args []any) {
 			ledger.CurrentIndex() + lockInterval, // till
 		}
 
-		for i := 0; i < len(innerRingNodes); i++ {
+		for i := range innerRingNodes {
 			addr := contract.CreateStandardAccount(innerRingNodes[i])
 			if !gas.Transfer(currentContract, addr, perNodeGASSimple, nil) {
 				panic("failed to transfer part of GAS to the Inner Ring node")
@@ -175,7 +175,7 @@ func switchToNotary(ctx storage.Context, args []any) {
 			}
 		}
 
-		for i := 0; i < len(storageNodes); i++ {
+		for i := range storageNodes {
 			publicKey := storageNodes[i].blob[2:35] // hardcoded because there was no other way
 			addr := contract.CreateStandardAccount(publicKey)
 			if !gas.Transfer(currentContract, addr, perNodeGASSimple, nil) {

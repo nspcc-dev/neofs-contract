@@ -38,9 +38,7 @@ func Vote(ctx storage.Context, id, from []byte) int {
 		blockHeight   = ledger.CurrentIndex()
 	)
 
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
+	for _, cnd := range candidates {
 		if blockHeight-cnd.Height > blockDiff {
 			continue
 		}
@@ -84,8 +82,7 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 		index      int
 	)
 
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
+	for i, cnd := range candidates {
 		if bytesEqual(cnd.ID, id) {
 			index = i
 			break
@@ -103,9 +100,7 @@ func TryPurgeVotes(ctx storage.Context) bool {
 		candidates  = getBallots(ctx)
 		blockHeight = ledger.CurrentIndex()
 	)
-	for i := 0; i < len(candidates); i++ {
-		cnd := candidates[i]
-
+	for _, cnd := range candidates {
 		if blockHeight-cnd.Height <= blockDiff {
 			return false
 		}
