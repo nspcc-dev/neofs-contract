@@ -3,6 +3,7 @@ bindings_config.yml
 /vendor/
 .idea
 /bin/
+.golangci.yml
 
 # debhelpers
 **/.debhelper
