@@ -1,5 +1,0 @@
-issues:
-  exclude-rules:
-    - path: ./rpc
-      linters:
-      - unused # RPC bindings are allowed to contain some unused convertors.

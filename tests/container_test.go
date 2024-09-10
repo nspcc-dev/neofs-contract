@@ -166,7 +166,6 @@ func checkContainerList(t *testing.T, c *neotest.ContractInvoker, expected [][]b
 		}
 		require.ElementsMatch(t, expected, actual)
 	})
-
 }
 
 func TestContainerPut(t *testing.T) {

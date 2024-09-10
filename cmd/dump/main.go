@@ -26,7 +26,7 @@ func main() {
 
 	err := os.MkdirAll(rootDir, 0700)
 	if err != nil {
-		log.Fatal(fmt.Errorf("create root dir: %v", err))
+		log.Fatal(fmt.Errorf("create root dir: %w", err))
 	}
 
 	err = _dump(*neoRPCEndpoint, rootDir, *chainLabel)

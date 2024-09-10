@@ -88,7 +88,7 @@ func (x *Reader) fromDumpStreams(rContracts, rStorageItems io.Reader) error {
 	for {
 		rec, err = _csv.Read()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return fmt.Errorf("read next CSV record: %w", err)

@@ -65,9 +65,9 @@ func (x *dumpStreams) close() {
 }
 
 const (
-	// word separator used in dump file naming
+	// word separator used in dump file naming.
 	sep = "-"
-	// suffix of file with contracts' states
+	// suffix of file with contracts' states.
 	statesFileSuffix = "contracts.json"
 )
 

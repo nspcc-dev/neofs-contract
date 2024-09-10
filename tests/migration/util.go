@@ -24,7 +24,7 @@ func checkSingleTrueInStack(tb testing.TB, stack []stackitem.Item) {
 	require.True(tb, ok)
 }
 
-// inheritor of storage.Store canceling Close method
+// inheritor of storage.Store canceling Close method.
 type nopCloseStore struct {
 	storage.Store
 }

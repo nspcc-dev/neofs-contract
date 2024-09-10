@@ -36,7 +36,7 @@ const (
 	maxBalanceAmount    = 9000 // Max integer of Fixed12 in JSON bound (2**53-1)
 	maxBalanceAmountGAS = int64(maxBalanceAmount) * 1_0000_0000
 
-	// hardcoded value to ignore deposit notification in onReceive
+	// hardcoded value to ignore deposit notification in onReceive.
 	ignoreDepositNotification = "\x57\x0b"
 )
 
@@ -70,8 +70,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("incorrect length of contract script hash")
 	}
 
-	for i := 0; i < len(args.keys); i++ {
-		pub := args.keys[i]
+	for _, pub := range args.keys {
 		if len(pub) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key length")
 		}
@@ -94,7 +93,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("bad configuration")
 	}
 
-	for i := 0; i < ln/2; i++ {
+	for i := 0; i < ln/2; i++ { //nolint:intrange // Not supported by NeoGo
 		key := args.config[i*2]
 		val := args.config[i*2+1]
 
@@ -374,8 +373,7 @@ func Bind(user interop.Hash160, keys []interop.PublicKey) {
 		panic("you should be the owner of the wallet")
 	}
 
-	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i]
+	for _, pubKey := range keys {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
@@ -394,8 +392,7 @@ func Unbind(user interop.Hash160, keys []interop.PublicKey) {
 		panic("you should be the owner of the wallet")
 	}
 
-	for i := 0; i < len(keys); i++ {
-		pubKey := keys[i]
+	for _, pubKey := range keys {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("incorrect public key size")
 		}
@@ -435,8 +432,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 
 	newAlphabet := []interop.PublicKey{}
 
-	for i := 0; i < len(args); i++ {
-		pubKey := args[i]
+	for _, pubKey := range args {
 		if len(pubKey) != interop.PublicKeyCompressedLen {
 			panic("invalid public key in alphabet list")
 		}

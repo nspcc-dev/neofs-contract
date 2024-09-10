@@ -42,7 +42,7 @@ func newNeoFSInvoker(t *testing.T, n int, config ...any) (*neotest.ContractInvok
 	e := newExecutor(t)
 
 	accounts := make([]*wallet.Account, n)
-	for i := 0; i < n; i++ {
+	for i := range accounts {
 		acc, err := wallet.NewAccount()
 		require.NoError(t, err)
 

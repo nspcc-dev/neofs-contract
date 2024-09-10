@@ -75,3 +75,10 @@ debclean:
 
 fmt:
 	@gofmt -l -w -s $$(find . -type f -name '*.go'| grep -v "/vendor/")
+
+.golangci.yml:
+	wget -O $@ https://github.com/nspcc-dev/.github/raw/master/.golangci.yml
+
+# Lint Go code
+lint: .golangci.yml
+	golangci-lint run

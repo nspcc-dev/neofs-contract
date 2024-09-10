@@ -113,13 +113,13 @@ func TestNewEpoch(t *testing.T) {
 	for i := range nodes {
 		size := rand.IntN(5) + 1
 		arr := make([]testNodeInfo, size)
-		for j := 0; j < size; j++ {
+		for j := range arr {
 			arr[j] = newStorageNode(t, cNm)
 		}
 		nodes[i] = arr
 	}
 
-	for i := 0; i < epochCount; i++ {
+	for i := range nodes {
 		for _, tn := range nodes[i] {
 			cNm.WithSigners(tn.signer).Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
 			cNm.Invoke(t, stackitem.Null{}, "addPeerIR", tn.raw)
@@ -244,7 +244,7 @@ func TestUpdateSnapshotCount(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, s.Len())
 		checkSnapshot(t, s, nodes[epochCount-1])
-		for i := 0; i < epochCount; i++ {
+		for i := range epochCount {
 			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
 		}
 		for i := epochCount; i < newCount; i++ {
@@ -268,7 +268,7 @@ func TestUpdateSnapshotCount(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, s.Len())
 		checkSnapshot(t, s, nodes[epochCount-1])
-		for i := 0; i < newCount-3; i++ {
+		for i := range newCount - 3 {
 			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
 		}
 		for i := newCount - 3; i < newCount; i++ {
@@ -292,7 +292,7 @@ func TestUpdateSnapshotCount(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, s.Len())
 		checkSnapshot(t, s, nodes[epochCount-1])
-		for i := 0; i < newCount; i++ {
+		for i := range newCount {
 			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
 		}
 		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
@@ -313,7 +313,7 @@ func TestUpdateSnapshotCount(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, s.Len())
 		checkSnapshot(t, s, nodes[epochCount-1])
-		for i := 0; i < newCount; i++ {
+		for i := range newCount {
 			checkSnapshotAt(t, i, cNm, nodes[epochCount-i-1])
 		}
 		_, err = cNm.TestInvoke(t, "snapshot", int64(newCount))
