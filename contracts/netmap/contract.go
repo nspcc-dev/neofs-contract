@@ -87,7 +87,7 @@ func _deploy(data any, isUpdate bool) {
 		if version < 16*1_000 {
 			count := getSnapshotCount(ctx)
 			prefix := []byte(snapshotKeyPrefix)
-			for i := 0; i < count; i++ {
+			for i := 0; i < count; i++ { //nolint:intrange // Not supported by NeoGo
 				key := append(prefix, byte(i))
 				data := storage.Get(ctx, key)
 				if data != nil {
@@ -154,7 +154,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("bad configuration")
 	}
 
-	for i := 0; i < ln/2; i++ {
+	for i := 0; i < ln/2; i++ { //nolint:intrange // Not supported by NeoGo
 		key := args.config[i*2]
 		val := args.config[i*2+1]
 
@@ -167,7 +167,7 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, snapshotBlockKey, 0)
 
 	prefix := []byte(snapshotKeyPrefix)
-	for i := 0; i < DefaultSnapshotCount; i++ {
+	for i := 0; i < DefaultSnapshotCount; i++ { //nolint:intrange // Not supported by NeoGo
 		common.SetSerialized(ctx, append(prefix, byte(i)), []Node{})
 	}
 	storage.Put(ctx, snapshotCurrentIDKey, 0)

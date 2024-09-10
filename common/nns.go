@@ -45,7 +45,7 @@ func ResolveFSContractWithNNS(nns interop.Hash160, contractName string) interop.
 	}
 	if len(records[0]) == 2*interop.Hash160Len {
 		var h = make([]byte, interop.Hash160Len)
-		for i := 0; i < interop.Hash160Len; i++ {
+		for i := 0; i < interop.Hash160Len; i++ { //nolint:intrange // Not supported by NeoGo
 			ii := (interop.Hash160Len - i - 1) * 2
 			h[i] = byte(std.Atoi(records[0][ii:ii+2], 16))
 		}

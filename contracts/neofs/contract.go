@@ -93,7 +93,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("bad configuration")
 	}
 
-	for i := 0; i < ln/2; i++ {
+	for i := 0; i < ln/2; i++ { //nolint:intrange // Not supported by NeoGo
 		key := args.config[i*2]
 		val := args.config[i*2+1]
 
