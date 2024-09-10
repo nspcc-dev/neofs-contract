@@ -27,7 +27,7 @@ const (
 )
 
 const (
-	// WitnessSet is not needed
+	// WitnessSet is not needed.
 	_ WitnessSet = iota
 	// WitnessValidators requires committee 2/3n+1.
 	WitnessValidators

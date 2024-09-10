@@ -58,7 +58,7 @@ const (
 	// nolint:deadcode,unused
 	nnsDefaultTLD = "container"
 
-	// V2 format
+	// V2 format.
 	containerIDSize = interop.Hash256Len // SHA256 size
 
 	singleEstimatePrefix = "est"
@@ -68,7 +68,7 @@ const (
 	deletedKeyPrefix     = 'd'
 	estimatePostfixSize  = 10
 
-	// default SOA record field values
+	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
 	defaultRetry   = 600                  // 10 min
 	defaultExpire  = 3600 * 24 * 365 * 10 // 10 years

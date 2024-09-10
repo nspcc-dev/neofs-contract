@@ -24,7 +24,7 @@ type (
 // epoch and container ID since we iterate over these values. But we can shrink
 // public key by using first bytes of the hashed value.
 
-// V2 format
+// V2 format.
 const maxKeySize = 24 // 24 + 32 (container ID length) + 8 (epoch length) = 64
 
 func (a AuditHeader) ID() []byte {
