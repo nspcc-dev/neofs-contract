@@ -1,5 +1,5 @@
 name: "NeoFS Container"
-safemethods: ["alias", "count", "containersOf", "get", "owner", "list", "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes", "version"]
+safemethods: ["alias", "count", "containersOf", "get", "owner", "list", "nodes", "replicasNumbers", "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes", "version"]
 permissions:
   - methods: ["update", "addKey", "transferX",
               "register", "registerTLD", "addRecord", "deleteRecords", "subscribeForNewEpoch"]
@@ -28,3 +28,7 @@ events:
     parameters:
       - name: epoch
         type: Integer
+  - name: NodesUpdate
+    parameters:
+      - name: ContainerID
+        type: hash256

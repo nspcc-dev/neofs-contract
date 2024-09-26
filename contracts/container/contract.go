@@ -66,6 +66,9 @@ const (
 	containerKeyPrefix   = 'x'
 	ownerKeyPrefix       = 'o'
 	deletedKeyPrefix     = 'd'
+	nodesPrefix          = 'n'
+	replicasNumberPrefix = 'r'
+	nextEpochNodesPrefix = 'u'
 	estimatePostfixSize  = 10
 
 	// default SOA record field values.
@@ -489,6 +492,179 @@ func List(owner []byte) [][]byte {
 	}
 
 	return list
+}
+
+// maxNumOfREPs is a max supported number of REP value in container's policy
+// and also a max number of REPs.
+const maxNumOfREPs = 255
+
+// AddNextEpochNodes accumulates passed nodes as container members for the next
+// epoch to be committed using [CommitContainerListUpdate]. Nodes must be
+// grouped by selector index from placement policy (SELECT clauses). Results of
+// the call operation can be received via [Nodes]. This method must be called
+// only when a container list is changed, otherwise nothing should be done.
+// Call must be signed by the Alphabet nodes.
+func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []interop.PublicKey) {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+	// nolint:staticcheck
+	if placementVector >= maxNumOfREPs {
+		panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(placementVector)))
+	}
+	ctx := storage.GetContext()
+	validatePlacementIndex(ctx, cID, placementVector)
+
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
+
+	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
+	commonPrefix = append(commonPrefix, placementVector)
+
+	counter := 0
+	c := storage.Find(ctx, commonPrefix, storage.RemovePrefix|storage.KeysOnly|storage.Backwards)
+	if iterator.Next(c) {
+		counter = counterFromBytes(iterator.Value(c).([]byte))
+	}
+
+	for _, publicKey := range publicKeys {
+		if len(publicKey) != interop.PublicKeyCompressedLen {
+			panic(cst.ErrorInvalidPublicKey + ": length: " + std.Itoa10(len(publicKey)))
+		}
+
+		counter++
+
+		storageKey := append(commonPrefix, counterToBytes(counter)...)
+		storage.Put(ctx, storageKey, publicKey)
+	}
+}
+
+func counterToBytes(counter int) []byte {
+	var anyCounter any = counter
+	res := anyCounter.([]byte)
+
+	switch len(res) {
+	case 0:
+		return []byte{0, 0}
+	case 1:
+		return []byte{0, res[0]}
+	default:
+		// only 2 bytes are expected, it should be ensured on the upper levels
+	}
+
+	// BE for correct sorting
+	first := res[0]
+	res[0] = res[1]
+	res[1] = first
+
+	return res
+}
+
+func counterFromBytes(counter []byte) int {
+	first := counter[0]
+	counter[0] = counter[1]
+	counter[1] = first
+
+	var anyCounter any = counter
+
+	return anyCounter.(int)
+}
+
+func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8) {
+	if inx == 0 {
+		return
+	}
+
+	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
+	iter := storage.Find(ctx, append(commonPrefix, inx-1), storage.None)
+	if !iterator.Next(iter) {
+		panic("invalid placement vector: " + std.Itoa10(int(inx-1)) + " index not found but " + std.Itoa10(int(inx)) + " requested")
+	}
+}
+
+// CommitContainerListUpdate commits container list changes made by
+// [AddNextEpochNodes] calls in advance. Replicas must correspond to
+// ordered placement policy (REP clauses). If no [AddNextEpochNodes]
+// have been made, it clears container list. Makes "ContainerUpdate"
+// notification with container ID after successful list change.
+// Call must be signed by the Alphabet nodes.
+func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetContext()
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
+
+	oldNodesPrefix := append([]byte{nodesPrefix}, cID...)
+	newNodesPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
+	replicasPrefix := append([]byte{replicasNumberPrefix}, cID...)
+
+	oldNodes := storage.Find(ctx, oldNodesPrefix, storage.KeysOnly)
+	for iterator.Next(oldNodes) {
+		oldNode := iterator.Value(oldNodes).(string)
+		storage.Delete(ctx, oldNode)
+	}
+
+	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
+	for iterator.Next(newNodes) {
+		newNode := iterator.Value(newNodes).(struct {
+			key []byte
+			val []byte
+		})
+
+		storage.Delete(ctx, newNode.key)
+
+		newKey := append([]byte{nodesPrefix}, newNode.key[1:]...)
+		storage.Put(ctx, newKey, newNode.val)
+	}
+
+	rr := storage.Find(ctx, replicasPrefix, storage.KeysOnly)
+	for iterator.Next(rr) {
+		oldReplicasNumber := iterator.Value(rr).([]byte)
+		storage.Delete(ctx, oldReplicasNumber)
+	}
+
+	// nolint:gosimple // https://github.com/nspcc-dev/neo-go/issues/3608
+	if replicas != nil {
+		for i, replica := range replicas {
+			if replica > maxNumOfREPs {
+				panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(replica)))
+			}
+
+			storage.Put(ctx, append(replicasPrefix, uint8(i)), replica)
+		}
+	}
+
+	runtime.Notify("NodesUpdate", cID)
+}
+
+// ReplicasNumbers returns iterator over saved by [CommitContainerListUpdate]
+// container's replicas from placement policy.
+func ReplicasNumbers(cID interop.Hash256) iterator.Iterator {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetReadOnlyContext()
+
+	return storage.Find(ctx, append([]byte{replicasNumberPrefix}, cID...), storage.ValuesOnly)
+}
+
+// Nodes returns iterator over members of the container. The list is handled
+// by the Alphabet nodes and must be updated via [AddNextEpochNodes] and
+// [CommitContainerListUpdate] calls.
+func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	key := append([]byte{nodesPrefix}, cID...)
+	key = append(key, placementVector)
+
+	return storage.Find(ctx, key, storage.ValuesOnly)
 }
 
 // SetEACL method sets a new extended ACL table related to the contract

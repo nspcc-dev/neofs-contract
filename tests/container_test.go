@@ -2,7 +2,9 @@ package tests
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 	"path"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
@@ -559,4 +562,153 @@ func requireEstimationsMatch(t *testing.T, expected []estimation, actual []estim
 		}
 		require.True(t, found, "expected estimation from %x to be present", e.from)
 	}
+}
+
+func TestContainerList(t *testing.T) {
+	c, _, _ := newContainerInvoker(t, false)
+
+	t.Run("happy path", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		const nodesNumber = 1024
+		const numberOfVectors = 4
+		var containerList []any
+		for range nodesNumber {
+			s := c.NewAccount(t).(neotest.SingleSigner)
+			containerList = append(containerList, s.Account().PublicKey().Bytes())
+		}
+
+		var replicas []uint8
+		var vectors [][]any
+		for i := range numberOfVectors {
+			vector := containerList[nodesNumber/numberOfVectors*i : nodesNumber/numberOfVectors*(i+1)]
+			vectors = append(vectors, vector)
+			replicas = append(replicas, uint8(i+1))
+
+			c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, i, vector)
+		}
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID, replicas)
+
+		stack, err := c.TestInvoke(t, "replicasNumbers", cID)
+		require.NoError(t, err)
+
+		replicasFromContract := stackIteratorToUint8Array(t, stack)
+		require.Equal(t, replicas, replicasFromContract)
+
+		for i := range numberOfVectors {
+			stack, err := c.TestInvoke(t, "nodes", cID, uint8(i))
+			require.NoError(t, err)
+
+			fromContract := stackIteratorToBytesArray(t, stack)
+			require.ElementsMatch(t, vectors[i], fromContract)
+		}
+
+		// change container
+		for i := nodesNumber / 2; i < nodesNumber; i++ {
+			s := c.NewAccount(t).(neotest.SingleSigner)
+			containerList[i] = s.Account().PublicKey().Bytes()
+		}
+
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, 0, containerList)
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID, []uint8{1})
+		stack, err = c.TestInvoke(t, "nodes", cID, 0)
+		require.NoError(t, err)
+
+		fromContract := stackIteratorToBytesArray(t, stack)
+		require.ElementsMatch(t, containerList, fromContract)
+
+		// clean container up
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID, nil)
+
+		for i := range numberOfVectors {
+			stack, err = c.TestInvoke(t, "nodes", cID, i)
+			require.NoError(t, err)
+
+			fromContract = stackIteratorToBytesArray(t, stack)
+			require.Empty(t, fromContract)
+		}
+
+		// cleaning cleaned container
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID, nil)
+
+		for i := range numberOfVectors {
+			stack, err = c.TestInvoke(t, "nodes", cID, i)
+			require.NoError(t, err)
+
+			fromContract = stackIteratorToBytesArray(t, stack)
+			require.Empty(t, fromContract)
+		}
+
+		stack, err = c.TestInvoke(t, "replicasNumbers", cID)
+		require.NoError(t, err)
+
+		replicasFromContract = stackIteratorToUint8Array(t, stack)
+		require.Empty(t, replicasFromContract)
+	})
+
+	t.Run("unknown placement vector", func(t *testing.T) {
+		const requestedIndex = 1
+		c.InvokeFail(t, fmt.Sprintf("invalid placement vector: %d index not found but %d requested", requestedIndex-1, requestedIndex),
+			"addNextEpochNodes", make([]byte, 32), requestedIndex, nil)
+	})
+
+	t.Run("invalid container ID", func(t *testing.T) {
+		badCID := []byte{1, 2, 3, 4, 5}
+
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "addNextEpochNodes", badCID, 0, nil)
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "commitContainerListUpdate", badCID, 0)
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "nodes", badCID, 0)
+	})
+
+	t.Run("invalid public key", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		badPublicKey := []byte{1, 2, 3, 4, 5}
+
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidPublicKey, len(badPublicKey)), "addNextEpochNodes", cID, 0, []any{badPublicKey})
+	})
+
+	t.Run("not alphabet", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		notAlphabet := c.Executor.NewInvoker(c.Hash, c.NewAccount(t))
+		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "addNextEpochNodes", cID, 0, nil)
+		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "commitContainerListUpdate", cID, 0)
+	})
+}
+
+func stackIteratorToBytesArray(t *testing.T, stack *vm.Stack) [][]byte {
+	i, ok := stack.Pop().Value().(*storage.Iterator)
+	require.True(t, ok)
+
+	res := make([][]byte, 0)
+	for i.Next() {
+		b, err := i.Value().TryBytes()
+		require.NoError(t, err)
+
+		res = append(res, b)
+	}
+
+	return res
+}
+
+func stackIteratorToUint8Array(t *testing.T, stack *vm.Stack) []uint8 {
+	i, ok := stack.Pop().Value().(*storage.Iterator)
+	require.True(t, ok)
+
+	res := make([]uint8, 0)
+	for i.Next() {
+		b, err := i.Value().TryInteger()
+		require.NoError(t, err)
+
+		res = append(res, uint8(b.Uint64()))
+	}
+
+	return res
 }
