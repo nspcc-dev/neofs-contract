@@ -2,7 +2,9 @@ package tests
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 	"path"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
@@ -559,4 +562,104 @@ func requireEstimationsMatch(t *testing.T, expected []estimation, actual []estim
 		}
 		require.True(t, found, "expected estimation from %x to be present", e.from)
 	}
+}
+
+func TestContainerList(t *testing.T) {
+	c, _, _ := newContainerInvoker(t, false)
+
+	t.Run("happy path", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		const nodesNumber = 1024
+		var containerList []any
+		for range nodesNumber {
+			s := c.NewAccount(t).(neotest.SingleSigner)
+			containerList = append(containerList, s.Account().PublicKey().Bytes())
+		}
+
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, containerList[:nodesNumber/2])
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, containerList[nodesNumber/2:])
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID)
+		stack, err := c.TestInvoke(t, "nodes", cID)
+		require.NoError(t, err)
+
+		fromContract := stackIteratorToBytesArray(t, stack)
+		require.ElementsMatch(t, containerList, fromContract)
+
+		// change container
+		for i := nodesNumber / 2; i < nodesNumber; i++ {
+			s := c.NewAccount(t).(neotest.SingleSigner)
+			containerList[i] = s.Account().PublicKey().Bytes()
+		}
+
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, containerList)
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID)
+		stack, err = c.TestInvoke(t, "nodes", cID)
+		require.NoError(t, err)
+
+		fromContract = stackIteratorToBytesArray(t, stack)
+		require.ElementsMatch(t, containerList, fromContract)
+
+		// clean container up
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID)
+
+		stack, err = c.TestInvoke(t, "nodes", cID)
+		require.NoError(t, err)
+
+		fromContract = stackIteratorToBytesArray(t, stack)
+		require.Empty(t, fromContract)
+
+		// cleaning cleaned container
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID)
+
+		stack, err = c.TestInvoke(t, "nodes", cID)
+		require.NoError(t, err)
+
+		fromContract = stackIteratorToBytesArray(t, stack)
+		require.Empty(t, fromContract)
+	})
+
+	t.Run("invalid container ID", func(t *testing.T) {
+		badCID := []byte{1, 2, 3, 4, 5}
+
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "addNextEpochNodes", badCID, nil)
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "commitContainerListUpdate", badCID)
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidContainerID, len(badCID)), "nodes", badCID)
+	})
+
+	t.Run("invalid public key", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		badPublicKey := []byte{1, 2, 3, 4, 5}
+
+		c.InvokeFail(t, fmt.Sprintf("%s: length: %d", containerconst.ErrorInvalidPublicKey, len(badPublicKey)), "addNextEpochNodes", cID, []any{badPublicKey})
+	})
+
+	t.Run("not alphabet", func(t *testing.T) {
+		cID := make([]byte, sha256.Size)
+		_, err := rand.Read(cID)
+		require.NoError(t, err)
+
+		notAlphabet := c.Executor.NewInvoker(c.Hash, c.NewAccount(t))
+		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "addNextEpochNodes", cID, nil)
+		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "commitContainerListUpdate", cID)
+	})
+}
+
+func stackIteratorToBytesArray(t *testing.T, stack *vm.Stack) [][]byte {
+	i, ok := stack.Pop().Value().(*storage.Iterator)
+	require.True(t, ok)
+
+	res := make([][]byte, 0)
+	for i.Next() {
+		b, err := i.Value().TryBytes()
+		require.NoError(t, err)
+
+		res = append(res, b)
+	}
+	return res
 }

@@ -36,6 +36,13 @@ and validate container ownership, signature and token if present.
 	  - name: token
 	    type: ByteArray
 
+nodesUpdate notification. This notification is produced when a container roster
+is changed. Triggered only by the Alphabet at the beginning of epoch.
+
+	name: NodesUpdate
+	  - name: ContainerID
+	    type: hash256
+
 setEACL notification. This notification is produced when a container owner wants
 to update an extended ACL of a container. Alphabet nodes of the Inner Ring catch
 the notification and validate container ownership, signature and token if
@@ -103,6 +110,13 @@ Key-value storage format:
  - 'est' + [20]byte -> []<epoch>
    list of NeoFS epochs when particular storage node sent estimations. Suffix is
    RIPEMD-160 hash of the storage node's public key (interop.PublicKey).
+ - 'n<cid><counter>' -> interop.PublicKey
+   one of the container nodes' public key, counter is NEO serialized int _but_ LE
+   is converted to BE
+ - 'u<cid><counter>' -> interop.PublicKey
+   one of the container nodes' public key _for the next epoch_, they will become
+   the current ones (with the 'n' prefix) once the Alphabet handles epoch update.
+   Counter is NEO serialized int _but_ LE is converted to BE
 
 # Setting
 To handle some events, the contract refers to other contracts.

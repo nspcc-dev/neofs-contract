@@ -18,4 +18,10 @@ const (
 
 	// ErrorDeleted is returned on attempt to create previously deleted container.
 	ErrorDeleted = "container was previously deleted"
+
+	// ErrorInvalidContainerID is returned on an attempt to work with incorrect container ID.
+	ErrorInvalidContainerID = "invalid container id"
+
+	// ErrorInvalidPublicKey is returned on an attempt to work with an incorrect public key.
+	ErrorInvalidPublicKey = "invalid public key"
 )

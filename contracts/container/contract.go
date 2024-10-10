@@ -66,6 +66,8 @@ const (
 	containerKeyPrefix   = 'x'
 	ownerKeyPrefix       = 'o'
 	deletedKeyPrefix     = 'd'
+	nodesPrefix          = 'n'
+	nextEpochNodesPrefix = 'u'
 	estimatePostfixSize  = 10
 
 	// default SOA record field values.
@@ -489,6 +491,110 @@ func List(owner []byte) [][]byte {
 	}
 
 	return list
+}
+
+// AddNextEpochNodes accumulates passed nodes as container members for the next
+// epoch to be committed using [CommitContainerListUpdate]. Results of the call
+// operation can be received via [Nodes]. This method must be called only when
+// a container list is changed, otherwise nothing should be done.
+// Call must be signed by the Alphabet nodes.
+func AddNextEpochNodes(cID interop.Hash256, publicKeys []interop.PublicKey) {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetContext()
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
+
+	counter := 0
+	c := storage.Find(ctx, append([]byte{nextEpochNodesPrefix}, cID...), storage.KeysOnly|storage.Backwards)
+	if iterator.Next(c) {
+		counterRaw := iterator.Value(c).([]byte)[1+interop.Hash256Len:]
+		counter = counterFromBE(counterRaw)
+	}
+
+	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
+	for _, publicKey := range publicKeys {
+		if len(publicKey) != interop.PublicKeyCompressedLen {
+			panic(cst.ErrorInvalidPublicKey + ": length: " + std.Itoa10(len(publicKey)))
+		}
+
+		counter++
+
+		storageKey := append(commonPrefix, counterBE(counter)...)
+		storage.Put(ctx, storageKey, publicKey)
+	}
+}
+
+func counterBE(c int) []byte {
+	rawCounter := std.Serialize(c)
+	res := []byte{rawCounter[0], rawCounter[1]} // first is type, second is length
+	for i := len(rawCounter) - 1; i > 1; i-- {  // LE to BE
+		res = append(res, rawCounter[i])
+	}
+
+	return res
+}
+
+func counterFromBE(b []byte) int {
+	res := []byte{b[0], b[1]}         // first is type, second is length
+	for i := len(b) - 1; i > 1; i-- { // BE to LE
+		res = append(res, b[i])
+	}
+
+	return std.Deserialize(res).(int)
+}
+
+// CommitContainerListUpdate commits container list changes made by
+// [AddNextEpochNodes] calls in advance. If no [AddNextEpochNodes] have been
+// made, it clears container list. Makes "ContainerUpdate" notification with
+// container ID after successful list change.
+// Call must be signed by the Alphabet nodes.
+func CommitContainerListUpdate(cID interop.Hash256) {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetContext()
+	multiaddr := common.AlphabetAddress()
+	common.CheckAlphabetWitness(multiaddr)
+
+	oldNodesPrefix := append([]byte{nodesPrefix}, cID...)
+	newNodesPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
+
+	oldNodes := storage.Find(ctx, oldNodesPrefix, storage.KeysOnly)
+	for iterator.Next(oldNodes) {
+		oldNode := iterator.Value(oldNodes).(string)
+		storage.Delete(ctx, oldNode)
+	}
+
+	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
+	for iterator.Next(newNodes) {
+		newNode := iterator.Value(newNodes).(struct {
+			key []byte
+			val []byte
+		})
+
+		storage.Delete(ctx, newNode.key)
+
+		newKey := append([]byte{nodesPrefix}, newNode.key[1:]...)
+		storage.Put(ctx, newKey, newNode.val)
+	}
+
+	runtime.Notify("NodesUpdate", cID)
+}
+
+// Nodes returns iterator over members of the container. The list is handled
+// by the Alphabet nodes and must be updated via [AddNextEpochNodes] and
+// [CommitContainerListUpdate] calls.
+func Nodes(cID interop.Hash256) iterator.Iterator {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	return storage.Find(ctx, append([]byte{nodesPrefix}, cID...), storage.ValuesOnly)
 }
 
 // SetEACL method sets a new extended ACL table related to the contract
