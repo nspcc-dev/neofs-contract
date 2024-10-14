@@ -79,6 +79,11 @@ type StopEstimationEvent struct {
 	Epoch *big.Int
 }
 
+// NodesUpdateEvent represents "NodesUpdate" event emitted by the contract.
+type NodesUpdateEvent struct {
+	ContainerID util.Uint256
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
@@ -199,14 +204,86 @@ func (c *ContractReader) ListContainerSizes(epoch *big.Int) ([][]byte, error) {
 	return unwrap.ArrayOfBytes(c.invoker.Call(c.hash, "listContainerSizes", epoch))
 }
 
+// Nodes invokes `nodes` method of contract.
+func (c *ContractReader) Nodes(cID util.Uint256, placementVector *big.Int) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "nodes", cID, placementVector))
+}
+
+// NodesExpanded is similar to Nodes (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) NodesExpanded(cID util.Uint256, placementVector *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "nodes", _numOfIteratorItems, cID, placementVector))
+}
+
 // Owner invokes `owner` method of contract.
 func (c *ContractReader) Owner(containerID []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "owner", containerID))
 }
 
+// ReplicasNumbers invokes `replicasNumbers` method of contract.
+func (c *ContractReader) ReplicasNumbers(cID util.Uint256) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "replicasNumbers", cID))
+}
+
+// ReplicasNumbersExpanded is similar to ReplicasNumbers (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) ReplicasNumbersExpanded(cID util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "replicasNumbers", _numOfIteratorItems, cID))
+}
+
 // Version invokes `version` method of contract.
 func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))
+}
+
+// AddNextEpochNodes creates a transaction invoking `addNextEpochNodes` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) AddNextEpochNodes(cID util.Uint256, placementVector *big.Int, publicKeys keys.PublicKeys) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "addNextEpochNodes", cID, placementVector, publicKeys)
+}
+
+// AddNextEpochNodesTransaction creates a transaction invoking `addNextEpochNodes` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) AddNextEpochNodesTransaction(cID util.Uint256, placementVector *big.Int, publicKeys keys.PublicKeys) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "addNextEpochNodes", cID, placementVector, publicKeys)
+}
+
+// AddNextEpochNodesUnsigned creates a transaction invoking `addNextEpochNodes` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) AddNextEpochNodesUnsigned(cID util.Uint256, placementVector *big.Int, publicKeys keys.PublicKeys) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "addNextEpochNodes", nil, cID, placementVector, publicKeys)
+}
+
+// CommitContainerListUpdate creates a transaction invoking `commitContainerListUpdate` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) CommitContainerListUpdate(cID util.Uint256, replicas []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "commitContainerListUpdate", cID, replicas)
+}
+
+// CommitContainerListUpdateTransaction creates a transaction invoking `commitContainerListUpdate` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) CommitContainerListUpdateTransaction(cID util.Uint256, replicas []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "commitContainerListUpdate", cID, replicas)
+}
+
+// CommitContainerListUpdateUnsigned creates a transaction invoking `commitContainerListUpdate` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) CommitContainerListUpdateUnsigned(cID util.Uint256, replicas []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "commitContainerListUpdate", nil, cID, replicas)
 }
 
 // Delete creates a transaction invoking `delete` method of the contract.
@@ -1000,6 +1077,68 @@ func (e *StopEstimationEvent) FromStackItem(item *stackitem.Array) error {
 	e.Epoch, err = arr[index].TryInteger()
 	if err != nil {
 		return fmt.Errorf("field Epoch: %w", err)
+	}
+
+	return nil
+}
+
+// NodesUpdateEventsFromApplicationLog retrieves a set of all emitted events
+// with "NodesUpdate" name from the provided [result.ApplicationLog].
+func NodesUpdateEventsFromApplicationLog(log *result.ApplicationLog) ([]*NodesUpdateEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*NodesUpdateEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "NodesUpdate" {
+				continue
+			}
+			event := new(NodesUpdateEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize NodesUpdateEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to NodesUpdateEvent or
+// returns an error if it's not possible to do to so.
+func (e *NodesUpdateEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 1 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
 	}
 
 	return nil

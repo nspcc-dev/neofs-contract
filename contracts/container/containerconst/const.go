@@ -18,4 +18,14 @@ const (
 
 	// ErrorDeleted is returned on attempt to create previously deleted container.
 	ErrorDeleted = "container was previously deleted"
+
+	// ErrorTooBigNumberOfNodes is returned if it is assumed that REP or number of REPS
+	// in container's placement policy is bigger than 255.
+	ErrorTooBigNumberOfNodes = "number of container nodes exceeds limits"
+
+	// ErrorInvalidContainerID is returned on an attempt to work with incorrect container ID.
+	ErrorInvalidContainerID = "invalid container id"
+
+	// ErrorInvalidPublicKey is returned on an attempt to work with an incorrect public key.
+	ErrorInvalidPublicKey = "invalid public key"
 )
