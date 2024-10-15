@@ -582,6 +582,48 @@ func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8)
 	}
 }
 
+// VerifyPlacementSignatures verifies that message has been signed by container
+// members according to container's placement policy: there should be at least
+// REP number of signatures for every placement vector. sigs must be container's
+// number of SELECTs length.
+func VerifyPlacementSignatures(cid interop.Hash256, msg []byte, sigs [][]interop.Signature) bool {
+	sigsLen := len(sigs)
+	var i int
+	repsI := ReplicasNumbers(cid)
+repsLoop:
+	for iterator.Next(repsI) {
+		if sigsLen == i {
+			return false
+		}
+
+		m := iterator.Value(repsI).(int)
+		if len(sigs[i]) < m {
+			return false
+		}
+
+		var counter int
+		for _, sig := range sigs[i] {
+			pubsI := Nodes(cid, uint8(i))
+			for iterator.Next(pubsI) {
+				pub := iterator.Value(pubsI).(interop.PublicKey)
+				if crypto.VerifyWithECDsa(msg, pub, sig, crypto.Secp256r1Sha256) {
+					counter++
+					break
+				}
+			}
+
+			if counter == m {
+				i++
+				continue repsLoop
+			}
+		}
+
+		return false
+	}
+
+	return true
+}
+
 // CommitContainerListUpdate commits container list changes made by
 // [AddNextEpochNodes] calls in advance. Replicas must correspond to
 // ordered placement policy (REP clauses). If no [AddNextEpochNodes]
