@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"slices"
 	"testing"
 
 	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -711,4 +713,92 @@ func stackIteratorToUint8Array(t *testing.T, stack *vm.Stack) []uint8 {
 	}
 
 	return res
+}
+
+func TestVerifyPlacementSignature(t *testing.T) {
+	testData := make([]byte, 1024)
+	_, err := rand.Read(testData)
+	require.NoError(t, err)
+	cID := make([]byte, sha256.Size)
+	_, err = rand.Read(cID)
+	require.NoError(t, err)
+
+	c, _, _ := newContainerInvoker(t, false)
+
+	const nodesNumber = 1024
+	const numberOfVectors = 4
+	vectors := make([][]any, numberOfVectors)
+	vectorsSigners := make([][]*keys.PrivateKey, numberOfVectors)
+	for i := range nodesNumber {
+		vecNum := i / (nodesNumber / numberOfVectors)
+		s := c.NewAccount(t).(neotest.SingleSigner)
+
+		vectors[vecNum] = append(vectors[vecNum], s.Account().PublicKey().Bytes())
+		vectorsSigners[vecNum] = append(vectorsSigners[vecNum], s.Account().PrivateKey())
+	}
+	var replicas []uint8
+	for i := range numberOfVectors {
+		replicas = append(replicas, uint8(i+1))
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID, i, vectors[i])
+	}
+	c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID, replicas)
+
+	sigs := make([]any, numberOfVectors)
+	for i, rep := range replicas {
+		// neo-go client's "generic" magic for args
+		var vectorSigs []any
+		for j := range rep {
+			vectorSigs = append(vectorSigs, vectorsSigners[i][j].Sign(testData))
+		}
+
+		sigs[i] = vectorSigs
+	}
+
+	t.Run("happy path", func(t *testing.T) {
+		stack, err := c.TestInvoke(t, "verifyPlacementSignatures", cID, testData, sigs)
+		require.NoError(t, err)
+		stackWithBool(t, stack, true)
+
+		// "right" signatures not in the first place
+		slices.Reverse(sigs[numberOfVectors-1].([]any))
+
+		stack, err = c.TestInvoke(t, "verifyPlacementSignatures", cID, testData, sigs)
+		require.NoError(t, err)
+		stackWithBool(t, stack, true)
+	})
+
+	t.Run("not enough vectors", func(t *testing.T) {
+		stack, err := c.TestInvoke(t, "verifyPlacementSignatures", cID, testData, sigs[:len(vectors)-1])
+		require.NoError(t, err)
+		stackWithBool(t, stack, false)
+	})
+
+	t.Run("incorrect signature", func(t *testing.T) {
+		k, err := keys.NewPrivateKey()
+		require.NoError(t, err)
+
+		const problemVector = 1
+		sigs[problemVector].([]any)[replicas[problemVector]-1] = k.Sign(testData)
+
+		stack, err := c.TestInvoke(t, "verifyPlacementSignatures", cID, testData, sigs)
+		require.NoError(t, err)
+		stackWithBool(t, stack, false)
+	})
+
+	t.Run("not enough signatures", func(t *testing.T) {
+		const problemVector = 1
+		sigs[problemVector] = sigs[problemVector].([]any)[:replicas[problemVector]-1]
+
+		stack, err := c.TestInvoke(t, "verifyPlacementSignatures", cID, testData, sigs)
+		require.NoError(t, err)
+		stackWithBool(t, stack, false)
+	})
+}
+
+func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
+	require.Equal(t, 1, stack.Len())
+
+	res, ok := stack.Pop().Value().(bool)
+	require.True(t, ok)
+	require.Equal(t, v, res)
 }

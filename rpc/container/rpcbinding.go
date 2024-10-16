@@ -237,6 +237,11 @@ func (c *ContractReader) ReplicasNumbersExpanded(cID util.Uint256, _numOfIterato
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "replicasNumbers", _numOfIteratorItems, cID))
 }
 
+// VerifyPlacementSignatures invokes `verifyPlacementSignatures` method of contract.
+func (c *ContractReader) VerifyPlacementSignatures(cid util.Uint256, msg []byte, sigs [][][]byte) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "verifyPlacementSignatures", cid, msg, sigs))
+}
+
 // Version invokes `version` method of contract.
 func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))
