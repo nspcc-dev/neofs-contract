@@ -629,7 +629,7 @@ func Resolve(name string, typ recordtype.Type) []string {
 	}
 
 	ctx := storage.GetReadOnlyContext()
-	return resolve(ctx, nil, name, typ, 2)
+	return resolve(ctx, []string{}, name, typ, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
@@ -744,11 +744,11 @@ func putNameStateWithKey(ctx storage.Context, tokenKey []byte, ns NameState) {
 	storage.Put(ctx, nameKey, nsBytes)
 }
 
-// getRecordsByType returns domain record.
+// getRecordsByType returns domain record. It returns empty array if no records found.
 func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type) []string {
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
-	var result []string
+	result := []string{}
 	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
