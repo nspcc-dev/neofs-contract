@@ -26,6 +26,20 @@ type NnsNameState struct {
 	Admin      util.Uint160
 }
 
+// SetAdminEvent represents "SetAdmin" event emitted by the contract.
+type SetAdminEvent struct {
+	Name     string
+	OldAdmin util.Uint160
+	NewAdmin util.Uint160
+}
+
+// RenewEvent represents "Renew" event emitted by the contract.
+type RenewEvent struct {
+	Name          string
+	OldExpiration *big.Int
+	NewExpiration *big.Int
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	nep11.Invoker
@@ -231,22 +245,44 @@ func (c *Contract) RegisterTLDUnsigned(name string, email string, refresh *big.I
 // Renew creates a transaction invoking `renew` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Renew(name string) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "renew", name)
+func (c *Contract) Renew(name string, years *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "renew", name, years)
 }
 
 // RenewTransaction creates a transaction invoking `renew` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
-func (c *Contract) RenewTransaction(name string) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "renew", name)
+func (c *Contract) RenewTransaction(name string, years *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "renew", name, years)
 }
 
 // RenewUnsigned creates a transaction invoking `renew` method of the contract.
 // This transaction is not signed, it's simply returned to the caller.
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) RenewUnsigned(name string) (*transaction.Transaction, error) {
+func (c *Contract) RenewUnsigned(name string, years *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "renew", nil, name, years)
+}
+
+// Renew2 creates a transaction invoking `renew` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Renew2(name string) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "renew", name)
+}
+
+// Renew2Transaction creates a transaction invoking `renew` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) Renew2Transaction(name string) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "renew", name)
+}
+
+// Renew2Unsigned creates a transaction invoking `renew` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) Renew2Unsigned(name string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "renew", nil, name)
 }
 
@@ -436,6 +472,172 @@ func (res *NnsNameState) FromStackItem(item stackitem.Item) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field Admin: %w", err)
+	}
+
+	return nil
+}
+
+// SetAdminEventsFromApplicationLog retrieves a set of all emitted events
+// with "SetAdmin" name from the provided [result.ApplicationLog].
+func SetAdminEventsFromApplicationLog(log *result.ApplicationLog) ([]*SetAdminEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*SetAdminEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "SetAdmin" {
+				continue
+			}
+			event := new(SetAdminEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize SetAdminEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to SetAdminEvent or
+// returns an error if it's not possible to do to so.
+func (e *SetAdminEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Name, err = func(item stackitem.Item) (string, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return "", err
+		}
+		if !utf8.Valid(b) {
+			return "", errors.New("not a UTF-8 string")
+		}
+		return string(b), nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Name: %w", err)
+	}
+
+	index++
+	e.OldAdmin, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field OldAdmin: %w", err)
+	}
+
+	index++
+	e.NewAdmin, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field NewAdmin: %w", err)
+	}
+
+	return nil
+}
+
+// RenewEventsFromApplicationLog retrieves a set of all emitted events
+// with "Renew" name from the provided [result.ApplicationLog].
+func RenewEventsFromApplicationLog(log *result.ApplicationLog) ([]*RenewEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*RenewEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "Renew" {
+				continue
+			}
+			event := new(RenewEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize RenewEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to RenewEvent or
+// returns an error if it's not possible to do to so.
+func (e *RenewEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Name, err = func(item stackitem.Item) (string, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return "", err
+		}
+		if !utf8.Valid(b) {
+			return "", errors.New("not a UTF-8 string")
+		}
+		return string(b), nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Name: %w", err)
+	}
+
+	index++
+	e.OldExpiration, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field OldExpiration: %w", err)
+	}
+
+	index++
+	e.NewExpiration, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field NewExpiration: %w", err)
 	}
 
 	return nil

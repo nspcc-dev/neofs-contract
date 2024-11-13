@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -354,7 +355,16 @@ func TestNNSSetAdmin(t *testing.T) {
 		"testdomain.com", int64(recordtype.TXT), "won't be added")
 
 	c1 := c.WithSigners(c.Committee, acc)
-	c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	h := c1.Invoke(t, stackitem.Null{}, "setAdmin", "testdomain.com", acc.ScriptHash())
+	c1.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: c1.Hash,
+		Name:       "SetAdmin",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Null{},
+			stackitem.NewByteArray(acc.ScriptHash().BytesBE()),
+		}),
+	})
 
 	expiration := top.Timestamp + uint64(expire*1000)
 	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{
@@ -401,16 +411,44 @@ func TestNNSRenew(t *testing.T) {
 
 	const msPerYear = 365 * 24 * time.Hour / time.Millisecond
 	b := c.TopBlock(t)
-	ts := b.Timestamp + uint64(expire*1000) + uint64(msPerYear)
+	renewalPeriod := int64(2)
+	oldExpiration := b.Timestamp + uint64(expire*1000)
+	ts := oldExpiration + uint64(msPerYear)*uint64(renewalPeriod)
 
 	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com")
-	c1.Invoke(t, ts, "renew", "testdomain.com")
+	cAcc.InvokeFail(t, "not witnessed by admin", "renew", "testdomain.com", renewalPeriod)
+	h := c1.Invoke(t, ts, "renew", "testdomain.com", renewalPeriod)
+	cAcc.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: cAcc.Hash,
+		Name:       "Renew",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Make(oldExpiration),
+			stackitem.Make(ts),
+		}),
+	})
 	expected := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
 		{Key: stackitem.Make("expiration"), Value: stackitem.Make(ts)},
 		{Key: stackitem.Make("admin"), Value: stackitem.Null{}}})
 	cAcc.Invoke(t, expected, "properties", "testdomain.com")
+
+	// Invalid renewal period.
+	c1.InvokeFail(t, "invalid renewal period value", "renew", "testdomain.com", 11)
+	// Too large expiration period.
+	c1.InvokeFail(t, "10 years of expiration period at max is allowed", "renew", "testdomain.com", 10)
+
+	// Default renewal period.
+	h = c1.Invoke(t, ts+uint64(msPerYear), "renew", "testdomain.com")
+	c1.CheckTxNotificationEvent(t, h, 0, state.NotificationEvent{
+		ScriptHash: cAcc.Hash,
+		Name:       "Renew",
+		Item: stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte("testdomain.com")),
+			stackitem.Make(ts),
+			stackitem.Make(ts + uint64(msPerYear)),
+		}),
+	})
 }
 
 func TestNNSResolve(t *testing.T) {
