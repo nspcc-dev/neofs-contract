@@ -239,6 +239,8 @@ func InnerRingList() []common.IRNode {
 // the candidate proposed via AddPeer needs to be supplemented. In such cases, a
 // new transaction will be required and therefore the candidate's signature is
 // not verified by AddPeerIR. Besides this, the behavior is similar.
+//
+// Deprecated: currently unused, to be removed in future.
 func AddPeerIR(nodeInfo []byte) {
 	ctx := storage.GetContext()
 
@@ -261,9 +263,6 @@ func AddPeerIR(nodeInfo []byte) {
 // number of signatures, the node will be added to the list of candidates for
 // the next-epoch network map ('AddPeerSuccess' notification is thrown after
 // that).
-//
-// Note that if the Alphabet needs to complete information about the candidate,
-// it will be added with AddPeerIR.
 func AddPeer(nodeInfo []byte) {
 	ctx := storage.GetContext()
 
@@ -271,12 +270,6 @@ func AddPeer(nodeInfo []byte) {
 
 	common.CheckWitness(publicKey)
 
-	// TODO: is it good approach? We could always call AddPeerIR by the Alphabet,
-	//  but for unchanged candidates it would require new transaction, which seems
-	//  rather redundant. At the same time, doing this check every time here will
-	//  sometimes waste more GAS. Maybe we can somehow cheaply precede the check by
-	//  determining the presence of signatures (for example, is there a second
-	//  signature).
 	if runtime.CheckWitness(common.AlphabetAddress()) {
 		addToNetmap(ctx, publicKey, Node{
 			BLOB:  nodeInfo,
