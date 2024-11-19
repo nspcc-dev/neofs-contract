@@ -1,12 +1,11 @@
 /*
-Package alphabet contains implementation of Alphabet contract deployed in NeoFS
-sidechain.
+Package alphabet implements Alphabet contract which is deployed to FS chain.
 
 Alphabet contract is designed to support GAS production and vote for new
-validators in the sidechain. NEO token is required to produce GAS and vote for
+validators in FS chain. NEO token is required to produce GAS and vote for
 a new committee. It can be distributed among alphabet nodes of the Inner Ring.
 However, some of them may be malicious, and some NEO can be lost. It will destabilize
-the economic of the sidechain. To avoid it, all 100,000,000 NEO are
+the economics of FS chain. To avoid it, all 100,000,000 NEO are
 distributed among all alphabet contracts.
 
 To identify alphabet contracts, they are named with letters of the Glagolitic alphabet.
@@ -41,5 +40,5 @@ Key-value storage format:
 To handle some events, the contract refers to other contracts.
 
 # Membership
-Contracts are named and positioned in the Alphabet list of the NeoFS Sidechain.
+Contracts are named and positioned in the Alphabet list of FS chain.
 */

@@ -1,6 +1,5 @@
 /*
-Package audit contains implementation of Audit contract deployed in NeoFS
-sidechain.
+Package audit implements Audit contract which is deployed to FS chain.
 
 Inner Ring nodes perform audit of the registered containers during every epoch.
 If a container contains StorageGroup objects, an Inner Ring node initializes

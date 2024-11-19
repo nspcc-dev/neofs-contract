@@ -11,11 +11,11 @@ import (
 )
 
 // Resolve addresses of NeoFS smart contracts deployed in a particular
-// NeoFS sidechain by their NNS domain names.
+// FS chain by their NNS domain names.
 func ExampleContractReader_ResolveFSContract() {
-	const sidechainRPCEndpoint = "https://rpc1.morph.fs.neo.org:40341"
+	const fschainRPCEndpoint = "https://rpc1.morph.fs.neo.org:40341"
 
-	c, err := rpcclient.New(context.Background(), sidechainRPCEndpoint, rpcclient.Options{})
+	c, err := rpcclient.New(context.Background(), fschainRPCEndpoint, rpcclient.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}

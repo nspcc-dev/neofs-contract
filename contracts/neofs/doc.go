@@ -1,22 +1,22 @@
 /*
-Package neofs contains implementation of NeoFS contract deployed in NeoFS mainchain.
+Package neofs contains NeoFS contract which is deployed to main chain.
 
 NeoFS contract is an entry point to NeoFS users. This contract stores all NeoFS
 related GAS, registers new Inner Ring candidates and produces notifications
-to control the sidechain.
+to control FS chain.
 
-While mainchain committee controls the list of Alphabet nodes in native
+While main chain committee controls the list of Alphabet nodes in native
 RoleManagement contract, NeoFS can't change more than 1\3 keys at a time.
-NeoFS contract contains the actual list of Alphabet nodes in the sidechain.
+NeoFS contract contains the actual list of Alphabet nodes in FS chain.
 
 Network configuration is also stored in NeoFS contract. All changes in
-configuration are mirrored in the sidechain with notifications.
+configuration are mirrored in FS chain with notifications.
 
 # Contract notifications
 
 Deposit notification. This notification is produced when user transfers native
 GAS to the NeoFS contract address. The same amount of NEOFS token will be
-minted in Balance contract in the sidechain.
+minted in Balance contract in FS chain.
 
 	Deposit:
 	  - name: from

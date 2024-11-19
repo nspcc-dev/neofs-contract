@@ -28,7 +28,7 @@ import (
 )
 
 // Blockchain groups services provided by particular Neo blockchain network
-// representing NeoFS Sidechain that are required for its deployment.
+// representing FS chain that are required for its deployment.
 type Blockchain interface {
 	// RPCActor groups functions needed to compose and send transactions (incl.
 	// Notary service requests) to the blockchain.
@@ -121,12 +121,12 @@ type Glagolitsa interface {
 	LetterByIndex(ind int) string
 }
 
-// Prm groups all parameters of the NeoFS Sidechain deployment procedure.
+// Prm groups all parameters of the FS chain deployment procedure.
 type Prm struct {
 	// Writes progress into the log.
 	Logger *zap.Logger
 
-	// Particular Neo blockchain instance to be used as NeoFS Sidechain.
+	// Particular Neo blockchain instance to be used as FS chain.
 	Blockchain Blockchain
 
 	// Local process account used for transaction signing (must be unlocked).
@@ -150,8 +150,8 @@ type Prm struct {
 	Glagolitsa Glagolitsa
 }
 
-// Deploy initializes Neo network represented by given Prm.Blockchain as NeoFS
-// Sidechain and makes it full-featured for NeoFS storage system operation.
+// Deploy initializes Neo network represented by given Prm.Blockchain as FS
+// chain and makes it full-featured for NeoFS storage system operation.
 //
 // Deploy aborts only by context or when a fatal error occurs. Deployment
 // progress is logged in detail. It is expected that some situations can be

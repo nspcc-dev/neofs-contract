@@ -133,7 +133,7 @@ func (x *blockchainMonitor) waitForNextBlock(ctx context.Context) error {
 // readNNSOnChainState reads state of the NeoFS NNS contract in the given
 // Blockchain. Returns both nil if contract is missing.
 func readNNSOnChainState(b Blockchain) (*state.Contract, error) {
-	// NNS must always have ID=1 in the NeoFS Sidechain
+	// NNS must always have ID=1 in FS chain
 	const nnsContractID = 1
 	res, err := b.GetContractStateByID(nnsContractID)
 	if err != nil {

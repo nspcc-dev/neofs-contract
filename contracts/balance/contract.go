@@ -276,7 +276,7 @@ func NewEpoch(epochNum int) {
 //
 // Mint method is invoked by Alphabet nodes of the Inner Ring when they process
 // Deposit notification from NeoFS contract. Before that, Alphabet nodes should
-// synchronize precision of mainchain GAS contract and Balance contract.
+// synchronize precision of main chain GAS contract and Balance contract.
 // Mint increases total supply of NEP-17 compatible NeoFS token.
 func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
@@ -304,8 +304,8 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 //
 // Burn method is invoked by Alphabet nodes of the Inner Ring when they process
 // Cheque notification from NeoFS contract. It means that locked assets have been
-// transferred to the user in the mainchain, therefore the lock account should be destroyed.
-// Before that, Alphabet nodes should synchronize precision of mainchain GAS
+// transferred to the user in main chain, therefore the lock account should be destroyed.
+// Before that, Alphabet nodes should synchronize precision of main chain GAS
 // contract and Balance contract. Burn decreases total supply of NEP-17
 // compatible NeoFS token.
 func Burn(from interop.Hash160, amount int, txDetails []byte) {

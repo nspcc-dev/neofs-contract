@@ -50,7 +50,7 @@ func _deploy(data any, isUpdate bool) {
 }
 
 // Update method updates contract source code and manifest. It can be invoked
-// only by the sidechain committee.
+// only by the FS chain committee.
 func Update(script []byte, manifest []byte, data any) {
 	blockHeight := ledger.CurrentIndex()
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))

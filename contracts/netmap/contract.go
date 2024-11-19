@@ -220,7 +220,7 @@ func Update(script []byte, manifest []byte, data any) {
 // an Inner Ring node. It should be used in notary disabled environment only.
 //
 // If notary is enabled, look to NeoFSAlphabet role in native RoleManagement
-// contract of the sidechain.
+// contract of FS chain.
 //
 // Deprecated: since non-notary settings are no longer supported, refer only to
 // the RoleManagement contract only. The method will be removed in one of the

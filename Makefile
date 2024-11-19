@@ -18,11 +18,11 @@ PKG_VERSION ?= $(shell echo $(VERSION) | sed "s/^v//" | \
 			sed "s/-/~/")-${OS_RELEASE}
 
 .PHONY: all build clean test neo-go
-.PHONY: alphabet mainnet morph nns sidechain
+.PHONY: alphabet mainnet morph nns fschain
 .PHONY: debpackage debclean
 build: neo-go all
-all: sidechain mainnet
-sidechain: alphabet morph nns
+all: fschain mainnet
+fschain: alphabet morph nns
 
 alphabet_sc = alphabet
 morph_sc = audit balance container neofsid netmap proxy reputation
