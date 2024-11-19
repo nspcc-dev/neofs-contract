@@ -6,9 +6,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/roles"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -106,11 +104,9 @@ func _deploy(data any, isUpdate bool) {
 // Update method updates contract source code and manifest. It can be invoked
 // only by sidechain committee.
 func Update(script []byte, manifest []byte, data any) {
-	blockHeight := ledger.CurrentIndex()
-	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
-	alphabetCommittee := common.Multiaddress(alphabetKeys, true)
+	alphabetCommittee := common.Multiaddress(common.InnerRingNodes(), true)
 
-	common.CheckAlphabetWitness(alphabetCommittee)
+	common.CheckOwnerWitness(alphabetCommittee)
 
 	contract.Call(interop.Hash160(management.Hash), "update",
 		contract.All, script, manifest, common.AppendVersion(data))
@@ -337,8 +333,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 			panic("this method must be invoked by alphabet")
 		}
 	} else {
-		multiaddr := AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
+		common.CheckAlphabetWitness()
 	}
 
 	from := runtime.GetExecutingScriptHash()
@@ -426,8 +421,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 			panic("this method must be invoked by alphabet")
 		}
 	} else {
-		multiaddr := AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
+		common.CheckAlphabetWitness()
 	}
 
 	newAlphabet := []interop.PublicKey{}
@@ -482,8 +476,7 @@ func SetConfig(id, key, val []byte) {
 			panic("this method must be invoked by alphabet")
 		}
 	} else {
-		multiaddr := AlphabetAddress()
-		common.CheckAlphabetWitness(multiaddr)
+		common.CheckAlphabetWitness()
 	}
 
 	if notaryDisabled {

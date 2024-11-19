@@ -14,10 +14,10 @@ var (
 	ErrWitnessFailed = "witness check failed"
 )
 
-// CheckAlphabetWitness checks witness of the passed caller.
+// CheckAlphabetWitness checks witness of the alphabet multiaddress.
 // It panics with ErrAlphabetWitnessFailed message on fail.
-func CheckAlphabetWitness(caller []byte) {
-	checkWitnessWithPanic(caller, ErrAlphabetWitnessFailed)
+func CheckAlphabetWitness() {
+	checkWitnessWithPanic(AlphabetAddress(), ErrAlphabetWitnessFailed)
 }
 
 // CheckOwnerWitness checks witness of the passed caller.

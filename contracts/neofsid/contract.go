@@ -113,8 +113,7 @@ func AddKey(owner []byte, keys []interop.PublicKey) {
 
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
 	for i := range keys {
@@ -144,7 +143,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 
 	ctx := storage.GetContext()
 
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
 	for i := range keys {

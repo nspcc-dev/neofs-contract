@@ -266,7 +266,7 @@ func InnerRingList() []common.IRNode {
 func AddPeerIR(nodeInfo []byte) {
 	ctx := storage.GetContext()
 
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
@@ -293,7 +293,7 @@ func AddPeer(nodeInfo []byte) {
 	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 	common.CheckWitness(publicKey)
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	addToNetmap(ctx, publicKey, Node{
 		BLOB:  nodeInfo,
@@ -315,7 +315,7 @@ func AddNode(n Node2) {
 		panic("incorrect public key")
 	}
 	common.CheckWitness(n.Key)
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	var key = append([]byte(node2CandidatePrefix), n.Key...)
 	storage.Put(ctx, key, std.Serialize(n))
@@ -331,7 +331,7 @@ func DeleteNode(pkey interop.PublicKey) {
 		panic("incorrect public key")
 	}
 
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 	updateCandidateState(storage.GetContext(), pkey, nodestate.Offline)
 }
 
@@ -376,7 +376,7 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	common.CheckWitness(publicKey)
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	updateCandidateState(ctx, publicKey, state)
 }
@@ -390,7 +390,7 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 func UpdateStateIR(state nodestate.Type, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	updateCandidateState(ctx, publicKey, state)
 }
@@ -407,8 +407,7 @@ func UpdateStateIR(state nodestate.Type, publicKey interop.PublicKey) {
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
 	if epochNum <= currentEpoch {
@@ -546,7 +545,7 @@ func getSnapshotCount(ctx storage.Context) int {
 //
 // Count MUST NOT be negative.
 func UpdateSnapshotCount(count int) {
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 	if count < 0 {
 		panic("count must be positive")
 	}
@@ -652,8 +651,7 @@ func Config(key []byte) any {
 func SetConfig(id, key, val []byte) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	setConfig(ctx, key, val)
 
@@ -688,7 +686,7 @@ func ListConfig() []ConfigRecord {
 // Produces `NewEpochSubscription` notification event with a just
 // registered recipient in a success case.
 func SubscribeForNewEpoch(contract interop.Hash160) {
-	common.CheckAlphabetWitness(common.AlphabetAddress())
+	common.CheckAlphabetWitness()
 
 	if !management.HasMethod(contract, "newEpoch", 1) {
 		panic(address.FromHash160(contract) + " contract does not have `newEpoch(epoch)` method")
