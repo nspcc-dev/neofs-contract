@@ -3,11 +3,13 @@ package netmap
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/lib/address"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
+	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -22,6 +24,22 @@ type Node struct {
 	BLOB []byte
 
 	// Current node state.
+	State nodestate.Type
+}
+
+// Node2 is a more modern version of [Node] stored in the contract. It exposes
+// all of the node structure to contract.
+type Node2 struct {
+	// Addresses are to be used to connect to the node.
+	Addresses []string
+
+	// Attributes are KV pairs with node metadata.
+	Attributes map[string]string
+
+	// Key is a node public key.
+	Key interop.PublicKey
+
+	// State is a current node state.
 	State nodestate.Type
 }
 
@@ -60,6 +78,10 @@ const (
 
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
+
+	// Node2 storage.
+	node2CandidatePrefix = "2"
+	node2NetmapPrefix    = "p"
 
 	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
 	// marking the start of the node's public key.
@@ -263,6 +285,8 @@ func AddPeerIR(nodeInfo []byte) {
 // number of signatures, the node will be added to the list of candidates for
 // the next-epoch network map ('AddPeerSuccess' notification is thrown after
 // that).
+//
+// Deprecated: migrate to [AddNode].
 func AddPeer(nodeInfo []byte) {
 	ctx := storage.GetContext()
 
@@ -276,6 +300,40 @@ func AddPeer(nodeInfo []byte) {
 			State: nodestate.Online,
 		})
 	}
+}
+
+// AddNode adds a new node into the candidate list for the next epoch. Node
+// must have [nodestate.Online] state to be considered and the request must be
+// signed by both the node and Alphabet. AddNode event is emitted upon success.
+func AddNode(n Node2) {
+	ctx := storage.GetContext()
+
+	if n.State != nodestate.Online {
+		panic("can't add non-online node")
+	}
+
+	if len(n.Key) != interop.PublicKeyCompressedLen {
+		panic("incorrect public key")
+	}
+	common.CheckWitness(n.Key)
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+
+	var key = append([]byte(node2CandidatePrefix), n.Key...)
+	storage.Put(ctx, key, std.Serialize(n))
+	runtime.Notify("AddNode", n.Key, n.Addresses, n.Attributes)
+}
+
+// DeleteNode removes a node with the given public key from candidate list.
+// It must be signed by Alphabet nodes and doesn't require node witness. See
+// [UpdateState] as well, this method emits UpdateStateSuccess upon success
+// with state [nodestate.Offline].
+func DeleteNode(pkey interop.PublicKey) {
+	if len(pkey) != interop.PublicKeyCompressedLen {
+		panic("incorrect public key")
+	}
+
+	common.CheckAlphabetWitness(common.AlphabetAddress())
+	updateCandidateState(storage.GetContext(), pkey, nodestate.Offline)
 }
 
 // updates state of the network map candidate by its public key in the contract
@@ -330,6 +388,8 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 // signature of the network candidate is inaccessible. In such cases, a new
 // transaction will be required and therefore the candidate's signature is not
 // verified by UpdateStateIR. Besides this, the behavior is similar.
+//
+// Deprecated: migrate to [UpdateState] and [DeleteNode].
 func UpdateStateIR(state nodestate.Type, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
@@ -366,12 +426,21 @@ func NewEpoch(epochNum int) {
 	storage.Put(ctx, snapshotEpoch, epochNum)
 	storage.Put(ctx, snapshotBlockKey, ledger.CurrentIndex())
 
-	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	id = (id + 1) % getSnapshotCount(ctx)
+	fillNetmap(ctx, epochNum)
+
+	var (
+		snapCount = getSnapshotCount(ctx)
+		id        = storage.Get(ctx, snapshotCurrentIDKey).(int)
+	)
+	id = (id + 1) % snapCount
 	storage.Put(ctx, snapshotCurrentIDKey, id)
 
 	// put netmap into actual snapshot
 	common.SetSerialized(ctx, snapshotKeyPrefix+string([]byte{byte(id)}), dataOnlineState)
+
+	if epochNum > snapCount {
+		dropNetmap(ctx, epochNum-snapCount)
+	}
 
 	// make clean up routines in other contracts
 	cleanup(ctx, epochNum)
@@ -397,6 +466,8 @@ func LastEpochBlock() int {
 // Current state of each node is represented in the State field. It MAY differ
 // with the state encoded into BLOB field, in this case binary encoded state
 // MUST NOT be processed.
+//
+// Deprecated: migrate to [ListNodes].
 func Netmap() []Node {
 	ctx := storage.GetReadOnlyContext()
 	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
@@ -409,9 +480,36 @@ func Netmap() []Node {
 // Current state of each node is represented in the State field. It MAY differ
 // with the state encoded into BLOB field, in this case binary encoded state
 // MUST NOT be processed.
+//
+// Deprecated: migrate to [ListCandidates].
 func NetmapCandidates() []Node {
 	ctx := storage.GetReadOnlyContext()
 	return getNetmapNodes(ctx)
+}
+
+// ListNodes provides an iterator to walk over current node set. It is similar
+// to [Netmap] method, iterator values are [Node2] structures.
+func ListNodes() iterator.Iterator {
+	return ListNodesEpoch(Epoch())
+}
+
+// ListNodesEpoch provides an iterator to walk over node set at the given epoch.
+// It's the same as [ListNodes] (and exposed as listNodes from the contract via
+// overload), but allows to query a particular epoch data if it's still stored.
+// If this epoch is already expired (or not happened yet) returns an empty
+// iterator.
+func ListNodesEpoch(epoch int) iterator.Iterator {
+	return storage.Find(storage.GetReadOnlyContext(),
+		append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...),
+		storage.ValuesOnly|storage.DeserializeValues)
+}
+
+// ListCandidates returns an iterator for a set of current candidate nodes.
+// Iterator values are [Node2] structures.
+func ListCandidates() iterator.Iterator {
+	return storage.Find(storage.GetReadOnlyContext(),
+		[]byte(node2CandidatePrefix),
+		storage.ValuesOnly|storage.DeserializeValues)
 }
 
 // Snapshot returns set of information about the storage nodes representing a network
@@ -424,6 +522,8 @@ func NetmapCandidates() []Node {
 // Current state of each node is represented in the State field. It MAY differ
 // with the state encoded into BLOB field, in this case binary encoded state
 // MUST NOT be processed.
+//
+// Deprecated: migrate to [ListNodesEpoch].
 func Snapshot(diff int) []Node {
 	ctx := storage.GetReadOnlyContext()
 	count := getSnapshotCount(ctx)
@@ -454,18 +554,18 @@ func UpdateSnapshotCount(count int) {
 		panic("count must be positive")
 	}
 	ctx := storage.GetContext()
-	curr := getSnapshotCount(ctx)
-	if curr == count {
+	oldCount := getSnapshotCount(ctx)
+	if oldCount == count {
 		panic("count has not changed")
 	}
 	storage.Put(ctx, snapshotCountKey, count)
 
 	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
 	var delStart, delFinish int
-	if curr < count {
+	if oldCount < count {
 		// Increase history size.
 		//
-		// Old state (N = count, K = curr, E = current index, C = current epoch)
+		// Old state (N = count, K = oldCount, E = current index, C = current epoch)
 		// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1   | ... | N-1
 		// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1 |
 		//
@@ -475,19 +575,19 @@ func UpdateSnapshotCount(count int) {
 		//
 		// So we need to move tail snapshots N-K keys forward,
 		// i.e. from E+1 .. K to N-K+E+1 .. N
-		diff := count - curr
+		diff := count - oldCount
 		lower := diff + id + 1
 		for k := count - 1; k >= lower; k-- {
 			moveSnapshot(ctx, k-diff, k)
 		}
 		delStart, delFinish = id+1, id+1+diff
-		if curr < delFinish {
-			delFinish = curr
+		if oldCount < delFinish {
+			delFinish = oldCount
 		}
 	} else {
 		// Decrease history size.
 		//
-		// Old state (N = curr, K = count)
+		// Old state (N = oldCount, K = count)
 		// KEY INDEX: 0   | 1     | ... K1 ... | E | E+1   | ... K2-1 ... | N-1
 		// EPOCH    : C-E | C-E+1 | ... .. ... | C | C-N+1 | ... ...  ... | C-E-1
 		var step, start int
@@ -496,7 +596,7 @@ func UpdateSnapshotCount(count int) {
 			// New state:
 			// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1
 			// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1
-			step = curr - count
+			step = oldCount - count
 			start = id + 1
 		} else {
 			// New state:
@@ -510,11 +610,15 @@ func UpdateSnapshotCount(count int) {
 		for k := start; k < count; k++ {
 			moveSnapshot(ctx, k+step, k)
 		}
-		delStart, delFinish = count, curr
+		delStart, delFinish = count, oldCount
 	}
 	for k := delStart; k < delFinish; k++ {
 		key := snapshotKeyPrefix + string([]byte{byte(k)})
 		storage.Delete(ctx, key)
+	}
+	var curEpoch = Epoch()
+	for k := curEpoch - oldCount + 1; k < curEpoch-count; k++ {
+		dropNetmap(ctx, k)
 	}
 }
 
@@ -530,6 +634,8 @@ func moveSnapshot(ctx storage.Context, from, to int) {
 //
 // Behaves like Snapshot: it is called after difference with the current epoch is
 // calculated.
+//
+// Deprecated: migrate to [ListNodesEpoch].
 func SnapshotByEpoch(epoch int) []Node {
 	ctx := storage.GetReadOnlyContext()
 	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
@@ -557,27 +663,22 @@ func SetConfig(id, key, val []byte) {
 	runtime.Log("configuration has been updated")
 }
 
-type record struct {
-	key []byte
-	val []byte
+// ConfigRecord represent a config Key/Value pair.
+type ConfigRecord struct {
+	Key   []byte
+	Value []byte
 }
 
 // ListConfig returns an array of structures that contain key and value of all
 // NeoFS configuration records. Key and value are both byte arrays.
-func ListConfig() []record {
+func ListConfig() []ConfigRecord {
 	ctx := storage.GetReadOnlyContext()
 
-	var config []record
+	var config []ConfigRecord
 
-	it := storage.Find(ctx, configPrefix, storage.None)
+	it := storage.Find(ctx, configPrefix, storage.RemovePrefix)
 	for iterator.Next(it) {
-		pair := iterator.Value(it).(struct {
-			key []byte
-			val []byte
-		})
-		r := record{key: pair.key[len(configPrefix):], val: pair.val}
-
-		config = append(config, r)
+		config = append(config, iterator.Value(it).(ConfigRecord))
 	}
 
 	return config
@@ -637,17 +738,32 @@ func addToNetmap(ctx storage.Context, publicKey []byte, node Node) {
 func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 	storageKey := append(candidatePrefix, key...)
 	storage.Delete(ctx, storageKey)
+	storageKey = append([]byte(node2CandidatePrefix), key...)
+	storage.Delete(ctx, storageKey)
 }
 
 func updateNetmapState(ctx storage.Context, key interop.PublicKey, state nodestate.Type) {
+	var present bool
+
 	storageKey := append(candidatePrefix, key...)
 	raw := storage.Get(ctx, storageKey).([]byte)
-	if raw == nil {
+	if raw != nil {
+		present = true
+		node := std.Deserialize(raw).(Node)
+		node.State = state
+		storage.Put(ctx, storageKey, std.Serialize(node))
+	}
+	storageKey = append([]byte(node2CandidatePrefix), key...)
+	raw = storage.Get(ctx, storageKey).([]byte)
+	if raw != nil {
+		present = true
+		node := std.Deserialize(raw).(Node2)
+		node.State = state
+		storage.Put(ctx, storageKey, std.Serialize(node))
+	}
+	if !present {
 		panic("peer is missing")
 	}
-	node := std.Deserialize(raw).(Node)
-	node.State = state
-	storage.Put(ctx, storageKey, std.Serialize(node))
 }
 
 func filterNetmap(ctx storage.Context) []Node {
@@ -663,6 +779,32 @@ func filterNetmap(ctx storage.Context) []Node {
 	}
 
 	return result
+}
+
+func fourBytesBE(num int) []byte {
+	var res = make([]byte, 4)
+	copy(res, convert.ToBytes(num))                    // LE
+	neogointernal.Opcode1NoReturn("REVERSEITEMS", res) // BE
+	return res
+}
+
+func fillNetmap(ctx storage.Context, epoch int) {
+	var (
+		epochPrefix = append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...)
+		it          = storage.Find(ctx, []byte(node2CandidatePrefix), storage.RemovePrefix)
+	)
+	for iterator.Next(it) {
+		kv := iterator.Value(it).(kv)
+		// Offline nodes are just deleted, so we can omit state check.
+		storage.Put(ctx, append(epochPrefix, kv.k...), kv.v)
+	}
+}
+
+func dropNetmap(ctx storage.Context, epoch int) {
+	var it = storage.Find(ctx, append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...), storage.KeysOnly)
+	for iterator.Next(it) {
+		storage.Delete(ctx, iterator.Value(it).([]byte))
+	}
 }
 
 func getNetmapNodes(ctx storage.Context) []Node {

@@ -1,8 +1,16 @@
 name: "NeoFS Netmap"
-safemethods: ["innerRingList", "epoch", "netmap", "netmapCandidates", "snapshot", "snapshotByEpoch", "config", "listConfig", "version"]
+safemethods: ["innerRingList", "epoch", "netmap", "netmapCandidates", "snapshot", "snapshotByEpoch", "config", "listConfig", "version", "listNodes", "listCandidates"]
 permissions:
   - methods: ["update", "newEpoch"]
 events:
+  - name: AddNode
+    parameters:
+      - name: publicKey
+        type: PublicKey
+      - name: addresses
+        type: Array
+      - name: attributes
+        type: Map
   - name: AddPeerSuccess
     parameters:
       - name: publicKey
@@ -21,3 +29,5 @@ events:
     parameters:
       - name: contract
         type: Hash160
+overloads:
+  listNodesEpoch: listNodes
