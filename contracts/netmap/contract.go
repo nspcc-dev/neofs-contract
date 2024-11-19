@@ -293,13 +293,12 @@ func AddPeer(nodeInfo []byte) {
 	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
 
 	common.CheckWitness(publicKey)
+	common.CheckAlphabetWitness(common.AlphabetAddress())
 
-	if runtime.CheckWitness(common.AlphabetAddress()) {
-		addToNetmap(ctx, publicKey, Node{
-			BLOB:  nodeInfo,
-			State: nodestate.Online,
-		})
-	}
+	addToNetmap(ctx, publicKey, Node{
+		BLOB:  nodeInfo,
+		State: nodestate.Online,
+	})
 }
 
 // AddNode adds a new node into the candidate list for the next epoch. Node
@@ -377,11 +376,9 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
 	common.CheckWitness(publicKey)
+	common.CheckAlphabetWitness(common.AlphabetAddress())
 
-	// TODO: see same place in AddPeer
-	if runtime.CheckWitness(common.AlphabetAddress()) {
-		updateCandidateState(ctx, publicKey, state)
-	}
+	updateCandidateState(ctx, publicKey, state)
 }
 
 // UpdateStateIR is called by the NeoFS Alphabet instead of UpdateState when

@@ -400,8 +400,10 @@ func TestContainerSizeEstimation(t *testing.T) {
 		newStorageNode(t, c),
 	}
 	for i := range nodes {
-		cNm.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
-		cNm.Invoke(t, stackitem.Null{}, "addPeerIR", nodes[i].raw)
+		var cAcc = new(neotest.ContractInvoker)
+		*cAcc = *cNm
+		cAcc.Signers = append(cAcc.Signers, nodes[i].signer)
+		cAcc.Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
 	}
 
 	// putContainerSize retrieves storage nodes from the previous snapshot,

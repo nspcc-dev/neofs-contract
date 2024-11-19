@@ -86,7 +86,9 @@ func TestAddPeer(t *testing.T) {
 	c := newNetmapInvoker(t)
 
 	acc := c.NewAccount(t)
-	cAcc := c.WithSigners(acc)
+	var cAcc = new(neotest.ContractInvoker)
+	*cAcc = *c
+	cAcc.Signers = append(cAcc.Signers, acc)
 	dummyInfo := dummyNodeInfo(acc)
 
 	acc1 := c.NewAccount(t)
@@ -95,12 +97,12 @@ func TestAddPeer(t *testing.T) {
 
 	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer := cAcc.CheckHalt(t, h)
-	require.Equal(t, 0, len(aer.Events))
+	require.Equal(t, 1, len(aer.Events))
 
 	dummyInfo.raw[0] ^= 0xFF
 	h = cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer = cAcc.CheckHalt(t, h)
-	require.Equal(t, 0, len(aer.Events))
+	require.Equal(t, 1, len(aer.Events))
 
 	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
 	c.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
@@ -122,8 +124,10 @@ func TestNewEpoch(t *testing.T) {
 
 	for i := range nodes {
 		for _, tn := range nodes[i] {
-			cNm.WithSigners(tn.signer).Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
-			cNm.Invoke(t, stackitem.Null{}, "addPeerIR", tn.raw)
+			var cAcc = new(neotest.ContractInvoker)
+			*cAcc = *cNm
+			cAcc.Signers = append(cAcc.Signers, tn.signer)
+			cAcc.Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
 		}
 
 		if i > 0 {

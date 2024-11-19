@@ -144,10 +144,7 @@ func RemoveKey(owner []byte, keys []interop.PublicKey) {
 
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	if !runtime.CheckWitness(multiaddr) {
-		panic("invocation from non inner ring node")
-	}
+	common.CheckAlphabetWitness(common.AlphabetAddress())
 
 	ownerKey := append([]byte{ownerKeysPrefix}, owner...)
 	for i := range keys {
