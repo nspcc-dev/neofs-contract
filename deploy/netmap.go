@@ -26,7 +26,7 @@ type RawNetworkParameter struct {
 }
 
 // NetworkConfiguration represents NeoFS network configuration stored
-// in the NeoFS Sidechain.
+// in FS chain.
 type NetworkConfiguration struct {
 	MaxObjectSize              uint64
 	StoragePrice               uint64

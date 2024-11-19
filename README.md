@@ -9,16 +9,16 @@
 
 # Overview
 
-NeoFS-Contract contains all NeoFS related contracts written for
-[neo-go](https://github.com/nspcc-dev/neo-go) compiler. These contracts
-are deployed both in the mainchain and the sidechain.
+neofs-contract contains all NeoFS-related contracts written for
+[neo-go](https://github.com/nspcc-dev/neo-go) compiler. There are contracts
+both for the main and FS chains.
 
-Mainchain contracts:
+Main chain (mainnet) contracts:
 
 - neofs
 - processing
 
-Sidechain contracts:
+FS chain contracts:
 
 - alphabet
 - audit

@@ -104,7 +104,7 @@ func _deploy(data any, isUpdate bool) {
 }
 
 // Update method updates contract source code and manifest. It can be invoked
-// only by sidechain committee.
+// only by the FS chain committee.
 func Update(script []byte, manifest []byte, data any) {
 	blockHeight := ledger.CurrentIndex()
 	alphabetKeys := roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
@@ -117,8 +117,8 @@ func Update(script []byte, manifest []byte, data any) {
 	runtime.Log("neofs contract updated")
 }
 
-// AlphabetList returns an array of alphabet node keys. It is used in sidechain notary
-// disabled environment.
+// AlphabetList returns an array of alphabet node keys. It is used in notary-disabled
+// FS chain environment.
 func AlphabetList() []common.IRNode {
 	ctx := storage.GetReadOnlyContext()
 	pubs := getAlphabetNodes(ctx)
@@ -130,7 +130,7 @@ func AlphabetList() []common.IRNode {
 }
 
 // AlphabetAddress returns 2\3n+1 multisignature address of alphabet nodes.
-// It is used in sidechain notary disabled environment.
+// It is used in notary-disabled FS chain environment.
 func AlphabetAddress() interop.Hash160 {
 	ctx := storage.GetReadOnlyContext()
 	return multiaddress(getAlphabetNodes(ctx))
@@ -267,9 +267,9 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 // Withdraw initializes gas asset withdraw from NeoFS. It can be invoked only
 // by the specified user.
 //
-// This method produces Withdraw notification to lock assets in the sidechain and
+// This method produces Withdraw notification to lock assets in FS chain and
 // transfers withdraw fee from a user account to each Alphabet node. If notary
-// is enabled in the mainchain, fee is transferred to Processing contract.
+// is enabled in main chain, fee is transferred to Processing contract.
 // Fee value is specified in NeoFS network config with the key WithdrawFee.
 func Withdraw(user interop.Hash160, amount int) {
 	if !runtime.CheckWitness(user) {
@@ -320,7 +320,7 @@ func Withdraw(user interop.Hash160, amount int) {
 // successfully locked in NeoFS balance contract. It can be invoked only by
 // Alphabet nodes.
 //
-// This method produces Cheque notification to burn assets in sidechain.
+// This method produces Cheque notification to burn assets in FS chain.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	ctx := storage.GetContext()
 	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
@@ -364,7 +364,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 }
 
 // Bind method produces notification to bind the specified public keys in NeoFSID
-// contract in the sidechain. It can be invoked only by specified user.
+// contract in FS chain. It can be invoked only by specified user.
 //
 // This method produces Bind notification. This method panics if keys are not
 // 33 byte long. User argument must be a valid 20 byte script hash.
@@ -383,7 +383,7 @@ func Bind(user interop.Hash160, keys []interop.PublicKey) {
 }
 
 // Unbind method produces notification to unbind the specified public keys in NeoFSID
-// contract in the sidechain. It can be invoked only by the specified user.
+// contract in FS chain. It can be invoked only by the specified user.
 //
 // This method produces Unbind notification. This method panics if keys are not
 // 33 byte long. User argument must be a valid 20 byte script hash.
@@ -404,7 +404,7 @@ func Unbind(user interop.Hash160, keys []interop.PublicKey) {
 // AlphabetUpdate updates a list of alphabet nodes with the provided list of
 // public keys. It can be invoked only by alphabet nodes.
 //
-// This method is used in notary disabled sidechain environment. In this case,
+// This method is used in notary-disabled FS chain environment. In this case,
 // the actual alphabet list should be stored in the NeoFS contract.
 func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	ctx := storage.GetContext()

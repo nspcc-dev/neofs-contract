@@ -28,7 +28,7 @@ func InnerRingInvoker(ir []interop.PublicKey) interop.PublicKey {
 }
 
 // InnerRingNodes return a list of inner ring nodes from state validator role
-// in the sidechain.
+// in FS chain.
 func InnerRingNodes() []interop.PublicKey {
 	blockHeight := ledger.CurrentIndex()
 	return roles.GetDesignatedByRole(roles.NeoFSAlphabet, uint32(blockHeight+1))
@@ -46,7 +46,7 @@ func InnerRingNodesFromNetmap(sc interop.Hash160) []interop.PublicKey {
 	return pubs
 }
 
-// AlphabetNodes returns a list of alphabet nodes from committee in the sidechain.
+// AlphabetNodes returns a list of alphabet nodes from committee in FS chain.
 func AlphabetNodes() []interop.PublicKey {
 	return neo.GetCommittee()
 }

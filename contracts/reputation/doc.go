@@ -1,6 +1,5 @@
 /*
-Package reputation contains implementation of Reputation contract deployed in NeoFS
-sidechain.
+Package reputation implements Reputation contract which is deployed to FS chain.
 
 Storage nodes collect reputation data while communicating with other nodes.
 This data is exchanged and the end result (global trust values) is stored in

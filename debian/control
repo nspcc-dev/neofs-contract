@@ -11,16 +11,16 @@ Vcs-Browser: https://github.com/nspcc-dev/neofs-contract
 Package: neofs-contract
 Architecture: all
 Depends: ${misc:Depends}
-Description: NeoFS-Contract contains all NeoFS related contracts.
+Description: This package contains all NeoFS-related contracts.
  Contracts are written for neo-go compiler.
- These contracts are deployed both in the mainchain and the sidechain.
+ The package contains contracts both from main and FS chains.
  .
- Mainchain contracts:
+ Main chain contracts:
  .
  - neofs
  - processing
  .
- Sidechain contracts:
+ FS chain contracts:
  .
  - alphabet
  - audit

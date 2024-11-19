@@ -99,7 +99,7 @@ type syncNeoFSContractPrm struct {
 type ContractPrm struct {
 	// Writes progress into the log.
 	Logger *zap.Logger
-	// Particular Neo blockchain instance to be used as NeoFS Sidechain.
+	// Particular Neo blockchain instance to be used as FS chain.
 	Blockchain Blockchain
 	// Local process account used for transaction signing (must be unlocked).
 	LocalAccount *wallet.Account

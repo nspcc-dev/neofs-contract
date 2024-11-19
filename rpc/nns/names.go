@@ -1,6 +1,6 @@
 package nns
 
-// A set of standard contract names deployed into NeoFS sidechain.
+// A set of standard contract names deployed into FS chain.
 const (
 	// NameAlphabetPrefix differs from other names in this list, because
 	// in reality there will be multiple alphabets contract deployed to

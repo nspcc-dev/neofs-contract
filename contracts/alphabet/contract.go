@@ -210,12 +210,12 @@ func Update(script []byte, manifest []byte, data any) {
 	runtime.Log("alphabet contract updated")
 }
 
-// Gas returns the amount of the sidechain GAS stored in the contract account.
+// Gas returns the amount of FS chain GAS stored in the contract account.
 func Gas() int {
 	return gas.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-// Neo returns the amount of sidechain NEO stored in the contract account.
+// Neo returns the amount of FS chain NEO stored in the contract account.
 func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
@@ -245,7 +245,7 @@ func checkPermission(ir []interop.PublicKey) bool {
 	return runtime.CheckWitness(node)
 }
 
-// Emit method produces sidechain GAS and distributes it among Inner Ring nodes
+// Emit method produces FS chain GAS and distributes it among Inner Ring nodes
 // and proxy contract. It can be invoked only by an Alphabet node of the Inner Ring.
 //
 // To produce GAS, an alphabet contract transfers all available NEO from the
@@ -299,11 +299,11 @@ func Emit() {
 	}
 }
 
-// Vote method votes for the sidechain committee. It requires multisignature from
+// Vote method votes for the FS chain committee. It requires multisignature from
 // Alphabet nodes of the Inner Ring.
 //
 // This method is used when governance changes the list of Alphabet nodes of the
-// Inner Ring. Alphabet nodes share keys with sidechain validators, therefore
+// Inner Ring. Alphabet nodes share keys with FS chain validators, therefore
 // it is required to change them as well. To do that, NEO holders (which are
 // alphabet contracts) should vote for a new committee.
 func Vote(epoch int, candidates []interop.PublicKey) {

@@ -1,6 +1,5 @@
 /*
-Package container contains implementation of Container contract deployed in NeoFS
-sidechain.
+Package container implements Container contract which is deployed to FS chain.
 
 Container contract stores and manages containers, extended ACLs and container
 size estimations. Contract does not perform sanity or signature checks of
