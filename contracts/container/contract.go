@@ -299,8 +299,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		panic("insufficient balance to create container")
 	}
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	details := common.ContainerFeeTransferDetails(containerID)
 
@@ -383,8 +382,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		return
 	}
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
 	domain := storage.Get(ctx, key).(string)
@@ -515,8 +513,7 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	ctx := storage.GetContext()
 	validatePlacementIndex(ctx, cID, placementVector)
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
 	commonPrefix = append(commonPrefix, placementVector)
@@ -636,8 +633,8 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 	}
 
 	ctx := storage.GetContext()
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+
+	common.CheckAlphabetWitness()
 
 	oldNodesPrefix := append([]byte{nodesPrefix}, cID...)
 	newNodesPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
@@ -743,8 +740,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 		panic(cst.NotFoundError)
 	}
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	rule := ExtendedACL{
 		Value: eACL,
@@ -911,8 +907,7 @@ func IterateAllContainerSizes(epoch int) iterator.Iterator {
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	cleanupContainers(ctx, epochNum)
 }
@@ -920,8 +915,7 @@ func NewEpoch(epochNum int) {
 // StartContainerEstimation method produces StartEstimation notification.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 func StartContainerEstimation(epoch int) {
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	runtime.Notify("StartEstimation", epoch)
 	runtime.Log("notification has been produced")
@@ -930,8 +924,7 @@ func StartContainerEstimation(epoch int) {
 // StopContainerEstimation method produces StopEstimation notification.
 // It can be invoked only by Alphabet nodes of the Inner Ring.
 func StopContainerEstimation(epoch int) {
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	runtime.Notify("StopEstimation", epoch)
 	runtime.Log("notification has been produced")

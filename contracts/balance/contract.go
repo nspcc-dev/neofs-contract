@@ -193,8 +193,7 @@ func Transfer(from, to interop.Hash160, amount int, data any) bool {
 func TransferX(from, to interop.Hash160, amount int, details []byte) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	result := token.transfer(ctx, from, to, amount, true, details)
 	if !result {
@@ -215,8 +214,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) {
 func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	details := common.LockTransferDetails(txDetails)
 
@@ -246,8 +244,7 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 func NewEpoch(epochNum int) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	it := storage.Find(ctx, []byte{accPrefix}, storage.KeysOnly|storage.RemovePrefix)
 	for iterator.Next(it) {
@@ -281,8 +278,7 @@ func NewEpoch(epochNum int) {
 func Mint(to interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	details := common.MintTransferDetails(txDetails)
 
@@ -311,8 +307,7 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	details := common.BurnTransferDetails(txDetails)
 

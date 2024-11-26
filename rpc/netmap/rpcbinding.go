@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
@@ -14,6 +15,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"math/big"
+	"unicode/utf8"
 )
 
 // CommonBallot is a contract-specific common.Ballot type used by its methods.
@@ -28,16 +30,31 @@ type CommonIRNode struct {
 	PublicKey *keys.PublicKey
 }
 
+// NetmapConfigRecord is a contract-specific netmap.ConfigRecord type used by its methods.
+type NetmapConfigRecord struct {
+	Key   []byte
+	Value []byte
+}
+
 // NetmapNode is a contract-specific netmap.Node type used by its methods.
 type NetmapNode struct {
 	BLOB  []byte
 	State *big.Int
 }
 
-// Netmaprecord is a contract-specific netmap.record type used by its methods.
-type Netmaprecord struct {
-	Key []byte
-	Val []byte
+// NetmapNode2 is a contract-specific netmap.Node2 type used by its methods.
+type NetmapNode2 struct {
+	Addresses  []string
+	Attributes map[string]string
+	Key        *keys.PublicKey
+	State      *big.Int
+}
+
+// AddNodeEvent represents "AddNode" event emitted by the contract.
+type AddNodeEvent struct {
+	PublicKey  *keys.PublicKey
+	Addresses  []any
+	Attributes map[any]any
 }
 
 // AddPeerSuccessEvent represents "AddPeerSuccess" event emitted by the contract.
@@ -64,6 +81,9 @@ type NewEpochSubscriptionEvent struct {
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
+	CallAndExpandIterator(contract util.Uint160, method string, maxItems int, params ...any) (*result.Invoke, error)
+	TerminateSession(sessionID uuid.UUID) error
+	TraverseIterator(sessionID uuid.UUID, iterator *result.Iterator, num int) ([]stackitem.Item, error)
 }
 
 // Actor is used by Contract to call state-changing methods.
@@ -139,20 +159,34 @@ func (c *ContractReader) InnerRingList() ([]*CommonIRNode, error) {
 	}(unwrap.Item(c.invoker.Call(c.hash, "innerRingList")))
 }
 
+// ListCandidates invokes `listCandidates` method of contract.
+func (c *ContractReader) ListCandidates() (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "listCandidates"))
+}
+
+// ListCandidatesExpanded is similar to ListCandidates (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) ListCandidatesExpanded(_numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "listCandidates", _numOfIteratorItems))
+}
+
 // ListConfig invokes `listConfig` method of contract.
-func (c *ContractReader) ListConfig() ([]*Netmaprecord, error) {
-	return func(item stackitem.Item, err error) ([]*Netmaprecord, error) {
+func (c *ContractReader) ListConfig() ([]*NetmapConfigRecord, error) {
+	return func(item stackitem.Item, err error) ([]*NetmapConfigRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		return func(item stackitem.Item) ([]*Netmaprecord, error) {
+		return func(item stackitem.Item) ([]*NetmapConfigRecord, error) {
 			arr, ok := item.Value().([]stackitem.Item)
 			if !ok {
 				return nil, errors.New("not an array")
 			}
-			res := make([]*Netmaprecord, len(arr))
+			res := make([]*NetmapConfigRecord, len(arr))
 			for i := range res {
-				res[i], err = itemToNetmaprecord(arr[i], nil)
+				res[i], err = itemToNetmapConfigRecord(arr[i], nil)
 				if err != nil {
 					return nil, fmt.Errorf("item %d: %w", i, err)
 				}
@@ -160,6 +194,34 @@ func (c *ContractReader) ListConfig() ([]*Netmaprecord, error) {
 			return res, nil
 		}(item)
 	}(unwrap.Item(c.invoker.Call(c.hash, "listConfig")))
+}
+
+// ListNodes invokes `listNodes` method of contract.
+func (c *ContractReader) ListNodes() (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "listNodes"))
+}
+
+// ListNodesExpanded is similar to ListNodes (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) ListNodesExpanded(_numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "listNodes", _numOfIteratorItems))
+}
+
+// ListNodes2 invokes `listNodes` method of contract.
+func (c *ContractReader) ListNodes2(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "listNodes", epoch))
+}
+
+// ListNodes2Expanded is similar to ListNodes2 (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) ListNodes2Expanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "listNodes", _numOfIteratorItems, epoch))
 }
 
 // Netmap invokes `netmap` method of contract.
@@ -259,6 +321,28 @@ func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))
 }
 
+// AddNode creates a transaction invoking `addNode` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) AddNode(n *NetmapNode2) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "addNode", n)
+}
+
+// AddNodeTransaction creates a transaction invoking `addNode` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) AddNodeTransaction(n *NetmapNode2) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "addNode", n)
+}
+
+// AddNodeUnsigned creates a transaction invoking `addNode` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) AddNodeUnsigned(n *NetmapNode2) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "addNode", nil, n)
+}
+
 // AddPeer creates a transaction invoking `addPeer` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -301,6 +385,28 @@ func (c *Contract) AddPeerIRTransaction(nodeInfo []byte) (*transaction.Transacti
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) AddPeerIRUnsigned(nodeInfo []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "addPeerIR", nil, nodeInfo)
+}
+
+// DeleteNode creates a transaction invoking `deleteNode` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) DeleteNode(pkey *keys.PublicKey) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "deleteNode", pkey)
+}
+
+// DeleteNodeTransaction creates a transaction invoking `deleteNode` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) DeleteNodeTransaction(pkey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "deleteNode", pkey)
+}
+
+// DeleteNodeUnsigned creates a transaction invoking `deleteNode` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) DeleteNodeUnsigned(pkey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "deleteNode", nil, pkey)
 }
 
 // LastEpochBlock creates a transaction invoking `lastEpochBlock` method of the contract.
@@ -592,6 +698,46 @@ func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// itemToNetmapConfigRecord converts stack item into *NetmapConfigRecord.
+func itemToNetmapConfigRecord(item stackitem.Item, err error) (*NetmapConfigRecord, error) {
+	if err != nil {
+		return nil, err
+	}
+	var res = new(NetmapConfigRecord)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// FromStackItem retrieves fields of NetmapConfigRecord from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+func (res *NetmapConfigRecord) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Key, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Key: %w", err)
+	}
+
+	index++
+	res.Value, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Value: %w", err)
+	}
+
+	return nil
+}
+
 // itemToNetmapNode converts stack item into *NetmapNode.
 func itemToNetmapNode(item stackitem.Item, err error) (*NetmapNode, error) {
 	if err != nil {
@@ -632,24 +778,24 @@ func (res *NetmapNode) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
-// itemToNetmaprecord converts stack item into *Netmaprecord.
-func itemToNetmaprecord(item stackitem.Item, err error) (*Netmaprecord, error) {
+// itemToNetmapNode2 converts stack item into *NetmapNode2.
+func itemToNetmapNode2(item stackitem.Item, err error) (*NetmapNode2, error) {
 	if err != nil {
 		return nil, err
 	}
-	var res = new(Netmaprecord)
+	var res = new(NetmapNode2)
 	err = res.FromStackItem(item)
 	return res, err
 }
 
-// FromStackItem retrieves fields of Netmaprecord from the given
+// FromStackItem retrieves fields of NetmapNode2 from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
-func (res *Netmaprecord) FromStackItem(item stackitem.Item) error {
+func (res *NetmapNode2) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
 		return errors.New("not an array")
 	}
-	if len(arr) != 2 {
+	if len(arr) != 4 {
 		return errors.New("wrong number of structure elements")
 	}
 
@@ -658,15 +804,200 @@ func (res *Netmaprecord) FromStackItem(item stackitem.Item) error {
 		err   error
 	)
 	index++
-	res.Key, err = arr[index].TryBytes()
+	res.Addresses, err = func(item stackitem.Item) ([]string, error) {
+		arr, ok := item.Value().([]stackitem.Item)
+		if !ok {
+			return nil, errors.New("not an array")
+		}
+		res := make([]string, len(arr))
+		for i := range res {
+			res[i], err = func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(arr[i])
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Addresses: %w", err)
+	}
+
+	index++
+	res.Attributes, err = func(item stackitem.Item) (map[string]string, error) {
+		m, ok := item.Value().([]stackitem.MapElement)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a map", item.Type().String())
+		}
+		res := make(map[string]string)
+		for i := range m {
+			k, err := func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(m[i].Key)
+			if err != nil {
+				return nil, fmt.Errorf("key %d: %w", i, err)
+			}
+			v, err := func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(m[i].Value)
+			if err != nil {
+				return nil, fmt.Errorf("value %d: %w", i, err)
+			}
+			res[k] = v
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Attributes: %w", err)
+	}
+
+	index++
+	res.Key, err = func(item stackitem.Item) (*keys.PublicKey, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return nil, err
+		}
+		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
+		if err != nil {
+			return nil, err
+		}
+		return k, nil
+	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field Key: %w", err)
 	}
 
 	index++
-	res.Val, err = arr[index].TryBytes()
+	res.State, err = arr[index].TryInteger()
 	if err != nil {
-		return fmt.Errorf("field Val: %w", err)
+		return fmt.Errorf("field State: %w", err)
+	}
+
+	return nil
+}
+
+// AddNodeEventsFromApplicationLog retrieves a set of all emitted events
+// with "AddNode" name from the provided [result.ApplicationLog].
+func AddNodeEventsFromApplicationLog(log *result.ApplicationLog) ([]*AddNodeEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*AddNodeEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "AddNode" {
+				continue
+			}
+			event := new(AddNodeEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize AddNodeEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to AddNodeEvent or
+// returns an error if it's not possible to do to so.
+func (e *AddNodeEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return nil, err
+		}
+		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
+		if err != nil {
+			return nil, err
+		}
+		return k, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	index++
+	e.Addresses, err = func(item stackitem.Item) ([]any, error) {
+		arr, ok := item.Value().([]stackitem.Item)
+		if !ok {
+			return nil, errors.New("not an array")
+		}
+		res := make([]any, len(arr))
+		for i := range res {
+			res[i], err = arr[i].Value(), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Addresses: %w", err)
+	}
+
+	index++
+	e.Attributes, err = func(item stackitem.Item) (map[any]any, error) {
+		m, ok := item.Value().([]stackitem.MapElement)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a map", item.Type().String())
+		}
+		res := make(map[any]any)
+		for i := range m {
+			k, err := m[i].Key.Value(), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %d: %w", i, err)
+			}
+			v, err := m[i].Value.Value(), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("value %d: %w", i, err)
+			}
+			res[k] = v
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Attributes: %w", err)
 	}
 
 	return nil

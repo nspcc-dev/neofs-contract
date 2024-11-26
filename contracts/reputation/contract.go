@@ -89,8 +89,7 @@ func Update(script []byte, manifest []byte, data any) {
 func Put(epoch int, peerID []byte, value []byte) {
 	ctx := storage.GetContext()
 
-	multiaddr := common.AlphabetAddress()
-	common.CheckAlphabetWitness(multiaddr)
+	common.CheckAlphabetWitness()
 
 	id := storageID(epoch, peerID)
 

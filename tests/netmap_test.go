@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
@@ -85,7 +86,9 @@ func TestAddPeer(t *testing.T) {
 	c := newNetmapInvoker(t)
 
 	acc := c.NewAccount(t)
-	cAcc := c.WithSigners(acc)
+	var cAcc = new(neotest.ContractInvoker)
+	*cAcc = *c
+	cAcc.Signers = append(cAcc.Signers, acc)
 	dummyInfo := dummyNodeInfo(acc)
 
 	acc1 := c.NewAccount(t)
@@ -94,12 +97,12 @@ func TestAddPeer(t *testing.T) {
 
 	h := cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer := cAcc.CheckHalt(t, h)
-	require.Equal(t, 0, len(aer.Events))
+	require.Equal(t, 1, len(aer.Events))
 
 	dummyInfo.raw[0] ^= 0xFF
 	h = cAcc.Invoke(t, stackitem.Null{}, "addPeer", dummyInfo.raw)
 	aer = cAcc.CheckHalt(t, h)
-	require.Equal(t, 0, len(aer.Events))
+	require.Equal(t, 1, len(aer.Events))
 
 	c.InvokeFail(t, common.ErrWitnessFailed, "addPeer", dummyInfo.raw)
 	c.Invoke(t, stackitem.Null{}, "addPeerIR", dummyInfo.raw)
@@ -121,8 +124,10 @@ func TestNewEpoch(t *testing.T) {
 
 	for i := range nodes {
 		for _, tn := range nodes[i] {
-			cNm.WithSigners(tn.signer).Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
-			cNm.Invoke(t, stackitem.Null{}, "addPeerIR", tn.raw)
+			var cAcc = new(neotest.ContractInvoker)
+			*cAcc = *cNm
+			cAcc.Signers = append(cAcc.Signers, tn.signer)
+			cAcc.Invoke(t, stackitem.Null{}, "addPeer", tn.raw)
 		}
 
 		if i > 0 {
@@ -469,4 +474,147 @@ func TestInnerRing(t *testing.T) {
 
 	SetInnerRing(t, e, ir)
 	require.ElementsMatch(t, ir, InnerRing(t, e))
+}
+
+func TestAddNode(t *testing.T) {
+	var (
+		c = newNetmapInvoker(t)
+
+		acc  = c.NewAccount(t)
+		pKey = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey()
+
+		nodeStruct = stackitem.NewStruct([]stackitem.Item{
+			stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
+			stackitem.NewMapWithValue([]stackitem.MapElement{
+				{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
+				{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
+			}),
+			stackitem.NewByteArray(pKey.Bytes()),
+			stackitem.Make(nodestate.Online),
+		})
+	)
+
+	acc1 := c.NewAccount(t)
+	cAcc1 := c.WithSigners(acc1)
+	cAcc1.InvokeFail(t, common.ErrWitnessFailed, "addNode", nodeStruct)
+
+	c.InvokeFail(t, common.ErrWitnessFailed, "addNode", nodeStruct)
+
+	var cAcc = new(neotest.ContractInvoker)
+	*cAcc = *c
+	cAcc.Signers = append(cAcc.Signers, acc)
+
+	badStruct, err := nodeStruct.Clone()
+	require.NoError(t, err)
+	badStruct.Remove(3) // state
+	badStruct.Append(stackitem.Make(nodestate.Offline))
+
+	c.InvokeFail(t, "can't add non-online node", "addNode", badStruct)
+
+	badStruct.Remove(3) // state
+	badStruct.Remove(2) // key
+	badStruct.Append(stackitem.Make(pKey.GetScriptHash()))
+	badStruct.Append(stackitem.Make(nodestate.Online))
+
+	c.InvokeFail(t, "incorrect public key", "addNode", badStruct)
+
+	h := cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
+	aer := cAcc.CheckHalt(t, h)
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "AddNode", aer.Events[0].Name)
+	require.Equal(t, 3, aer.Events[0].Item.Len())
+
+	// Check addNode doesn't affect current node list.
+	var checkZeroList = func(method string, params ...any) {
+		s, err := c.TestInvoke(t, method, params...)
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		iter, ok := s.Top().Value().(*storage.Iterator)
+		require.True(t, ok)
+		require.False(t, iter.Next()) // Empty list.
+	}
+	checkZeroList("listNodes")
+	// But it's a part of the candidate list.
+	var checkNodeList = func(method string, params ...any) {
+		s, err := c.TestInvoke(t, method, params...)
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		iter, ok := s.Top().Value().(*storage.Iterator)
+		require.True(t, ok)
+		actual := make([]stackitem.Item, 0, 1)
+		for iter.Next() {
+			actual = append(actual, iter.Value())
+		}
+		require.ElementsMatch(t, []stackitem.Item{nodeStruct}, actual)
+	}
+	checkNodeList("listCandidates")
+
+	h = cAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Maintenance), pKey.Bytes())
+	aer = cAcc.CheckHalt(t, h)
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "UpdateStateSuccess", aer.Events[0].Name)
+	require.Equal(t, 2, aer.Events[0].Item.Len())
+
+	h = cAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Online), pKey.Bytes())
+	aer = cAcc.CheckHalt(t, h)
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "UpdateStateSuccess", aer.Events[0].Name)
+	require.Equal(t, 2, aer.Events[0].Item.Len())
+
+	// Tick epoch.
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 1)
+
+	// New node is added to the netmap.
+	checkNodeList("listNodes")
+
+	// Check epoch 0 contents, it still doesn't have any nodes.
+	checkZeroList("listNodes", 0)
+
+	// Incorrect deleteNode call.
+	cAcc.InvokeFail(t, "incorrect public key", "deleteNode", pKey.Bytes()[:2])
+
+	// Drop the node.
+	h = cAcc.Invoke(t, stackitem.Null{}, "deleteNode", pKey.Bytes())
+	aer = cAcc.CheckHalt(t, h)
+	require.Equal(t, 1, len(aer.Events))
+	require.Equal(t, "UpdateStateSuccess", aer.Events[0].Name)
+	require.Equal(t, 2, aer.Events[0].Item.Len())
+
+	// Still a part of the map.
+	checkNodeList("listNodes")
+	// But not on the candidate list
+	checkZeroList("listCandidates")
+
+	// Tick epoch.
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 2)
+
+	// Current map is empty.
+	checkZeroList("listNodes")
+	// But some historic data available.
+	checkNodeList("listNodes", 1)
+
+	for i := range netmap.DefaultSnapshotCount - 1 {
+		_ = c.Invoke(t, stackitem.Null{}, "newEpoch", i+3)
+	}
+	// Current map is still empty.
+	checkZeroList("listNodes")
+	// And historic data is gone.
+	checkZeroList("listNodes", 1)
+}
+
+func TestListConfig(t *testing.T) {
+	var c = newNetmapInvoker(t, "key", "value", "some", "setting")
+
+	s, err := c.TestInvoke(t, "listConfig")
+	require.NoError(t, err)
+	require.Equal(t, 1, s.Len())
+
+	arr, ok := s.Pop().Item().(*stackitem.Array)
+	require.True(t, ok)
+	require.Equal(t, stackitem.NewArray([]stackitem.Item{
+		stackitem.NewStruct([]stackitem.Item{stackitem.Make("key"), stackitem.Make("value")}),
+		stackitem.NewStruct([]stackitem.Item{stackitem.Make("some"), stackitem.Make("setting")}),
+	}), arr)
 }

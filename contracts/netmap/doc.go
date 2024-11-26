@@ -1,11 +1,23 @@
 /*
 Package netmap contains implementation of the Netmap contract for NeoFS systems.
 
-Netmap contract stores and manages NeoFS network map, Storage node candidates
-and epoch number counter. In notary disabled environment, contract also stores
-a list of Inner Ring node keys.
+Netmap contract stores and manages NeoFS network map, storage node candidates
+and epoch number counter. Currently it maintains two lists simultaneously, both
+in old BLOB-based format and new structured one. Nodes and IR are encouraged to
+use both during transition period, old format will eventually be discontinued.
 
 # Contract notifications
+
+AddNode notification. This notification is emitted when a storage node joins
+the candidate list via AddNode method (using new format).
+
+	AddNode
+	  - name: publicKey
+	    type: PublicKey
+	  - name: addresses
+	    type: Array
+	  - name: attributes
+	    type: Map
 
 AddPeer notification. This notification is produced when a Storage node sends
 a bootstrap request by invoking AddPeer method.
@@ -14,15 +26,15 @@ a bootstrap request by invoking AddPeer method.
 	  - name: nodeInfo
 	    type: ByteArray
 
-UpdateState notification. This notification is produced when a Storage node wants
-to change its state (go offline) by invoking UpdateState method. Supported
-states: (2) -- offline.
+UpdateStateSuccess notification. This notification is produced when a storage
+node or Alphabet changes node state by invoking UpdateState or DeleteNode
+methods. Supported states: online/offline/maintenance.
 
-	UpdateState
-	  - name: state
-	    type: Integer
+	UpdateStateSuccess
 	  - name: publicKey
 	    type: PublicKey
+	  - name: state
+	    type: Integer
 
 NewEpoch notification. This notification is produced when a new epoch is applied
 in the network by invoking NewEpoch method.
@@ -56,6 +68,10 @@ Key-value storage format:
    Balance contract reference
  - 'config<name>' -> []byte
    value of the particular NeoFS network parameter
+ - '2<public_key>' -> std.Serialize(Node2)
+   Candidate list in modern structured format.
+ - 'p<epoch><public_key>' -> std.Serialize(Node2)
+   Per-epoch node list, epoch is encoded as 4-byte BE integer.
 
 # Setting
 To handle some events, the contract refers to other contracts.
