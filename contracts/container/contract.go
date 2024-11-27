@@ -6,8 +6,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
+	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -61,15 +63,16 @@ const (
 	// V2 format.
 	containerIDSize = interop.Hash256Len // SHA256 size
 
-	singleEstimatePrefix = "est"
-	estimateKeyPrefix    = "cnr"
-	containerKeyPrefix   = 'x'
-	ownerKeyPrefix       = 'o'
-	deletedKeyPrefix     = 'd'
-	nodesPrefix          = 'n'
-	replicasNumberPrefix = 'r'
-	nextEpochNodesPrefix = 'u'
-	estimatePostfixSize  = 10
+	singleEstimatePrefix     = "est"
+	estimateKeyPrefix        = "cnr"
+	containersWithMetaPrefix = 'm'
+	containerKeyPrefix       = 'x'
+	ownerKeyPrefix           = 'o'
+	deletedKeyPrefix         = 'd'
+	nodesPrefix              = 'n'
+	replicasNumberPrefix     = 'r'
+	nextEpochNodesPrefix     = 'u'
+	estimatePostfixSize      = 10
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -236,6 +239,73 @@ func Update(script []byte, manifest []byte, data any) {
 	contract.Call(interop.Hash160(management.Hash), "update",
 		contract.All, script, manifest, common.AppendVersion(data))
 	runtime.Log("container contract updated")
+}
+
+// SubmitObjectPut registers successful object PUT operation and notifies about
+// it. metaInformation must be signed by container nodes according to
+// container's placement, see [VerifyPlacementSignatures]. metaInformation
+// must contain information about an object placed to a container that was
+// created using [Put] ([PutMeta]) with enabled meta-on-chain option.
+func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
+	metaMap := std.Deserialize(metaInformation).(map[string]any)
+	cID := getFromMap(metaMap, "cid").(interop.Hash256)
+	if len(cID) != interop.Hash256Len {
+		panic("incorrect container ID")
+	}
+	if storage.Get(storage.GetContext(), append([]byte{containersWithMetaPrefix}, cID...)) == nil {
+		panic("container does not support meta-on-chain")
+	}
+	oID := getFromMap(metaMap, "oid").(interop.Hash256)
+	if len(oID) != interop.Hash256Len {
+		panic("incorrect object ID")
+	}
+	magic := getFromMap(metaMap, "network").(int)
+	if magic != runtime.GetNetwork() {
+		panic("incorrect network magic")
+	}
+	_ = getFromMap(metaMap, "size").(int)
+	deleted := getFromMap(metaMap, "deleted").([]interop.Hash256)
+	for i, d := range deleted {
+		if len(d) != interop.Hash256Len {
+			panic("incorrect " + std.Itoa10(i) + " deleted object")
+		}
+	}
+	locked := getFromMap(metaMap, "locked").([]interop.Hash256)
+	for i, l := range locked {
+		if len(l) != interop.Hash256Len {
+			panic("incorrect " + std.Itoa10(i) + " locked object")
+		}
+	}
+	vub := getFromMap(metaMap, "validuntil").(int)
+	if vub <= ledger.CurrentIndex() {
+		panic("incorrect vub: exceeded")
+	}
+
+	if !VerifyPlacementSignatures(cID, metaInformation, sigs) {
+		panic("signature verification failed")
+	}
+
+	runtime.Notify("ObjectPut", cID, oID, metaMap)
+}
+
+func getFromMap(m map[string]any, key string) any {
+	if !neogointernal.Opcode2("HASKEY", m, key).(bool) { // https://github.com/nspcc-dev/neo-go/issues/3716
+		panic("'" + key + "'" + " not found")
+	}
+
+	return m[key]
+}
+
+// PutMeta is the same as [Put] (and exposed as put from the contract via
+// overload), but allows container's meta-information be handled and notified
+// using the chain.
+func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, metaOnChain bool) {
+	if metaOnChain {
+		ctx := storage.GetContext()
+		cID := crypto.Sha256(container)
+		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, cID...), []byte{})
+	}
+	Put(container, signature, publicKey, token)
 }
 
 // Put method creates a new container if it has been invoked by Alphabet nodes
@@ -950,6 +1020,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	storage.Delete(ctx, containerListKey)
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
+	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
 	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
 }

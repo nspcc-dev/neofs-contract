@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/big"
 	"path"
 	"slices"
 	"testing"
 
 	"github.com/mr-tron/base58"
+	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
@@ -803,4 +805,108 @@ func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
 	res, ok := stack.Pop().Value().(bool)
 	require.True(t, ok)
 	require.Equal(t, v, res)
+}
+
+func TestPutMeta(t *testing.T) {
+	c, cBal, _ := newContainerInvoker(t, false)
+
+	t.Run("meta disabled", func(t *testing.T) {
+		acc := c.NewAccount(t)
+		cnt := dummyContainer(acc)
+		balanceMint(t, cBal, acc, containerFee*1, []byte{})
+
+		metaInfo, err := stackitem.Serialize(stackitem.NewMapWithValue(
+			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
+		require.NoError(t, err)
+
+		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, false)
+		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
+
+		expected := stackitem.NewStruct([]stackitem.Item{
+			stackitem.NewByteArray(cnt.value),
+			stackitem.NewByteArray(cnt.sig),
+			stackitem.NewByteArray(cnt.pub),
+			stackitem.NewByteArray(cnt.token),
+		})
+		c.Invoke(t, expected, "get", cnt.id[:])
+	})
+
+	t.Run("meta enabled", func(t *testing.T) {
+		acc := c.NewAccount(t)
+		cnt := dummyContainer(acc)
+		oid := randomBytes(sha256.Size)
+		balanceMint(t, cBal, acc, containerFee*1, []byte{})
+		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, true)
+
+		t.Run("correct meta data", func(t *testing.T) {
+			meta := testMeta(cnt.id[:], oid)
+			rawMeta, err := stackitem.Serialize(meta)
+			require.NoError(t, err)
+
+			hash := c.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, nil)
+			res := c.GetTxExecResult(t, hash)
+			require.Len(t, res.Events, 1)
+			require.Equal(t, "ObjectPut", res.Events[0].Name)
+			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
+			require.Len(t, notificationArgs, 3)
+			require.Equal(t, cnt.id[:], notificationArgs[0].Value().([]byte))
+			require.Equal(t, oid, notificationArgs[1].Value().([]byte))
+
+			metaValuesExp := meta.Value().([]stackitem.MapElement)
+			metaValuesGot := notificationArgs[2].Value().([]stackitem.MapElement)
+			require.Equal(t, metaValuesExp, metaValuesGot)
+		})
+
+		t.Run("not a map", func(t *testing.T) {
+			c.InvokeFail(t, "invalid type", "submitObjectPut", []byte{1}, nil)
+		})
+
+		t.Run("missing values", func(t *testing.T) {
+			testFunc := func(key string) {
+				meta := testMeta(cnt.id[:], oid)
+				meta.Drop(meta.Index(stackitem.Make(key)))
+				raw, err := stackitem.Serialize(meta)
+				require.NoError(t, err)
+				c.InvokeFail(t, fmt.Sprintf("'%s' not found", key), "submitObjectPut", raw, nil)
+			}
+
+			testFunc("cid")
+			testFunc("oid")
+			testFunc("network")
+			testFunc("size")
+			testFunc("deleted")
+			testFunc("locked")
+			testFunc("validuntil")
+		})
+
+		t.Run("incorrect values", func(t *testing.T) {
+			testFunc := func(key string, newVal any) {
+				meta := testMeta(cnt.id[:], oid)
+				meta.Add(stackitem.Make(key), stackitem.Make(newVal))
+				raw, err := stackitem.Serialize(meta)
+				require.NoError(t, err)
+				c.InvokeFail(t, "incorrect", "submitObjectPut", raw, nil)
+			}
+
+			testFunc("cid", []byte{1})
+			testFunc("oid", []byte{1})
+			testFunc("network", netmode.UnitTestNet+1)
+			testFunc("deleted", []any{[]byte{1}})
+			testFunc("locked", []any{[]byte{1}})
+			testFunc("validuntil", 1) // tested chain will have some blocks for sure
+		})
+	})
+}
+
+func testMeta(cid, oid []byte) *stackitem.Map {
+	return stackitem.NewMapWithValue(
+		[]stackitem.MapElement{
+			{Key: stackitem.Make("network"), Value: stackitem.Make(netmode.UnitTestNet)},
+			{Key: stackitem.Make("cid"), Value: stackitem.Make(cid)},
+			{Key: stackitem.Make("oid"), Value: stackitem.Make(oid)},
+			{Key: stackitem.Make("size"), Value: stackitem.Make(123)},
+			{Key: stackitem.Make("deleted"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
+			{Key: stackitem.Make("locked"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
+			{Key: stackitem.Make("validuntil"), Value: stackitem.Make(math.MaxInt)},
+		})
 }

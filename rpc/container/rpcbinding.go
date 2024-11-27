@@ -84,6 +84,13 @@ type NodesUpdateEvent struct {
 	ContainerID util.Uint256
 }
 
+// ObjectPutEvent represents "ObjectPut" event emitted by the contract.
+type ObjectPutEvent struct {
+	ContainerID util.Uint256
+	ObjectID    util.Uint256
+	Meta        map[any]any
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
@@ -379,6 +386,28 @@ func (c *Contract) PutContainerSizeUnsigned(epoch *big.Int, cid []byte, usedSize
 	return c.actor.MakeUnsignedCall(c.hash, "putContainerSize", nil, epoch, cid, usedSize, pubKey)
 }
 
+// Put2 creates a transaction invoking `put` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Put2(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "put", container, signature, publicKey, token, metaOnChain)
+}
+
+// Put2Transaction creates a transaction invoking `put` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) Put2Transaction(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "put", container, signature, publicKey, token, metaOnChain)
+}
+
+// Put2Unsigned creates a transaction invoking `put` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) Put2Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, metaOnChain)
+}
+
 // PutNamed creates a transaction invoking `putNamed` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -465,6 +494,28 @@ func (c *Contract) StopContainerEstimationTransaction(epoch *big.Int) (*transact
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) StopContainerEstimationUnsigned(epoch *big.Int) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "stopContainerEstimation", nil, epoch)
+}
+
+// SubmitObjectPut creates a transaction invoking `submitObjectPut` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SubmitObjectPut(metaInformation []byte, sigs [][][]byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "submitObjectPut", metaInformation, sigs)
+}
+
+// SubmitObjectPutTransaction creates a transaction invoking `submitObjectPut` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SubmitObjectPutTransaction(metaInformation []byte, sigs [][][]byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "submitObjectPut", metaInformation, sigs)
+}
+
+// SubmitObjectPutUnsigned creates a transaction invoking `submitObjectPut` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SubmitObjectPutUnsigned(metaInformation []byte, sigs [][][]byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "submitObjectPut", nil, metaInformation, sigs)
 }
 
 // Update creates a transaction invoking `update` method of the contract.
@@ -1144,6 +1195,108 @@ func (e *NodesUpdateEvent) FromStackItem(item *stackitem.Array) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	return nil
+}
+
+// ObjectPutEventsFromApplicationLog retrieves a set of all emitted events
+// with "ObjectPut" name from the provided [result.ApplicationLog].
+func ObjectPutEventsFromApplicationLog(log *result.ApplicationLog) ([]*ObjectPutEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*ObjectPutEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "ObjectPut" {
+				continue
+			}
+			event := new(ObjectPutEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize ObjectPutEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to ObjectPutEvent or
+// returns an error if it's not possible to do to so.
+func (e *ObjectPutEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.ObjectID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ObjectID: %w", err)
+	}
+
+	index++
+	e.Meta, err = func(item stackitem.Item) (map[any]any, error) {
+		m, ok := item.Value().([]stackitem.MapElement)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a map", item.Type().String())
+		}
+		res := make(map[any]any)
+		for i := range m {
+			k, err := m[i].Key.Value(), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %d: %w", i, err)
+			}
+			v, err := m[i].Value.Value(), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("value %d: %w", i, err)
+			}
+			res[k] = v
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Meta: %w", err)
 	}
 
 	return nil
