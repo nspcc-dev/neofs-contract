@@ -32,3 +32,13 @@ events:
     parameters:
       - name: ContainerID
         type: hash256
+  - name: ObjectPut
+    parameters:
+      - name: ContainerID
+        type: hash256
+      - name: ObjectID
+        type: hash256
+      - name: Meta
+        type: Map
+overloads:
+  putMeta: put
