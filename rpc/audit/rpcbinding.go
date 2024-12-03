@@ -138,9 +138,14 @@ func (c *Contract) UpdateUnsigned(script []byte, manifest []byte, data any) (*tr
 }
 
 // itemToAuditAuditHeader converts stack item into *AuditAuditHeader.
+// NULL item is returned as nil pointer without error.
 func itemToAuditAuditHeader(item stackitem.Item, err error) (*AuditAuditHeader, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(AuditAuditHeader)
 	err = res.FromStackItem(item)

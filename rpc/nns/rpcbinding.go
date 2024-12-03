@@ -397,9 +397,14 @@ func (c *Contract) UpdateSOAUnsigned(name string, email string, refresh *big.Int
 }
 
 // itemToNnsNameState converts stack item into *NnsNameState.
+// NULL item is returned as nil pointer without error.
 func itemToNnsNameState(item stackitem.Item, err error) (*NnsNameState, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NnsNameState)
 	err = res.FromStackItem(item)

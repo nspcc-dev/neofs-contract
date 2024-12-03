@@ -586,9 +586,14 @@ func (c *Contract) UpdateStateIRUnsigned(state *big.Int, publicKey *keys.PublicK
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)
@@ -655,9 +660,14 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToCommonIRNode converts stack item into *CommonIRNode.
+// NULL item is returned as nil pointer without error.
 func itemToCommonIRNode(item stackitem.Item, err error) (*CommonIRNode, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonIRNode)
 	err = res.FromStackItem(item)
@@ -699,9 +709,14 @@ func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToNetmapConfigRecord converts stack item into *NetmapConfigRecord.
+// NULL item is returned as nil pointer without error.
 func itemToNetmapConfigRecord(item stackitem.Item, err error) (*NetmapConfigRecord, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NetmapConfigRecord)
 	err = res.FromStackItem(item)
@@ -739,9 +754,14 @@ func (res *NetmapConfigRecord) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToNetmapNode converts stack item into *NetmapNode.
+// NULL item is returned as nil pointer without error.
 func itemToNetmapNode(item stackitem.Item, err error) (*NetmapNode, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NetmapNode)
 	err = res.FromStackItem(item)
@@ -779,9 +799,14 @@ func (res *NetmapNode) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToNetmapNode2 converts stack item into *NetmapNode2.
+// NULL item is returned as nil pointer without error.
 func itemToNetmapNode2(item stackitem.Item, err error) (*NetmapNode2, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NetmapNode2)
 	err = res.FromStackItem(item)

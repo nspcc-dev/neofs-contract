@@ -410,9 +410,14 @@ func (c *Contract) WithdrawUnsigned(user util.Uint160, amount *big.Int) (*transa
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)
@@ -479,9 +484,14 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToCommonIRNode converts stack item into *CommonIRNode.
+// NULL item is returned as nil pointer without error.
 func itemToCommonIRNode(item stackitem.Item, err error) (*CommonIRNode, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonIRNode)
 	err = res.FromStackItem(item)
@@ -523,9 +533,14 @@ func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToNeofsRecord converts stack item into *NeofsRecord.
+// NULL item is returned as nil pointer without error.
 func itemToNeofsRecord(item stackitem.Item, err error) (*NeofsRecord, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NeofsRecord)
 	err = res.FromStackItem(item)

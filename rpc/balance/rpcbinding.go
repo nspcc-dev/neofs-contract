@@ -239,9 +239,14 @@ func (c *Contract) UpdateUnsigned(script []byte, manifest []byte, data any) (*tr
 }
 
 // itemToBalanceAccount converts stack item into *BalanceAccount.
+// NULL item is returned as nil pointer without error.
 func itemToBalanceAccount(item stackitem.Item, err error) (*BalanceAccount, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(BalanceAccount)
 	err = res.FromStackItem(item)
@@ -285,9 +290,14 @@ func (res *BalanceAccount) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToBalanceToken converts stack item into *BalanceToken.
+// NULL item is returned as nil pointer without error.
 func itemToBalanceToken(item stackitem.Item, err error) (*BalanceToken, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(BalanceToken)
 	err = res.FromStackItem(item)
@@ -349,9 +359,14 @@ func (res *BalanceToken) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)
