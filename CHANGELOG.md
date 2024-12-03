@@ -9,6 +9,7 @@ Changelog for NeoFS Contract
 - Minimal Go version to 1.22 (#353, #387)
 
 ### Updated
+- NeoGo dependency to 0.107.0 (#450)
 
 ### Removed
 

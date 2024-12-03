@@ -541,9 +541,14 @@ func (c *Contract) UpdateUnsigned(script []byte, manifest []byte, data any) (*tr
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)
@@ -610,9 +615,14 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToContainerContainer converts stack item into *ContainerContainer.
+// NULL item is returned as nil pointer without error.
 func itemToContainerContainer(item stackitem.Item, err error) (*ContainerContainer, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(ContainerContainer)
 	err = res.FromStackItem(item)
@@ -672,9 +682,14 @@ func (res *ContainerContainer) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToContainerContainerSizes converts stack item into *ContainerContainerSizes.
+// NULL item is returned as nil pointer without error.
 func itemToContainerContainerSizes(item stackitem.Item, err error) (*ContainerContainerSizes, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(ContainerContainerSizes)
 	err = res.FromStackItem(item)
@@ -725,9 +740,14 @@ func (res *ContainerContainerSizes) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToContainerEstimation converts stack item into *ContainerEstimation.
+// NULL item is returned as nil pointer without error.
 func itemToContainerEstimation(item stackitem.Item, err error) (*ContainerEstimation, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(ContainerEstimation)
 	err = res.FromStackItem(item)
@@ -775,9 +795,14 @@ func (res *ContainerEstimation) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToContainerExtendedACL converts stack item into *ContainerExtendedACL.
+// NULL item is returned as nil pointer without error.
 func itemToContainerExtendedACL(item stackitem.Item, err error) (*ContainerExtendedACL, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(ContainerExtendedACL)
 	err = res.FromStackItem(item)

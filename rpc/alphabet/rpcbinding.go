@@ -155,9 +155,14 @@ func (c *Contract) VoteUnsigned(epoch *big.Int, candidates keys.PublicKeys) (*tr
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)

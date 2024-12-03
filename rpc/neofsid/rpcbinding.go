@@ -145,9 +145,14 @@ func (c *Contract) UpdateUnsigned(script []byte, manifest []byte, data any) (*tr
 }
 
 // itemToCommonBallot converts stack item into *CommonBallot.
+// NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(CommonBallot)
 	err = res.FromStackItem(item)
@@ -214,9 +219,14 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 }
 
 // itemToNeofsidUserInfo converts stack item into *NeofsidUserInfo.
+// NULL item is returned as nil pointer without error.
 func itemToNeofsidUserInfo(item stackitem.Item, err error) (*NeofsidUserInfo, error) {
 	if err != nil {
 		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
 	}
 	var res = new(NeofsidUserInfo)
 	err = res.FromStackItem(item)
