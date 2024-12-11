@@ -41,4 +41,4 @@ events:
       - name: Meta
         type: Map
 overloads:
-  putMeta: put
+  putMeta: putNamed

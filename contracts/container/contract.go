@@ -296,16 +296,16 @@ func getFromMap(m map[string]any, key string) any {
 	return m[key]
 }
 
-// PutMeta is the same as [Put] (and exposed as put from the contract via
+// PutMeta is the same as [PutNamed] (and exposed as put from the contract via
 // overload), but allows container's meta-information be handled and notified
 // using the chain.
-func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, metaOnChain bool) {
+func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
 		ctx := storage.GetContext()
 		cID := crypto.Sha256(container)
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, cID...), []byte{})
 	}
-	Put(container, signature, publicKey, token)
+	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
 // Put method creates a new container if it has been invoked by Alphabet nodes

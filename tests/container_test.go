@@ -819,7 +819,7 @@ func TestPutMeta(t *testing.T) {
 			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
 		require.NoError(t, err)
 
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, false)
+		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
 		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
@@ -836,7 +836,7 @@ func TestPutMeta(t *testing.T) {
 		cnt := dummyContainer(acc)
 		oid := randomBytes(sha256.Size)
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, true)
+		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
 
 		t.Run("correct meta data", func(t *testing.T) {
 			meta := testMeta(cnt.id[:], oid)
