@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
@@ -247,6 +246,7 @@ func Update(script []byte, manifest []byte, data any) {
 // must contain information about an object placed to a container that was
 // created using [Put] ([PutMeta]) with enabled meta-on-chain option.
 func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
+	ctx := storage.GetContext()
 	metaMap := std.Deserialize(metaInformation).(map[string]any)
 	cID := getFromMap(metaMap, "cid").(interop.Hash256)
 	if len(cID) != interop.Hash256Len {
@@ -277,7 +277,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 		}
 	}
 	vub := getFromMap(metaMap, "validuntil").(int)
-	if vub <= ledger.CurrentIndex() {
+	if vub <= contract.Call(storage.Get(ctx, netmapContractKey).(interop.Hash160), "epoch", contract.ReadOnly).(int) {
 		panic("incorrect vub: exceeded")
 	}
 
@@ -296,16 +296,16 @@ func getFromMap(m map[string]any, key string) any {
 	return m[key]
 }
 
-// PutMeta is the same as [Put] (and exposed as put from the contract via
+// PutMeta is the same as [PutNamed] (and exposed as put from the contract via
 // overload), but allows container's meta-information be handled and notified
 // using the chain.
-func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, metaOnChain bool) {
+func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
 		ctx := storage.GetContext()
 		cID := crypto.Sha256(container)
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, cID...), []byte{})
 	}
-	Put(container, signature, publicKey, token)
+	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
 // Put method creates a new container if it has been invoked by Alphabet nodes
