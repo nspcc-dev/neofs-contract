@@ -296,16 +296,18 @@ func getFromMap(m map[string]any, key string) any {
 	return m[key]
 }
 
-// PutMeta is the same as [Put] (and exposed as put from the contract via
-// overload), but allows container's meta-information be handled and notified
-// using the chain.
-func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, metaOnChain bool) {
+// PutMeta is the same as [Put] and [PutNamed] (and exposed as put from
+// the contract via overload), but allows named containers and container's
+// meta-information be handled and notified using the chain. If name and
+// zone are non-empty strings, it behaves the same as [PutNamed]; empty
+// strings make a regular [Put] call.
+func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
 		ctx := storage.GetContext()
 		cID := crypto.Sha256(container)
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, cID...), []byte{})
 	}
-	Put(container, signature, publicKey, token)
+	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
 // Put method creates a new container if it has been invoked by Alphabet nodes
@@ -320,8 +322,15 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 	PutNamed(container, signature, publicKey, token, "", "")
 }
 
+// PutNamedOverloaded is the same as [Put] (and exposed as put from the contract via
+// overload), but allows named container creation via NNS contract.
+func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string) {
+	PutNamed(container, signature, publicKey, token, name, zone)
+}
+
 // PutNamed is similar to put but also sets a TXT record in nns contract.
 // Note that zone must exist.
+// DEPRECATED: call [Put] with the same args instead.
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
