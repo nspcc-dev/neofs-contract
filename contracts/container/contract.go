@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
@@ -247,6 +246,7 @@ func Update(script []byte, manifest []byte, data any) {
 // must contain information about an object placed to a container that was
 // created using [Put] ([PutMeta]) with enabled meta-on-chain option.
 func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
+	ctx := storage.GetContext()
 	metaMap := std.Deserialize(metaInformation).(map[string]any)
 	cID := getFromMap(metaMap, "cid").(interop.Hash256)
 	if len(cID) != interop.Hash256Len {
@@ -277,7 +277,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 		}
 	}
 	vub := getFromMap(metaMap, "validuntil").(int)
-	if vub <= ledger.CurrentIndex() {
+	if vub <= contract.Call(storage.Get(ctx, netmapContractKey).(interop.Hash160), "epoch", contract.ReadOnly).(int) {
 		panic("incorrect vub: exceeded")
 	}
 

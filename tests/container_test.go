@@ -893,7 +893,7 @@ func TestPutMeta(t *testing.T) {
 			testFunc("network", netmode.UnitTestNet+1)
 			testFunc("deleted", []any{[]byte{1}})
 			testFunc("locked", []any{[]byte{1}})
-			testFunc("validuntil", 1) // tested chain will have some blocks for sure
+			testFunc("validuntil", 0)
 		})
 	})
 }
