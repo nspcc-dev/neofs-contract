@@ -42,3 +42,4 @@ events:
         type: Map
 overloads:
   putMeta: put
+  putNamedOverloaded: put

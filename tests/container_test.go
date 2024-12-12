@@ -205,11 +205,11 @@ func TestContainerPut(t *testing.T) {
 
 				putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
 				t.Run("no fee for alias", func(t *testing.T) {
-					c.InvokeFail(t, "insufficient balance to create container", "putNamed", putArgs...)
+					c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
 				})
 
 				balanceMint(t, cBal, acc, containerAliasFee*1, []byte{})
-				c.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
+				c.Invoke(t, stackitem.Null{}, "put", putArgs...)
 
 				expected := stackitem.NewArray([]stackitem.Item{
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
@@ -219,7 +219,7 @@ func TestContainerPut(t *testing.T) {
 				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 
 				t.Run("name is already taken", func(t *testing.T) {
-					c.InvokeFail(t, "name is already taken", "putNamed", putArgs...)
+					c.InvokeFail(t, "name is already taken", "put", putArgs...)
 				})
 
 				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
@@ -240,7 +240,7 @@ func TestContainerPut(t *testing.T) {
 
 					putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
 					c2 := c.WithSigners(c.Committee, acc)
-					c2.Invoke(t, stackitem.Null{}, "putNamed", putArgs...)
+					c2.Invoke(t, stackitem.Null{}, "put", putArgs...)
 
 					expected = stackitem.NewArray([]stackitem.Item{
 						stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
@@ -819,7 +819,7 @@ func TestPutMeta(t *testing.T) {
 			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
 		require.NoError(t, err)
 
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, false)
+		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
 		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
@@ -836,7 +836,7 @@ func TestPutMeta(t *testing.T) {
 		cnt := dummyContainer(acc)
 		oid := randomBytes(sha256.Size)
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, true)
+		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
 
 		t.Run("correct meta data", func(t *testing.T) {
 			meta := testMeta(cnt.id[:], oid)

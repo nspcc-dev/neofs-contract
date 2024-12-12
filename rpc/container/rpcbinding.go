@@ -389,23 +389,23 @@ func (c *Contract) PutContainerSizeUnsigned(epoch *big.Int, cid []byte, usedSize
 // Put2 creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Put2(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "put", container, signature, publicKey, token, metaOnChain)
+func (c *Contract) Put2(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string, metaOnChain bool) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "put", container, signature, publicKey, token, name, zone, metaOnChain)
 }
 
 // Put2Transaction creates a transaction invoking `put` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
-func (c *Contract) Put2Transaction(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "put", container, signature, publicKey, token, metaOnChain)
+func (c *Contract) Put2Transaction(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "put", container, signature, publicKey, token, name, zone, metaOnChain)
 }
 
 // Put2Unsigned creates a transaction invoking `put` method of the contract.
 // This transaction is not signed, it's simply returned to the caller.
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) Put2Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, metaOnChain bool) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, metaOnChain)
+func (c *Contract) Put2Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, name, zone, metaOnChain)
 }
 
 // PutNamed creates a transaction invoking `putNamed` method of the contract.
@@ -428,6 +428,28 @@ func (c *Contract) PutNamedTransaction(container []byte, signature []byte, publi
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) PutNamedUnsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "putNamed", nil, container, signature, publicKey, token, name, zone)
+}
+
+// Put3 creates a transaction invoking `put` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Put3(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "put", container, signature, publicKey, token, name, zone)
+}
+
+// Put3Transaction creates a transaction invoking `put` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) Put3Transaction(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "put", container, signature, publicKey, token, name, zone)
+}
+
+// Put3Unsigned creates a transaction invoking `put` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) Put3Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, name, zone)
 }
 
 // SetEACL creates a transaction invoking `setEACL` method of the contract.
