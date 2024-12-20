@@ -1028,6 +1028,10 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	containerListKey = append(containerListKey, id...)
 	storage.Delete(ctx, containerListKey)
 
+	deleteByPrefix(ctx, append([]byte{nodesPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
+
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
 	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
@@ -1166,5 +1170,12 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 		if epoch-n.(int) > cst.TotalCleanupDelta {
 			storage.Delete(ctx, k)
 		}
+	}
+}
+
+func deleteByPrefix(ctx storage.Context, prefix []byte) {
+	it := storage.Find(ctx, prefix, storage.KeysOnly)
+	for iterator.Next(it) {
+		storage.Delete(ctx, iterator.Value(it).([]byte))
 	}
 }
