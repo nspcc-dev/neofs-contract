@@ -876,7 +876,7 @@ func TestPutMeta(t *testing.T) {
 			testFunc("size")
 			testFunc("deleted")
 			testFunc("locked")
-			testFunc("validuntil")
+			testFunc("validUntil")
 		})
 
 		t.Run("incorrect values", func(t *testing.T) {
@@ -893,7 +893,7 @@ func TestPutMeta(t *testing.T) {
 			testFunc("network", netmode.UnitTestNet+1)
 			testFunc("deleted", []any{[]byte{1}})
 			testFunc("locked", []any{[]byte{1}})
-			testFunc("validuntil", 1) // tested chain will have some blocks for sure
+			testFunc("validUntil", 1) // tested chain will have some blocks for sure
 		})
 	})
 }
@@ -907,6 +907,6 @@ func testMeta(cid, oid []byte) *stackitem.Map {
 			{Key: stackitem.Make("size"), Value: stackitem.Make(123)},
 			{Key: stackitem.Make("deleted"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
 			{Key: stackitem.Make("locked"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
-			{Key: stackitem.Make("validuntil"), Value: stackitem.Make(math.MaxInt)},
+			{Key: stackitem.Make("validUntil"), Value: stackitem.Make(math.MaxInt)},
 		})
 }

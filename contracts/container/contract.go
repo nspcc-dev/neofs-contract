@@ -276,7 +276,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 			panic("incorrect " + std.Itoa10(i) + " locked object")
 		}
 	}
-	vub := getFromMap(metaMap, "validuntil").(int)
+	vub := getFromMap(metaMap, "validUntil").(int)
 	if vub <= ledger.CurrentIndex() {
 		panic("incorrect vub: exceeded")
 	}
