@@ -872,6 +872,8 @@ func TestPutMeta(t *testing.T) {
 
 			testFunc("cid")
 			testFunc("oid")
+			testFunc("firstPart")
+			testFunc("previousPart")
 			testFunc("network")
 			testFunc("size")
 			testFunc("deleted")
@@ -890,6 +892,8 @@ func TestPutMeta(t *testing.T) {
 
 			testFunc("cid", []byte{1})
 			testFunc("oid", []byte{1})
+			testFunc("firstPart", []byte{1})
+			testFunc("previousPart", []byte{1})
 			testFunc("network", netmode.UnitTestNet+1)
 			testFunc("deleted", []any{[]byte{1}})
 			testFunc("locked", []any{[]byte{1}})
@@ -904,6 +908,8 @@ func testMeta(cid, oid []byte) *stackitem.Map {
 			{Key: stackitem.Make("network"), Value: stackitem.Make(netmode.UnitTestNet)},
 			{Key: stackitem.Make("cid"), Value: stackitem.Make(cid)},
 			{Key: stackitem.Make("oid"), Value: stackitem.Make(oid)},
+			{Key: stackitem.Make("firstPart"), Value: stackitem.Make(oid)},
+			{Key: stackitem.Make("previousPart"), Value: stackitem.Make(oid)},
 			{Key: stackitem.Make("size"), Value: stackitem.Make(123)},
 			{Key: stackitem.Make("deleted"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
 			{Key: stackitem.Make("locked"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},

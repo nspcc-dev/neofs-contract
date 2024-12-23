@@ -259,6 +259,14 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 	if len(oID) != interop.Hash256Len {
 		panic("incorrect object ID")
 	}
+	firstPart := getFromMap(metaMap, "firstPart").(interop.Hash256)
+	if len(firstPart) != interop.Hash256Len && len(firstPart) != 0 {
+		panic("incorrect first part object ID")
+	}
+	previousPart := getFromMap(metaMap, "previousPart").(interop.Hash256)
+	if len(previousPart) != interop.Hash256Len && len(previousPart) != 0 {
+		panic("incorrect previousPart part object ID")
+	}
 	magic := getFromMap(metaMap, "network").(int)
 	if magic != runtime.GetNetwork() {
 		panic("incorrect network magic")
