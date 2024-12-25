@@ -274,6 +274,14 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 
 	// optional
 
+	if v, ok := getFromMap(metaMap, "type"); ok {
+		typ := v.(int)
+		switch typ {
+		case 0, 1, 2, 3, 4: // regular, tombstone, storage group, lock, link
+		default:
+			panic("incorrect object type")
+		}
+	}
 	if v, ok := getFromMap(metaMap, "firstPart"); ok {
 		firstPart := v.(interop.Hash256)
 		if len(firstPart) != interop.Hash256Len {

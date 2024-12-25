@@ -890,6 +890,7 @@ func TestPutMeta(t *testing.T) {
 			testFunc("oid", []byte{1})
 			testFunc("validUntil", 1) // tested chain will have some blocks for sure
 			testFunc("network", netmode.UnitTestNet+1)
+			testFunc("type", math.MaxInt64)
 			testFunc("firstPart", []byte{1})
 			testFunc("previousPart", []byte{1})
 			testFunc("deleted", []any{[]byte{1}})
