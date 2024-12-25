@@ -248,37 +248,67 @@ func Update(script []byte, manifest []byte, data any) {
 // created using [Put] ([PutMeta]) with enabled meta-on-chain option.
 func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 	metaMap := std.Deserialize(metaInformation).(map[string]any)
-	cID := getFromMap(metaMap, "cid").(interop.Hash256)
+
+	// required
+
+	cID := requireMapValue(metaMap, "cid").(interop.Hash256)
 	if len(cID) != interop.Hash256Len {
 		panic("incorrect container ID")
 	}
 	if storage.Get(storage.GetContext(), append([]byte{containersWithMetaPrefix}, cID...)) == nil {
 		panic("container does not support meta-on-chain")
 	}
-	oID := getFromMap(metaMap, "oid").(interop.Hash256)
+	oID := requireMapValue(metaMap, "oid").(interop.Hash256)
 	if len(oID) != interop.Hash256Len {
 		panic("incorrect object ID")
 	}
-	magic := getFromMap(metaMap, "network").(int)
+	_ = requireMapValue(metaMap, "size").(int)
+	vub := requireMapValue(metaMap, "validUntil").(int)
+	if vub <= ledger.CurrentIndex() {
+		panic("incorrect vub: exceeded")
+	}
+	magic := requireMapValue(metaMap, "network").(int)
 	if magic != runtime.GetNetwork() {
 		panic("incorrect network magic")
 	}
-	_ = getFromMap(metaMap, "size").(int)
-	deleted := getFromMap(metaMap, "deleted").([]interop.Hash256)
-	for i, d := range deleted {
-		if len(d) != interop.Hash256Len {
-			panic("incorrect " + std.Itoa10(i) + " deleted object")
+
+	// optional
+
+	if v, ok := getFromMap(metaMap, "type"); ok {
+		typ := v.(int)
+		switch typ {
+		case 0, 1, 2, 3, 4: // regular, tombstone, storage group, lock, link
+		default:
+			panic("incorrect object type")
 		}
 	}
-	locked := getFromMap(metaMap, "locked").([]interop.Hash256)
-	for i, l := range locked {
-		if len(l) != interop.Hash256Len {
-			panic("incorrect " + std.Itoa10(i) + " locked object")
+	if v, ok := getFromMap(metaMap, "firstPart"); ok {
+		firstPart := v.(interop.Hash256)
+		if len(firstPart) != interop.Hash256Len {
+			panic("incorrect first part object ID")
 		}
 	}
-	vub := getFromMap(metaMap, "validuntil").(int)
-	if vub <= ledger.CurrentIndex() {
-		panic("incorrect vub: exceeded")
+	if v, ok := getFromMap(metaMap, "previousPart"); ok {
+		previousPart := v.(interop.Hash256)
+		if len(previousPart) != interop.Hash256Len {
+			panic("incorrect previous part object ID")
+		}
+	}
+	if v, ok := getFromMap(metaMap, "locked"); ok {
+		locked := v.([]interop.Hash256)
+		for i, l := range locked {
+			if len(l) != interop.Hash256Len {
+				panic("incorrect " + std.Itoa10(i) + " locked object")
+			}
+		}
+	}
+	if v, ok := getFromMap(metaMap, "deleted"); ok {
+		deleted := v.([]interop.Hash256)
+		for i, d := range deleted {
+			if len(d) != interop.Hash256Len {
+				panic("incorrect " + std.Itoa10(i) + " deleted object")
+			}
+		}
 	}
 
 	if !VerifyPlacementSignatures(cID, metaInformation, sigs) {
@@ -288,12 +318,21 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 	runtime.Notify("ObjectPut", cID, oID, metaMap)
 }
 
-func getFromMap(m map[string]any, key string) any {
-	if !neogointernal.Opcode2("HASKEY", m, key).(bool) { // https://github.com/nspcc-dev/neo-go/issues/3716
+func requireMapValue(m map[string]any, key string) any {
+	v, ok := getFromMap(m, key)
+	if !ok {
 		panic("'" + key + "'" + " not found")
 	}
 
-	return m[key]
+	return v
+}
+
+func getFromMap(m map[string]any, key string) (any, bool) {
+	if neogointernal.Opcode2("HASKEY", m, key).(bool) { // https://github.com/nspcc-dev/neo-go/issues/3716
+		return m[key], true
+	}
+
+	return nil, false
 }
 
 // PutMeta is the same as [Put] and [PutNamed] (and exposed as put from
