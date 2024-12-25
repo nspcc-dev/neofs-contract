@@ -861,7 +861,7 @@ func TestPutMeta(t *testing.T) {
 			c.InvokeFail(t, "invalid type", "submitObjectPut", []byte{1}, nil)
 		})
 
-		t.Run("missing values", func(t *testing.T) {
+		t.Run("missing required values", func(t *testing.T) {
 			testFunc := func(key string) {
 				meta := testMeta(cnt.id[:], oid)
 				meta.Drop(meta.Index(stackitem.Make(key)))
@@ -872,13 +872,9 @@ func TestPutMeta(t *testing.T) {
 
 			testFunc("cid")
 			testFunc("oid")
-			testFunc("firstPart")
-			testFunc("previousPart")
-			testFunc("network")
 			testFunc("size")
-			testFunc("deleted")
-			testFunc("locked")
 			testFunc("validUntil")
+			testFunc("network")
 		})
 
 		t.Run("incorrect values", func(t *testing.T) {
@@ -892,12 +888,12 @@ func TestPutMeta(t *testing.T) {
 
 			testFunc("cid", []byte{1})
 			testFunc("oid", []byte{1})
+			testFunc("validUntil", 1) // tested chain will have some blocks for sure
+			testFunc("network", netmode.UnitTestNet+1)
 			testFunc("firstPart", []byte{1})
 			testFunc("previousPart", []byte{1})
-			testFunc("network", netmode.UnitTestNet+1)
 			testFunc("deleted", []any{[]byte{1}})
 			testFunc("locked", []any{[]byte{1}})
-			testFunc("validUntil", 1) // tested chain will have some blocks for sure
 		})
 	})
 }
@@ -909,7 +905,6 @@ func testMeta(cid, oid []byte) *stackitem.Map {
 			{Key: stackitem.Make("cid"), Value: stackitem.Make(cid)},
 			{Key: stackitem.Make("oid"), Value: stackitem.Make(oid)},
 			{Key: stackitem.Make("firstPart"), Value: stackitem.Make(oid)},
-			{Key: stackitem.Make("previousPart"), Value: stackitem.Make(oid)},
 			{Key: stackitem.Make("size"), Value: stackitem.Make(123)},
 			{Key: stackitem.Make("deleted"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
 			{Key: stackitem.Make("locked"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
