@@ -1,5 +1,5 @@
 name: "NeoFS Netmap"
-safemethods: ["innerRingList", "epoch", "netmap", "netmapCandidates", "snapshot", "snapshotByEpoch", "config", "listConfig", "version", "listNodes", "listCandidates"]
+safemethods: ["innerRingList", "epoch", "netmap", "netmapCandidates", "snapshot", "snapshotByEpoch", "config", "listConfig", "version", "listNodes", "listCandidates", "cleanupThreshold"]
 permissions:
   - methods: ["update", "newEpoch"]
 events:

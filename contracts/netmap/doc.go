@@ -68,10 +68,12 @@ Key-value storage format:
    Balance contract reference
  - 'config<name>' -> []byte
    value of the particular NeoFS network parameter
- - '2<public_key>' -> std.Serialize(Node2)
+ - '2<public_key>' -> std.Serialize(Candidate)
    Candidate list in modern structured format.
  - 'p<epoch><public_key>' -> std.Serialize(Node2)
    Per-epoch node list, epoch is encoded as 4-byte BE integer.
+ - 't' -> int
+   Cleanup threshold value.
 
 # Setting
 To handle some events, the contract refers to other contracts.
@@ -88,7 +90,8 @@ snapshots. Snapshots are identified by the numerical ring [0:SNAPSHOT_LIMIT).
 
 # Network map candidates
 Contract stores information about the network parties which were requested to be
-added to the network map.
+added to the network map. Nodes need to update their state regularly, contract
+filters out stale nodes on every epoch update (see CleanupThreshold).
 
 # Network configuration
 Contract stores NeoFS network configuration declared in the NeoFS API protocol.
