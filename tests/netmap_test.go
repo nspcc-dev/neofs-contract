@@ -494,6 +494,10 @@ func TestAddNode(t *testing.T) {
 		})
 	)
 
+	candidateStruct, err := nodeStruct.Clone()
+	require.NoError(t, err)
+	candidateStruct.Append(stackitem.Make(0))
+
 	acc1 := c.NewAccount(t)
 	cAcc1 := c.WithSigners(acc1)
 	cAcc1.InvokeFail(t, common.ErrWitnessFailed, "addNode", nodeStruct)
@@ -547,7 +551,7 @@ func TestAddNode(t *testing.T) {
 		for iter.Next() {
 			actual = append(actual, iter.Value())
 		}
-		require.ElementsMatch(t, []stackitem.Item{nodeStruct}, actual)
+		require.ElementsMatch(t, []stackitem.Item{candidateStruct}, actual)
 	}
 	checkNodeList("listCandidates")
 
@@ -602,6 +606,32 @@ func TestAddNode(t *testing.T) {
 	checkZeroList("listNodes")
 	// And historic data is gone.
 	checkZeroList("listNodes", 1)
+
+	// We're at epoch 11, add node again
+	_ = cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 12)
+	candidateStruct.Remove(4)
+	candidateStruct.Append(stackitem.Make(11))
+	checkNodeList("listNodes") // Added.
+
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 13)
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 14)
+	checkNodeList("listNodes") // +2 epochs, still here
+
+	// Update state at epoch 14.
+	_ = cAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Online), pKey.Bytes())
+
+	_ = c.Invoke(t, stackitem.Null{}, "newEpoch", 15)
+	candidateStruct.Remove(4)
+	candidateStruct.Append(stackitem.Make(14))
+	checkNodeList("listNodes") // Not gone
+
+	for i := 16; i < 16+3; i++ {
+		_ = c.Invoke(t, stackitem.Null{}, "newEpoch", i)
+	}
+	// Cleaned up as stale.
+	checkZeroList("listCandidates")
+	checkZeroList("listNodes")
 }
 
 func TestListConfig(t *testing.T) {
@@ -617,4 +647,22 @@ func TestListConfig(t *testing.T) {
 		stackitem.NewStruct([]stackitem.Item{stackitem.Make("key"), stackitem.Make("value")}),
 		stackitem.NewStruct([]stackitem.Item{stackitem.Make("some"), stackitem.Make("setting")}),
 	}), arr)
+}
+
+func TestCleanupThreshold(t *testing.T) {
+	var c = newNetmapInvoker(t)
+
+	s, err := c.TestInvoke(t, "cleanupThreshold")
+	require.NoError(t, err)
+	require.Equal(t, 1, s.Len())
+	require.Equal(t, stackitem.Make(3), s.Pop().Item())
+
+	c.InvokeFail(t, "negative value", "setCleanupThreshold", -1)
+
+	_ = c.Invoke(t, stackitem.Null{}, "setCleanupThreshold", 10)
+
+	s, err = c.TestInvoke(t, "cleanupThreshold")
+	require.NoError(t, err)
+	require.Equal(t, 1, s.Len())
+	require.Equal(t, stackitem.Make(10), s.Pop().Item())
 }

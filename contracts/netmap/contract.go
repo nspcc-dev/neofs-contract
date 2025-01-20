@@ -43,6 +43,25 @@ type Node2 struct {
 	State nodestate.Type
 }
 
+// Candidate is an extended version of [Node2] that also knows about the last
+// active epoch for the node.
+type Candidate struct {
+	// Addresses are to be used to connect to the node.
+	Addresses []string
+
+	// Attributes are KV pairs with node metadata.
+	Attributes map[string]string
+
+	// Key is a node public key.
+	Key interop.PublicKey
+
+	// State is a current node state.
+	State nodestate.Type
+
+	// LastActiveEpoch is the last epoch this node was active in.
+	LastActiveEpoch int
+}
+
 // Temporary migration-related types.
 // nolint:deadcode,unused
 type oldNode struct {
@@ -82,6 +101,9 @@ const (
 	// Node2 storage.
 	node2CandidatePrefix = "2"
 	node2NetmapPrefix    = "p"
+
+	defaultCleanupThreshold = 3
+	cleanupThresholdKey     = "t"
 
 	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
 	// marking the start of the node's public key.
@@ -159,6 +181,10 @@ func _deploy(data any, isUpdate bool) {
 			storage.Delete(ctx, containerContractKey)
 		}
 
+		if version < 21_000 {
+			storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
+		}
+
 		return
 	}
 
@@ -187,6 +213,7 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 	storage.Put(ctx, snapshotEpoch, 0)
 	storage.Put(ctx, snapshotBlockKey, 0)
+	storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
 
 	prefix := []byte(snapshotKeyPrefix)
 	for i := 0; i < DefaultSnapshotCount; i++ { //nolint:intrange // Not supported by NeoGo
@@ -317,8 +344,17 @@ func AddNode(n Node2) {
 	common.CheckWitness(n.Key)
 	common.CheckAlphabetWitness()
 
-	var key = append([]byte(node2CandidatePrefix), n.Key...)
-	storage.Put(ctx, key, std.Serialize(n))
+	var (
+		c = Candidate{
+			Addresses:       n.Addresses,
+			Attributes:      n.Attributes,
+			Key:             n.Key,
+			State:           n.State,
+			LastActiveEpoch: Epoch(),
+		}
+		key = append([]byte(node2CandidatePrefix), n.Key...)
+	)
+	storage.Put(ctx, key, std.Serialize(c))
 	runtime.Notify("AddNode", n.Key, n.Addresses, n.Attributes)
 }
 
@@ -501,7 +537,7 @@ func ListNodesEpoch(epoch int) iterator.Iterator {
 }
 
 // ListCandidates returns an iterator for a set of current candidate nodes.
-// Iterator values are [Node2] structures.
+// Iterator values are [Candidate] structures.
 func ListCandidates() iterator.Iterator {
 	return storage.Find(storage.GetReadOnlyContext(),
 		[]byte(node2CandidatePrefix),
@@ -719,6 +755,24 @@ func Version() int {
 	return common.Version
 }
 
+// SetCleanupThreshold sets cleanup threshold configuration. Negative values
+// are not allowed. Zero disables stale node cleanups on epoch change.
+func SetCleanupThreshold(val int) {
+	if val < 0 {
+		panic("negative value")
+	}
+
+	common.CheckAlphabetWitness()
+	storage.Put(storage.GetContext(), []byte(cleanupThresholdKey), val)
+}
+
+// CleanupThreshold returns the cleanup threshold configuration. Nodes that
+// do not update their state for this number of epochs get kicked out of the
+// network map. Zero means cleanups are disabled.
+func CleanupThreshold() int {
+	return storage.Get(storage.GetReadOnlyContext(), []byte(cleanupThresholdKey)).(int)
+}
+
 // serializes and stores the given Node by its public key in the contract storage,
 // and throws AddPeerSuccess notification after this.
 //
@@ -752,9 +806,10 @@ func updateNetmapState(ctx storage.Context, key interop.PublicKey, state nodesta
 	raw = storage.Get(ctx, storageKey).([]byte)
 	if raw != nil {
 		present = true
-		node := std.Deserialize(raw).(Node2)
-		node.State = state
-		storage.Put(ctx, storageKey, std.Serialize(node))
+		cand := std.Deserialize(raw).(Candidate)
+		cand.State = state
+		cand.LastActiveEpoch = Epoch()
+		storage.Put(ctx, storageKey, std.Serialize(cand))
 	}
 	if !present {
 		panic("peer is missing")
@@ -785,13 +840,21 @@ func fourBytesBE(num int) []byte {
 
 func fillNetmap(ctx storage.Context, epoch int) {
 	var (
-		epochPrefix = append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...)
-		it          = storage.Find(ctx, []byte(node2CandidatePrefix), storage.RemovePrefix)
+		cleanupThreshold = CleanupThreshold()
+		epochPrefix      = append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...)
+		it               = storage.Find(ctx, []byte(node2CandidatePrefix), storage.RemovePrefix)
 	)
 	for iterator.Next(it) {
 		kv := iterator.Value(it).(kv)
-		// Offline nodes are just deleted, so we can omit state check.
-		storage.Put(ctx, append(epochPrefix, kv.k...), kv.v)
+
+		cand := std.Deserialize(kv.v).(Candidate)
+		if cleanupThreshold > 0 && cand.LastActiveEpoch < epoch-cleanupThreshold {
+			// Forget about stale nodes.
+			updateCandidateState(ctx, interop.PublicKey(kv.k), nodestate.Offline)
+		} else {
+			// Offline nodes are just deleted, so we can omit state check.
+			storage.Put(ctx, append(epochPrefix, kv.k...), kv.v)
+		}
 	}
 }
 

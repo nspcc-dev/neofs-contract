@@ -121,6 +121,11 @@ func New(actor Actor, hash util.Uint160) *Contract {
 	return &Contract{ContractReader{actor, hash}, actor, hash}
 }
 
+// CleanupThreshold invokes `cleanupThreshold` method of contract.
+func (c *ContractReader) CleanupThreshold() (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "cleanupThreshold"))
+}
+
 // Config invokes `config` method of contract.
 func (c *ContractReader) Config(key []byte) (any, error) {
 	return func(item stackitem.Item, err error) (any, error) {
@@ -451,6 +456,28 @@ func (c *Contract) NewEpochTransaction(epochNum *big.Int) (*transaction.Transact
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) NewEpochUnsigned(epochNum *big.Int) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "newEpoch", nil, epochNum)
+}
+
+// SetCleanupThreshold creates a transaction invoking `setCleanupThreshold` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetCleanupThreshold(val *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setCleanupThreshold", val)
+}
+
+// SetCleanupThresholdTransaction creates a transaction invoking `setCleanupThreshold` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetCleanupThresholdTransaction(val *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setCleanupThreshold", val)
+}
+
+// SetCleanupThresholdUnsigned creates a transaction invoking `setCleanupThreshold` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetCleanupThresholdUnsigned(val *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setCleanupThreshold", nil, val)
 }
 
 // SetConfig creates a transaction invoking `setConfig` method of the contract.

@@ -212,6 +212,10 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.True(t, ok)
 		require.ElementsMatch(t, vPrev, vNew, "%d-th past netmap snapshot should remain", k)
 	}
+
+	var cleanupThreshItem = c.GetStorageItem([]byte("t"))
+	cleanupThresh := io.NewBinReaderFromBuf(cleanupThreshItem).ReadVarUint()
+	require.Equal(t, 3, cleanupThresh)
 }
 
 func checkNewEpochSubscribers(t *testing.T, contract *migration.Contract, balanceWant, containerWant util.Uint160) {
