@@ -183,6 +183,7 @@ func _deploy(data any, isUpdate bool) {
 
 		if version < 21_000 {
 			storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
+			setConfig(ctx, "UseNodeV2", []byte{0})
 		}
 
 		return
@@ -214,6 +215,7 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, snapshotEpoch, 0)
 	storage.Put(ctx, snapshotBlockKey, 0)
 	storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
+	setConfig(ctx, "UseNodeV2", []byte{1})
 
 	prefix := []byte(snapshotKeyPrefix)
 	for i := 0; i < DefaultSnapshotCount; i++ { //nolint:intrange // Not supported by NeoGo

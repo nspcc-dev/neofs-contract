@@ -644,6 +644,7 @@ func TestListConfig(t *testing.T) {
 	arr, ok := s.Pop().Item().(*stackitem.Array)
 	require.True(t, ok)
 	require.Equal(t, stackitem.NewArray([]stackitem.Item{
+		stackitem.NewStruct([]stackitem.Item{stackitem.Make("UseNodeV2"), stackitem.Make([]byte{1})}),
 		stackitem.NewStruct([]stackitem.Item{stackitem.Make("key"), stackitem.Make("value")}),
 		stackitem.NewStruct([]stackitem.Item{stackitem.Make("some"), stackitem.Make("setting")}),
 	}), arr)
