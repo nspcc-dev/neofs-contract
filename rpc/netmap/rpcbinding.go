@@ -30,6 +30,15 @@ type CommonIRNode struct {
 	PublicKey *keys.PublicKey
 }
 
+// NetmapCandidate is a contract-specific netmap.Candidate type used by its methods.
+type NetmapCandidate struct {
+	Addresses       []string
+	Attributes      map[string]string
+	Key             *keys.PublicKey
+	State           *big.Int
+	LastActiveEpoch *big.Int
+}
+
 // NetmapConfigRecord is a contract-specific netmap.ConfigRecord type used by its methods.
 type NetmapConfigRecord struct {
 	Key   []byte
@@ -319,6 +328,11 @@ func (c *ContractReader) SnapshotByEpoch(epoch *big.Int) ([]*NetmapNode, error) 
 			return res, nil
 		}(item)
 	}(unwrap.Item(c.invoker.Call(c.hash, "snapshotByEpoch", epoch)))
+}
+
+// UnusedCandidate invokes `unusedCandidate` method of contract.
+func (c *ContractReader) UnusedCandidate() (*NetmapCandidate, error) {
+	return itemToNetmapCandidate(unwrap.Item(c.invoker.Call(c.hash, "unusedCandidate")))
 }
 
 // Version invokes `version` method of contract.
@@ -730,6 +744,137 @@ func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	return nil
+}
+
+// itemToNetmapCandidate converts stack item into *NetmapCandidate.
+// NULL item is returned as nil pointer without error.
+func itemToNetmapCandidate(item stackitem.Item, err error) (*NetmapCandidate, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(NetmapCandidate)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// FromStackItem retrieves fields of NetmapCandidate from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+func (res *NetmapCandidate) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 5 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Addresses, err = func(item stackitem.Item) ([]string, error) {
+		arr, ok := item.Value().([]stackitem.Item)
+		if !ok {
+			return nil, errors.New("not an array")
+		}
+		res := make([]string, len(arr))
+		for i := range res {
+			res[i], err = func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(arr[i])
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Addresses: %w", err)
+	}
+
+	index++
+	res.Attributes, err = func(item stackitem.Item) (map[string]string, error) {
+		m, ok := item.Value().([]stackitem.MapElement)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a map", item.Type().String())
+		}
+		res := make(map[string]string)
+		for i := range m {
+			k, err := func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(m[i].Key)
+			if err != nil {
+				return nil, fmt.Errorf("key %d: %w", i, err)
+			}
+			v, err := func(item stackitem.Item) (string, error) {
+				b, err := item.TryBytes()
+				if err != nil {
+					return "", err
+				}
+				if !utf8.Valid(b) {
+					return "", errors.New("not a UTF-8 string")
+				}
+				return string(b), nil
+			}(m[i].Value)
+			if err != nil {
+				return nil, fmt.Errorf("value %d: %w", i, err)
+			}
+			res[k] = v
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Attributes: %w", err)
+	}
+
+	index++
+	res.Key, err = func(item stackitem.Item) (*keys.PublicKey, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return nil, err
+		}
+		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
+		if err != nil {
+			return nil, err
+		}
+		return k, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Key: %w", err)
+	}
+
+	index++
+	res.State, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field State: %w", err)
+	}
+
+	index++
+	res.LastActiveEpoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LastActiveEpoch: %w", err)
 	}
 
 	return nil

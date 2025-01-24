@@ -775,6 +775,13 @@ func CleanupThreshold() int {
 	return storage.Get(storage.GetReadOnlyContext(), []byte(cleanupThresholdKey)).(int)
 }
 
+// UnusedCandidate does nothing except marking Candidate structure as used one
+// thereby making RPC binding generator produce code for it. It is a temporary
+// solution until we have proper iterator types. Never use it.
+func UnusedCandidate() Candidate {
+	return Candidate{}
+}
+
 // serializes and stores the given Node by its public key in the contract storage,
 // and throws AddPeerSuccess notification after this.
 //
