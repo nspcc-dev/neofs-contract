@@ -411,8 +411,15 @@ func itemToNnsNameState(item stackitem.Item, err error) (*NnsNameState, error) {
 	return res, err
 }
 
+// Ensure *NnsNameState is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&NnsNameState{})
+
+// Ensure *NnsNameState is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&NnsNameState{})
+
 // FromStackItem retrieves fields of NnsNameState from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *NnsNameState) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -480,6 +487,85 @@ func (res *NnsNameState) FromStackItem(item stackitem.Item) error {
 	}
 
 	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing NnsNameState.
+// It implements [stackitem.Convertible] interface.
+func (res *NnsNameState) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 4)
+	)
+	itm, err = stackitem.NewByteArray(res.Owner.BytesBE()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Owner: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray([]byte(res.Name)), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Name: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Expiration), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Expiration: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Admin.BytesBE()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Admin: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing NnsNameState.
+// It implements [smartcontract.Convertible] interface so that NnsNameState
+// could be used with invokers.
+func (res *NnsNameState) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 4)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Owner)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Owner: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Name)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Name: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Expiration)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Expiration: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Admin)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Admin: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
 // SetAdminEventsFromApplicationLog retrieves a set of all emitted events

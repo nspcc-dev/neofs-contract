@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"math/big"
@@ -152,8 +153,15 @@ func itemToAuditAuditHeader(item stackitem.Item, err error) (*AuditAuditHeader, 
 	return res, err
 }
 
+// Ensure *AuditAuditHeader is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&AuditAuditHeader{})
+
+// Ensure *AuditAuditHeader is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&AuditAuditHeader{})
+
 // FromStackItem retrieves fields of AuditAuditHeader from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *AuditAuditHeader) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -196,4 +204,71 @@ func (res *AuditAuditHeader) FromStackItem(item stackitem.Item) error {
 	}
 
 	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing AuditAuditHeader.
+// It implements [stackitem.Convertible] interface.
+func (res *AuditAuditHeader) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 3)
+	)
+	itm, err = (*stackitem.BigInteger)(res.Epoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Epoch: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.CID), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field CID: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.From.Bytes()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field From: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing AuditAuditHeader.
+// It implements [smartcontract.Convertible] interface so that AuditAuditHeader
+// could be used with invokers.
+func (res *AuditAuditHeader) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 3)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Epoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Epoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.CID)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field CID: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.From)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field From: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }

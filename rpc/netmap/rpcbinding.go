@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"math/big"
@@ -641,8 +642,15 @@ func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	return res, err
 }
 
+// Ensure *CommonBallot is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&CommonBallot{})
+
+// Ensure *CommonBallot is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&CommonBallot{})
+
 // FromStackItem retrieves fields of CommonBallot from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -700,6 +708,101 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing CommonBallot.
+// It implements [stackitem.Convertible] interface.
+func (res *CommonBallot) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 3)
+	)
+	itm, err = stackitem.NewByteArray(res.ID), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ID: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = func(in keys.PublicKeys) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var items = make([]stackitem.Item, 0, len(in))
+		for i, v := range in {
+			itm, err := stackitem.NewByteArray(v.Bytes()), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+			items = append(items, itm)
+		}
+		return stackitem.NewArray(items), nil
+	}(res.Voters)
+	if err != nil {
+		return nil, fmt.Errorf("field Voters: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Height), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Height: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing CommonBallot.
+// It implements [smartcontract.Convertible] interface so that CommonBallot
+// could be used with invokers.
+func (res *CommonBallot) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 3)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.ID)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ID: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = func(in keys.PublicKeys) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.Parameter, 0, len(in))
+		for i, v := range in {
+			prm, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("item %d: %w", i, err)
+			}
+			prms = append(prms, prm)
+		}
+		return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+	}(res.Voters)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Voters: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Height)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Height: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToCommonIRNode converts stack item into *CommonIRNode.
 // NULL item is returned as nil pointer without error.
 func itemToCommonIRNode(item stackitem.Item, err error) (*CommonIRNode, error) {
@@ -715,8 +818,15 @@ func itemToCommonIRNode(item stackitem.Item, err error) (*CommonIRNode, error) {
 	return res, err
 }
 
+// Ensure *CommonIRNode is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&CommonIRNode{})
+
+// Ensure *CommonIRNode is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&CommonIRNode{})
+
 // FromStackItem retrieves fields of CommonIRNode from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -749,6 +859,49 @@ func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing CommonIRNode.
+// It implements [stackitem.Convertible] interface.
+func (res *CommonIRNode) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 1)
+	)
+	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field PublicKey: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing CommonIRNode.
+// It implements [smartcontract.Convertible] interface so that CommonIRNode
+// could be used with invokers.
+func (res *CommonIRNode) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 1)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PublicKey: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToNetmapCandidate converts stack item into *NetmapCandidate.
 // NULL item is returned as nil pointer without error.
 func itemToNetmapCandidate(item stackitem.Item, err error) (*NetmapCandidate, error) {
@@ -764,8 +917,15 @@ func itemToNetmapCandidate(item stackitem.Item, err error) (*NetmapCandidate, er
 	return res, err
 }
 
+// Ensure *NetmapCandidate is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&NetmapCandidate{})
+
+// Ensure *NetmapCandidate is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&NetmapCandidate{})
+
 // FromStackItem retrieves fields of NetmapCandidate from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *NetmapCandidate) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -880,6 +1040,161 @@ func (res *NetmapCandidate) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing NetmapCandidate.
+// It implements [stackitem.Convertible] interface.
+func (res *NetmapCandidate) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 5)
+	)
+	itm, err = func(in []string) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var items = make([]stackitem.Item, 0, len(in))
+		for i, v := range in {
+			itm, err := stackitem.NewByteArray([]byte(v)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+			items = append(items, itm)
+		}
+		return stackitem.NewArray(items), nil
+	}(res.Addresses)
+	if err != nil {
+		return nil, fmt.Errorf("field Addresses: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = func(in map[string]string) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var m = stackitem.NewMap()
+		for k, v := range in {
+			iKey, err := stackitem.NewByteArray([]byte(k)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %v: %w", k, err)
+			}
+			iVal, err := stackitem.NewByteArray([]byte(v)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %v, wrong value: %w", k, err)
+			}
+			m.Add(iKey, iVal)
+		}
+		return m, nil
+	}(res.Attributes)
+	if err != nil {
+		return nil, fmt.Errorf("field Attributes: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Key.Bytes()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Key: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.State), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field State: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.LastActiveEpoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LastActiveEpoch: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing NetmapCandidate.
+// It implements [smartcontract.Convertible] interface so that NetmapCandidate
+// could be used with invokers.
+func (res *NetmapCandidate) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 5)
+	)
+	prm, err = func(in []string) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.Parameter, 0, len(in))
+		for i, v := range in {
+			prm, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("item %d: %w", i, err)
+			}
+			prms = append(prms, prm)
+		}
+		return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+	}(res.Addresses)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Addresses: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = func(in map[string]string) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.ParameterPair, 0, len(in))
+		for k, v := range in {
+			iKey, err := smartcontract.NewParameterFromValue(k)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("key %v: %w", k, err)
+			}
+			iVal, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("key %v, wrong value: %w", k, err)
+			}
+			prms = append(prms, smartcontract.ParameterPair{Key: iKey, Value: iVal})
+		}
+		return smartcontract.Parameter{Type: smartcontract.MapType, Value: prms}, nil
+	}(res.Attributes)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Attributes: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Key)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Key: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.State)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field State: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LastActiveEpoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LastActiveEpoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToNetmapConfigRecord converts stack item into *NetmapConfigRecord.
 // NULL item is returned as nil pointer without error.
 func itemToNetmapConfigRecord(item stackitem.Item, err error) (*NetmapConfigRecord, error) {
@@ -895,8 +1210,15 @@ func itemToNetmapConfigRecord(item stackitem.Item, err error) (*NetmapConfigReco
 	return res, err
 }
 
+// Ensure *NetmapConfigRecord is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&NetmapConfigRecord{})
+
+// Ensure *NetmapConfigRecord is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&NetmapConfigRecord{})
+
 // FromStackItem retrieves fields of NetmapConfigRecord from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *NetmapConfigRecord) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -925,6 +1247,61 @@ func (res *NetmapConfigRecord) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing NetmapConfigRecord.
+// It implements [stackitem.Convertible] interface.
+func (res *NetmapConfigRecord) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = stackitem.NewByteArray(res.Key), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Key: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Value), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Value: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing NetmapConfigRecord.
+// It implements [smartcontract.Convertible] interface so that NetmapConfigRecord
+// could be used with invokers.
+func (res *NetmapConfigRecord) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Key)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Key: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Value)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToNetmapNode converts stack item into *NetmapNode.
 // NULL item is returned as nil pointer without error.
 func itemToNetmapNode(item stackitem.Item, err error) (*NetmapNode, error) {
@@ -940,8 +1317,15 @@ func itemToNetmapNode(item stackitem.Item, err error) (*NetmapNode, error) {
 	return res, err
 }
 
+// Ensure *NetmapNode is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&NetmapNode{})
+
+// Ensure *NetmapNode is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&NetmapNode{})
+
 // FromStackItem retrieves fields of NetmapNode from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *NetmapNode) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -970,6 +1354,61 @@ func (res *NetmapNode) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing NetmapNode.
+// It implements [stackitem.Convertible] interface.
+func (res *NetmapNode) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = stackitem.NewByteArray(res.BLOB), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field BLOB: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.State), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field State: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing NetmapNode.
+// It implements [smartcontract.Convertible] interface so that NetmapNode
+// could be used with invokers.
+func (res *NetmapNode) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.BLOB)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field BLOB: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.State)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field State: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToNetmapNode2 converts stack item into *NetmapNode2.
 // NULL item is returned as nil pointer without error.
 func itemToNetmapNode2(item stackitem.Item, err error) (*NetmapNode2, error) {
@@ -985,8 +1424,15 @@ func itemToNetmapNode2(item stackitem.Item, err error) (*NetmapNode2, error) {
 	return res, err
 }
 
+// Ensure *NetmapNode2 is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&NetmapNode2{})
+
+// Ensure *NetmapNode2 is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&NetmapNode2{})
+
 // FromStackItem retrieves fields of NetmapNode2 from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *NetmapNode2) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -1093,6 +1539,149 @@ func (res *NetmapNode2) FromStackItem(item stackitem.Item) error {
 	}
 
 	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing NetmapNode2.
+// It implements [stackitem.Convertible] interface.
+func (res *NetmapNode2) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 4)
+	)
+	itm, err = func(in []string) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var items = make([]stackitem.Item, 0, len(in))
+		for i, v := range in {
+			itm, err := stackitem.NewByteArray([]byte(v)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+			items = append(items, itm)
+		}
+		return stackitem.NewArray(items), nil
+	}(res.Addresses)
+	if err != nil {
+		return nil, fmt.Errorf("field Addresses: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = func(in map[string]string) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var m = stackitem.NewMap()
+		for k, v := range in {
+			iKey, err := stackitem.NewByteArray([]byte(k)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %v: %w", k, err)
+			}
+			iVal, err := stackitem.NewByteArray([]byte(v)), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("key %v, wrong value: %w", k, err)
+			}
+			m.Add(iKey, iVal)
+		}
+		return m, nil
+	}(res.Attributes)
+	if err != nil {
+		return nil, fmt.Errorf("field Attributes: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Key.Bytes()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Key: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.State), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field State: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing NetmapNode2.
+// It implements [smartcontract.Convertible] interface so that NetmapNode2
+// could be used with invokers.
+func (res *NetmapNode2) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 4)
+	)
+	prm, err = func(in []string) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.Parameter, 0, len(in))
+		for i, v := range in {
+			prm, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("item %d: %w", i, err)
+			}
+			prms = append(prms, prm)
+		}
+		return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+	}(res.Addresses)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Addresses: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = func(in map[string]string) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.ParameterPair, 0, len(in))
+		for k, v := range in {
+			iKey, err := smartcontract.NewParameterFromValue(k)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("key %v: %w", k, err)
+			}
+			iVal, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("key %v, wrong value: %w", k, err)
+			}
+			prms = append(prms, smartcontract.ParameterPair{Key: iKey, Value: iVal})
+		}
+		return smartcontract.Parameter{Type: smartcontract.MapType, Value: prms}, nil
+	}(res.Attributes)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Attributes: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Key)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Key: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.State)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field State: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
 // AddNodeEventsFromApplicationLog retrieves a set of all emitted events
