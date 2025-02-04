@@ -861,8 +861,14 @@ func fillNetmap(ctx storage.Context, epoch int) {
 			// Forget about stale nodes.
 			updateCandidateState(ctx, interop.PublicKey(kv.k), nodestate.Offline)
 		} else {
+			var n2 = Node2{
+				Addresses:  cand.Addresses,
+				Attributes: cand.Attributes,
+				Key:        cand.Key,
+				State:      cand.State,
+			}
 			// Offline nodes are just deleted, so we can omit state check.
-			storage.Put(ctx, append(epochPrefix, kv.k...), kv.v)
+			storage.Put(ctx, append(epochPrefix, kv.k...), std.Serialize(n2))
 		}
 	}
 }

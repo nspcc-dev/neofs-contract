@@ -551,7 +551,11 @@ func TestAddNode(t *testing.T) {
 		for iter.Next() {
 			actual = append(actual, iter.Value())
 		}
-		require.ElementsMatch(t, []stackitem.Item{candidateStruct}, actual)
+		if method == "listCandidates" {
+			require.ElementsMatch(t, []stackitem.Item{candidateStruct}, actual)
+		} else {
+			require.ElementsMatch(t, []stackitem.Item{nodeStruct}, actual)
+		}
 	}
 	checkNodeList("listCandidates")
 
