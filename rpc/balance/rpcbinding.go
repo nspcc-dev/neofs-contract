@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep17"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"math/big"
@@ -253,8 +254,15 @@ func itemToBalanceAccount(item stackitem.Item, err error) (*BalanceAccount, erro
 	return res, err
 }
 
+// Ensure *BalanceAccount is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&BalanceAccount{})
+
+// Ensure *BalanceAccount is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&BalanceAccount{})
+
 // FromStackItem retrieves fields of BalanceAccount from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *BalanceAccount) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -289,6 +297,73 @@ func (res *BalanceAccount) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing BalanceAccount.
+// It implements [stackitem.Convertible] interface.
+func (res *BalanceAccount) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 3)
+	)
+	itm, err = (*stackitem.BigInteger)(res.Balance), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Balance: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Until), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Until: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Parent), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Parent: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing BalanceAccount.
+// It implements [smartcontract.Convertible] interface so that BalanceAccount
+// could be used with invokers.
+func (res *BalanceAccount) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 3)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Balance)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Balance: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Until)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Until: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Parent)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Parent: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToBalanceToken converts stack item into *BalanceToken.
 // NULL item is returned as nil pointer without error.
 func itemToBalanceToken(item stackitem.Item, err error) (*BalanceToken, error) {
@@ -304,8 +379,15 @@ func itemToBalanceToken(item stackitem.Item, err error) (*BalanceToken, error) {
 	return res, err
 }
 
+// Ensure *BalanceToken is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&BalanceToken{})
+
+// Ensure *BalanceToken is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&BalanceToken{})
+
 // FromStackItem retrieves fields of BalanceToken from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *BalanceToken) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -358,6 +440,73 @@ func (res *BalanceToken) FromStackItem(item stackitem.Item) error {
 	return nil
 }
 
+// ToStackItem creates [stackitem.Item] representing BalanceToken.
+// It implements [stackitem.Convertible] interface.
+func (res *BalanceToken) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 3)
+	)
+	itm, err = stackitem.NewByteArray([]byte(res.Symbol)), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Symbol: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Decimals), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Decimals: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray([]byte(res.CirculationKey)), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field CirculationKey: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing BalanceToken.
+// It implements [smartcontract.Convertible] interface so that BalanceToken
+// could be used with invokers.
+func (res *BalanceToken) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 3)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Symbol)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Symbol: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Decimals)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Decimals: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.CirculationKey)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field CirculationKey: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToCommonBallot converts stack item into *CommonBallot.
 // NULL item is returned as nil pointer without error.
 func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
@@ -373,8 +522,15 @@ func itemToCommonBallot(item stackitem.Item, err error) (*CommonBallot, error) {
 	return res, err
 }
 
+// Ensure *CommonBallot is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&CommonBallot{})
+
+// Ensure *CommonBallot is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&CommonBallot{})
+
 // FromStackItem retrieves fields of CommonBallot from the given
 // [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
 func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 	arr, ok := item.Value().([]stackitem.Item)
 	if !ok {
@@ -430,6 +586,101 @@ func (res *CommonBallot) FromStackItem(item stackitem.Item) error {
 	}
 
 	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing CommonBallot.
+// It implements [stackitem.Convertible] interface.
+func (res *CommonBallot) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 3)
+	)
+	itm, err = stackitem.NewByteArray(res.ID), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ID: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = func(in keys.PublicKeys) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var items = make([]stackitem.Item, 0, len(in))
+		for i, v := range in {
+			itm, err := stackitem.NewByteArray(v.Bytes()), error(nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+			items = append(items, itm)
+		}
+		return stackitem.NewArray(items), nil
+	}(res.Voters)
+	if err != nil {
+		return nil, fmt.Errorf("field Voters: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Height), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Height: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing CommonBallot.
+// It implements [smartcontract.Convertible] interface so that CommonBallot
+// could be used with invokers.
+func (res *CommonBallot) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 3)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.ID)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ID: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = func(in keys.PublicKeys) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.Parameter, 0, len(in))
+		for i, v := range in {
+			prm, err := smartcontract.NewParameterFromValue(v)
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("item %d: %w", i, err)
+			}
+			prms = append(prms, prm)
+		}
+		return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+	}(res.Voters)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Voters: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Height)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Height: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
 // LockEventsFromApplicationLog retrieves a set of all emitted events
