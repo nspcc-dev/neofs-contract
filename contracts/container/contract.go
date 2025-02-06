@@ -79,13 +79,6 @@ const (
 	defaultRetry   = 600                  // 10 min
 	defaultExpire  = 3600 * 24 * 365 * 10 // 10 years
 	defaultTTL     = 3600                 // 1 hour
-
-	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
-	// marking the start of the node's public key.
-	nodeKeyOffset = 2
-	// nodeKeyEndOffset is an offset in a serialized node info representation (V2 format)
-	// marking the end of the node's public key.
-	nodeKeyEndOffset = nodeKeyOffset + interop.PublicKeyCompressedLen
 )
 
 var (
@@ -1156,19 +1149,8 @@ func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) ContainerS
 // announces container size estimation of the previous epoch.
 func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	snapshot := contract.Call(netmapContractAddr, "snapshot", contract.ReadOnly, 1).([]StorageNode)
-
-	for i := range snapshot {
-		// V2 format
-		nodeInfo := snapshot[i].Info
-		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
-
-		if key.Equals(nodeKey) {
-			return true
-		}
-	}
-
-	return false
+	epoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
+	return contract.Call(netmapContractAddr, "isStorageNode", contract.ReadOnly, key, epoch-1).(bool)
 }
 
 func updateEstimations(ctx storage.Context, epoch int, cid []byte, pub interop.PublicKey, isUpdate bool) {

@@ -174,6 +174,16 @@ func (c *ContractReader) InnerRingList() ([]*CommonIRNode, error) {
 	}(unwrap.Item(c.invoker.Call(c.hash, "innerRingList")))
 }
 
+// IsStorageNode invokes `isStorageNode` method of contract.
+func (c *ContractReader) IsStorageNode(key *keys.PublicKey) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "isStorageNode", key))
+}
+
+// IsStorageNode2 invokes `isStorageNode` method of contract.
+func (c *ContractReader) IsStorageNode2(key *keys.PublicKey, epoch *big.Int) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "isStorageNode", key, epoch))
+}
+
 // ListCandidates invokes `listCandidates` method of contract.
 func (c *ContractReader) ListCandidates() (uuid.UUID, result.Iterator, error) {
 	return unwrap.SessionIterator(c.invoker.Call(c.hash, "listCandidates"))

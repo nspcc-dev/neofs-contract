@@ -546,6 +546,51 @@ func ListCandidates() iterator.Iterator {
 		storage.ValuesOnly|storage.DeserializeValues)
 }
 
+// IsStorageNode allows to check for the given key presence in the current
+// network map.
+func IsStorageNode(key interop.PublicKey) bool {
+	return IsStorageNodeInEpoch(key, Epoch())
+}
+
+// IsStorageNodeInEpoch is the same as [IsStorageNode], but allows to do
+// the check for previous epochs if they're still stored in the contract.
+// If this epoch is no longer stored (or too new) it will return false.
+func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
+	if epoch > Epoch() {
+		return false
+	}
+
+	ctx := storage.GetReadOnlyContext()
+
+	// v2 check is rather trivial.
+	key2 := append(append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...), key...)
+	v := storage.Get(ctx, key2)
+	if v != nil {
+		return true
+	}
+
+	// v1 is more involved.
+	count := getSnapshotCount(ctx)
+	diff := Epoch() - epoch
+	if count <= diff {
+		return false
+	}
+
+	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
+	needID := (id - diff + count) % count
+	snapshot := getSnapshot(ctx, snapshotKeyPrefix+string([]byte{byte(needID)}))
+
+	for i := range snapshot {
+		nodeInfo := snapshot[i].BLOB
+		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
+
+		if key.Equals(nodeKey) {
+			return true
+		}
+	}
+	return false
+}
+
 // Snapshot returns set of information about the storage nodes representing a network
 // map in (current-diff)-th epoch.
 //
