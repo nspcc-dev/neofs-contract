@@ -401,11 +401,28 @@ func TestContainerSizeEstimation(t *testing.T) {
 		newStorageNode(t, c),
 		newStorageNode(t, c),
 	}
+	// Never clean up the map.
+	cNm.Invoke(t, stackitem.Null{}, "setCleanupThreshold", 0)
 	for i := range nodes {
 		var cAcc = new(neotest.ContractInvoker)
 		*cAcc = *cNm
 		cAcc.Signers = append(cAcc.Signers, nodes[i].signer)
-		cAcc.Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
+		// It's not correct to have nodes in different maps, but it's good enough
+		// to test both map versions wrt estimations.
+		if i%2 == 0 {
+			cAcc.Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
+		} else {
+			nodeStruct := stackitem.NewStruct([]stackitem.Item{
+				stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
+				stackitem.NewMapWithValue([]stackitem.MapElement{
+					{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
+					{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
+				}),
+				stackitem.NewByteArray(nodes[i].pub),
+				stackitem.Make(nodes[i].state),
+			})
+			cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
+		}
 	}
 
 	// putContainerSize retrieves storage nodes from the previous snapshot,
