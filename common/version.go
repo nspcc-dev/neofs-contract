@@ -4,7 +4,7 @@ import "github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 
 const (
 	major = 0
-	minor = 20
+	minor = 21
 	patch = 0
 
 	// Versions from which an update should be performed.

@@ -6,14 +6,34 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Minimal Go version to 1.22 (#353, #387)
 
 ### Updated
-- NeoGo dependency to 0.108.0 (#450, #465)
 
 ### Removed
 
 ### Fixed
+
+## [0.21.0] - 2025-02-19
+
+### Added
+- Container node lists to the container contract (#438)
+- Container placement verifications to the container contract (#440)
+- NNS renew method with time parameter (#442)
+- SetAdmin and Renew events in NNS contract (#442)
+- New node format in the netmap contract with no limits to the map size (#445, #461, #462, #464)
+- Experimental object metadata events in the container contract (#448, #451, #456, #457)
+- Auto-cleaning for inactive nodes in the netmap contract (#460)
+
+### Changed
+- Minimal Go version to 1.22 (#353, #387)
+- NNS contract now returns an empty array from resolve and getRecord if there are no records (#420)
+
+### Updated
+- NeoGo dependency to 0.108.0 (#450, #465)
+- golang.org/x/crypto dependency from 0.26.0 to 0.31.0 (#452, #453, #454)
+
+### Removed
+- github.com/urfave/cli dependency (#433)
 
 ## [0.20.0] - 2024-07-30
 
@@ -519,7 +539,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...master
+[0.21.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.18.0...v0.19.0
