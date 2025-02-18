@@ -51,6 +51,10 @@ $(NEOGO): Makefile
 test:
 	@go test ./...
 
+cover:
+	@go test -v ./... -coverprofile=coverage.txt -coverpkg=./contracts/...
+	@go tool cover -html=coverage.txt -o coverage.html
+
 clean:
 	rm -rf ./bin $(foreach sc,$(all_sc),contracts/$(sc)/bindings_config.yml)
 

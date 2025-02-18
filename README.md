@@ -7,6 +7,12 @@
 
 ---
 
+[![codecov](https://codecov.io/gh/nspcc-dev/neo-go/branch/master/graph/badge.svg)](https://codecov.io/gh/nspcc-dev/neofs-contract)
+[![GithubWorkflows Tests](https://github.com/nspcc-dev/neofs-contract/actions/workflows/go.yml/badge.svg)](https://github.com/nspcc-dev/neofs-contract/actions/workflows/go.yml)
+[![Report](https://goreportcard.com/badge/github.com/nspcc-dev/neofs-contract)](https://goreportcard.com/report/github.com/nspcc-dev/neofs-contract)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/nspcc-dev/neofs-contract?sort=semver)
+![License](https://img.shields.io/github/license/nspcc-dev/neofs-contract.svg?style=popout)
+
 # Overview
 
 neofs-contract contains all NeoFS-related contracts written for

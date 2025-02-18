@@ -953,3 +953,26 @@ func testMeta(cid, oid []byte) *stackitem.Map {
 			{Key: stackitem.Make("validUntil"), Value: stackitem.Make(math.MaxInt)},
 		})
 }
+
+func TestContainerAlias(t *testing.T) {
+	c, cBal, _ := newContainerInvoker(t, false)
+
+	t.Run("missing container", func(t *testing.T) {
+		c.InvokeFail(t, containerconst.NotFoundError, "alias", make([]byte, 32))
+	})
+
+	t.Run("no alias", func(t *testing.T) {
+		acc, cnt := addContainer(t, c, cBal)
+		cAcc := c.WithSigners(acc)
+
+		cAcc.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
+	})
+
+	t.Run("good", func(t *testing.T) {
+		acc, cnt := addContainer(t, c, cBal)
+		balanceMint(t, cBal, acc, containerFee+containerAliasFee, []byte{})
+		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", "")
+
+		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
+	})
+}
