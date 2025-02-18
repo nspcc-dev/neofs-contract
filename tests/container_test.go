@@ -874,6 +874,30 @@ func TestPutMeta(t *testing.T) {
 			require.Equal(t, metaValuesExp, metaValuesGot)
 		})
 
+		t.Run("additional testing values", func(t *testing.T) {
+			// meta-on-chain feature is in progress, it may or may not include additional
+			// values passed through the contract, therefore, it should be allowed to
+			// accept unknown map KV pairs
+
+			meta := testMeta(cnt.id[:], oid)
+			meta.Add(stackitem.Make("test"), stackitem.Make("test"))
+			rawMeta, err := stackitem.Serialize(meta)
+			require.NoError(t, err)
+
+			hash := c.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, nil)
+			res := c.GetTxExecResult(t, hash)
+			require.Len(t, res.Events, 1)
+			require.Equal(t, "ObjectPut", res.Events[0].Name)
+			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
+			require.Len(t, notificationArgs, 3)
+			require.Equal(t, cnt.id[:], notificationArgs[0].Value().([]byte))
+			require.Equal(t, oid, notificationArgs[1].Value().([]byte))
+
+			metaValuesExp := meta.Value().([]stackitem.MapElement)
+			metaValuesGot := notificationArgs[2].Value().([]stackitem.MapElement)
+			require.Equal(t, metaValuesExp, metaValuesGot)
+		})
+
 		t.Run("not a map", func(t *testing.T) {
 			c.InvokeFail(t, "invalid type", "submitObjectPut", []byte{1}, nil)
 		})
