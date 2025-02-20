@@ -52,9 +52,9 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 		return nil, fmt.Errorf("get current blockchain height: %w", err)
 	}
 
-	blockCh, err := b.SubscribeToNewBlocks()
+	headerCh, err := b.SubscribeToNewHeaders()
 	if err != nil {
-		return nil, fmt.Errorf("subscribe to new blocks of the chain: %w", err)
+		return nil, fmt.Errorf("subscribe to new headers of the chain: %w", err)
 	}
 
 	res := &blockchainMonitor{
@@ -70,7 +70,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 	go func() {
 		l.Info("listening to new blocks...")
 		for {
-			b, ok := <-blockCh
+			h, ok := <-headerCh
 			if !ok {
 				close(chNewBlock)
 				close(res.chConnLost)
@@ -79,7 +79,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 				return
 			}
 
-			res.height.Store(b.Index)
+			res.height.Store(h.Index)
 
 			select {
 			case chNewBlock <- struct{}{}:
@@ -89,7 +89,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 			default:
 			}
 
-			l.Info("new block arrived", zap.Uint32("height", b.Index))
+			l.Info("new block arrived", zap.Uint32("height", h.Index))
 		}
 	}()
 

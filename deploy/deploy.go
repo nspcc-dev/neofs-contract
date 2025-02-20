@@ -47,12 +47,12 @@ type Blockchain interface {
 	// GetContractStateByHash may return non-nil state.Contract along with an error.
 	GetContractStateByHash(util.Uint160) (*state.Contract, error)
 
-	// SubscribeToNewBlocks opens stream of the new blocks persisted in the
+	// SubscribeToNewHeaders opens stream of the new headers persisted in the
 	// blockchain and returns channel to read them. The channel is closed only when
 	// connection to the blockchain is lost and there will be no more events. Caller
 	// subscribes once, regularly reads events from the channel and is resistant to
 	// event replay.
-	SubscribeToNewBlocks() (<-chan *block.Block, error)
+	SubscribeToNewHeaders() (<-chan *block.Header, error)
 
 	// SubscribeToNotaryRequests opens stream of the notary request events from the
 	// blockchain and returns channel to read them. The channel is closed only when
