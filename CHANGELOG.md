@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Deployment code uses header subscription instead of block subscription now (#471)
 
 ### Updated
 
