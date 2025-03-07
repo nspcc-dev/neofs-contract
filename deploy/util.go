@@ -114,7 +114,6 @@ func (x *blockchainMonitor) waitForNextBlock(ctx context.Context) error {
 	initialBlock := x.currentHeight()
 
 	ticker := time.NewTicker(x.blockInterval)
-	defer ticker.Stop()
 
 	for {
 		select {

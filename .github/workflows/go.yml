@@ -14,14 +14,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go: [ '1.22', '1.23' ]
+        go: [ '1.23', '1.24' ]
         os: [ubuntu-latest, windows-2022, macos-14]
         exclude:
           # Only latest Go version for Windows and MacOS.
           - os: windows-2022
-            go: '1.22'
+            go: '1.23'
           - os: macos-14
-            go: '1.22'
+            go: '1.23'
       fail-fast: false
     steps:
     - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Write coverage profile
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go_versions: [ '1.22', '1.23' ]
+        go_versions: [ '1.23', '1.24' ]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
