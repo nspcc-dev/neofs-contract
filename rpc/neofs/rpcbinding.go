@@ -58,18 +58,6 @@ type ChequeEvent struct {
 	LockAccount []byte
 }
 
-// BindEvent represents "Bind" event emitted by the contract.
-type BindEvent struct {
-	User util.Uint160
-	Keys keys.PublicKeys
-}
-
-// UnbindEvent represents "Unbind" event emitted by the contract.
-type UnbindEvent struct {
-	User util.Uint160
-	Keys keys.PublicKeys
-}
-
 // AlphabetUpdateEvent represents "AlphabetUpdate" event emitted by the contract.
 type AlphabetUpdateEvent struct {
 	Id       []byte
@@ -234,28 +222,6 @@ func (c *Contract) AlphabetUpdateUnsigned(id []byte, args keys.PublicKeys) (*tra
 	return c.actor.MakeUnsignedCall(c.hash, "alphabetUpdate", nil, id, args)
 }
 
-// Bind creates a transaction invoking `bind` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Bind(user util.Uint160, keys keys.PublicKeys) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "bind", user, keys)
-}
-
-// BindTransaction creates a transaction invoking `bind` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) BindTransaction(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "bind", user, keys)
-}
-
-// BindUnsigned creates a transaction invoking `bind` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) BindUnsigned(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "bind", nil, user, keys)
-}
-
 // Cheque creates a transaction invoking `cheque` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -342,28 +308,6 @@ func (c *Contract) SetConfigTransaction(id []byte, key []byte, val []byte) (*tra
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetConfigUnsigned(id []byte, key []byte, val []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setConfig", nil, id, key, val)
-}
-
-// Unbind creates a transaction invoking `unbind` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Unbind(user util.Uint160, keys keys.PublicKeys) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "unbind", user, keys)
-}
-
-// UnbindTransaction creates a transaction invoking `unbind` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) UnbindTransaction(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "unbind", user, keys)
-}
-
-// UnbindUnsigned creates a transaction invoking `unbind` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) UnbindUnsigned(user util.Uint160, keys keys.PublicKeys) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "unbind", nil, user, keys)
 }
 
 // Update creates a transaction invoking `update` method of the contract.
@@ -1051,188 +995,6 @@ func (e *ChequeEvent) FromStackItem(item *stackitem.Array) error {
 	e.LockAccount, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field LockAccount: %w", err)
-	}
-
-	return nil
-}
-
-// BindEventsFromApplicationLog retrieves a set of all emitted events
-// with "Bind" name from the provided [result.ApplicationLog].
-func BindEventsFromApplicationLog(log *result.ApplicationLog) ([]*BindEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*BindEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "Bind" {
-				continue
-			}
-			event := new(BindEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize BindEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to BindEvent or
-// returns an error if it's not possible to do to so.
-func (e *BindEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.User, err = func(item stackitem.Item) (util.Uint160, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return util.Uint160{}, err
-		}
-		u, err := util.Uint160DecodeBytesBE(b)
-		if err != nil {
-			return util.Uint160{}, err
-		}
-		return u, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field User: %w", err)
-	}
-
-	index++
-	e.Keys, err = func(item stackitem.Item) (keys.PublicKeys, error) {
-		arr, ok := item.Value().([]stackitem.Item)
-		if !ok {
-			return nil, errors.New("not an array")
-		}
-		res := make(keys.PublicKeys, len(arr))
-		for i := range res {
-			res[i], err = func(item stackitem.Item) (*keys.PublicKey, error) {
-				b, err := item.TryBytes()
-				if err != nil {
-					return nil, err
-				}
-				k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-				if err != nil {
-					return nil, err
-				}
-				return k, nil
-			}(arr[i])
-			if err != nil {
-				return nil, fmt.Errorf("item %d: %w", i, err)
-			}
-		}
-		return res, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field Keys: %w", err)
-	}
-
-	return nil
-}
-
-// UnbindEventsFromApplicationLog retrieves a set of all emitted events
-// with "Unbind" name from the provided [result.ApplicationLog].
-func UnbindEventsFromApplicationLog(log *result.ApplicationLog) ([]*UnbindEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*UnbindEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "Unbind" {
-				continue
-			}
-			event := new(UnbindEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize UnbindEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to UnbindEvent or
-// returns an error if it's not possible to do to so.
-func (e *UnbindEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.User, err = func(item stackitem.Item) (util.Uint160, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return util.Uint160{}, err
-		}
-		u, err := util.Uint160DecodeBytesBE(b)
-		if err != nil {
-			return util.Uint160{}, err
-		}
-		return u, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field User: %w", err)
-	}
-
-	index++
-	e.Keys, err = func(item stackitem.Item) (keys.PublicKeys, error) {
-		arr, ok := item.Value().([]stackitem.Item)
-		if !ok {
-			return nil, errors.New("not an array")
-		}
-		res := make(keys.PublicKeys, len(arr))
-		for i := range res {
-			res[i], err = func(item stackitem.Item) (*keys.PublicKey, error) {
-				b, err := item.TryBytes()
-				if err != nil {
-					return nil, err
-				}
-				k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-				if err != nil {
-					return nil, err
-				}
-				return k, nil
-			}(arr[i])
-			if err != nil {
-				return nil, fmt.Errorf("item %d: %w", i, err)
-			}
-		}
-		return res, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field Keys: %w", err)
 	}
 
 	return nil

@@ -52,24 +52,6 @@ has successfully transferred assets back to the user after withdraw.
 	  - name: lockAccount
 	    type: ByteArray
 
-Bind notification. This notification is produced when a user wants to bind
-public keys with the user account (OwnerID). Keys argument is an array of ByteArray.
-
-	Bind:
-	  - name: user
-	    type: ByteArray
-	  - name: keys
-	    type: Array
-
-Unbind notification. This notification is produced when a user wants to unbind
-public keys with the user account (OwnerID). Keys argument is an array of ByteArray.
-
-	Unbind:
-	  - name: user
-	    type: ByteArray
-	  - name: keys
-	    type: Array
-
 AlphabetUpdate notification. This notification is produced when Alphabet nodes
 have updated their lists in the contract. Alphabet argument is an array of ByteArray. It
 contains public keys of new alphabet nodes.
