@@ -12,6 +12,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- neofsid contract (#474)
 
 ### Fixed
 

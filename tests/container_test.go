@@ -66,7 +66,6 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	if !autohashes {
 		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	} else {
-		_ = deployNeoFSIDContract(t, e) // Needed in this case to autoresolve.
 		deployContainerContractInternal(t, e, nil)
 	}
 	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)

@@ -30,7 +30,6 @@ FS chain contracts:
 - audit
 - balance
 - container
-- neofsid
 - netmap
 - nns
 - proxy

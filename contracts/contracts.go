@@ -24,7 +24,6 @@ const (
 	auditDir      = "audit"
 	balanceDir    = "balance"
 	containerDir  = "container"
-	neofsIDDir    = "neofsid"
 	netmapDir     = "netmap"
 	proxyDir      = "proxy"
 	reputationDir = "reputation"
@@ -53,7 +52,6 @@ var (
 		netmapDir,
 		balanceDir,
 		reputationDir,
-		neofsIDDir,
 		containerDir,
 		alphabetDir,
 	}

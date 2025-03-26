@@ -36,7 +36,6 @@ func ExampleContractReader_ResolveFSContract() {
 		nns.NameAudit,
 		nns.NameBalance,
 		nns.NameContainer,
-		nns.NameNeoFSID,
 		nns.NameNetmap,
 		nns.NameProxy,
 		nns.NameReputation,

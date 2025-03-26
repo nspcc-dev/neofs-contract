@@ -26,7 +26,6 @@ Description: This package contains all NeoFS-related contracts.
  - audit
  - balance
  - container
- - neofsid
  - netmap
  - nns
  - proxy

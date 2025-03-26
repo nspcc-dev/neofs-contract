@@ -1,4 +1,0 @@
-name: "NeoFS ID"
-safemethods: ["key", "version"]
-permissions:
-  - methods: ["update"]

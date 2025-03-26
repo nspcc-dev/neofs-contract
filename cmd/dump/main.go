@@ -74,7 +74,6 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 		"audit",
 		"balance",
 		"container",
-		"neofsid",
 		"netmap",
 		"reputation",
 	} {

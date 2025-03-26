@@ -88,8 +88,6 @@ Key-value storage format:
    Netmap contract reference
  - 'balanceScriptHash' -> interop.Hash160
    Balance contract reference
- - 'identityScriptHash' -> interop.Hash160
-   NeoFSID contract reference
  - 'nnsScriptHash' -> interop.Hash160
    NNS contract reference
  - 'nnsRoot' -> interop.Hash160
