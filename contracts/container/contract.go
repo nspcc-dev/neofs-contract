@@ -50,7 +50,6 @@ type (
 )
 
 const (
-	neofsIDContractKey = "identityScriptHash"
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
 	nnsContractKey     = "nnsScriptHash"
@@ -125,13 +124,16 @@ func _deploy(data any, isUpdate bool) {
 			switchToNotary(ctx)
 		}
 
+		if version < 22_000 {
+			storage.Delete(ctx, "identityScriptHash") // neofsIDContractKey
+		}
+
 		return
 	}
 
 	var (
 		addrNetmap  interop.Hash160
 		addrBalance interop.Hash160
-		addrID      interop.Hash160
 		addrNNS     interop.Hash160
 		nnsRoot     string
 	)
@@ -156,11 +158,9 @@ func _deploy(data any, isUpdate bool) {
 	} else {
 		addrBalance = common.ResolveFSContractWithNNS(addrNNS, "balance")
 	}
-	if len(args) >= 4 && len(args[3].(interop.Hash160)) == interop.Hash160Len {
-		addrID = args[3].(interop.Hash160)
-	} else {
-		addrID = common.ResolveFSContractWithNNS(addrNNS, "neofsid")
-	}
+
+	// args[3] is neofsid hash, no longer used
+
 	if len(args) >= 6 && len(args[5].(string)) > 0 {
 		nnsRoot = args[5].(string)
 	} else {
@@ -169,7 +169,6 @@ func _deploy(data any, isUpdate bool) {
 
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, balanceContractKey, addrBalance)
-	storage.Put(ctx, neofsIDContractKey, addrID)
 	storage.Put(ctx, nnsContractKey, addrNNS)
 	storage.Put(ctx, nnsRootKey, nnsRoot)
 
@@ -373,7 +372,7 @@ func PutNamed(container []byte, signature interop.Signature,
 	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
 		panic(cst.ErrorDeleted)
 	}
-	neofsIDContractAddr := storage.Get(ctx, neofsIDContractKey).(interop.Hash160)
+
 	cnr := Container{
 		Value: container,
 		Sig:   signature,
@@ -442,10 +441,6 @@ func PutNamed(container []byte, signature interop.Signature,
 
 		key := append([]byte(nnsHasAliasKey), containerID...)
 		storage.Put(ctx, key, domain)
-	}
-
-	if len(token) == 0 { // if container created directly without session
-		contract.Call(neofsIDContractAddr, "addKey", contract.All, ownerID, [][]byte{publicKey})
 	}
 
 	runtime.Log("added new container")

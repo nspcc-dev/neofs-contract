@@ -358,44 +358,6 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	runtime.Notify("Cheque", id, user, amount, lockAcc)
 }
 
-// Bind method produces notification to bind the specified public keys in NeoFSID
-// contract in FS chain. It can be invoked only by specified user.
-//
-// This method produces Bind notification. This method panics if keys are not
-// 33 byte long. User argument must be a valid 20 byte script hash.
-func Bind(user interop.Hash160, keys []interop.PublicKey) {
-	if !runtime.CheckWitness(user) {
-		panic("you should be the owner of the wallet")
-	}
-
-	for _, pubKey := range keys {
-		if len(pubKey) != interop.PublicKeyCompressedLen {
-			panic("incorrect public key size")
-		}
-	}
-
-	runtime.Notify("Bind", user, keys)
-}
-
-// Unbind method produces notification to unbind the specified public keys in NeoFSID
-// contract in FS chain. It can be invoked only by the specified user.
-//
-// This method produces Unbind notification. This method panics if keys are not
-// 33 byte long. User argument must be a valid 20 byte script hash.
-func Unbind(user interop.Hash160, keys []interop.PublicKey) {
-	if !runtime.CheckWitness(user) {
-		panic("you should be the owner of the wallet")
-	}
-
-	for _, pubKey := range keys {
-		if len(pubKey) != interop.PublicKeyCompressedLen {
-			panic("incorrect public key size")
-		}
-	}
-
-	runtime.Notify("Unbind", user, keys)
-}
-
 // AlphabetUpdate updates a list of alphabet nodes with the provided list of
 // public keys. It can be invoked only by alphabet nodes.
 //

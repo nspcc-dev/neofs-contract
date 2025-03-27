@@ -12,6 +12,8 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- neofsid contract (#474)
+- bind/unbind methods of neofs contract (#475)
 
 ### Fixed
 

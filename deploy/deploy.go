@@ -94,11 +94,6 @@ type ContainerContractPrm struct {
 	Common CommonDeployPrm
 }
 
-// NeoFSIDContractPrm groups deployment parameters of the NeoFS ID contract.
-type NeoFSIDContractPrm struct {
-	Common CommonDeployPrm
-}
-
 // NetmapContractPrm groups deployment parameters of the Netmap contract.
 type NetmapContractPrm struct {
 	Common CommonDeployPrm
@@ -142,7 +137,6 @@ type Prm struct {
 	AuditContract      AuditContractPrm
 	BalanceContract    BalanceContractPrm
 	ContainerContract  ContainerContractPrm
-	NeoFSIDContract    NeoFSIDContractPrm
 	NetmapContract     NetmapContractPrm
 	ProxyContract      ProxyContractPrm
 	ReputationContract ReputationContractPrm
@@ -539,21 +533,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("Reputation contract successfully synchronized", zap.Stringer("address", reputationContractAddress))
 
-	// 6. NeoFSID
-	syncPrm.localNEF = prm.NeoFSIDContract.Common.NEF
-	syncPrm.localManifest = prm.NeoFSIDContract.Common.Manifest
-	syncPrm.domainName = domainNeoFSID
-	syncPrm.buildExtraDeployArgs = noExtraDeployArgs
-
-	prm.Logger.Info("synchronizing NeoFSID contract with the chain...")
-
-	neoFSIDContractAddress, err := syncNeoFSContract(ctx, syncPrm)
-	if err != nil {
-		return fmt.Errorf("sync NeoFSID contract with the chain: %w", err)
-	}
-
-	prm.Logger.Info("NeoFSID contract successfully synchronized", zap.Stringer("address", neoFSIDContractAddress))
-
 	// 7. Container
 	syncPrm.localNEF = prm.ContainerContract.Common.NEF
 	syncPrm.localManifest = prm.ContainerContract.Common.Manifest
@@ -565,7 +544,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 			notaryDisabledExtraUpdateArg,
 			netmapContractAddress,
 			balanceContractAddress,
-			neoFSIDContractAddress,
+			util.Uint160{}, // neofsid address
 			nnsOnChainAddress,
 			domainContainers,
 		}, nil

@@ -9,7 +9,6 @@ const (
 	NameAudit          = "audit"
 	NameBalance        = "balance"
 	NameContainer      = "container"
-	NameNeoFSID        = "neofsid"
 	NameNetmap         = "netmap"
 	NameProxy          = "proxy"
 	NameReputation     = "reputation"

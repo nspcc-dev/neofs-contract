@@ -36,7 +36,6 @@ const (
 	domainAudit       = "audit"
 	domainBalance     = "balance"
 	domainContainer   = "container"
-	domainNeoFSID     = "neofsid"
 	domainNetmap      = "netmap"
 	domainProxy       = "proxy"
 	domainReputation  = "reputation"

@@ -31,26 +31,6 @@ events:
         type: Integer
       - name: lockAccount
         type: ByteArray
-  - name: Bind
-    parameters:
-      - name: user
-        type: Hash160
-      - name: keys
-        type: Array
-        extendedtype:
-          base: Array
-          value:
-            base: PublicKey
-  - name: Unbind
-    parameters:
-      - name: user
-        type: Hash160
-      - name: keys
-        type: Array
-        extendedtype:
-          base: Array
-          value:
-            base: PublicKey
   - name: AlphabetUpdate
     parameters:
       - name: id
