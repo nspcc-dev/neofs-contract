@@ -8,11 +8,10 @@ However, some of them may be malicious, and some NEO can be lost. It will destab
 the economics of FS chain. To avoid it, all 100,000,000 NEO are
 distributed among all alphabet contracts.
 
-To identify alphabet contracts, they are named with letters of the Glagolitic alphabet.
-Names are set at contract deploy. Alphabet nodes of the Inner Ring communicate with
-one of the alphabetical contracts to emit GAS. To vote for a new list of side
-chain committee, alphabet nodes of the Inner Ring create multisignature transactions
-for each alphabet contract.
+To identify alphabet contracts, they are named, names are set at contract deploy.
+Alphabet nodes of the Inner Ring communicate with one of the alphabetical contracts
+to emit GAS. To vote for a new list of side chain committee, alphabet nodes of
+the Inner Ring create multisignature transactions for each alphabet contract.
 
 # Contract notifications
 
@@ -30,7 +29,7 @@ Key-value storage format:
  - 'proxyScriptHash' -> interop.Hash160
    Proxy contract reference
  - 'name' -> string
-   name (Glagolitic letter) of the contract
+   name of the contract set at its deployment
  - 'index' -> int
    member index in the Alphabet list
  - 'threshold' -> int

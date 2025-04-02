@@ -110,12 +110,6 @@ type ReputationContractPrm struct {
 	Common CommonDeployPrm
 }
 
-// Glagolitsa is used for alphabet contract deploy routine.
-type Glagolitsa interface {
-	Size() int
-	LetterByIndex(ind int) string
-}
-
 // Prm groups all parameters of the FS chain deployment procedure.
 type Prm struct {
 	// Writes progress into the log.
@@ -140,8 +134,6 @@ type Prm struct {
 	NetmapContract     NetmapContractPrm
 	ProxyContract      ProxyContractPrm
 	ReputationContract ReputationContractPrm
-
-	Glagolitsa Glagolitsa
 }
 
 // Deploy initializes Neo network represented by given Prm.Blockchain as FS
@@ -568,7 +560,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	var alphabetContracts []util.Uint160
 
-	for ind := 0; ind < len(committee) && ind < prm.Glagolitsa.Size(); ind++ {
+	for ind := range committee {
 		syncPrm.tryDeploy = ind == localAccCommitteeIndex // each member deploys its own Alphabet contract
 		if !syncPrm.tryDeploy {
 			temp := committee[ind].GetScriptHash()
@@ -580,7 +572,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 				notaryDisabledExtraUpdateArg,
 				netmapContractAddress,
 				proxyContractAddress,
-				prm.Glagolitsa.LetterByIndex(ind),
+				syncPrm.domainName,
 				ind,
 				len(committee),
 			}, nil

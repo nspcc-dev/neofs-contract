@@ -329,7 +329,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 	}
 }
 
-// Name returns the Glagolitic name of the contract.
+// Name returns the name of the contract set at deployment stage.
 func Name() string {
 	ctx := storage.GetReadOnlyContext()
 	return name(ctx)
