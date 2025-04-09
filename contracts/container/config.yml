@@ -9,7 +9,7 @@ events:
       - name: containerID
         type: Hash256
       - name: publicKey
-        type: PublicKey
+        type: ByteArray
   - name: DeleteSuccess
     parameters:
       - name: containerID
@@ -19,7 +19,7 @@ events:
       - name: containerID
         type: ByteArray
       - name: publicKey
-        type: PublicKey
+        type: ByteArray
   - name: StartEstimation
     parameters:
       - name: epoch

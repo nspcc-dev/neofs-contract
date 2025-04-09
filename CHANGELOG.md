@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 ### Changed
 - Deployment code uses header subscription instead of block subscription now (#471)
 - Go 1.23+ is required now (#472)
+- `publicKey` field of container `PutSuccess` and `SetEACLSuccess` notifications is of `ByteArray` type now (#478)
 
 ### Updated
 

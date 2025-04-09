@@ -56,7 +56,7 @@ type ContainerExtendedACL struct {
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
 type PutSuccessEvent struct {
 	ContainerID util.Uint256
-	PublicKey   *keys.PublicKey
+	PublicKey   []byte
 }
 
 // DeleteSuccessEvent represents "DeleteSuccess" event emitted by the contract.
@@ -67,7 +67,7 @@ type DeleteSuccessEvent struct {
 // SetEACLSuccessEvent represents "SetEACLSuccess" event emitted by the contract.
 type SetEACLSuccessEvent struct {
 	ContainerID []byte
-	PublicKey   *keys.PublicKey
+	PublicKey   []byte
 }
 
 // StartEstimationEvent represents "StartEstimation" event emitted by the contract.
@@ -1370,17 +1370,7 @@ func (e *PutSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	}
 
 	index++
-	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
+	e.PublicKey, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
 	}
@@ -1490,17 +1480,7 @@ func (e *SetEACLSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	}
 
 	index++
-	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
+	e.PublicKey, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
 	}

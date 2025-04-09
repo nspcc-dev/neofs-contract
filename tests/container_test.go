@@ -247,6 +247,12 @@ func TestContainerPut(t *testing.T) {
 					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(recordtype.TXT))
 				})
 			})
+			t.Run("N3 signature", func(t *testing.T) {
+				cnt := cnt
+				cnt.pub = randomBytes(47) // any
+				balanceMint(t, cBal, acc, containerFee, []byte{})
+				assertPutContainerSuccess(t, c, "put", cnt)
+			})
 		})
 	}
 }
@@ -361,6 +367,19 @@ func TestContainerSetEACL(t *testing.T) {
 		stackitem.NewByteArray(e.token),
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
+
+	t.Run("N3 signature", func(t *testing.T) {
+		e.pub = randomBytes(47)
+
+		assertSetEACLSuccess(t, c, cnt, e)
+
+		c.Invoke(t, stackitem.NewStruct([]stackitem.Item{
+			stackitem.NewByteArray(e.value),
+			stackitem.NewByteArray(e.sig),
+			stackitem.NewByteArray(e.pub),
+			stackitem.NewByteArray(e.token),
+		}), "eACL", cnt.id[:])
+	})
 
 	replaceEACLArg := func(eACL []byte) []any {
 		res := make([]any, len(setArgs))
