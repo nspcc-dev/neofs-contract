@@ -14,6 +14,7 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
@@ -116,18 +117,18 @@ func TestContainerCount(t *testing.T) {
 	// Same owner.
 	cnt3 := dummyContainer(acc1)
 	balanceMint(t, cBal, acc1, containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
+	assertPutContainerSuccess(t, c, "put", cnt3)
 	checkContainerList(t, c, [][]byte{cnt1.id[:], cnt2.id[:], cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt1.id[:], cnt1.sig, cnt1.token)
+	assertDeleteContainerSuccess(t, c, true, cnt1)
 	checkCount(t, 2)
 	checkContainerList(t, c, [][]byte{cnt2.id[:], cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt2.id[:], cnt2.sig, cnt2.token)
+	assertDeleteContainerSuccess(t, c, true, cnt2)
 	checkCount(t, 1)
 	checkContainerList(t, c, [][]byte{cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt3.id[:], cnt3.sig, cnt3.token)
+	assertDeleteContainerSuccess(t, c, true, cnt3)
 	checkCount(t, 0)
 	checkContainerList(t, c, [][]byte{})
 }
@@ -193,7 +194,7 @@ func TestContainerPut(t *testing.T) {
 			cAcc := c.WithSigners(acc)
 			cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
 
-			c.Invoke(t, stackitem.Null{}, "put", putArgs...)
+			assertPutContainerSuccess(t, c, "put", cnt)
 			c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
 
 			t.Run("with nice names", func(t *testing.T) {
@@ -208,7 +209,7 @@ func TestContainerPut(t *testing.T) {
 				})
 
 				balanceMint(t, cBal, acc, containerAliasFee*1, []byte{})
-				c.Invoke(t, stackitem.Null{}, "put", putArgs...)
+				assertPutContainerSuccess(t, c, "put", cnt, "mycnt", "")
 
 				expected := stackitem.NewArray([]stackitem.Item{
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
@@ -221,7 +222,7 @@ func TestContainerPut(t *testing.T) {
 					c.InvokeFail(t, "name is already taken", "put", putArgs...)
 				})
 
-				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+				assertDeleteContainerSuccess(t, c, true, cnt)
 				cNNS.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 
 				t.Run("register in advance", func(t *testing.T) {
@@ -255,7 +256,7 @@ func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signe
 	cnt := dummyContainer(acc)
 
 	balanceMint(t, cBal, acc, containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	assertPutContainerSuccess(t, c, "put", cnt)
 	return acc, cnt
 }
 
@@ -267,12 +268,12 @@ func TestContainerDelete(t *testing.T) {
 	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "delete",
 		cnt.id[:], cnt.sig, cnt.token)
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+	assertDeleteContainerSuccess(t, c, true, cnt)
 
 	t.Run("missing container", func(t *testing.T) {
-		id := cnt.id
-		id[0] ^= 0xFF
-		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+		cnt := cnt
+		cnt.id[0] ^= 0xFF
+		assertDeleteContainerSuccess(t, c, false, cnt)
 	})
 
 	c.InvokeFail(t, containerconst.NotFoundError, "get", cnt.id[:])
@@ -351,7 +352,7 @@ func TestContainerSetEACL(t *testing.T) {
 	cAcc := c.WithSigners(acc)
 	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "setEACL", setArgs...)
 
-	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
+	assertSetEACLSuccess(t, c, cnt, e)
 
 	expected := stackitem.NewStruct([]stackitem.Item{
 		stackitem.NewByteArray(e.value),
@@ -386,8 +387,9 @@ func TestContainerSetEACL(t *testing.T) {
 
 	checkInvalidEACL(prefix, missingContainerException)
 	checkInvalidEACL(append(prefix, make([]byte, len(cnt.id)-1)...), missingContainerException)
-	c.Invoke(t, stackitem.Null{}, "setEACL", replaceEACLArg(append(prefix, cnt.id[:]...))...)
-	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+	e.value = append(prefix, cnt.id[:]...)
+	assertSetEACLSuccess(t, c, cnt, e)
+	assertDeleteContainerSuccess(t, c, true, cnt)
 	c.InvokeFail(t, containerconst.NotFoundError, "eACL", cnt.id[:])
 }
 
@@ -835,7 +837,7 @@ func TestPutMeta(t *testing.T) {
 			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
 		require.NoError(t, err)
 
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
+		assertPutContainerSuccess(t, c, "put", cnt, "", "", false)
 		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
@@ -852,7 +854,7 @@ func TestPutMeta(t *testing.T) {
 		cnt := dummyContainer(acc)
 		oid := randomBytes(sha256.Size)
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
+		assertPutContainerSuccess(t, c, "put", cnt, "", "", true)
 
 		t.Run("correct meta data", func(t *testing.T) {
 			meta := testMeta(cnt.id[:], oid)
@@ -970,8 +972,53 @@ func TestContainerAlias(t *testing.T) {
 	t.Run("good", func(t *testing.T) {
 		acc, cnt := addContainer(t, c, cBal)
 		balanceMint(t, cBal, acc, containerFee+containerAliasFee, []byte{})
-		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", "")
+		assertPutContainerSuccess(t, c, "putNamed", cnt, "mycnt", "")
 
 		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 	})
+}
+
+func assertPutContainerSuccess(t testing.TB, c *neotest.ContractInvoker, method string, cnr testContainer, extraArgs ...any) {
+	mainArgs := []any{cnr.value, cnr.sig, cnr.pub, cnr.token}
+	tx := c.Invoke(t, stackitem.Null{}, method, slices.Concat(mainArgs, extraArgs)...)
+
+	res := c.GetTxExecResult(t, tx)
+	events := res.Events
+	require.GreaterOrEqual(t, len(events), 1) // others are transfers
+	events = events[len(events)-1:]
+
+	assertNotificationEvent(t, events[0], "PutSuccess", cnr.id[:], cnr.pub)
+}
+
+func assertSetEACLSuccess(t testing.TB, c *neotest.ContractInvoker, cnr testContainer, e eacl) {
+	tx := c.Invoke(t, stackitem.Null{}, "setEACL", e.value, e.sig, e.pub, e.token)
+
+	res := c.GetTxExecResult(t, tx)
+	events := res.Events
+	require.Len(t, events, 1)
+
+	assertNotificationEvent(t, events[0], "SetEACLSuccess", cnr.id[:], e.pub)
+}
+
+func assertDeleteContainerSuccess(t testing.TB, c *neotest.ContractInvoker, exists bool, cnr testContainer) {
+	tx := c.Invoke(t, stackitem.Null{}, "delete", cnr.id[:], cnr.sig, cnr.token)
+
+	res := c.GetTxExecResult(t, tx)
+	events := res.Events
+	if !exists {
+		require.Empty(t, events)
+		return
+	}
+	require.Len(t, events, 1)
+
+	assertNotificationEvent(t, events[0], "DeleteSuccess", cnr.id[:])
+}
+
+func assertNotificationEvent(t testing.TB, e state.NotificationEvent, name string, items ...any) {
+	require.Equal(t, name, e.Name)
+	gotItems := e.Item.Value().([]stackitem.Item)
+	require.Len(t, gotItems, len(items))
+	for i := range items {
+		require.Equal(t, items[i], gotItems[i].Value(), i)
+	}
 }
