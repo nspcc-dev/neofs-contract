@@ -72,23 +72,21 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
 }
 
-func setContainerOwner(c []byte, acc neotest.Signer) {
-	owner, _ := base58.Decode(address.Uint160ToString(acc.ScriptHash()))
-	copy(c[6:], owner)
-}
-
 type testContainer struct {
 	id                     [32]byte
+	owner                  []byte
 	value, sig, pub, token []byte
 }
 
-func dummyContainer(owner neotest.Signer) testContainer {
+func dummyContainer(acc neotest.Signer) testContainer {
 	value := randomBytes(100)
 	value[1] = 0 // zero offset
-	setContainerOwner(value, owner)
+	owner, _ := base58.Decode(address.Uint160ToString(acc.ScriptHash()))
+	copy(value[6:], owner)
 
 	return testContainer{
 		id:    sha256.Sum256(value),
+		owner: owner,
 		value: value,
 		sig:   randomBytes(64),
 		pub:   randomBytes(33),
@@ -1003,10 +1001,11 @@ func assertPutContainerSuccess(t testing.TB, c *neotest.ContractInvoker, method 
 
 	res := c.GetTxExecResult(t, tx)
 	events := res.Events
-	require.GreaterOrEqual(t, len(events), 1) // others are transfers
-	events = events[len(events)-1:]
+	require.GreaterOrEqual(t, len(events), 2) // others are transfers
+	events = events[len(events)-2:]
 
 	assertNotificationEvent(t, events[0], "PutSuccess", cnr.id[:], cnr.pub)
+	assertNotificationEvent(t, events[1], "Created", cnr.id[:], cnr.owner)
 }
 
 func assertSetEACLSuccess(t testing.TB, c *neotest.ContractInvoker, cnr testContainer, e eacl) {
@@ -1014,9 +1013,10 @@ func assertSetEACLSuccess(t testing.TB, c *neotest.ContractInvoker, cnr testCont
 
 	res := c.GetTxExecResult(t, tx)
 	events := res.Events
-	require.Len(t, events, 1)
+	require.Len(t, events, 2)
 
 	assertNotificationEvent(t, events[0], "SetEACLSuccess", cnr.id[:], e.pub)
+	assertNotificationEvent(t, events[1], "EACLChanged", cnr.id[:], cnr.owner)
 }
 
 func assertDeleteContainerSuccess(t testing.TB, c *neotest.ContractInvoker, exists bool, cnr testContainer) {

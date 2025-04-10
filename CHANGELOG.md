@@ -4,6 +4,7 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- Container `put`/`setEACL` methods throw `Created`/`EACLChanged` notifications now (#478)
 
 ### Changed
 - Deployment code uses header subscription instead of block subscription now (#471)
