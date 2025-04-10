@@ -4,6 +4,18 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Updated
+
+### Removed
+
+### Fixed
+
+## [0.22.0] - 2025-04-10
+
+### Added
 - Container `put`/`setEACL` methods throw `Created`/`EACLChanged` notifications now (#478)
 
 ### Changed
@@ -12,12 +24,12 @@ Changelog for NeoFS Contract
 - `publicKey` field of container `PutSuccess` and `SetEACLSuccess` notifications is of `ByteArray` type now (#478)
 
 ### Updated
+- `github.com/stretchr/testify` dependency to `v1.10.0` (#472)
 
 ### Removed
 - neofsid contract (#474)
 - bind/unbind methods of neofs contract (#475)
-
-### Fixed
+- Glagolitsa ABC as a deployment parameter (#476)
 
 ## [0.21.0] - 2025-02-19
 
@@ -545,7 +557,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...master
+[0.22.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.0...v0.19.1
