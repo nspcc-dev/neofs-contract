@@ -56,7 +56,13 @@ type ContainerExtendedACL struct {
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
 type PutSuccessEvent struct {
 	ContainerID util.Uint256
-	PublicKey   *keys.PublicKey
+	PublicKey   []byte
+}
+
+// CreatedEvent represents "Created" event emitted by the contract.
+type CreatedEvent struct {
+	ContainerID util.Uint256
+	Owner       []byte
 }
 
 // DeleteSuccessEvent represents "DeleteSuccess" event emitted by the contract.
@@ -67,7 +73,13 @@ type DeleteSuccessEvent struct {
 // SetEACLSuccessEvent represents "SetEACLSuccess" event emitted by the contract.
 type SetEACLSuccessEvent struct {
 	ContainerID []byte
-	PublicKey   *keys.PublicKey
+	PublicKey   []byte
+}
+
+// EACLChangedEvent represents "EACLChanged" event emitted by the contract.
+type EACLChangedEvent struct {
+	ContainerID []byte
+	Owner       []byte
 }
 
 // StartEstimationEvent represents "StartEstimation" event emitted by the contract.
@@ -1370,19 +1382,77 @@ func (e *PutSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	}
 
 	index++
-	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
+	e.PublicKey, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	return nil
+}
+
+// CreatedEventsFromApplicationLog retrieves a set of all emitted events
+// with "Created" name from the provided [result.ApplicationLog].
+func CreatedEventsFromApplicationLog(log *result.ApplicationLog) ([]*CreatedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*CreatedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "Created" {
+				continue
+			}
+			event := new(CreatedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize CreatedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to CreatedEvent or
+// returns an error if it's not possible to do to so.
+func (e *CreatedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Owner, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Owner: %w", err)
 	}
 
 	return nil
@@ -1490,19 +1560,67 @@ func (e *SetEACLSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	}
 
 	index++
-	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
+	e.PublicKey, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	return nil
+}
+
+// EACLChangedEventsFromApplicationLog retrieves a set of all emitted events
+// with "EACLChanged" name from the provided [result.ApplicationLog].
+func EACLChangedEventsFromApplicationLog(log *result.ApplicationLog) ([]*EACLChangedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*EACLChangedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "EACLChanged" {
+				continue
+			}
+			event := new(EACLChangedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize EACLChangedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to EACLChangedEvent or
+// returns an error if it's not possible to do to so.
+func (e *EACLChangedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Owner, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Owner: %w", err)
 	}
 
 	return nil

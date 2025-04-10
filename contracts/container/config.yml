@@ -9,7 +9,13 @@ events:
       - name: containerID
         type: Hash256
       - name: publicKey
-        type: PublicKey
+        type: ByteArray
+  - name: Created
+    parameters:
+      - name: containerID
+        type: Hash256
+      - name: owner
+        type: ByteArray # 25 byte Neo3 address
   - name: DeleteSuccess
     parameters:
       - name: containerID
@@ -19,7 +25,13 @@ events:
       - name: containerID
         type: ByteArray
       - name: publicKey
-        type: PublicKey
+        type: ByteArray
+  - name: EACLChanged
+    parameters:
+      - name: containerID
+        type: ByteArray
+      - name: owner
+        type: ByteArray # 25 byte Neo3 address
   - name: StartEstimation
     parameters:
       - name: epoch
