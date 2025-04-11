@@ -10,16 +10,32 @@ events:
         type: Hash256
       - name: publicKey
         type: PublicKey
+  - name: Created
+    parameters:
+      - name: containerID
+        type: Hash256
+      - name: owner
+        type: ByteArray # 25 byte N3 address
   - name: DeleteSuccess
     parameters:
       - name: containerID
         type: ByteArray
+  - name: Removed
+    parameters:
+      - name: containerID
+        type: Hash256
+      - name: owner
+        type: ByteArray # 25 byte N3 address
   - name: SetEACLSuccess
     parameters:
       - name: containerID
         type: ByteArray
       - name: publicKey
         type: PublicKey
+  - name: EACLChanged
+    parameters:
+      - name: containerID
+        type: Hash256
   - name: StartEstimation
     parameters:
       - name: epoch
