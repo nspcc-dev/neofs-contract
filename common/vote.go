@@ -137,28 +137,3 @@ func InvokeID(args []any, prefix []byte) []byte {
 
 	return crypto.Sha256(prefix)
 }
-
-/*
-   Check if the invocation is made from known container or audit contracts.
-   This is necessary because calls from these contracts require to do transfer
-   without signature collection (1 invoke transfer).
-
-   IR1, IR2, IR3, IR4 -(4 invokes)-> [ Container Contract ] -(1 invoke)-> [ Balance Contract ]
-
-   We can do 1 invoke transfer if:
-   - invokation has happened from inner ring node,
-   - it is indirect invocation from another smart-contract.
-
-   However, there is a possible attack, when a malicious inner ring node creates
-   a malicious smart-contract in the morph chain to do indirect call.
-
-   MaliciousIR -(1 invoke)-> [ Malicious Contract ] -(1 invoke)-> [ Balance Contract ]
-
-   To prevent that, we have to allow 1 invoke transfer from authorised well-known
-   smart-contracts, that will be set up at `Init` method.
-*/
-
-func FromKnownContract(ctx storage.Context, caller interop.Hash160, key string) bool {
-	addr := storage.Get(ctx, key).(interop.Hash160)
-	return caller.Equals(addr)
-}
