@@ -161,14 +161,6 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
-		// switch to notary mode if version of the current contract deployment is
-		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
-		// use)
-		// TODO: avoid number magic, add function for version comparison to common package
-		if version < 17_000 {
-			switchToNotary(ctx)
-		}
-
 		if version < 19_000 {
 			balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 			key := append([]byte(newEpochSubscribersPrefix), append([]byte{byte(0)}, balanceContract...)...)
@@ -224,35 +216,6 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, snapshotCurrentIDKey, 0)
 
 	runtime.Log("netmap contract initialized")
-}
-
-// re-initializes contract from non-notary to notary mode. Does nothing if
-// action has already been done. The function is called on contract update with
-// storage.Context from _deploy.
-//
-// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
-// Otherwise, existing value is removed.
-//
-// switchToNotary removes values stored by 'innerring' and 'notary' keys.
-//
-// nolint:unused
-func switchToNotary(ctx storage.Context) {
-	const notaryDisabledKey = "notary" // non-notary legacy
-
-	notaryVal := storage.Get(ctx, notaryDisabledKey)
-	if notaryVal == nil {
-		runtime.Log("contract is already notarized")
-		return
-	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
-		panic("pending vote detected")
-	}
-
-	storage.Delete(ctx, notaryDisabledKey)
-	storage.Delete(ctx, "innerring")
-
-	if notaryVal.(bool) {
-		runtime.Log("contract successfully notarized")
-	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked

@@ -18,21 +18,11 @@ const (
 
 // nolint:deadcode,unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
-
 	if isUpdate {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
-
-		// switch to notary mode if version of the current contract deployment is
-		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
-		// use)
-		// TODO: avoid number magic, add function for version comparison to common package
-		if version < 17_000 {
-			switchToNotary(ctx)
-		}
 
 		return
 	}

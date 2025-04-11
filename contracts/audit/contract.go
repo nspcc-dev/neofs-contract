@@ -38,49 +38,16 @@ func (a AuditHeader) ID() []byte {
 
 // nolint:deadcode,unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
 
-		// switch to notary mode if version of the current contract deployment is
-		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
-		// use)
-		// TODO: avoid number magic, add function for version comparison to common package
-		if version < 17_000 {
-			switchToNotary(ctx)
-		}
-
 		return
 	}
 
 	runtime.Log("audit contract initialized")
-}
-
-// re-initializes contract from non-notary to notary mode. Does nothing if
-// action has already been done. The function is called on contract update with
-// storage.Context from _deploy.
-//
-// switchToNotary removes values stored by 'netmapScriptHash' and 'notary' keys.
-//
-// nolint:unused
-func switchToNotary(ctx storage.Context) {
-	const notaryDisabledKey = "notary" // non-notary legacy
-
-	notaryVal := storage.Get(ctx, notaryDisabledKey)
-	if notaryVal == nil {
-		runtime.Log("contract is already notarized")
-		return
-	}
-
-	storage.Delete(ctx, notaryDisabledKey)
-	storage.Delete(ctx, "netmapScriptHash")
-
-	if notaryVal.(bool) {
-		runtime.Log("contract successfully notarized")
-	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked

@@ -4,10 +4,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/notary"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -40,14 +38,6 @@ func _deploy(data any, isUpdate bool) {
 
 		common.CheckVersion(version)
 
-		// switch to notary mode if version of the current contract deployment is
-		// earlier than v0.17.0 (initial version when non-notary mode was taken out of
-		// use)
-		// TODO: avoid number magic, add function for version comparison to common package
-		if version < 17_000 {
-			switchToNotary(ctx, args)
-		}
-
 		return
 	}
 
@@ -74,128 +64,6 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, totalKey, args.total)
 
 	runtime.Log(args.name + " contract initialized")
-}
-
-// re-initializes contract from non-notary to notary mode. Does nothing if
-// action has already been done. The function is called on contract update with
-// storage.Context and parameters from _deploy.
-//
-// switchToNotary panics if address of the Proxy contract (3rd parameter) is
-// missing or invalid. Otherwise, on success, the address is stored by
-// 'proxyScriptHash' key.
-//
-// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
-// Otherwise, existing value is removed.
-//
-// switchToNotary removes value stored by 'notary' key.
-//
-// nolint:unused
-func switchToNotary(ctx storage.Context, args []any) {
-	const notaryDisabledKey = "notary" // non-notary legacy
-	contractName := args[3].(string)
-
-	notaryVal := storage.Get(ctx, notaryDisabledKey)
-	if notaryVal == nil {
-		runtime.Log(contractName + " contract is already notarized")
-		return
-	} else if notaryVal.(bool) {
-		proxyContract := args[2].(interop.Hash160)
-		if len(proxyContract) > 0 {
-			if len(proxyContract) != interop.Hash160Len {
-				panic("address of the Proxy contract is missing or invalid")
-			}
-		} else {
-			proxyContract = common.ResolveFSContract("proxy")
-		}
-
-		if !common.TryPurgeVotes(ctx) {
-			panic("pending vote detected")
-		}
-
-		// distribute 75% of available GAS:
-		//  - 50% to Proxy contract
-		//  - the rest is evenly distributed between Inner Ring and storage nodes
-		netmapContract := args[1].(interop.Hash160)
-		if len(netmapContract) > 0 {
-			if len(netmapContract) != interop.Hash160Len {
-				panic("address of the Netmap contract is invalid")
-			}
-		} else {
-			netmapContract = storage.Get(ctx, netmapKey).(interop.Hash160)
-		}
-
-		storageNodes := contract.Call(netmapContract, "netmap", contract.ReadOnly).([]struct {
-			blob []byte // see netmap.Node
-		})
-		innerRingNodes := common.InnerRingNodesFromNetmap(netmapContract)
-
-		currentContract := runtime.GetExecutingScriptHash()
-		currentGAS := gas.BalanceOf(currentContract) * 3 / 4
-
-		if currentGAS == 0 {
-			panic("no GAS in the contract")
-		}
-
-		toTransfer := currentGAS / 2
-		if !gas.Transfer(currentContract, proxyContract, toTransfer, nil) {
-			panic("failed to transfer half of GAS to Proxy contract")
-		}
-
-		toTransfer = currentGAS - toTransfer
-
-		nNodes := len(storageNodes) + len(innerRingNodes)
-		perNodeGAS := toTransfer / nNodes
-		// half of GAS goes to node contract, the rest to its notary deposit
-		perNodeGASNotary := perNodeGAS / 2
-
-		// limit notary deposit
-		const notaryDepositLimit = 20_0000_0000 // TODO: always fixed8?
-		if perNodeGASNotary > notaryDepositLimit {
-			perNodeGASNotary = notaryDepositLimit
-		}
-
-		perNodeGASSimple := perNodeGAS - perNodeGASNotary
-
-		// see https://github.com/nspcc-dev/neo-go/blob/v0.101.0/docs/notary.md#1-notary-deposit
-		const lockInterval = 6 * 30 * 24 * 60 * 4 // 6 months blocks of 15s
-		notaryTransferData := []any{
-			nil,                                  // receiver account (set in loop)
-			ledger.CurrentIndex() + lockInterval, // till
-		}
-
-		for i := range innerRingNodes {
-			addr := contract.CreateStandardAccount(innerRingNodes[i])
-			if !gas.Transfer(currentContract, addr, perNodeGASSimple, nil) {
-				panic("failed to transfer part of GAS to the Inner Ring node")
-			}
-
-			notaryTransferData[0] = addr
-			if !gas.Transfer(currentContract, interop.Hash160(notary.Hash), perNodeGASNotary, notaryTransferData) {
-				panic("failed to make notary deposit for the Inner Ring node")
-			}
-		}
-
-		for i := range storageNodes {
-			publicKey := storageNodes[i].blob[2:35] // hardcoded because there was no other way
-			addr := contract.CreateStandardAccount(publicKey)
-			if !gas.Transfer(currentContract, addr, perNodeGASSimple, nil) {
-				panic("failed to transfer part of GAS to the storage node")
-			}
-
-			notaryTransferData[0] = addr
-			if !gas.Transfer(currentContract, interop.Hash160(notary.Hash), perNodeGASNotary, notaryTransferData) {
-				panic("failed to make notary deposit for the storage node")
-			}
-		}
-
-		storage.Put(ctx, proxyKey, proxyContract)
-	}
-
-	storage.Delete(ctx, notaryDisabledKey)
-
-	if notaryVal.(bool) {
-		runtime.Log(contractName + " contract successfully notarized")
-	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
