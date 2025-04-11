@@ -296,6 +296,7 @@ func getFromMap(m map[string]any, key string) (any, bool) {
 // meta-information be handled and notified using the chain. If name and
 // zone are non-empty strings, it behaves the same as [PutNamed]; empty
 // strings make a regular [Put] call.
+// Deprecated: use [Create] instead.
 func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
 		ctx := storage.GetContext()
@@ -313,19 +314,21 @@ func PutMeta(container []byte, signature interop.Signature, publicKey interop.Pu
 // PublicKey contains the public key of the signer.
 // Token is optional and should be a stable marshaled SessionToken structure from
 // API.
+// Deprecated: use [Create] instead.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	PutNamed(container, signature, publicKey, token, "", "")
 }
 
 // PutNamedOverloaded is the same as [Put] (and exposed as put from the contract via
 // overload), but allows named container creation via NNS contract.
+// Deprecated: use [Create] instead.
 func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string) {
 	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
 // PutNamed is similar to put but also sets a TXT record in nns contract.
 // Note that zone must exist.
-// DEPRECATED: call [Put] with the same args instead.
+// DEPRECATED: use [Create] instead.
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
@@ -411,6 +414,93 @@ func PutNamed(container []byte, signature interop.Signature,
 	runtime.Notify("PutSuccess", containerID, publicKey)
 }
 
+// Create saves container descriptor serialized according to the NeoFS API
+// binary protocol. Created containers are content-addressed: they may be
+// accessed by SHA-256 checksum of their data. On success, Create throws
+// 'Created' notification event.
+//
+// Created containers are disposable: if they are deleted, they cannot be
+// created again. Create throws [cst.ErrorDeleted] exception on recreation
+// attempts.
+//
+// Domain name is optional. If specified, it is used to register 'name.zone'
+// domain for given container. Domain zone is optional: it defaults to the 6th
+// contract deployment parameter which itself defaults to 'container'.
+//
+// Meta-on-chain boolean flag specifies whether meta information about objects
+// from this container can be collected for it.
+//
+// The operation is paid. Container owner pays per-container fee (global chain
+// configuration) to each committee member. If domain registration is requested,
+// additional alias fee (also a configuration) is added to each payment.
+//
+// Create must have chain's committee multi-signature witness. Invocation
+// script, verification script and session token parameters are owner
+// credentials. They are transmitted in notary transactions carrying original
+// users' requests. IR verifies requests and approves them via multi-signature.
+// Once creation is approved, container is persisted and becomes accessible.
+// Credentials are disposable and do not persist in the chain.
+func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zone string, metaOnChain bool) {
+	owner := ownerFromBinaryContainer(cnr)
+	alphabet := common.AlphabetNodes()
+	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
+		panic(common.ErrAlphabetWitnessFailed)
+	}
+
+	ctx := storage.GetContext()
+	id := crypto.Sha256(cnr)
+	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, id...)) != nil {
+		panic(cst.ErrorDeleted)
+	}
+
+	if name != "" {
+		if zone == "" {
+			zone = storage.Get(ctx, nnsRootKey).(string)
+		}
+		nnsContract := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+		domain := name + "." + zone
+
+		if checkNiceNameAvailable(nnsContract, domain) {
+			if !contract.Call(nnsContract, "register", contract.All, domain, runtime.GetExecutingScriptHash(),
+				"ops@nspcc.ru", defaultRefresh, defaultRetry, defaultExpire, defaultTTL).(bool) {
+				panic("domain registration failed")
+			}
+		}
+
+		contract.Call(nnsContract, "addRecord", contract.All, domain, recordtype.TXT, std.Base58Encode(cnr))
+
+		storage.Put(ctx, append([]byte(nnsHasAliasKey), id...), domain)
+	}
+
+	netmapContract := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	fee := contract.Call(netmapContract, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
+	if name != "" {
+		fee += contract.Call(netmapContract, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
+	}
+	if fee > 0 {
+		ownerAcc := common.WalletToScriptHash(owner)
+		balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
+		ownerBalance := contract.Call(balanceContract, "balanceOf", contract.ReadOnly, ownerAcc).(int)
+		if ownerBalance < fee*len(alphabet) {
+			panic("insufficient balance to create container")
+		}
+
+		transferDetails := common.ContainerFeeTransferDetails(id)
+		for i := range alphabet {
+			contract.Call(balanceContract, "transferX", contract.All,
+				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails)
+		}
+	}
+
+	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...), id)
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), std.Serialize(Container{Value: cnr}))
+	if metaOnChain {
+		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
+	}
+
+	runtime.Notify("Created", id, owner)
+}
+
 // checkNiceNameAvailable checks if the nice name is available for the container.
 // It panics if the name is taken. Returned value specifies if new domain registration is needed.
 func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool {
@@ -444,6 +534,7 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 // API.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+// Deprecated: use [Remove] instead.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 
@@ -463,6 +554,47 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
+}
+
+// Remove removes all data for the referenced container. Remove is no-op if
+// container does not exist. On success, Remove throws 'Removed' notification
+// event.
+//
+// See [Create] for details.
+func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
+	common.CheckAlphabetWitness()
+
+	if len(id) != interop.Hash256Len {
+		panic("invalid container ID length")
+	}
+
+	ctx := storage.GetContext()
+	cnrItemKey := append([]byte{containerKeyPrefix}, id...)
+	cnrItem := storage.Get(ctx, cnrItemKey)
+	if cnrItem == nil {
+		return
+	}
+
+	owner := ownerFromBinaryContainer(std.Deserialize(cnrItem.([]byte)).(Container).Value)
+
+	storage.Delete(ctx, cnrItemKey)
+	storage.Delete(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...))
+	storage.Delete(ctx, append(eACLPrefix, id...))
+	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
+
+	deleteByPrefix(ctx, append([]byte{nodesPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
+
+	domainKey := append([]byte(nnsHasAliasKey), id...)
+	if domain := storage.Get(ctx, domainKey).(string); len(domain) != 0 { // != "" not working
+		storage.Delete(ctx, domainKey)
+		deleteNNSRecords(ctx, domain)
+	}
+
+	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
+
+	runtime.Notify("Removed", interop.Hash256(id), owner)
 }
 
 func deleteNNSRecords(ctx storage.Context, domain string) {
@@ -789,6 +921,7 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 // API.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+// Deprecated: use [PutEACL] instead.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
 
@@ -825,6 +958,37 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	runtime.Log("success")
 	runtime.Notify("SetEACLSuccess", containerID, publicKey)
+}
+
+// PutEACL puts given eACL serialized according to the NeoFS API binary protocol
+// for the container it is referenced to. Operation must be allowed in the
+// container's basic ACL. If container does not exist, PutEACL throws
+// [cst.NotFoundError] exception. On success, PutEACL throws 'EACLChanged'
+// notification event.
+//
+// See [Create] for details.
+func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
+	common.CheckAlphabetWitness()
+
+	if len(eACL) < 2 {
+		panic("missing version field in eACL BLOB")
+	}
+
+	idOff := 2 + int(eACL[1]) + 4
+	if len(eACL) < idOff+containerIDSize {
+		panic("missing container ID field in eACL BLOB")
+	}
+
+	id := eACL[idOff : idOff+containerIDSize]
+	ctx := storage.GetContext()
+
+	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	storage.Put(ctx, append(eACLPrefix, id...), std.Serialize(ExtendedACL{Value: eACL}))
+
+	runtime.Notify("EACLChanged", interop.Hash256(id))
 }
 
 // EACL method returns a structure that contains a stable marshaled EACLTable structure,

@@ -4,6 +4,7 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- `create`, `remove` and `putEACL` methods to Container contract (#478)
 
 ### Changed
 - Deployment code uses header subscription instead of block subscription now (#471)
