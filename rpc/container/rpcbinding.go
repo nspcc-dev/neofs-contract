@@ -52,15 +52,32 @@ type PutSuccessEvent struct {
 	PublicKey   *keys.PublicKey
 }
 
+// CreatedEvent represents "Created" event emitted by the contract.
+type CreatedEvent struct {
+	ContainerID util.Uint256
+	Owner       []byte
+}
+
 // DeleteSuccessEvent represents "DeleteSuccess" event emitted by the contract.
 type DeleteSuccessEvent struct {
 	ContainerID []byte
+}
+
+// RemovedEvent represents "Removed" event emitted by the contract.
+type RemovedEvent struct {
+	ContainerID util.Uint256
+	Owner       []byte
 }
 
 // SetEACLSuccessEvent represents "SetEACLSuccess" event emitted by the contract.
 type SetEACLSuccessEvent struct {
 	ContainerID []byte
 	PublicKey   *keys.PublicKey
+}
+
+// EACLChangedEvent represents "EACLChanged" event emitted by the contract.
+type EACLChangedEvent struct {
+	ContainerID util.Uint256
 }
 
 // StartEstimationEvent represents "StartEstimation" event emitted by the contract.
@@ -292,6 +309,28 @@ func (c *Contract) CommitContainerListUpdateUnsigned(cID util.Uint256, replicas 
 	return c.actor.MakeUnsignedCall(c.hash, "commitContainerListUpdate", nil, cID, replicas)
 }
 
+// Create creates a transaction invoking `create` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Create(cnr []byte, invocScript []byte, verifScript []byte, sessionToken []byte, name string, zone string, metaOnChain bool) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "create", cnr, invocScript, verifScript, sessionToken, name, zone, metaOnChain)
+}
+
+// CreateTransaction creates a transaction invoking `create` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) CreateTransaction(cnr []byte, invocScript []byte, verifScript []byte, sessionToken []byte, name string, zone string, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "create", cnr, invocScript, verifScript, sessionToken, name, zone, metaOnChain)
+}
+
+// CreateUnsigned creates a transaction invoking `create` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) CreateUnsigned(cnr []byte, invocScript []byte, verifScript []byte, sessionToken []byte, name string, zone string, metaOnChain bool) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "create", nil, cnr, invocScript, verifScript, sessionToken, name, zone, metaOnChain)
+}
+
 // Delete creates a transaction invoking `delete` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -380,6 +419,28 @@ func (c *Contract) PutContainerSizeUnsigned(epoch *big.Int, cid []byte, usedSize
 	return c.actor.MakeUnsignedCall(c.hash, "putContainerSize", nil, epoch, cid, usedSize, pubKey)
 }
 
+// PutEACL creates a transaction invoking `putEACL` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) PutEACL(eACL []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "putEACL", eACL, invocScript, verifScript, sessionToken)
+}
+
+// PutEACLTransaction creates a transaction invoking `putEACL` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) PutEACLTransaction(eACL []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "putEACL", eACL, invocScript, verifScript, sessionToken)
+}
+
+// PutEACLUnsigned creates a transaction invoking `putEACL` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) PutEACLUnsigned(eACL []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "putEACL", nil, eACL, invocScript, verifScript, sessionToken)
+}
+
 // Put2 creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -444,6 +505,28 @@ func (c *Contract) Put3Transaction(container []byte, signature []byte, publicKey
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) Put3Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, name, zone)
+}
+
+// Remove creates a transaction invoking `remove` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Remove(id []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "remove", id, invocScript, verifScript, sessionToken)
+}
+
+// RemoveTransaction creates a transaction invoking `remove` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) RemoveTransaction(id []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "remove", id, invocScript, verifScript, sessionToken)
+}
+
+// RemoveUnsigned creates a transaction invoking `remove` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) RemoveUnsigned(id []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "remove", nil, id, invocScript, verifScript, sessionToken)
 }
 
 // SetEACL creates a transaction invoking `setEACL` method of the contract.
@@ -1205,6 +1288,74 @@ func (e *PutSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	return nil
 }
 
+// CreatedEventsFromApplicationLog retrieves a set of all emitted events
+// with "Created" name from the provided [result.ApplicationLog].
+func CreatedEventsFromApplicationLog(log *result.ApplicationLog) ([]*CreatedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*CreatedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "Created" {
+				continue
+			}
+			event := new(CreatedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize CreatedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to CreatedEvent or
+// returns an error if it's not possible to do to so.
+func (e *CreatedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Owner, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Owner: %w", err)
+	}
+
+	return nil
+}
+
 // DeleteSuccessEventsFromApplicationLog retrieves a set of all emitted events
 // with "DeleteSuccess" name from the provided [result.ApplicationLog].
 func DeleteSuccessEventsFromApplicationLog(log *result.ApplicationLog) ([]*DeleteSuccessEvent, error) {
@@ -1252,6 +1403,74 @@ func (e *DeleteSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	e.ContainerID, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	return nil
+}
+
+// RemovedEventsFromApplicationLog retrieves a set of all emitted events
+// with "Removed" name from the provided [result.ApplicationLog].
+func RemovedEventsFromApplicationLog(log *result.ApplicationLog) ([]*RemovedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*RemovedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "Removed" {
+				continue
+			}
+			event := new(RemovedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize RemovedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to RemovedEvent or
+// returns an error if it's not possible to do to so.
+func (e *RemovedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Owner, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Owner: %w", err)
 	}
 
 	return nil
@@ -1320,6 +1539,68 @@ func (e *SetEACLSuccessEvent) FromStackItem(item *stackitem.Array) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	return nil
+}
+
+// EACLChangedEventsFromApplicationLog retrieves a set of all emitted events
+// with "EACLChanged" name from the provided [result.ApplicationLog].
+func EACLChangedEventsFromApplicationLog(log *result.ApplicationLog) ([]*EACLChangedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*EACLChangedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "EACLChanged" {
+				continue
+			}
+			event := new(EACLChangedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize EACLChangedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to EACLChangedEvent or
+// returns an error if it's not possible to do to so.
+func (e *EACLChangedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 1 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
 	}
 
 	return nil

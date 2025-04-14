@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
@@ -24,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 const containerPath = "../contracts/container"
@@ -974,4 +976,358 @@ func TestContainerAlias(t *testing.T) {
 
 		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 	})
+}
+
+func TestContainerCreate(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+	const anyValidDomainName = ""
+	const anyValidDomainZone = ""
+	const anyValidMetaOnChain = false
+	t.Run("invalid container", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+		t.Run("wrong owner offset", func(t *testing.T) {
+			cnr := randomBytes(10)
+			cnr[1] = 100
+			exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "invalid offset", "create",
+				cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+		})
+	})
+	t.Run("no alphabet witness", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+		otherAcc := exec.NewAccount(t)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "create",
+			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+	})
+	t.Run("already deleted", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+
+		// TODO: do not mix test with the other ops. Instead, preset contract storage.
+		//  It will be easier with https://github.com/nspcc-dev/neo-go/issues/2926.
+		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "remove",
+			anyValidCnrID, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "container was previously deleted", "create",
+			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+	})
+	t.Run("domain register failure", func(t *testing.T) {
+		t.Skip("TODO")
+	})
+	t.Run("not enough funds", func(t *testing.T) {
+		const fee = 1000
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		owner := exec.NewAccount(t, 0)
+		cnr := slices.Clone(anyValidCnr)
+		setContainerOwner(cnr, owner)
+
+		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "insufficient balance to create container", "create",
+			cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+
+		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee-1, []byte{})
+
+		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "insufficient balance to create container", "create",
+			cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
+	})
+	t.Run("payment failure", func(t *testing.T) {
+		t.Skip("TODO")
+	})
+
+	const fee = 1000
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 0)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr, _ := base58.Decode(address.Uint160ToString(ownerAcc))
+	cnr := slices.Clone(anyValidCnr)
+	copy(cnr[6:], ownerAddr)
+	setContainerOwner(cnr, owner)
+	id := sha256.Sum256(cnr)
+
+	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee, []byte{})
+
+	txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, true)
+	// storage
+	getStorageItem := func(key []byte) []byte {
+		return getContractStorageItem(t, exec, containerContract.Hash, key)
+	}
+	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
+	cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
+	require.NoError(t, err)
+	require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+	require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
+	// notifications
+	res := exec.GetTxExecResult(t, txHash)
+	events := res.Events
+	require.Len(t, events, 3)
+	committeeAcc := committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
+	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee))
+	assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee), slices.Concat([]byte{0x10}, id[:]))
+	assertNotificationEvent(t, events[2], "Created", id[:], ownerAddr)
+}
+
+func TestContainerRemove(t *testing.T) {
+	anyValidCnrID := randomBytes(32)
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+	t.Run("no alphabet witness", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+		otherAcc := exec.NewAccount(t)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "remove",
+			anyValidCnrID, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+	t.Run("invalid ID", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		for _, tc := range []struct {
+			name, err string
+			ln        int
+		}{
+			{name: "empty", err: "invalid container ID length", ln: 0},
+			{name: "undersize", err: "invalid container ID length", ln: 31},
+			{name: "oversize", err: "invalid container ID length", ln: 33},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "", "remove",
+					randomBytes(tc.ln), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			})
+		}
+	})
+	t.Run("broken container in storage", func(t *testing.T) {
+		t.Skip("TODO https://github.com/nspcc-dev/neo-go/issues/2926")
+	})
+
+	const createFee = 1000
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", createFee)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	// TODO: store items manually instead instead of creation call.
+	//  https://github.com/nspcc-dev/neo-go/issues/2926 would help
+	owner := exec.NewAccount(t, 0)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr, _ := base58.Decode(address.Uint160ToString(ownerAcc))
+	cnr := randomBytes(100)
+	cnr[1] = 0 // owner offset fix
+	copy(cnr[6:], ownerAddr)
+	setContainerOwner(cnr, owner)
+	id := sha256.Sum256(cnr)
+
+	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, createFee, []byte{})
+
+	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", true)
+	txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "remove",
+		id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	// storage
+	getStorageItem := func(key []byte) []byte {
+		return getContractStorageItem(t, exec, containerContract.Hash, key)
+	}
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
+	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'n'}, id[:])) {
+		t.Fatalf("SN item not removed: key %x, val %x", k, v)
+	}
+	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'u'}, id[:])) {
+		t.Fatalf("next epoch SN item not removed: key %x, val %x", k, v)
+	}
+	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'r'}, id[:])) {
+		t.Fatalf("replica num item not removed: key %x, val %x", k, v)
+	}
+	require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'d'}, id[:])))
+	// notifications
+	res := exec.GetTxExecResult(t, txHash)
+	events := res.Events
+	require.Len(t, events, 1)
+	assertNotificationEvent(t, events[0], "Removed", id[:], ownerAddr)
+}
+
+func TestContainerPutEACL(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidEACL := randomBytes(100)
+	anyValidEACL[1] = 0 // CID offset fix
+	copy(anyValidEACL[6:], anyValidCnrID)
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+	t.Run("invalid eACL", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+		t.Run("no fields", func(t *testing.T) {
+			for ln := range 2 {
+				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "missing version field in eACL BLOB", "putEACL",
+					make([]byte, ln), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			}
+		})
+		t.Run("cut container ID", func(t *testing.T) {
+			for idLn := range 32 {
+				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "missing container ID field in eACL BLOB", "putEACL",
+					anyValidEACL[:6+idLn], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			}
+		})
+	})
+	t.Run("no alphabet witness", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+		otherAcc := exec.NewAccount(t)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+
+		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "putEACL",
+			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+	t.Run("missing container", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "container does not exist", "putEACL",
+			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
+	const fee = 1000
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 0)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr, _ := base58.Decode(address.Uint160ToString(ownerAcc))
+	cnr := slices.Clone(anyValidCnr)
+	copy(cnr[6:], ownerAddr)
+	setContainerOwner(cnr, owner)
+	id := sha256.Sum256(cnr)
+	copy(anyValidEACL[6:], id[:])
+
+	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee, []byte{})
+
+	// TODO: store items manually instead instead of creation call.
+	//  https://github.com/nspcc-dev/neo-go/issues/2926 would help
+	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+	txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
+		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	// storage
+	getStorageItem := func(key []byte) []byte {
+		return getContractStorageItem(t, exec, containerContract.Hash, key)
+	}
+	eACLStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(anyValidEACL), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
+	require.NoError(t, err)
+	require.EqualValues(t, eACLStructBytes, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
+	// notifications
+	res := exec.GetTxExecResult(t, txHash)
+	events := res.Events
+	require.Len(t, events, 1)
+	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
 }
