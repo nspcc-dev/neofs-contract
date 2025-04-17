@@ -80,6 +80,11 @@ type kv struct {
 	v []byte
 }
 
+type epochItem struct {
+	height int
+	time   int
+}
+
 const (
 	// DefaultSnapshotCount contains the number of previous snapshots stored by this contract.
 	// Must be less than 255.
@@ -104,6 +109,8 @@ const (
 
 	defaultCleanupThreshold = 3
 	cleanupThresholdKey     = "t"
+
+	epochIndexKey = 'i'
 
 	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
 	// marking the start of the node's public key.
@@ -178,6 +185,13 @@ func _deploy(data any, isUpdate bool) {
 			setConfig(ctx, "UseNodeV2", []byte{0})
 		}
 
+		if version < 22_000 {
+			curEpoch := storage.Get(ctx, snapshotEpoch).(int)
+			curEpochHeight := storage.Get(ctx, snapshotBlockKey).(int)
+			storage.Put(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...), std.Serialize(epochItem{height: curEpochHeight}))
+			storage.Delete(ctx, snapshotBlockKey)
+		}
+
 		return
 	}
 
@@ -205,7 +219,6 @@ func _deploy(data any, isUpdate bool) {
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 	storage.Put(ctx, snapshotEpoch, 0)
-	storage.Put(ctx, snapshotBlockKey, 0)
 	storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
 	setConfig(ctx, "UseNodeV2", []byte{1})
 
@@ -421,8 +434,6 @@ func NewEpoch(epochNum int) {
 
 	// todo: check if provided epoch number is bigger than current
 	storage.Put(ctx, snapshotEpoch, epochNum)
-	storage.Put(ctx, snapshotBlockKey, ledger.CurrentIndex())
-
 	fillNetmap(ctx, epochNum)
 
 	var (
@@ -442,6 +453,11 @@ func NewEpoch(epochNum int) {
 	// make clean up routines in other contracts
 	cleanup(ctx, epochNum)
 
+	storage.Put(ctx, append([]byte{epochIndexKey}, fourBytesBE(epochNum)...), std.Serialize(epochItem{
+		height: ledger.CurrentIndex(),
+		time:   runtime.GetTime(),
+	}))
+
 	runtime.Notify("NewEpoch", epochNum)
 }
 
@@ -451,10 +467,32 @@ func Epoch() int {
 	return storage.Get(ctx, snapshotEpoch).(int)
 }
 
-// LastEpochBlock method returns the block number when the current epoch was applied.
+// LastEpochBlock method returns the block number when the current epoch was
+// applied. Do not confuse with [LastEpochTime].
+//
+// Use [GetEpochBlock] for specific epoch.
 func LastEpochBlock() int {
 	ctx := storage.GetReadOnlyContext()
-	return storage.Get(ctx, snapshotBlockKey).(int)
+	curEpoch := storage.Get(ctx, snapshotEpoch).(int)
+	val := storage.Get(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...))
+	if val == nil {
+		return 0
+	}
+	return std.Deserialize(val.([]byte)).(epochItem).height
+}
+
+// LastEpochTime method returns the block time when the current epoch was
+// applied. Do not confuse with [LastEpochBlock].
+//
+// Use [GetEpochTime] for specific epoch.
+func LastEpochTime() int {
+	ctx := storage.GetReadOnlyContext()
+	curEpoch := storage.Get(ctx, snapshotEpoch).(int)
+	val := storage.Get(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...))
+	if val == nil {
+		return 0
+	}
+	return std.Deserialize(val.([]byte)).(epochItem).time
 }
 
 // Netmap returns set of information about the storage nodes representing a network
@@ -788,6 +826,30 @@ func CleanupThreshold() int {
 // solution until we have proper iterator types. Never use it.
 func UnusedCandidate() Candidate {
 	return Candidate{}
+}
+
+// GetEpochBlock returns block index when given epoch came. Returns 0 if the
+// epoch is missing. Do not confuse with [GetEpochTime].
+//
+// Use [LastEpochBlock] if you are interested in the current epoch.
+func GetEpochBlock(epoch int) int {
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, fourBytesBE(epoch)...))
+	if val == nil {
+		return 0
+	}
+	return std.Deserialize(val.([]byte)).(epochItem).height
+}
+
+// GetEpochTime returns block time when given epoch came. Returns 0 if the epoch
+// is missing. Do not confuse with [GetEpochBlock].
+//
+// Use [LastEpochTime] if you are interested in the current epoch.
+func GetEpochTime(epoch int) int {
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, fourBytesBE(epoch)...))
+	if val == nil {
+		return 0
+	}
+	return std.Deserialize(val.([]byte)).(epochItem).time
 }
 
 // serializes and stores the given Node by its public key in the contract storage,

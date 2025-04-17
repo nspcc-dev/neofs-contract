@@ -96,8 +96,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevPendingVote := readPendingVotes()
 
 	// read previous values using contract API
-	readUint64 := func(method string) uint64 {
-		n, err := c.Call(t, method).TryInteger()
+	readUint64 := func(method string, args ...any) uint64 {
+		n, err := c.Call(t, method, args...).TryInteger()
 		require.NoError(t, err)
 		return n.Uint64()
 	}
@@ -200,7 +200,10 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
 	require.Equal(t, prevCurrentEpoch, newCurrentEpoch, "current epoch should remain")
-	require.Equal(t, prevCurrentEpochBlock, newCurrentEpochBlock, "current epoch block should remain")
+	require.Equal(t, prevCurrentEpochBlock, newCurrentEpochBlock, "current epoch block should remain (method)")
+	require.Nil(t, c.GetStorageItem([]byte("snapshotBlock")), "current epoch block should be removed (storage)")
+	require.EqualValues(t, prevCurrentEpochBlock, readUint64("getEpochBlock", prevCurrentEpoch),
+		"current epoch block should be resolvable")
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.ElementsMatch(t, prevCurrentNetmap, newCurrentNetmap, "current netmap should remain")
 	require.ElementsMatch(t, prevNetmapCandidates, newNetmapCandidates, "netmap candidates should remain")

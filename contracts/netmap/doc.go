@@ -52,8 +52,8 @@ Contract storage model.
 Key-value storage format:
  - 'snapshotEpoch' -> int
    current epoch
- - 'snapshotBlock' -> int
-   block which "ticked" the current epoch
+ - 'i<epoch>' -> std.Serialize(epochItem)
+   state info of block which "ticked" the epoch which is encoded as 4-byte BE integer
  - 'snapshotCount' -> int
    number of stored network maps including current one
  - 'snapshot_<ID>' -> std.Serialize([]Node)
@@ -78,9 +78,8 @@ Key-value storage format:
 # Setting
 To handle some events, the contract refers to other contracts.
 
-# Epoch
-Contract stores the current (last) NeoFS timestamp for the network within which
-the contract is deployed.
+# Epochs
+Contract stores state info of NeoFS epoch ticks.
 
 # Network maps
 Contract records set of network parties representing the network map. Current
