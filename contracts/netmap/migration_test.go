@@ -18,7 +18,7 @@ import (
 const name = "netmap"
 
 func TestMigration(t *testing.T) {
-	err := dump.IterateDumps("../testdata", func(id dump.ID, r *dump.Reader) {
+	err := dump.IterateDumps("../../testdata", func(id dump.ID, r *dump.Reader) {
 		t.Run(id.String()+"/"+name, func(t *testing.T) {
 			testMigrationFromDump(t, r)
 		})
