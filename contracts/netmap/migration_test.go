@@ -2,7 +2,6 @@ package netmap_test
 
 import (
 	"bytes"
-	"math/big"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -107,13 +106,9 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 			res[i].BLOB, err = arr[0].TryBytes()
 			require.NoError(t, err)
 
-			if version <= 15_004 {
-				res[i].State = big.NewInt(1)
-			} else {
-				n, err := arr[1].TryInteger()
-				require.NoError(t, err)
-				res[i].State = n
-			}
+			n, err := arr[1].TryInteger()
+			require.NoError(t, err)
+			res[i].State = n
 		}
 		return res
 	}
@@ -137,13 +132,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		var err error
 		for i := range items {
 			arr := items[i].Value().([]stackitem.Item)
-			if version <= 15_004 {
-				res[i].BLOB, err = arr[0].Value().([]stackitem.Item)[0].TryBytes()
-				require.NoError(t, err)
-			} else {
-				res[i].BLOB, err = arr[0].TryBytes()
-				require.NoError(t, err)
-			}
+			res[i].BLOB, err = arr[0].TryBytes()
+			require.NoError(t, err)
 
 			n, err := arr[1].TryInteger()
 			require.NoError(t, err)
