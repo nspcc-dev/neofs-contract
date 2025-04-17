@@ -58,9 +58,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		},
 	})
 
-	require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
-	require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
-
 	updPrm := []any{
 		false,
 		util.Uint160{}, // Balance contract
@@ -184,7 +181,11 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.CheckUpdateSuccess(t, updPrm...)
 
-	checkNewEpochSubscribers(t, c, balanceHash, containerHash)
+	if prevVersion < 19_000 {
+		require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
+		require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
+		checkNewEpochSubscribers(t, c, balanceHash, containerHash)
+	}
 
 	// check that contract was updates as expected
 	newPendingVotes := readPendingVotes()
@@ -208,6 +209,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.ElementsMatch(t, prevCurrentNetmap, newCurrentNetmap, "current netmap should remain")
 	require.ElementsMatch(t, prevNetmapCandidates, newNetmapCandidates, "netmap candidates should remain")
 	require.ElementsMatch(t, ir, c.InnerRing(t))
+	require.Nil(t, c.GetStorageItem(balanceHashOldKey), "balance contract address should be removed")
+	require.Nil(t, c.GetStorageItem(containerHashOldKey), "container contract address should be removed")
 
 	require.Equal(t, len(prevDiffToSnapshots), len(newDiffToSnapshots))
 	for k, vPrev := range prevDiffToSnapshots {
@@ -218,13 +221,10 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	var cleanupThreshItem = c.GetStorageItem([]byte("t"))
 	cleanupThresh := io.NewBinReaderFromBuf(cleanupThreshItem).ReadVarUint()
-	require.Equal(t, 3, cleanupThresh)
+	require.EqualValues(t, 3, cleanupThresh)
 }
 
 func checkNewEpochSubscribers(t *testing.T, contract *migration.Contract, balanceWant, containerWant util.Uint160) {
-	require.Nil(t, contract.GetStorageItem(balanceHashOldKey))
-	require.Nil(t, contract.GetStorageItem(containerHashOldKey))
-
 	// contracts are migrated in alphabetical order at least for now
 
 	var balanceMigrated bool
