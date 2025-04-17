@@ -96,26 +96,6 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		it := storage.Find(ctx, []byte{}, storage.None)
-		for iterator.Next(it) {
-			item := iterator.Value(it).(struct {
-				key   []byte
-				value []byte
-			})
-
-			// Migrate container.
-			if len(item.key) == containerIDSize {
-				storage.Delete(ctx, item.key)
-				storage.Put(ctx, append([]byte{containerKeyPrefix}, item.key...), item.value)
-			}
-
-			// Migrate owner-cid map.
-			if len(item.key) == 25 /* owner id size */ +containerIDSize {
-				storage.Delete(ctx, item.key)
-				storage.Put(ctx, append([]byte{ownerKeyPrefix}, item.key...), item.value)
-			}
-		}
-
 		if version < 22_000 {
 			storage.Delete(ctx, "identityScriptHash") // neofsIDContractKey
 		}
