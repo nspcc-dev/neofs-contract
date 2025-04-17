@@ -671,3 +671,157 @@ func TestCleanupThreshold(t *testing.T) {
 	require.Equal(t, 1, s.Len())
 	require.Equal(t, stackitem.Make(10), s.Pop().Item())
 }
+
+func TestGetEpochBlock(t *testing.T) {
+	netmapContract := newNetmapInvoker(t)
+
+	assert := func(epoch, exp int) {
+		stk, err := netmapContract.TestInvoke(t, "getEpochBlock", epoch)
+		require.NoError(t, err)
+
+		items := stk.ToArray()
+		require.Len(t, items, 1)
+
+		i, err := items[0].TryInteger()
+		require.NoError(t, err)
+		require.True(t, i.IsUint64())
+		require.EqualValues(t, exp, i.Uint64())
+	}
+
+	const firstEpoch = 123
+	firstEpochHeight := int(netmapContract.Chain.BlockHeight())
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, 0)
+	assert(firstEpoch+1, 0)
+	assert(firstEpoch+2, 0)
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch)
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, firstEpochHeight)
+	assert(firstEpoch+1, 0)
+	assert(firstEpoch+2, 0)
+
+	const secondEpochAfter = 13
+	for range secondEpochAfter {
+		netmapContract.AddNewBlock(t)
+	}
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch+1)
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, firstEpochHeight)
+	assert(firstEpoch+1, firstEpochHeight+1+secondEpochAfter)
+	assert(firstEpoch+2, 0)
+}
+
+func TestLastEpochBlock(t *testing.T) {
+	netmapContract := newNetmapInvoker(t)
+
+	assert := func(exp uint32) {
+		stk, err := netmapContract.TestInvoke(t, "lastEpochBlock")
+		require.NoError(t, err)
+
+		items := stk.ToArray()
+		require.Len(t, items, 1)
+
+		i, err := items[0].TryInteger()
+		require.NoError(t, err)
+		require.True(t, i.IsUint64())
+		require.EqualValues(t, exp, i.Uint64())
+	}
+
+	assert(0)
+
+	firstEpochBlock := netmapContract.Chain.BlockHeight()
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", 123)
+
+	assert(firstEpochBlock)
+
+	for range 10 {
+		netmapContract.AddNewBlock(t)
+	}
+
+	secondEpochBlock := netmapContract.Chain.BlockHeight()
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", 123+1)
+
+	assert(secondEpochBlock)
+}
+
+func TestGetEpochTime(t *testing.T) {
+	netmapContract := newNetmapInvoker(t)
+
+	assert := func(epoch, exp uint64) {
+		stk, err := netmapContract.TestInvoke(t, "getEpochTime", epoch)
+		require.NoError(t, err)
+
+		items := stk.ToArray()
+		require.Len(t, items, 1)
+
+		i, err := items[0].TryInteger()
+		require.NoError(t, err)
+		require.True(t, i.IsUint64())
+		require.EqualValues(t, exp, i.Uint64())
+	}
+
+	const firstEpoch = 123
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, 0)
+	assert(firstEpoch+1, 0)
+	assert(firstEpoch+2, 0)
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch)
+	firstEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, firstEpochBlock.Timestamp)
+	assert(firstEpoch+1, 0)
+	assert(firstEpoch+2, 0)
+
+	for range 10 {
+		netmapContract.AddNewBlock(t)
+	}
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch+1)
+	secondEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+
+	assert(firstEpoch-1, 0)
+	assert(firstEpoch, firstEpochBlock.Timestamp)
+	assert(firstEpoch+1, secondEpochBlock.Timestamp)
+	assert(firstEpoch+2, 0)
+}
+
+func TestLastEpochTime(t *testing.T) {
+	netmapContract := newNetmapInvoker(t)
+
+	assert := func(exp uint64) {
+		stk, err := netmapContract.TestInvoke(t, "lastEpochTime")
+		require.NoError(t, err)
+
+		items := stk.ToArray()
+		require.Len(t, items, 1)
+
+		i, err := items[0].TryInteger()
+		require.NoError(t, err)
+		require.True(t, i.IsUint64())
+		require.EqualValues(t, exp, i.Uint64())
+	}
+
+	assert(0)
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", 123)
+	firstEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+
+	assert(firstEpochBlock.Timestamp)
+
+	for range 10 {
+		netmapContract.AddNewBlock(t)
+	}
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", 123+1)
+	secondEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+
+	assert(secondEpochBlock.Timestamp)
+}

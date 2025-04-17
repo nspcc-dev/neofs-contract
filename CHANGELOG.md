@@ -5,6 +5,7 @@ Changelog for NeoFS Contract
 
 ### Added
 - `create`, `remove` and `putEACL` methods to Container contract (#478)
+- `getEpochBlock`, `getEpochTime` and `lastEpochTime` methods to Netmap contract (#484)
 
 ### Changed
 - Deployment code uses header subscription instead of block subscription now (#471)

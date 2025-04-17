@@ -144,6 +144,16 @@ func (c *ContractReader) Epoch() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "epoch"))
 }
 
+// GetEpochBlock invokes `getEpochBlock` method of contract.
+func (c *ContractReader) GetEpochBlock(epoch *big.Int) (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochBlock", epoch))
+}
+
+// GetEpochTime invokes `getEpochTime` method of contract.
+func (c *ContractReader) GetEpochTime(epoch *big.Int) (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochTime", epoch))
+}
+
 // InnerRingList invokes `innerRingList` method of contract.
 func (c *ContractReader) InnerRingList() ([]*CommonIRNode, error) {
 	return func(item stackitem.Item, err error) ([]*CommonIRNode, error) {
@@ -175,6 +185,11 @@ func (c *ContractReader) IsStorageNode(key *keys.PublicKey) (bool, error) {
 // IsStorageNode2 invokes `isStorageNode` method of contract.
 func (c *ContractReader) IsStorageNode2(key *keys.PublicKey, epoch *big.Int) (bool, error) {
 	return unwrap.Bool(c.invoker.Call(c.hash, "isStorageNode", key, epoch))
+}
+
+// LastEpochTime invokes `lastEpochTime` method of contract.
+func (c *ContractReader) LastEpochTime() (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "lastEpochTime"))
 }
 
 // ListCandidates invokes `listCandidates` method of contract.
