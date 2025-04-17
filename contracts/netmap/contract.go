@@ -62,18 +62,6 @@ type Candidate struct {
 	LastActiveEpoch int
 }
 
-// Temporary migration-related types.
-// nolint:deadcode,unused
-type oldNode struct {
-	BLOB []byte
-}
-
-// nolint:deadcode,unused
-type oldCandidate struct {
-	f1 oldNode
-	f2 nodestate.Type
-}
-
 // nolint:deadcode,unused
 type kv struct {
 	k []byte
@@ -134,39 +122,6 @@ func _deploy(data any, isUpdate bool) {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
-
-		if version < 16*1_000 {
-			count := getSnapshotCount(ctx)
-			prefix := []byte(snapshotKeyPrefix)
-			for i := 0; i < count; i++ { //nolint:intrange // Not supported by NeoGo
-				key := append(prefix, byte(i))
-				data := storage.Get(ctx, key)
-				if data != nil {
-					nodes := std.Deserialize(data.([]byte)).([]oldNode)
-					var newnodes []Node
-					for j := range nodes {
-						// Old structure contains only the first field,
-						// second is implicitly assumed to be Online.
-						newnodes = append(newnodes, Node{
-							BLOB:  nodes[j].BLOB,
-							State: nodestate.Online,
-						})
-					}
-					common.SetSerialized(ctx, key, newnodes)
-				}
-			}
-
-			it := storage.Find(ctx, candidatePrefix, storage.None)
-			for iterator.Next(it) {
-				cand := iterator.Value(it).(kv)
-				oldcan := std.Deserialize(cand.v).(oldCandidate)
-				newcan := Node{
-					BLOB:  oldcan.f1.BLOB,
-					State: oldcan.f2,
-				}
-				common.SetSerialized(ctx, cand.k, newcan)
-			}
-		}
 
 		if version < 19_000 {
 			balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
