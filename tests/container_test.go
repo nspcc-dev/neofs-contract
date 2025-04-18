@@ -1044,7 +1044,57 @@ func TestContainerCreate(t *testing.T) {
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 	})
 	t.Run("domain register failure", func(t *testing.T) {
-		t.Skip("TODO")
+		const fee = 1000
+		const aliasFee = 500
+		blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+		require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+		exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+		nnsContract := deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee, "ContainerAliasFee", aliasFee)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		owner := exec.NewAccount(t, 0)
+		ownerAcc := owner.ScriptHash()
+		ownerAddr, _ := base58.Decode(address.Uint160ToString(ownerAcc))
+		cnr := slices.Clone(anyValidCnr)
+		copy(cnr[6:], ownerAddr)
+		setContainerOwner(cnr, owner)
+		id := sha256.Sum256(cnr)
+
+		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee+aliasFee, []byte{})
+
+		txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+			cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "my-domain", "", true)
+
+		// storage
+		getStorageItem := func(key []byte) []byte {
+			return getContractStorageItem(t, exec, containerContract.Hash, key)
+		}
+		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
+		cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
+		require.NoError(t, err)
+		require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+		require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
+		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
+
+		// NNS
+		exec.CommitteeInvoker(nnsContract).Invoke(t, stackitem.NewArray([]stackitem.Item{
+			stackitem.NewByteArray([]byte(base58.Encode(id[:]))),
+		}), "getRecords", "my-domain.container", int64(recordtype.TXT))
+
+		// notifications
+		res := exec.GetTxExecResult(t, txHash)
+		events := res.Events
+		require.Len(t, events, 4)
+		committeeAcc := committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
+		assertNotificationEvent(t, events[0], "Transfer", nil, containerContract.Hash[:], big.NewInt(1), []byte("my-domain.container"))
+		assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee+aliasFee))
+		assertNotificationEvent(t, events[2], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee+aliasFee), slices.Concat([]byte{0x10}, id[:]))
+		assertNotificationEvent(t, events[3], "Created", id[:], ownerAddr)
 	})
 	t.Run("not enough funds", func(t *testing.T) {
 		const fee = 1000

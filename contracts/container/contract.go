@@ -447,7 +447,7 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 			}
 		}
 
-		contract.Call(nnsContract, "addRecord", contract.All, domain, recordtype.TXT, std.Base58Encode(cnr))
+		contract.Call(nnsContract, "addRecord", contract.All, domain, recordtype.TXT, std.Base58Encode(id))
 
 		storage.Put(ctx, append([]byte(nnsHasAliasKey), id...), domain)
 	}
