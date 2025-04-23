@@ -92,7 +92,7 @@ type nsIteratorValue struct {
 }
 
 // Update updates NameService contract.
-func Update(nefFile []byte, manifest []byte, data any) {
+func Update(nefFile, manifest []byte, data any) {
 	checkCommittee()
 	// Calculating keys and serializing requires calling
 	// std and crypto contracts. This can be helpful on update

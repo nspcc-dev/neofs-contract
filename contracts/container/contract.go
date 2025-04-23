@@ -167,7 +167,7 @@ func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // by committee only.
-func Update(nefFile []byte, manifest []byte, data any) {
+func Update(nefFile, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
