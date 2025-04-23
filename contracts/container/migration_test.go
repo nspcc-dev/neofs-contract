@@ -2,6 +2,8 @@ package container_test
 
 import (
 	"bytes"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/mr-tron/base58"
@@ -88,6 +90,17 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	prevContainerCount := readContainerCount()
 	prevOwnersToContainers := readOwnersToContainers()
 
+	prevCnrStorageItems := make(map[string][]byte) // CID -> container binary
+	c.SeekStorage([]byte{'x'}, func(k, v []byte) bool {
+		prevCnrStorageItems[string(k)] = getStructField0(t, v)
+		return true
+	})
+	prevEACLStorageItems := make(map[string][]byte) // CID -> eACL binary
+	c.SeekStorage([]byte("eACL"), func(k, v []byte) bool {
+		prevEACLStorageItems[string(k)] = getStructField0(t, v)
+		return true
+	})
+
 	// try to update the contract
 	if notaryDisabled && prevPendingVote {
 		c.CheckUpdateFail(t, "pending vote detected")
@@ -102,10 +115,23 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	newContainerCount := readContainerCount()
 	newOwnersToContainers := readOwnersToContainers()
 
+	newCnrStorageItems := make(map[string][]byte) // CID -> container binary
+	c.SeekStorage([]byte{'x'}, func(k, v []byte) bool {
+		newCnrStorageItems[string(k)] = slices.Clone(v)
+		return true
+	})
+	newEACLStorageItems := make(map[string][]byte) // CID -> eACL binary
+	c.SeekStorage([]byte("eACL"), func(k, v []byte) bool {
+		newEACLStorageItems[string(k)] = slices.Clone(v)
+		return true
+	})
+
 	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Equal(t, prevContainerCount, newContainerCount, "number of containers should remain")
 	require.ElementsMatch(t, prevContainers, newContainers, "container list should remain")
 	require.False(t, newPendingVote, "there should be no more pending votes")
+	require.True(t, maps.EqualFunc(prevCnrStorageItems, newCnrStorageItems, bytes.Equal), "containers' binary items should remain")
+	require.True(t, maps.EqualFunc(prevEACLStorageItems, newEACLStorageItems, bytes.Equal), "eACLs' binary items should remain")
 
 	require.Equal(t, len(prevOwnersToContainers), len(newOwnersToContainers))
 	for k, vPrev := range prevOwnersToContainers {
@@ -113,4 +139,15 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.True(t, ok)
 		require.ElementsMatch(t, vPrev, vNew, "containers of '%s' owner should remain", base58.Encode([]byte(k)))
 	}
+}
+
+func getStructField0(t testing.TB, v []byte) []byte {
+	item, err := stackitem.Deserialize(v)
+	require.NoError(t, err)
+	arr, ok := item.Value().([]stackitem.Item)
+	require.True(t, ok)
+	require.NotEmpty(t, arr)
+	b, err := arr[0].TryBytes()
+	require.NoError(t, err)
+	return b
 }

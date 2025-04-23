@@ -35,6 +35,7 @@ Changelog for NeoFS Contract
 ### Changed
 - Minimal Go version to 1.22 (#353, #387)
 - NNS contract now returns an empty array from resolve and getRecord if there are no records (#420)
+- Container contract no longer persists container and eACL credentials (#481)
 
 ### Updated
 - NeoGo dependency to 0.108.0 (#450, #465)

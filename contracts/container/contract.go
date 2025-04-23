@@ -98,6 +98,18 @@ func _deploy(data any, isUpdate bool) {
 
 		if version < 22_000 {
 			storage.Delete(ctx, "identityScriptHash") // neofsIDContractKey
+
+			it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.DeserializeValues|storage.PickField0) // Container.Value field
+			for iterator.Next(it) {
+				val := iterator.Value(it).(struct{ key, cnr []byte })
+				storage.Put(ctx, val.key, val.cnr)
+			}
+
+			it = storage.Find(ctx, eACLPrefix, storage.DeserializeValues|storage.PickField0) // ExtendedACL.Value field
+			for iterator.Next(it) {
+				val := iterator.Value(it).(struct{ key, cnr []byte })
+				storage.Put(ctx, val.key, val.cnr)
+			}
 		}
 
 		return
@@ -320,13 +332,6 @@ func PutNamed(container []byte, signature interop.Signature,
 		panic(cst.ErrorDeleted)
 	}
 
-	cnr := Container{
-		Value: container,
-		Sig:   signature,
-		Pub:   publicKey,
-		Token: token,
-	}
-
 	var (
 		needRegister    bool
 		nnsContractAddr interop.Hash160
@@ -372,7 +377,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		)
 	}
 
-	addContainer(ctx, containerID, ownerID, cnr)
+	addContainer(ctx, containerID, ownerID, container)
 
 	if name != "" {
 		if needRegister {
@@ -473,7 +478,7 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 	}
 
 	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...), id)
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), std.Serialize(Container{Value: cnr}))
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnr)
 	if metaOnChain {
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
 	}
@@ -555,7 +560,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 		return
 	}
 
-	owner := ownerFromBinaryContainer(std.Deserialize(cnrItem.([]byte)).(Container).Value)
+	owner := ownerFromBinaryContainer(cnrItem.([]byte))
 
 	storage.Delete(ctx, cnrItemKey)
 	storage.Delete(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...))
@@ -925,16 +930,9 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	common.CheckAlphabetWitness()
 
-	rule := ExtendedACL{
-		Value: eACL,
-		Sig:   signature,
-		Pub:   publicKey,
-		Token: token,
-	}
-
 	key := append(eACLPrefix, containerID...)
 
-	common.SetSerialized(ctx, key, rule)
+	storage.Put(ctx, key, eACL)
 
 	runtime.Log("success")
 	runtime.Notify("SetEACLSuccess", containerID, publicKey)
@@ -966,7 +964,7 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 		panic(cst.NotFoundError)
 	}
 
-	storage.Put(ctx, append(eACLPrefix, id...), std.Serialize(ExtendedACL{Value: eACL}))
+	storage.Put(ctx, append(eACLPrefix, id...), eACL)
 
 	runtime.Notify("EACLChanged", interop.Hash256(id))
 }
@@ -1149,13 +1147,13 @@ func Version() int {
 	return common.Version
 }
 
-func addContainer(ctx storage.Context, id, owner []byte, container Container) {
+func addContainer(ctx storage.Context, id, owner, container []byte) {
 	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
 	containerListKey = append(containerListKey, id...)
 	storage.Put(ctx, containerListKey, id)
 
 	idKey := append([]byte{containerKeyPrefix}, id...)
-	common.SetSerialized(ctx, idKey, container)
+	storage.Put(ctx, idKey, container)
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
@@ -1190,7 +1188,7 @@ func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 	key := append(eACLPrefix, cid...)
 	data := storage.Get(ctx, key)
 	if data != nil {
-		return std.Deserialize(data.([]byte)).(ExtendedACL)
+		return ExtendedACL{Value: data.([]byte), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 	}
 
 	return ExtendedACL{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
@@ -1199,7 +1197,7 @@ func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 func getContainer(ctx storage.Context, cid []byte) Container {
 	data := storage.Get(ctx, append([]byte{containerKeyPrefix}, cid...))
 	if data != nil {
-		return std.Deserialize(data.([]byte)).(Container)
+		return Container{Value: data.([]byte), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 	}
 
 	return Container{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}

@@ -310,10 +310,10 @@ func TestContainerGet(t *testing.T) {
 	})
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewByteArray(cnt.value),
-		stackitem.NewByteArray(cnt.sig),
-		stackitem.NewByteArray(cnt.pub),
-		stackitem.NewByteArray(cnt.token),
+		stackitem.NewBuffer(cnt.value),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
 	})
 	c.Invoke(t, expected, "get", cnt.id[:])
 }
@@ -356,10 +356,10 @@ func TestContainerSetEACL(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewByteArray(e.value),
-		stackitem.NewByteArray(e.sig),
-		stackitem.NewByteArray(e.pub),
-		stackitem.NewByteArray(e.token),
+		stackitem.NewBuffer(e.value),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
 
@@ -841,10 +841,10 @@ func TestPutMeta(t *testing.T) {
 		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
-			stackitem.NewByteArray(cnt.value),
-			stackitem.NewByteArray(cnt.sig),
-			stackitem.NewByteArray(cnt.pub),
-			stackitem.NewByteArray(cnt.token),
+			stackitem.NewBuffer(cnt.value),
+			stackitem.NewBuffer([]byte{}),
+			stackitem.NewBuffer([]byte{}),
+			stackitem.NewBuffer([]byte{}),
 		})
 		c.Invoke(t, expected, "get", cnt.id[:])
 	})
@@ -1075,9 +1075,7 @@ func TestContainerCreate(t *testing.T) {
 			return getContractStorageItem(t, exec, containerContract.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-		cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-		require.NoError(t, err)
-		require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+		require.EqualValues(t, cnr, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
@@ -1153,9 +1151,7 @@ func TestContainerCreate(t *testing.T) {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-	cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-	require.NoError(t, err)
-	require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+	require.EqualValues(t, cnr, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
@@ -1372,9 +1368,7 @@ func TestContainerPutEACL(t *testing.T) {
 	getStorageItem := func(key []byte) []byte {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
-	eACLStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(anyValidEACL), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-	require.NoError(t, err)
-	require.EqualValues(t, eACLStructBytes, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
+	require.EqualValues(t, anyValidEACL, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
