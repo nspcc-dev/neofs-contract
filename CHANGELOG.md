@@ -11,6 +11,7 @@ Changelog for NeoFS Contract
 - Deployment code uses header subscription instead of block subscription now (#471)
 - Go 1.23+ is required now (#472)
 - Minimal supported version for upgrades is 0.18.0 now (#482)
+- All contracts follow NEP-22 standard now (#459)
 
 ### Updated
 
