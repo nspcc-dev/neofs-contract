@@ -604,6 +604,7 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 // structure if it was provided.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+// Deprecated: use [GetContainerData] instead.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	cnt := getContainer(ctx, containerID)
@@ -611,6 +612,18 @@ func Get(containerID []byte) Container {
 		panic(cst.NotFoundError)
 	}
 	return cnt
+}
+
+// GetContainerData returns binary of the container it was created with by ID.
+//
+// If the container is missing, GetContainerData throws [cst.NotFoundError]
+// exception.
+func GetContainerData(id []byte) []byte {
+	cnr := storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...))
+	if cnr == nil {
+		panic(cst.NotFoundError)
+	}
+	return cnr.([]byte)
 }
 
 // Owner method returns a 25 byte Owner ID of the container.
@@ -974,6 +987,7 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 // structure if it was provided.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+// Deprecated: use [GetEACLData] instead.
 func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
 
@@ -983,6 +997,20 @@ func EACL(containerID []byte) ExtendedACL {
 	}
 
 	return getEACL(ctx, containerID)
+}
+
+// GetEACLData returns binary of container eACL it was put with by the container
+// ID.
+//
+// If the container is missing, GetEACLData throws [cst.NotFoundError]
+// exception.
+func GetEACLData(id []byte) []byte {
+	ctx := storage.GetReadOnlyContext()
+	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	return storage.Get(ctx, append(eACLPrefix, id...)).([]byte)
 }
 
 // PutContainerSize method saves container size estimation in contract

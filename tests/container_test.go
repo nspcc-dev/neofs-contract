@@ -1375,3 +1375,73 @@ func TestContainerPutEACL(t *testing.T) {
 	require.Len(t, events, 1)
 	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
 }
+
+func TestGetContainerData(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("missing", func(t *testing.T) {
+		inv.InvokeFail(t, "container does not exist", "getContainerData", anyValidCnrID)
+	})
+
+	inv.Invoke(t, stackitem.Null{}, "create",
+		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+
+	inv.Invoke(t, stackitem.NewBuffer(anyValidCnr), "getContainerData", anyValidCnrID)
+}
+
+func TestGetEACLData(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidEACL := randomBytes(100)
+	anyValidEACL[1] = 0 // CID offset fix
+	copy(anyValidEACL[6:], anyValidCnrID)
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("missing container", func(t *testing.T) {
+		inv.InvokeFail(t, "container does not exist", "getEACLData", anyValidCnrID)
+	})
+
+	inv.Invoke(t, stackitem.Null{}, "create",
+		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+
+	t.Run("missing", func(t *testing.T) {
+		inv.Invoke(t, stackitem.Null{}, "getEACLData", anyValidCnrID)
+	})
+
+	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
+		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+	inv.Invoke(t, stackitem.NewBuffer(anyValidEACL), "getEACLData", anyValidCnrID)
+}
