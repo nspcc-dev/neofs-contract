@@ -92,14 +92,14 @@ type nsIteratorValue struct {
 }
 
 // Update updates NameService contract.
-func Update(nef []byte, manifest string, data any) {
+func Update(nefFile []byte, manifest string, data any) {
 	checkCommittee()
 	// Calculating keys and serializing requires calling
 	// std and crypto contracts. This can be helpful on update
 	// thus we provide `AllowCall` to management.Update.
 	// management.Update(nef, []byte(manifest))
 	contract.Call(interop.Hash160(management.Hash), "update",
-		contract.All, nef, manifest, common.AppendVersion(data))
+		contract.All, nefFile, manifest, common.AppendVersion(data))
 	runtime.Log("nns contract updated")
 }
 

@@ -355,23 +355,23 @@ func (c *Contract) SetRecordUnsigned(name string, typ *big.Int, id *big.Int, dat
 // Update creates a transaction invoking `update` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Update(nef []byte, manifest string, data any) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "update", nef, manifest, data)
+func (c *Contract) Update(nefFile []byte, manifest string, data any) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "update", nefFile, manifest, data)
 }
 
 // UpdateTransaction creates a transaction invoking `update` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
-func (c *Contract) UpdateTransaction(nef []byte, manifest string, data any) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "update", nef, manifest, data)
+func (c *Contract) UpdateTransaction(nefFile []byte, manifest string, data any) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "update", nefFile, manifest, data)
 }
 
 // UpdateUnsigned creates a transaction invoking `update` method of the contract.
 // This transaction is not signed, it's simply returned to the caller.
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) UpdateUnsigned(nef []byte, manifest string, data any) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "update", nil, nef, manifest, data)
+func (c *Contract) UpdateUnsigned(nefFile []byte, manifest string, data any) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "update", nil, nefFile, manifest, data)
 }
 
 // UpdateSOA creates a transaction invoking `updateSOA` method of the contract.

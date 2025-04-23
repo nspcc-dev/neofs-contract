@@ -99,13 +99,13 @@ func switchToAccPrefixes(ctx storage.Context) {
 
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
-func Update(script []byte, manifest []byte, data any) {
+func Update(nefFile []byte, manifest []byte, data any) {
 	if !common.HasUpdateAccess() {
 		panic("only committee can update contract")
 	}
 
 	contract.Call(interop.Hash160(management.Hash), "update",
-		contract.All, script, manifest, common.AppendVersion(data))
+		contract.All, nefFile, manifest, common.AppendVersion(data))
 	runtime.Log("balance contract updated")
 }
 
