@@ -1,4 +1,5 @@
 name: "NeoFS Container"
+supportedstandards: ["NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "list", "nodes", "replicasNumbers", "verifyPlacementSignatures", "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes", "version"]
 permissions:
   - methods: ["update", "addKey", "transferX",

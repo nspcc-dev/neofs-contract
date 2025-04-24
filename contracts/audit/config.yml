@@ -1,4 +1,5 @@
 name: "NeoFS Audit"
+supportedstandards: ["NEP-22"]
 safemethods: ["get", "list", "listByEpoch", "listByCID", "listByNode", "version"]
 permissions:
   - methods: ["update"]
