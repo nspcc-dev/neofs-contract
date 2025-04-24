@@ -115,6 +115,8 @@ Key-value storage format:
    Counter is 2-bytes long BE
  - 'r'<cid><placement_index> -> int (not bigger than uint8)
    REP clause from placement policy for <placement index>
+ - 'eACL<cid>' -> []byte
+   container eACLs encoded into NeoFS API binary protocol format
 
 # Setting
 To handle some events, the contract refers to other contracts.

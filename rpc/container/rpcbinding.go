@@ -179,9 +179,19 @@ func (c *ContractReader) Get(containerID []byte) (*ContainerContainer, error) {
 	return itemToContainerContainer(unwrap.Item(c.invoker.Call(c.hash, "get", containerID)))
 }
 
+// GetContainerData invokes `getContainerData` method of contract.
+func (c *ContractReader) GetContainerData(id []byte) ([]byte, error) {
+	return unwrap.Bytes(c.invoker.Call(c.hash, "getContainerData", id))
+}
+
 // GetContainerSize invokes `getContainerSize` method of contract.
 func (c *ContractReader) GetContainerSize(id []byte) (*ContainerContainerSizes, error) {
 	return itemToContainerContainerSizes(unwrap.Item(c.invoker.Call(c.hash, "getContainerSize", id)))
+}
+
+// GetEACLData invokes `getEACLData` method of contract.
+func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
+	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
 }
 
 // IterateAllContainerSizes invokes `iterateAllContainerSizes` method of contract.

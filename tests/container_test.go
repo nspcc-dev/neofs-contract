@@ -310,10 +310,10 @@ func TestContainerGet(t *testing.T) {
 	})
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewByteArray(cnt.value),
-		stackitem.NewByteArray(cnt.sig),
-		stackitem.NewByteArray(cnt.pub),
-		stackitem.NewByteArray(cnt.token),
+		stackitem.NewBuffer(cnt.value),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
 	})
 	c.Invoke(t, expected, "get", cnt.id[:])
 }
@@ -356,10 +356,10 @@ func TestContainerSetEACL(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewByteArray(e.value),
-		stackitem.NewByteArray(e.sig),
-		stackitem.NewByteArray(e.pub),
-		stackitem.NewByteArray(e.token),
+		stackitem.NewBuffer(e.value),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
+		stackitem.NewBuffer([]byte{}),
 	})
 	c.Invoke(t, expected, "eACL", cnt.id[:])
 
@@ -841,10 +841,10 @@ func TestPutMeta(t *testing.T) {
 		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
-			stackitem.NewByteArray(cnt.value),
-			stackitem.NewByteArray(cnt.sig),
-			stackitem.NewByteArray(cnt.pub),
-			stackitem.NewByteArray(cnt.token),
+			stackitem.NewBuffer(cnt.value),
+			stackitem.NewBuffer([]byte{}),
+			stackitem.NewBuffer([]byte{}),
+			stackitem.NewBuffer([]byte{}),
 		})
 		c.Invoke(t, expected, "get", cnt.id[:])
 	})
@@ -1075,9 +1075,7 @@ func TestContainerCreate(t *testing.T) {
 			return getContractStorageItem(t, exec, containerContract.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-		cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-		require.NoError(t, err)
-		require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+		require.EqualValues(t, cnr, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
@@ -1153,9 +1151,7 @@ func TestContainerCreate(t *testing.T) {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-	cnrStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(cnr), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-	require.NoError(t, err)
-	require.EqualValues(t, cnrStructBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+	require.EqualValues(t, cnr, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
@@ -1372,12 +1368,80 @@ func TestContainerPutEACL(t *testing.T) {
 	getStorageItem := func(key []byte) []byte {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
-	eACLStructBytes, err := stackitem.Serialize(stackitem.NewStruct([]stackitem.Item{stackitem.NewByteArray(anyValidEACL), stackitem.Null{}, stackitem.Null{}, stackitem.Null{}}))
-	require.NoError(t, err)
-	require.EqualValues(t, eACLStructBytes, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
+	require.EqualValues(t, anyValidEACL, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
 	require.Len(t, events, 1)
 	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
+}
+
+func TestGetContainerData(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("missing", func(t *testing.T) {
+		inv.InvokeFail(t, "container does not exist", "getContainerData", anyValidCnrID)
+	})
+
+	inv.Invoke(t, stackitem.Null{}, "create",
+		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+
+	inv.Invoke(t, stackitem.NewBuffer(anyValidCnr), "getContainerData", anyValidCnrID)
+}
+
+func TestGetEACLData(t *testing.T) {
+	anyValidCnr := randomBytes(100)
+	anyValidCnr[1] = 0 // owner offset fix
+	ch := sha256.Sum256(anyValidCnr)
+	anyValidCnrID := ch[:]
+	anyValidEACL := randomBytes(100)
+	anyValidEACL[1] = 0 // CID offset fix
+	copy(anyValidEACL[6:], anyValidCnrID)
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+
+	exec.DeployContract(t, containerContract, nil)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("missing container", func(t *testing.T) {
+		inv.InvokeFail(t, "container does not exist", "getEACLData", anyValidCnrID)
+	})
+
+	inv.Invoke(t, stackitem.Null{}, "create",
+		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+
+	t.Run("missing", func(t *testing.T) {
+		inv.Invoke(t, stackitem.Null{}, "getEACLData", anyValidCnrID)
+	})
+
+	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
+		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+	inv.Invoke(t, stackitem.NewBuffer(anyValidEACL), "getEACLData", anyValidCnrID)
 }

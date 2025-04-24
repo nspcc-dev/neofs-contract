@@ -31,10 +31,12 @@ Changelog for NeoFS Contract
 - New node format in the netmap contract with no limits to the map size (#445, #461, #462, #464)
 - Experimental object metadata events in the container contract (#448, #451, #456, #457)
 - Auto-cleaning for inactive nodes in the netmap contract (#460)
+- `getContainerData` and `getEACLData` methods to Container contract (#481)
 
 ### Changed
 - Minimal Go version to 1.22 (#353, #387)
 - NNS contract now returns an empty array from resolve and getRecord if there are no records (#420)
+- Container contract no longer persists container and eACL credentials (#481)
 
 ### Updated
 - NeoGo dependency to 0.108.0 (#450, #465)
