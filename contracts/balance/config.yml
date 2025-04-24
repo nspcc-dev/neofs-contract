@@ -1,5 +1,5 @@
 name: "NeoFS Balance"
-supportedstandards: ["NEP-17"]
+supportedstandards: ["NEP-17", "NEP-22"]
 safemethods: ["balanceOf", "decimals", "symbol", "totalSupply", "version"]
 permissions:
   - methods: ["update", "subscribeForNewEpoch"]

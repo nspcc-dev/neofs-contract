@@ -1,4 +1,5 @@
 name: "NeoFS Reputation"
+supportedstandards: ["NEP-22"]
 safemethods: ["get", "getByID", "listByEpoch"]
 permissions:
   - methods: ["update"]

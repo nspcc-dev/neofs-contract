@@ -1,4 +1,5 @@
 name: "NeoFS"
+supportedstandards: ["NEP-22"]
 safemethods: ["alphabetList", "alphabetAddress", "innerRingCandidates", "config", "listConfig", "version"]
 permissions:
   - methods: ["update", "transfer"]

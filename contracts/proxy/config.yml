@@ -1,4 +1,5 @@
 name: "NeoFS Notary Proxy"
+supportedstandards: ["NEP-22"]
 safemethods: ["verify", "version"]
 permissions:
   - methods: ["update"]

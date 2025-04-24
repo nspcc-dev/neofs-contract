@@ -1,4 +1,5 @@
 name: "NeoFS Alphabet"
+supportedstandards: ["NEP-22"]
 safemethods: ["gas", "neo", "name", "version", "verify"]
 permissions:
   - methods: ["update", "transfer", "vote"]
