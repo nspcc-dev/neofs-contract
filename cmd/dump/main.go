@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 )
 
@@ -69,6 +70,22 @@ func _dump(neoBlockchainRPCEndpoint, rootDir, label string) error {
 }
 
 func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
+	nnsHash, err := nns.InferHash(from.rpc)
+	if err != nil {
+		return fmt.Errorf("inferring nns: %w", err)
+	}
+	nnsContract, err := from.rpc.GetContractStateByHash(nnsHash)
+	if err != nil {
+		return fmt.Errorf("get NNS contract by hash: %w", err)
+	}
+
+	writer := to.AddContract("nns", *nnsContract)
+	err = from.iterateContractStorage(nnsHash, writer.Write)
+	if err != nil {
+		return fmt.Errorf("iterate 'nns' contract storage: %w", err)
+	}
+
+	nnsReader := nns.NewReader(from.actor, nnsHash)
 	for _, name := range []string{
 		"alphabet0",
 		"audit",
@@ -76,10 +93,11 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 		"container",
 		"netmap",
 		"reputation",
+		"proxy",
 	} {
 		log.Printf("Processing contract '%s'...\n", name)
 
-		ctr, err := from.getNeoFSContractByName(name)
+		ctr, err := from.getNeoFSContractByName(name, nnsReader)
 		if err != nil {
 			return fmt.Errorf("get '%s' contract state: %w", name, err)
 		}
