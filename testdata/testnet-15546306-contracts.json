@@ -1,0 +1,3143 @@
+[
+ {
+  "name": "nns",
+  "state": {
+   "id": 1,
+   "hash": "0xfb08ccf30ab534a871b7b092a49fe70c154ed678",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "stringSplit",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "memorySearch",
+      "paramcount": 4,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "deserialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "method": "getContract",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0x726cb6e0cd8628a1350a611384688911ab75f51b",
+      "method": "ripemd160",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "serialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "stringSplit",
+      "paramcount": 3,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "atoi",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "atoi",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "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",
+    "checksum": 1351455659
+   },
+   "manifest": {
+    "name": "NameService",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 32,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "addRecord",
+       "offset": 3169,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "typ",
+         "type": "Integer"
+        },
+        {
+         "name": "data",
+         "type": "String"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "balanceOf",
+       "offset": 696,
+       "parameters": [
+        {
+         "name": "owner",
+         "type": "Hash160"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "decimals",
+       "offset": 501,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "deleteRecords",
+       "offset": 3486,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "typ",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "getAllRecords",
+       "offset": 3733,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "getPrice",
+       "offset": 1147,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "getRecords",
+       "offset": 3400,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "typ",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "isAvailable",
+       "offset": 1181,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "ownerOf",
+       "offset": 523,
+       "parameters": [
+        {
+         "name": "tokenID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Hash160",
+       "safe": true
+      },
+      {
+       "name": "properties",
+       "offset": 593,
+       "parameters": [
+        {
+         "name": "tokenID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Map",
+       "safe": true
+      },
+      {
+       "name": "register",
+       "offset": 1599,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "owner",
+         "type": "Hash160"
+        },
+        {
+         "name": "email",
+         "type": "String"
+        },
+        {
+         "name": "refresh",
+         "type": "Integer"
+        },
+        {
+         "name": "retry",
+         "type": "Integer"
+        },
+        {
+         "name": "expire",
+         "type": "Integer"
+        },
+        {
+         "name": "ttl",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": false
+      },
+      {
+       "name": "registerTLD",
+       "offset": 2115,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "email",
+         "type": "String"
+        },
+        {
+         "name": "refresh",
+         "type": "Integer"
+        },
+        {
+         "name": "retry",
+         "type": "Integer"
+        },
+        {
+         "name": "expire",
+         "type": "Integer"
+        },
+        {
+         "name": "ttl",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "renew",
+       "offset": 2318,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "years",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": false
+      },
+      {
+       "name": "renew",
+       "offset": 2309,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": false
+      },
+      {
+       "name": "resolve",
+       "offset": 3670,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "typ",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "roots",
+       "offset": 1041,
+       "parameters": [],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "setAdmin",
+       "offset": 2676,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "admin",
+         "type": "Hash160"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "setPrice",
+       "offset": 1069,
+       "parameters": [
+        {
+         "name": "price",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "setRecord",
+       "offset": 2866,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "typ",
+         "type": "Integer"
+        },
+        {
+         "name": "id",
+         "type": "Integer"
+        },
+        {
+         "name": "data",
+         "type": "String"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "symbol",
+       "offset": 495,
+       "parameters": [],
+       "returntype": "String",
+       "safe": true
+      },
+      {
+       "name": "tokens",
+       "offset": 772,
+       "parameters": [],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "tokensOf",
+       "offset": 801,
+       "parameters": [
+        {
+         "name": "owner",
+         "type": "Hash160"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "totalSupply",
+       "offset": 507,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "transfer",
+       "offset": 863,
+       "parameters": [
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "tokenID",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 411,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "updateSOA",
+       "offset": 2599,
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "email",
+         "type": "String"
+        },
+        {
+         "name": "refresh",
+         "type": "Integer"
+        },
+        {
+         "name": "retry",
+         "type": "Integer"
+        },
+        {
+         "name": "expire",
+         "type": "Integer"
+        },
+        {
+         "name": "ttl",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "version",
+       "offset": 503,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": [
+      {
+       "name": "Transfer",
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "tokenId",
+         "type": "ByteArray"
+        }
+       ]
+      },
+      {
+       "name": "SetAdmin",
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "oldAdmin",
+         "type": "Hash160"
+        },
+        {
+         "name": "newAdmin",
+         "type": "Hash160"
+        }
+       ]
+      },
+      {
+       "name": "Renew",
+       "parameters": [
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "oldExpiration",
+         "type": "Integer"
+        },
+        {
+         "name": "newExpiration",
+         "type": "Integer"
+        }
+       ]
+      }
+     ]
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "methods": [
+       "update"
+      ]
+     },
+     {
+      "contract": "*",
+      "methods": [
+       "onNEP11Payment"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-11",
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 8
+  }
+ },
+ {
+  "name": "alphabet0",
+  "state": {
+   "id": 16,
+   "hash": "0x61936114ea7fb0e7b5a2723b02f505f126bb2c02",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xda65b600f7124ce6c79950c1772a36403104f2be",
+      "method": "currentIndex",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0x49cf4e5378ffcd4dec034fd98a174c5491e395e2",
+      "method": "getDesignatedByRole",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "method": "getContractById",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "atoi",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "base58CheckDecode",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xd2a4cff31913016155e38e474a2c06d08be276cf",
+      "method": "balanceOf",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "balanceOf",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "transfer",
+      "paramcount": 4,
+      "hasreturnvalue": true,
+      "callflags": "All"
+     },
+     {
+      "hash": "0xd2a4cff31913016155e38e474a2c06d08be276cf",
+      "method": "transfer",
+      "paramcount": 4,
+      "hasreturnvalue": true,
+      "callflags": "All"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "vote",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "States, AllowNotify"
+     }
+    ],
+    "script": "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",
+    "checksum": 780380370
+   },
+   "manifest": {
+    "name": "NeoFS Alphabet",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 35,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "emit",
+       "offset": 1558,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "gas",
+       "offset": 1379,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "name",
+       "offset": 2180,
+       "parameters": [],
+       "returntype": "String",
+       "safe": true
+      },
+      {
+       "name": "neo",
+       "offset": 1393,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "onNEP17Payment",
+       "offset": 965,
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 1247,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "verify",
+       "offset": 2200,
+       "parameters": [],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "version",
+       "offset": 2196,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "vote",
+       "offset": 2017,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "candidates",
+         "type": "Array"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      }
+     ],
+     "events": []
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update",
+       "transfer",
+       "vote"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 8
+  }
+ },
+ {
+  "name": "audit",
+  "state": {
+   "id": 4,
+   "hash": "0x0b2e571aa760c22a5ab94bae3a9752bb2eb918f5",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xda65b600f7124ce6c79950c1772a36403104f2be",
+      "method": "currentIndex",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0x49cf4e5378ffcd4dec034fd98a174c5491e395e2",
+      "method": "getDesignatedByRole",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0x726cb6e0cd8628a1350a611384688911ab75f51b",
+      "method": "sha256",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "VwICeSYoeErZQCQE20BwaGhK2CQFyiIERRARn85K2SEkBNshcWk1ggAAAEAMGmF1ZGl0IGNvbnRyYWN0IGluaXRpYWxpemVkQc/nR5ZAVwEANwAAcAAQaBGeUDcBAEBXAQA3AgBwaAhQNANAVwECeErYJAXKIgRFEBKgE6ERnnB5JhF4StgkBcoiBEUQEqERnnBoeFBBajPpCUBXAQA0wXBoQfgn7IxAVwABeAFQRi40DCZwcmV2aW91cyB2ZXJzaW9uIG1pc21hdGNoOiBleHBlY3RlZCA+PQFQRhpQNwMAizp4AfBVMDkMK2NvbnRyYWN0IGlzIGFscmVhZHkgb2YgdGhlIGxhdGVzdCB2ZXJzaW9uOiAB8FUaUDcDAIs6QFcAAXjYJggB8FURwEB4StlAJATbQErYJgRFwkoB8FXPQFcDAXgQznB4Es43BABxaRAAGEufjHJoStkwJATbMErYJgVFDAB4Ec5K2CYFRQwAaouLQFcBAzUj////qiYnDCJvbmx5IGNvbW1pdHRlZSBjYW4gdXBkYXRlIGNvbnRyYWN0Onh5ejV5////UxPAcAwU/aP6Q0bqUyolj8SX3a3bZDfJ/f8MBnVwZGF0ZR9oVEFifVtSRQwWYXVkaXQgY29udHJhY3QgdXBkYXRlZEHP50eWQFcHAUGb9mfOcDVP/v//cXg1nQEAAHIJc2lKyhBLSzJBSnRqEs51bdgmCGlsztgiAwkkJG3YJB1pbM7YJBdtStkoJATbKGlszkrZKCQE2yiXIgMJIgMIJgYIcyIFnCK/RUVFahLOQfgn7IyqJAZrqiYWDBFwdXQgYWNjZXNzIGRlbmllZDpqNcb+//92aG54U0HmPxiEDBxhdWRpdDogcmVzdWx0IGhhcyBiZWVuIHNhdmVkQc/nR5ZAVwEBQfa0a+JwaHhQQZJd6DFK2TAkBNswQFcCAEH2tGvicGgMAErZMCQE2zARU0HfMLiacWk1dQAAAEBXAwFB9rRr4nB4cWhpStkwJATbMBFTQd8wuJpyajRSQFcEAkH2tGvicHhxaUrZMCQE2zBK2CYFRQwAeYtyaGoRU0HfMLiac2s0J0BXBANB9rRr4nB6eXgTv3FpNf39//9zaGsRU0HfMLiacmo0A0BXAgELcHhBnAjtnCYdeEHzVL8dStkwJATbMHFoStgmBEXCSmnPcCLfaEAB8FVAVwIBeBDOcGhK2SEkBNshcRFpnngREWmeS5+MQFcGAXgRznASaJ4RnnB4aGgYnkufjHFpStkhJATbIXJoGJ5weGgSnhGeS8pLn4w0tnN0eGgSnhGebJ4RnkvKS5+MNKN1RW1rahO/QA==",
+    "checksum": 3842998855
+   },
+   "manifest": {
+    "name": "NeoFS Audit",
+    "abi": {
+     "methods": [
+      {
+       "name": "_deploy",
+       "offset": 0,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "get",
+       "offset": 687,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "ByteArray",
+       "safe": true
+      },
+      {
+       "name": "list",
+       "offset": 712,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listByCID",
+       "offset": 778,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "cid",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listByEpoch",
+       "offset": 746,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listByNode",
+       "offset": 821,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "cid",
+         "type": "ByteArray"
+        },
+        {
+         "name": "key",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "put",
+       "offset": 502,
+       "parameters": [
+        {
+         "name": "rawAuditResult",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 373,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "version",
+       "offset": 899,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": []
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ },
+ {
+  "name": "balance",
+  "state": {
+   "id": 6,
+   "hash": "0x54f3bd4dbec6ecd0f5177b5bd86f09043e34d45f",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "method": "getContractById",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "atoi",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "base58CheckDecode",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "serialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "deserialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "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",
+    "checksum": 124421888
+   },
+   "manifest": {
+    "name": "NeoFS Balance",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 93,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "balanceOf",
+       "offset": 1215,
+       "parameters": [
+        {
+         "name": "account",
+         "type": "Hash160"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "burn",
+       "offset": 1739,
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "txDetails",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "decimals",
+       "offset": 1193,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "lock",
+       "offset": 1354,
+       "parameters": [
+        {
+         "name": "txDetails",
+         "type": "ByteArray"
+        },
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "until",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "mint",
+       "offset": 1625,
+       "parameters": [
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "txDetails",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "newEpoch",
+       "offset": 1502,
+       "parameters": [
+        {
+         "name": "epochNum",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "symbol",
+       "offset": 1189,
+       "parameters": [],
+       "returntype": "String",
+       "safe": true
+      },
+      {
+       "name": "totalSupply",
+       "offset": 1197,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "transfer",
+       "offset": 1234,
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": false
+      },
+      {
+       "name": "transferX",
+       "offset": 1258,
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "details",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 1058,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "version",
+       "offset": 1883,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": [
+      {
+       "name": "Lock",
+       "parameters": [
+        {
+         "name": "txID",
+         "type": "ByteArray"
+        },
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "until",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "Transfer",
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "TransferX",
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "to",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "details",
+         "type": "ByteArray"
+        }
+       ]
+      }
+     ]
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update",
+       "subscribeForNewEpoch"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-17",
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ },
+ {
+  "name": "container",
+  "state": {
+   "id": 9,
+   "hash": "0x70cf38deb1ff7a4f64cb1127eafcd75cd38083d4",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "method": "getContractById",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "atoi",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "base58CheckDecode",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "serialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "deserialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xda65b600f7124ce6c79950c1772a36403104f2be",
+      "method": "currentIndex",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0x726cb6e0cd8628a1350a611384688911ab75f51b",
+      "method": "sha256",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "base58Encode",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "memorySearch",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0x726cb6e0cd8628a1350a611384688911ab75f51b",
+      "method": "verifyWithECDsa",
+      "paramcount": 4,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0x726cb6e0cd8628a1350a611384688911ab75f51b",
+      "method": "ripemd160",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "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",
+    "checksum": 4163994807
+   },
+   "manifest": {
+    "name": "NeoFS Container",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 83,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "addNextEpochNodes",
+       "offset": 5856,
+       "parameters": [
+        {
+         "name": "cID",
+         "type": "Hash256"
+        },
+        {
+         "name": "placementVector",
+         "type": "Integer"
+        },
+        {
+         "name": "publicKeys",
+         "type": "Array"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "alias",
+       "offset": 5566,
+       "parameters": [
+        {
+         "name": "cid",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "String",
+       "safe": true
+      },
+      {
+       "name": "commitContainerListUpdate",
+       "offset": 6622,
+       "parameters": [
+        {
+         "name": "cID",
+         "type": "Hash256"
+        },
+        {
+         "name": "replicas",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "containersOf",
+       "offset": 5706,
+       "parameters": [
+        {
+         "name": "owner",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "count",
+       "offset": 5661,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "create",
+       "offset": 3493,
+       "parameters": [
+        {
+         "name": "cnr",
+         "type": "ByteArray"
+        },
+        {
+         "name": "invocScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "verifScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "sessionToken",
+         "type": "ByteArray"
+        },
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "zone",
+         "type": "String"
+        },
+        {
+         "name": "metaOnChain",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "delete",
+       "offset": 4577,
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "eACL",
+       "offset": 7790,
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "get",
+       "offset": 5377,
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "getContainerData",
+       "offset": 5439,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "ByteArray",
+       "safe": true
+      },
+      {
+       "name": "getContainerSize",
+       "offset": 8140,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "getEACLData",
+       "offset": 7848,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "ByteArray",
+       "safe": true
+      },
+      {
+       "name": "iterateAllContainerSizes",
+       "offset": 8513,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "iterateContainerSizes",
+       "offset": 8415,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "cid",
+         "type": "Hash256"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "list",
+       "offset": 5760,
+       "parameters": [
+        {
+         "name": "owner",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listContainerSizes",
+       "offset": 8254,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "newEpoch",
+       "offset": 8565,
+       "parameters": [
+        {
+         "name": "epochNum",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "nodes",
+       "offset": 7181,
+       "parameters": [
+        {
+         "name": "cID",
+         "type": "Hash256"
+        },
+        {
+         "name": "placementVector",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "onNEP11Payment",
+       "offset": 1409,
+       "parameters": [
+        {
+         "name": "a",
+         "type": "Hash160"
+        },
+        {
+         "name": "b",
+         "type": "Integer"
+        },
+        {
+         "name": "c",
+         "type": "ByteArray"
+        },
+        {
+         "name": "d",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "owner",
+       "offset": 5515,
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "ByteArray",
+       "safe": true
+      },
+      {
+       "name": "put",
+       "offset": 2657,
+       "parameters": [
+        {
+         "name": "container",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "putContainerSize",
+       "offset": 7938,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "cid",
+         "type": "ByteArray"
+        },
+        {
+         "name": "usedSize",
+         "type": "Integer"
+        },
+        {
+         "name": "pubKey",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "putEACL",
+       "offset": 7544,
+       "parameters": [
+        {
+         "name": "eACL",
+         "type": "ByteArray"
+        },
+        {
+         "name": "invocScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "verifScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "sessionToken",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "put",
+       "offset": 2594,
+       "parameters": [
+        {
+         "name": "container",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        },
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "zone",
+         "type": "String"
+        },
+        {
+         "name": "metaOnChain",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "putNamed",
+       "offset": 2687,
+       "parameters": [
+        {
+         "name": "container",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        },
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "zone",
+         "type": "String"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "put",
+       "offset": 2673,
+       "parameters": [
+        {
+         "name": "container",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        },
+        {
+         "name": "name",
+         "type": "String"
+        },
+        {
+         "name": "zone",
+         "type": "String"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "remove",
+       "offset": 4739,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        },
+        {
+         "name": "invocScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "verifScript",
+         "type": "ByteArray"
+        },
+        {
+         "name": "sessionToken",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "replicasNumbers",
+       "offset": 7083,
+       "parameters": [
+        {
+         "name": "cID",
+         "type": "Hash256"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "setEACL",
+       "offset": 7305,
+       "parameters": [
+        {
+         "name": "eACL",
+         "type": "ByteArray"
+        },
+        {
+         "name": "signature",
+         "type": "Signature"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "token",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "startContainerEstimation",
+       "offset": 8588,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "stopContainerEstimation",
+       "offset": 8662,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "submitObjectPut",
+       "offset": 1641,
+       "parameters": [
+        {
+         "name": "metaInformation",
+         "type": "ByteArray"
+        },
+        {
+         "name": "sigs",
+         "type": "Array"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 1508,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "verifyPlacementSignatures",
+       "offset": 6454,
+       "parameters": [
+        {
+         "name": "cid",
+         "type": "Hash256"
+        },
+        {
+         "name": "msg",
+         "type": "ByteArray"
+        },
+        {
+         "name": "sigs",
+         "type": "Array"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "version",
+       "offset": 8735,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": [
+      {
+       "name": "PutSuccess",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "Hash256"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        }
+       ]
+      },
+      {
+       "name": "Created",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "Hash256"
+        },
+        {
+         "name": "owner",
+         "type": "ByteArray"
+        }
+       ]
+      },
+      {
+       "name": "DeleteSuccess",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        }
+       ]
+      },
+      {
+       "name": "Removed",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "Hash256"
+        },
+        {
+         "name": "owner",
+         "type": "ByteArray"
+        }
+       ]
+      },
+      {
+       "name": "SetEACLSuccess",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "ByteArray"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        }
+       ]
+      },
+      {
+       "name": "EACLChanged",
+       "parameters": [
+        {
+         "name": "containerID",
+         "type": "Hash256"
+        }
+       ]
+      },
+      {
+       "name": "StartEstimation",
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "StopEstimation",
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "NodesUpdate",
+       "parameters": [
+        {
+         "name": "ContainerID",
+         "type": "Hash256"
+        }
+       ]
+      },
+      {
+       "name": "ObjectPut",
+       "parameters": [
+        {
+         "name": "ContainerID",
+         "type": "Hash256"
+        },
+        {
+         "name": "ObjectID",
+         "type": "Hash256"
+        },
+        {
+         "name": "Meta",
+         "type": "Map"
+        }
+       ]
+      }
+     ]
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update",
+       "addKey",
+       "transferX",
+       "register",
+       "registerTLD",
+       "addRecord",
+       "deleteRecords",
+       "subscribeForNewEpoch"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ },
+ {
+  "name": "netmap",
+  "state": {
+   "id": 8,
+   "hash": "0xc4576ea5c3081dd765a17aaaa73d9352e74bdc28",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "serialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xda65b600f7124ce6c79950c1772a36403104f2be",
+      "method": "currentIndex",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0x49cf4e5378ffcd4dec034fd98a174c5491e395e2",
+      "method": "getDesignatedByRole",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "deserialize",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     },
+     {
+      "hash": "0xfffdc93764dbaddd97c48f252a53ea4643faa3fd",
+      "method": "hasMethod",
+      "paramcount": 3,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "base58CheckEncode",
+      "paramcount": 1,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "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",
+    "checksum": 1808277027
+   },
+   "manifest": {
+    "name": "NeoFS Netmap",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 93,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "addNode",
+       "offset": 1486,
+       "parameters": [
+        {
+         "name": "n",
+         "type": "Array"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "addPeer",
+       "offset": 1440,
+       "parameters": [
+        {
+         "name": "nodeInfo",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "addPeerIR",
+       "offset": 1400,
+       "parameters": [
+        {
+         "name": "nodeInfo",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "cleanupThreshold",
+       "offset": 4297,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "config",
+       "offset": 3721,
+       "parameters": [
+        {
+         "name": "key",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Any",
+       "safe": true
+      },
+      {
+       "name": "deleteNode",
+       "offset": 1667,
+       "parameters": [
+        {
+         "name": "pkey",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "epoch",
+       "offset": 2339,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "getEpochBlock",
+       "offset": 4341,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "getEpochTime",
+       "offset": 4411,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "innerRingList",
+       "offset": 1355,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "isStorageNode",
+       "offset": 2758,
+       "parameters": [
+        {
+         "name": "key",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "isStorageNode",
+       "offset": 2771,
+       "parameters": [
+        {
+         "name": "key",
+         "type": "PublicKey"
+        },
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "lastEpochBlock",
+       "offset": 2378,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": false
+      },
+      {
+       "name": "lastEpochTime",
+       "offset": 2478,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      },
+      {
+       "name": "listCandidates",
+       "offset": 2728,
+       "parameters": [],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "listConfig",
+       "offset": 3800,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listNodes",
+       "offset": 2676,
+       "parameters": [],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "listNodes",
+       "offset": 2684,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "InteropInterface",
+       "safe": true
+      },
+      {
+       "name": "netmap",
+       "offset": 2578,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "netmapCandidates",
+       "offset": 2660,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "newEpoch",
+       "offset": 2004,
+       "parameters": [
+        {
+         "name": "epochNum",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "setCleanupThreshold",
+       "offset": 4241,
+       "parameters": [
+        {
+         "name": "val",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "setConfig",
+       "offset": 3739,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        },
+        {
+         "name": "key",
+         "type": "ByteArray"
+        },
+        {
+         "name": "val",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "snapshot",
+       "offset": 3039,
+       "parameters": [
+        {
+         "name": "diff",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "snapshotByEpoch",
+       "offset": 3673,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "subscribeForNewEpoch",
+       "offset": 3856,
+       "parameters": [
+        {
+         "name": "contract",
+         "type": "Hash160"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "unusedCandidate",
+       "offset": 4333,
+       "parameters": [],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "update",
+       "offset": 1225,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "updateSnapshotCount",
+       "offset": 3193,
+       "parameters": [
+        {
+         "name": "count",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "updateState",
+       "offset": 1913,
+       "parameters": [
+        {
+         "name": "state",
+         "type": "Integer"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "updateStateIR",
+       "offset": 1980,
+       "parameters": [
+        {
+         "name": "state",
+         "type": "Integer"
+        },
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "version",
+       "offset": 4237,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": [
+      {
+       "name": "AddNode",
+       "parameters": [
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "addresses",
+         "type": "Array"
+        },
+        {
+         "name": "attributes",
+         "type": "Map"
+        }
+       ]
+      },
+      {
+       "name": "AddPeerSuccess",
+       "parameters": [
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        }
+       ]
+      },
+      {
+       "name": "UpdateStateSuccess",
+       "parameters": [
+        {
+         "name": "publicKey",
+         "type": "PublicKey"
+        },
+        {
+         "name": "state",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "NewEpoch",
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ]
+      },
+      {
+       "name": "NewEpochSubscription",
+       "parameters": [
+        {
+         "name": "contract",
+         "type": "Hash160"
+        }
+       ]
+      }
+     ]
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update",
+       "newEpoch"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ },
+ {
+  "name": "reputation",
+  "state": {
+   "id": 3,
+   "hash": "0x2fbca91096822825b8e9f71ff596381ceb4bd749",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "VgEMHWFscGhhYmV0IHdpdG5lc3MgY2hlY2sgZmFpbGVkYEBXAgJ5Jih4StlAJATbQHBoaErYJAXKIgRFEBGfzkrZISQE2yFxaTWDAAAAQAwfcmVwdXRhdGlvbiBjb250cmFjdCBpbml0aWFsaXplZEHP50eWQFcBADcAAHBoCVA0EEBXAQA3AABwaAhQNANAVwECeErYJAXKIgRFEBKgE6ERnnB5JhF4StgkBcoiBEUQEqERnnBoeFBBajPpCUBXAQA0wXBoQfgn7IxAVwABeAFQRi40DCZwcmV2aW91cyB2ZXJzaW9uIG1pc21hdGNoOiBleHBlY3RlZCA+PQFQRhpQNwEAizp4AfBVMDkMK2NvbnRyYWN0IGlzIGFscmVhZHkgb2YgdGhlIGxhdGVzdCB2ZXJzaW9uOiAB8FUaUDcBAIs6QFcAAXjYJggB8FURwEB4StlAJATbQErYJgRFwkoB8FXPQDUQ////WFA0A0BXAAJ4Qfgn7IyqJgR5OkBXAQM1Pf///6omJwwib25seSBjb21taXR0ZWUgY2FuIHVwZGF0ZSBjb250cmFjdDp4eXo1k////1MTwHAMFP2j+kNG6lMqJY/El92t22Q3yf3/DAZ1cGRhdGUfaFRBYn1bUkUMG3JlcHV0YXRpb24gY29udHJhY3QgdXBkYXRlZEHP50eWQFcFA0Gb9mfOcDVY////eHlQNRIBAABxAGNpUDWbAAAAcmhqUEGSXegxcxB0a9gkC2tK2SEkBNshdGycdGhqbFNB5j8YhAByahBR0GpK2CYFRQwAbErZMCQE2zCLcmhqelNB5j8YhEBXAQJ4eVA1tgAAAHBoNANAVwQBQfa0a+JwC3EAcnhQNDBzaGsUU0HfMLiacmpBnAjtnCYbaUrYJgRFwkpqQfNUvx1K2TAkBNswz3Ei4WlAVwACDAEAStkwJATbMEoQeNBK2CYFRQwAeYtAVwUBQfa0a+JwAGN4StkwJATbMFA00XFoaRFTQd8wuJpyC3NqQZwI7ZwmI2pB81S/HUrZMCQE2zB0a0rYJgRFwkpsEUvKS5+Mz3Mi2WtAAfBVQFcBAnhwaErZMCQE2zBK2CYFRQwAeYtA",
+    "checksum": 729077859
+   },
+   "manifest": {
+    "name": "NeoFS Reputation",
+    "abi": {
+     "methods": [
+      {
+       "name": "_initialize",
+       "offset": 0,
+       "parameters": [],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "_deploy",
+       "offset": 35,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "get",
+       "offset": 620,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "peerID",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "getByID",
+       "offset": 636,
+       "parameters": [
+        {
+         "name": "id",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "listByEpoch",
+       "offset": 726,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        }
+       ],
+       "returntype": "Array",
+       "safe": true
+      },
+      {
+       "name": "put",
+       "offset": 517,
+       "parameters": [
+        {
+         "name": "epoch",
+         "type": "Integer"
+        },
+        {
+         "name": "peerID",
+         "type": "ByteArray"
+        },
+        {
+         "name": "value",
+         "type": "ByteArray"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 383,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "version",
+       "offset": 804,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": false
+      }
+     ],
+     "events": []
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ },
+ {
+  "name": "proxy",
+  "state": {
+   "id": 2,
+   "hash": "0xb88b7ad0899766ee39bf554018f2df008f930a61",
+   "nef": {
+    "magic": 860243278,
+    "compiler": "neo-go-0.108.0",
+    "source": "",
+    "tokens": [
+     {
+      "hash": "0xef4073a0f2b305a38ec4050e4d3d28bc40ea63f5",
+      "method": "getCommittee",
+      "paramcount": 0,
+      "hasreturnvalue": true,
+      "callflags": "ReadStates"
+     },
+     {
+      "hash": "0xacce6fd80d44e1796aa0c2c625e9e4e0ce39efc0",
+      "method": "itoa",
+      "paramcount": 2,
+      "hasreturnvalue": true,
+      "callflags": "None"
+     }
+    ],
+    "script": "VwECeSYmeErZQCQE20BwaGhK2CQFyiIERRARn85K2SEkBNshNaMAAABADBpwcm94eSBjb250cmFjdCBpbml0aWFsaXplZEHP50eWQFcBADcAAHBoCFA0A0BXAQJ4StgkBcoiBEUQEqAToRGecHkmEXhK2CQFyiIERRASoRGecGh4UEFqM+kJQFcDADcAAHBoCVA0x3FpQfgn7IwmBAhAaAhQNLdyakH4J+yMQFcAAXhBz+dHljhAVwEANZL///9waEH4J+yMQFcAAXgBUEYuNAwmcHJldmlvdXMgdmVyc2lvbiBtaXNtYXRjaDogZXhwZWN0ZWQgPj0BUEYaUDcBAIs6eAHwVTA5DCtjb250cmFjdCBpcyBhbHJlYWR5IG9mIHRoZSBsYXRlc3QgdmVyc2lvbjogAfBVGlA3AQCLOkBXAAF42CYIAfBVEcBAeErZQCQE20BK2CYERcJKAfBVz0BXAgNBOVNuPHBocWnYJhsMFM924ovQBixKR47jVWEBExnzz6TS2CIDCSRKadgkQwwUz3bii9AGLEpHjuNVYQETGfPPpNLYJCppStkoJATbKAwUz3bii9AGLEpHjuNVYQETGfPPpNJK2SgkBNsolyIDCSIDCKomKAwfcHJveHkgY29udHJhY3QgYWNjZXB0cyBHQVMgb25seTWz/v//QFcBAzW1/v//qiYnDCJvbmx5IGNvbW1pdHRlZSBjYW4gdXBkYXRlIGNvbnRyYWN0Onh5ejUO////UxPAcAwU/aP6Q0bqUyolj8SX3a3bZDfJ/f8MBnVwZGF0ZR9oVEFifVtSRQwWcHJveHkgY29udHJhY3QgdXBkYXRlZEHP50eWQDUI/v//QAHwVUA=",
+    "checksum": 27136822
+   },
+   "manifest": {
+    "name": "NeoFS Notary Proxy",
+    "abi": {
+     "methods": [
+      {
+       "name": "_deploy",
+       "offset": 0,
+       "parameters": [
+        {
+         "name": "data",
+         "type": "Any"
+        },
+        {
+         "name": "isUpdate",
+         "type": "Boolean"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "onNEP17Payment",
+       "offset": 353,
+       "parameters": [
+        {
+         "name": "from",
+         "type": "Hash160"
+        },
+        {
+         "name": "amount",
+         "type": "Integer"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "update",
+       "offset": 511,
+       "parameters": [
+        {
+         "name": "nefFile",
+         "type": "ByteArray"
+        },
+        {
+         "name": "manifest",
+         "type": "ByteArray"
+        },
+        {
+         "name": "data",
+         "type": "Any"
+        }
+       ],
+       "returntype": "Void",
+       "safe": false
+      },
+      {
+       "name": "verify",
+       "offset": 640,
+       "parameters": [],
+       "returntype": "Boolean",
+       "safe": true
+      },
+      {
+       "name": "version",
+       "offset": 646,
+       "parameters": [],
+       "returntype": "Integer",
+       "safe": true
+      }
+     ],
+     "events": []
+    },
+    "features": {},
+    "groups": [],
+    "permissions": [
+     {
+      "contract": "*",
+      "methods": [
+       "update"
+      ]
+     }
+    ],
+    "supportedstandards": [
+     "NEP-22"
+    ],
+    "trusts": [],
+    "extra": null
+   },
+   "updatecounter": 7
+  }
+ }
+]
