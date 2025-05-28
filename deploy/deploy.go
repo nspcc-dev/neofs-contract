@@ -350,6 +350,12 @@ func Deploy(ctx context.Context, prm Prm) error {
 	// Deploy NeoFS contracts in strict order. Contracts dependent on others come
 	// after.
 
+	err = prefillNNS(ctx, prm.ContainerContract, syncPrm)
+	if err != nil {
+		return fmt.Errorf("prefilling NNS contract: %w", err)
+	}
+	prm.Logger.Info("prefilled NNS contract")
+
 	// 1. Proxy
 	//
 	// It's required for Notary service to work, and also pays for subsequent
@@ -544,6 +550,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("synchronizing Container contract with the chain...")
 
+	syncPrm.prefilledNNSRecord = true
 	containerContractAddress, err := syncNeoFSContract(ctx, syncPrm)
 	if err != nil {
 		return fmt.Errorf("sync Container contract with the chain: %w", err)
@@ -553,6 +560,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	syncPrm.deployWitness = 0
 	syncPrm.validatorsDeployAllowedContracts = nil
+	syncPrm.prefilledNNSRecord = false
 
 	// 8. Alphabet
 	syncPrm.localNEF = prm.AlphabetContract.Common.NEF

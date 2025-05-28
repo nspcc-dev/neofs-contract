@@ -44,8 +44,8 @@ func newAlphabetInvoker(t *testing.T, autohashes bool) (*neotest.Executor, *neot
 	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	deployProxyContract(t, e)
+	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 
 	var addrNetmap, addrProxy *util.Uint160
 	if !autohashes {

@@ -11,6 +11,9 @@ import (
 const proxyPath = "../contracts/proxy"
 
 func deployProxyContract(t *testing.T, e *neotest.Executor) util.Uint160 {
+	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	regContractNNS(t, e, "container", ctrContainer.Hash)
+
 	c := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
 	e.DeployContract(t, c, nil)
 	regContractNNS(t, e, "proxy", c.Hash)
