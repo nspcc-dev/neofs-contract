@@ -12,6 +12,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/actor"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/management"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/notary"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
@@ -69,6 +70,9 @@ type syncNeoFSContractPrm struct {
 	// if set, syncNeoFSContract attempts to deploy the contract when it's
 	// missing on the chain
 	tryDeploy bool
+	// means there is no need to add NNS record and the "NNS record but no contract"
+	// is a normal situation
+	prefilledNNSRecord bool
 	// 0: committee witness is not needed
 	// WitnessValidators: committee 2/3n+1 with validatorsDeployAllowedContracts
 	// WitnessValidatorsAndCommittee: WitnessValidators + committee n/2+1 with allowed NNS contract calls
@@ -326,6 +330,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 		record:               "", // set in for loop
 	}
 
+	nnsRecordWithoutContractIsOK := prm.prefilledNNSRecord && prm.tryDeploy
 	for ; ; err = prm.monitor.waitForNextBlock(ctx) {
 		if err != nil {
 			return util.Uint160{}, fmt.Errorf("wait for the contract synchronization: %w", err)
@@ -334,8 +339,12 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 		l.Info("reading on-chain state of the contract by NNS domain name...")
 
 		var missingDomainRecord bool
+		var onChainState *state.Contract
 
 		onChainState, err := readContractOnChainStateByDomainName(prm.blockchain, prm.nnsContract, domainNameForAddress)
+		if errors.Is(err, neorpc.ErrUnknownContract) && nnsRecordWithoutContractIsOK {
+			err = nil
+		}
 		if err != nil {
 			if errors.Is(err, neorpc.ErrUnknownContract) {
 				l.Error("contract is recorded in the NNS but not found on the chain, will wait for a background fix")
@@ -418,6 +427,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 					}
 					continue
 				}
+				nnsRecordWithoutContractIsOK = false
 
 				l.Info("Notary request deploying the contract has been successfully sent, will wait for the outcome",
 					zap.Stringer("main tx", mainTxID), zap.Stringer("fallback tx", fallbackTxID), zap.Uint32("vub", vub))
@@ -438,6 +448,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 				}
 				continue
 			}
+			nnsRecordWithoutContractIsOK = false
 
 			l.Info("transaction deploying the contract has been successfully sent, will wait for the outcome",
 				zap.Stringer("tx", txID), zap.Uint32("vub", vub),
@@ -502,6 +513,43 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 
 		setContractRecordPrm.record = onChainState.Hash.StringLE()
 
+		setNeoFSContractDomainRecord(ctx, setContractRecordPrm)
+	}
+}
+
+func prefillNNS(ctx context.Context, cnr ContainerContractPrm, prm syncNeoFSContractPrm) error {
+	var err error
+	nnsContainerDomain := domainContainer + "." + domainContractAddresses
+	precalculatedContainerHash := state.CreateContractHash(prm.committee[0].GetScriptHash(), cnr.Common.NEF.Checksum, cnr.Common.Manifest.Name)
+	inv := invoker.New(prm.blockchain, nil)
+
+	for ; ; err = prm.monitor.waitForNextBlock(ctx) {
+		if err != nil {
+			return fmt.Errorf("wait for the contract synchronization: %w", err)
+		}
+		_, err = lookupNNSDomainRecord(inv, prm.nnsContract, nnsContainerDomain)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errMissingDomain) {
+			return fmt.Errorf("container contract lookup in NNS: %w", err)
+		}
+		if !prm.tryDeploy {
+			prm.logger.Info("waiting for Proxy contract hash to be in NNS contract")
+			continue
+		}
+
+		setContractRecordPrm := setNeoFSContractDomainRecordPrm{
+			logger:               prm.logger,
+			setRecordTxMonitor:   newTransactionGroupMonitor(prm.simpleLocalActor),
+			registerTLDTxMonitor: newTransactionGroupMonitor(prm.simpleLocalActor),
+			nnsContract:          prm.nnsContract,
+			systemEmail:          prm.systemEmail,
+			localActor:           prm.simpleLocalActor,
+			committeeActor:       prm.committeeLocalActor,
+			domain:               nnsContainerDomain,
+			record:               precalculatedContainerHash.StringLE(),
+		}
 		setNeoFSContractDomainRecord(ctx, setContractRecordPrm)
 	}
 }

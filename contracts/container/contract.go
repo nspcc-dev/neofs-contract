@@ -52,6 +52,7 @@ type (
 const (
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
+	proxyContractKey   = "proxyScriptHash"
 	nnsContractKey     = "nnsScriptHash"
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
@@ -112,6 +113,18 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
+		if version < 23_000 {
+			addrNNS := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+			if len(addrNNS) != interop.Hash160Len {
+				panic("do not know NNS address")
+			}
+			addrProxy := common.ResolveFSContractWithNNS(addrNNS, "proxy")
+			if len(addrProxy) != interop.Hash160Len {
+				panic("NNS does not know Proxy address")
+			}
+			storage.Put(ctx, proxyContractKey, addrProxy)
+		}
+
 		return
 	}
 
@@ -119,6 +132,7 @@ func _deploy(data any, isUpdate bool) {
 		addrNetmap  interop.Hash160
 		addrBalance interop.Hash160
 		addrNNS     interop.Hash160
+		addrProxy   interop.Hash160
 		nnsRoot     string
 	)
 	// args[0] is notaryDisabled flag
@@ -145,6 +159,8 @@ func _deploy(data any, isUpdate bool) {
 
 	// args[3] is neofsid hash, no longer used
 
+	addrProxy = common.ResolveFSContractWithNNS(addrNNS, "proxy")
+
 	if len(args) >= 6 && len(args[5].(string)) > 0 {
 		nnsRoot = args[5].(string)
 	} else {
@@ -154,6 +170,7 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, netmapContractKey, addrNetmap)
 	storage.Put(ctx, balanceContractKey, addrBalance)
 	storage.Put(ctx, nnsContractKey, addrNNS)
+	storage.Put(ctx, proxyContractKey, addrProxy)
 	storage.Put(ctx, nnsRootKey, nnsRoot)
 
 	// add NNS root for container alias domains
@@ -195,6 +212,12 @@ func Update(nefFile, manifest []byte, data any) {
 // must contain information about an object placed to a container that was
 // created using [Put] ([PutMeta]) with enabled meta-on-chain option.
 func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
+	ctx := storage.GetContext()
+	proxyH := storage.Get(ctx, proxyContractKey).(interop.Hash160)
+	if !runtime.CurrentSigners()[0].Account.Equals(proxyH) {
+		panic("not signed by Proxy contract")
+	}
+
 	metaMap := std.Deserialize(metaInformation).(map[string]any)
 
 	// required
@@ -203,7 +226,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 	if len(cID) != interop.Hash256Len {
 		panic("incorrect container ID")
 	}
-	if storage.Get(storage.GetContext(), append([]byte{containersWithMetaPrefix}, cID...)) == nil {
+	if storage.Get(ctx, append([]byte{containersWithMetaPrefix}, cID...)) == nil {
 		panic("container does not support meta-on-chain")
 	}
 	oID := requireMapValue(metaMap, "oid").(interop.Hash256)
@@ -257,10 +280,6 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 				panic("incorrect " + std.Itoa10(i) + " deleted object")
 			}
 		}
-	}
-
-	if !VerifyPlacementSignatures(cID, metaInformation, sigs) {
-		panic("signature verification failed")
 	}
 
 	runtime.Notify("ObjectPut", cID, oID, metaMap)
