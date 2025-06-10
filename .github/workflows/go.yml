@@ -100,3 +100,12 @@ jobs:
           git diff --name-only;
           exit 1;
           fi
+
+      - name: Build archive
+        run: make archive
+
+      - name: Attach binary to the release as an asset
+        if: ${{ github.event_name == 'release' }}
+        run: gh release upload ${{ github.event.release.tag_name }} ./neofs-contract-${{ github.event.release.tag_name }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
