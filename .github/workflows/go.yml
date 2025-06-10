@@ -1,8 +1,15 @@
-name: Go
+name: Build and test
 
 on:
   pull_request:
     branches: [ master ]
+  push:
+    # Build for the master branch.
+    branches:
+      - master
+  release:
+    types:
+      - published
 
 jobs:
   lint:
