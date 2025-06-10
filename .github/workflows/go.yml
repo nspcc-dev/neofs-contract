@@ -1,8 +1,15 @@
-name: Go
+name: Build and test
 
 on:
   pull_request:
     branches: [ master ]
+  push:
+    # Build for the master branch.
+    branches:
+      - master
+  release:
+    types:
+      - published
 
 jobs:
   lint:
@@ -64,17 +71,13 @@ jobs:
   build:
     name: Build contracts and RPC bindings
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go_versions: [ '1.23', '1.24' ]
-      fail-fast: false
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ matrix.go_versions }}'
+          go-version: '1.24'
 
       - name: Clear built RPC bindings
         run: make clean
@@ -97,3 +100,12 @@ jobs:
           git diff --name-only;
           exit 1;
           fi
+
+      - name: Build archive
+        run: make archive
+
+      - name: Attach binary to the release as an asset
+        if: ${{ github.event_name == 'release' }}
+        run: gh release upload ${{ github.event.release.tag_name }} ./neofs-contract-${{ github.event.release.tag_name }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
