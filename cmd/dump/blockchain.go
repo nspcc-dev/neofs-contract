@@ -63,13 +63,8 @@ func (x *remoteBlockchain) close() {
 // referenced by given name using provided NeoFS NNS contract.
 //
 // See also nns.Resolve.
-func (x *remoteBlockchain) getNeoFSContractByName(name string) (res state.Contract, err error) {
-	nnsHash, err := nns.InferHash(x.rpc)
-	if err != nil {
-		return res, fmt.Errorf("inferring nns: %w", err)
-	}
-	r := nns.NewReader(x.actor, nnsHash)
-	h, err := r.ResolveFSContract(name)
+func (x *remoteBlockchain) getNeoFSContractByName(name string, nnsContract *nns.ContractReader) (res state.Contract, err error) {
+	h, err := nnsContract.ResolveFSContract(name)
 	if err != nil {
 		return res, fmt.Errorf("resolving %s: %w", name, err)
 	}

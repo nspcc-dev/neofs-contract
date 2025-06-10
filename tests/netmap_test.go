@@ -180,6 +180,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	deployNetmapContract(t, e)
 
 	// balance and container contracts subscribe to NewEpoch on their deployments
+	deployProxyContract(t, e)
 	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 

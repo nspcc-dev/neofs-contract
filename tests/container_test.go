@@ -14,6 +14,8 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
+	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
@@ -50,7 +52,12 @@ func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addr
 func deployContainerContractInternal(t *testing.T, e *neotest.Executor, args []any) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	e.DeployContract(t, c, args)
-	regContractNNS(t, e, "container", c.Hash)
+
+	// Container contract cannot be deployed without Proxy knowing its hash
+	// so its hash must always be precalculated externally and be registered
+	// in NNS beforehand, that is why there is no NNS registering in
+	// `deployContainer*` functions ever
+
 	return c.Hash
 }
 
@@ -65,12 +72,40 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	deployProxyContract(t, e)
 	if !autohashes {
 		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
 	} else {
 		deployContainerContractInternal(t, e, nil)
 	}
 	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
+}
+
+func newProxySponsorInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
+	e := newExecutor(t)
+
+	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
+	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
+	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
+
+	nnsHash := deployDefaultNNS(t, e)
+	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+		containerconst.AliasFeeKey, int64(containerAliasFee))
+	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	deployProxyContract(t, e)
+	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+
+	gasHash, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+	require.NoError(t, err)
+	gasInv := e.CommitteeInvoker(gasHash).WithSigners(e.Validator)
+	gasInv.Invoke(t, true, "transfer",
+		e.Validator.ScriptHash(), ctrProxy.Hash,
+		int64(10_0000_0000), nil)
+
+	return e.NewInvoker(ctrContainer.Hash, neotest.NewContractSigner(ctrProxy.Hash, func(tx *transaction.Transaction) []any {
+		return []any{}
+	}), e.NewAccount(t)), e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash)
 }
 
 func setContainerOwner(c []byte, acc neotest.Signer) {
@@ -826,10 +861,14 @@ func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
 }
 
 func TestPutMeta(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	cSingleWithProxy, cCommitee, cBal := newProxySponsorInvoker(t)
+	var sigs []any
+	for range 5 {
+		sigs = append(sigs, make([]byte, 64))
+	}
 
 	t.Run("meta disabled", func(t *testing.T) {
-		acc := c.NewAccount(t)
+		acc := cCommitee.NewAccount(t)
 		cnt := dummyContainer(acc)
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
 
@@ -837,8 +876,8 @@ func TestPutMeta(t *testing.T) {
 			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
 		require.NoError(t, err)
 
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
-		c.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, nil)
+		cCommitee.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
+		cSingleWithProxy.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, sigs)
 
 		expected := stackitem.NewStruct([]stackitem.Item{
 			stackitem.NewBuffer(cnt.value),
@@ -846,23 +885,23 @@ func TestPutMeta(t *testing.T) {
 			stackitem.NewBuffer([]byte{}),
 			stackitem.NewBuffer([]byte{}),
 		})
-		c.Invoke(t, expected, "get", cnt.id[:])
+		cCommitee.Invoke(t, expected, "get", cnt.id[:])
 	})
 
 	t.Run("meta enabled", func(t *testing.T) {
-		acc := c.NewAccount(t)
+		acc := cCommitee.NewAccount(t)
 		cnt := dummyContainer(acc)
 		oid := randomBytes(sha256.Size)
 		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
+		cCommitee.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
 
 		t.Run("correct meta data", func(t *testing.T) {
 			meta := testMeta(cnt.id[:], oid)
 			rawMeta, err := stackitem.Serialize(meta)
 			require.NoError(t, err)
 
-			hash := c.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, nil)
-			res := c.GetTxExecResult(t, hash)
+			hash := cSingleWithProxy.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, sigs)
+			res := cSingleWithProxy.GetTxExecResult(t, hash)
 			require.Len(t, res.Events, 1)
 			require.Equal(t, "ObjectPut", res.Events[0].Name)
 			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
@@ -885,8 +924,8 @@ func TestPutMeta(t *testing.T) {
 			rawMeta, err := stackitem.Serialize(meta)
 			require.NoError(t, err)
 
-			hash := c.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, nil)
-			res := c.GetTxExecResult(t, hash)
+			hash := cSingleWithProxy.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, sigs)
+			res := cSingleWithProxy.GetTxExecResult(t, hash)
 			require.Len(t, res.Events, 1)
 			require.Equal(t, "ObjectPut", res.Events[0].Name)
 			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
@@ -899,8 +938,12 @@ func TestPutMeta(t *testing.T) {
 			require.Equal(t, metaValuesExp, metaValuesGot)
 		})
 
-		t.Run("not a map", func(t *testing.T) {
-			c.InvokeFail(t, "invalid type", "submitObjectPut", []byte{1}, nil)
+		t.Run("not signed by Proxy", func(t *testing.T) {
+			meta := testMeta(cnt.id[:], oid)
+			rawMeta, err := stackitem.Serialize(meta)
+			require.NoError(t, err)
+
+			cCommitee.InvokeFail(t, "not signed by Proxy contract", "submitObjectPut", rawMeta, sigs)
 		})
 
 		t.Run("missing required values", func(t *testing.T) {
@@ -909,10 +952,9 @@ func TestPutMeta(t *testing.T) {
 				meta.Drop(meta.Index(stackitem.Make(key)))
 				raw, err := stackitem.Serialize(meta)
 				require.NoError(t, err)
-				c.InvokeFail(t, fmt.Sprintf("'%s' not found", key), "submitObjectPut", raw, nil)
+				cSingleWithProxy.InvokeFail(t, fmt.Sprintf("'%s' not found", key), "submitObjectPut", raw, sigs)
 			}
 
-			testFunc("cid")
 			testFunc("oid")
 			testFunc("size")
 			testFunc("validUntil")
@@ -925,10 +967,9 @@ func TestPutMeta(t *testing.T) {
 				meta.Add(stackitem.Make(key), stackitem.Make(newVal))
 				raw, err := stackitem.Serialize(meta)
 				require.NoError(t, err)
-				c.InvokeFail(t, "incorrect", "submitObjectPut", raw, nil)
+				cSingleWithProxy.InvokeFail(t, "incorrect", "submitObjectPut", raw, sigs)
 			}
 
-			testFunc("cid", []byte{1})
 			testFunc("oid", []byte{1})
 			testFunc("validUntil", 1) // tested chain will have some blocks for sure
 			testFunc("network", netmode.UnitTestNet+1)
@@ -997,6 +1038,7 @@ func TestContainerCreate(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 		t.Run("wrong owner offset", func(t *testing.T) {
@@ -1015,6 +1057,7 @@ func TestContainerCreate(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1029,6 +1072,7 @@ func TestContainerCreate(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1054,6 +1098,7 @@ func TestContainerCreate(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee, "ContainerAliasFee", aliasFee)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1103,6 +1148,7 @@ func TestContainerCreate(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1131,6 +1177,7 @@ func TestContainerCreate(t *testing.T) {
 	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
 	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
 
@@ -1177,6 +1224,7 @@ func TestContainerRemove(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1191,6 +1239,7 @@ func TestContainerRemove(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1220,6 +1269,7 @@ func TestContainerRemove(t *testing.T) {
 	netmapContract := deployNetmapContract(t, exec, "ContainerFee", createFee)
 	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
 
@@ -1284,6 +1334,7 @@ func TestContainerPutEACL(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1311,6 +1362,7 @@ func TestContainerPutEACL(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1328,6 +1380,7 @@ func TestContainerPutEACL(t *testing.T) {
 		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
 
 		exec.DeployContract(t, containerContract, nil)
 
@@ -1344,6 +1397,7 @@ func TestContainerPutEACL(t *testing.T) {
 	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
 	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
 
@@ -1392,6 +1446,7 @@ func TestGetContainerData(t *testing.T) {
 	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
 	inv := exec.CommitteeInvoker(containerContract.Hash)
@@ -1425,6 +1480,7 @@ func TestGetEACLData(t *testing.T) {
 	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
 	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
 	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
 	inv := exec.CommitteeInvoker(containerContract.Hash)
