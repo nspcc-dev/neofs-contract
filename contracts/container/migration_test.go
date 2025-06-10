@@ -24,8 +24,6 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var notaryDisabledKey = []byte("notary")
-
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// gather values which can't be fetched via contract API
 	var owners [][]byte
@@ -45,25 +43,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	})
 
 	migration.SkipUnsupportedVersions(t, c)
-
-	v := c.GetStorageItem(notaryDisabledKey)
-	notaryDisabled := len(v) == 1 && v[0] == 1
-
-	readPendingVotes := func() bool {
-		if v := c.GetStorageItem([]byte("ballots")); v != nil {
-			item, err := stackitem.Deserialize(v)
-			require.NoError(t, err)
-			arr, ok := item.Value().([]stackitem.Item)
-			if ok {
-				return len(arr) > 0
-			} else {
-				require.Equal(t, stackitem.Null{}, item)
-			}
-		}
-		return false
-	}
-
-	prevPendingVote := readPendingVotes()
 
 	// read previous values using contract API
 	readAllContainers := func() []stackitem.Item {
@@ -101,16 +80,9 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return true
 	})
 
-	// try to update the contract
-	if notaryDisabled && prevPendingVote {
-		c.CheckUpdateFail(t, "pending vote detected")
-		return
-	}
-
 	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
-	newPendingVote := readPendingVotes()
 	newContainers := readAllContainers()
 	newContainerCount := readContainerCount()
 	newOwnersToContainers := readOwnersToContainers()
@@ -126,10 +98,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return true
 	})
 
-	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Equal(t, prevContainerCount, newContainerCount, "number of containers should remain")
 	require.ElementsMatch(t, prevContainers, newContainers, "container list should remain")
-	require.False(t, newPendingVote, "there should be no more pending votes")
 	require.True(t, maps.EqualFunc(prevCnrStorageItems, newCnrStorageItems, bytes.Equal), "containers' binary items should remain")
 	require.True(t, maps.EqualFunc(prevEACLStorageItems, newEACLStorageItems, bytes.Equal), "eACLs' binary items should remain")
 
