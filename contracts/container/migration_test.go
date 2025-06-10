@@ -71,12 +71,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	prevCnrStorageItems := make(map[string][]byte) // CID -> container binary
 	c.SeekStorage([]byte{'x'}, func(k, v []byte) bool {
-		prevCnrStorageItems[string(k)] = getStructField0(t, v)
+		prevCnrStorageItems[string(k)] = slices.Clone(v)
 		return true
 	})
 	prevEACLStorageItems := make(map[string][]byte) // CID -> eACL binary
 	c.SeekStorage([]byte("eACL"), func(k, v []byte) bool {
-		prevEACLStorageItems[string(k)] = getStructField0(t, v)
+		prevEACLStorageItems[string(k)] = slices.Clone(v)
 		return true
 	})
 
@@ -109,15 +109,4 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.True(t, ok)
 		require.ElementsMatch(t, vPrev, vNew, "containers of '%s' owner should remain", base58.Encode([]byte(k)))
 	}
-}
-
-func getStructField0(t testing.TB, v []byte) []byte {
-	item, err := stackitem.Deserialize(v)
-	require.NoError(t, err)
-	arr, ok := item.Value().([]stackitem.Item)
-	require.True(t, ok)
-	require.NotEmpty(t, arr)
-	b, err := arr[0].TryBytes()
-	require.NoError(t, err)
-	return b
 }
