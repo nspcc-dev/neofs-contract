@@ -13,6 +13,12 @@ Changelog for NeoFS Contract
 
 ### Fixed
 
+## [0.23.0] - 2025-06-10
+
+### Added
+- Direct sponsoring of object meta puts by proxy contract (#491)
+- NNS and proxy contract to test dumps (#494)
+
 ## [0.22.0] - 2025-04-24
 
 ### Added
@@ -561,7 +567,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...master
+[0.23.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.19.1...v0.20.0
