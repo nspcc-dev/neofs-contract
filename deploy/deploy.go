@@ -437,7 +437,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 	netConfig := []any{
 		[]byte(MaxObjectSizeConfig), encodeUintConfig(prm.NetmapContract.Config.MaxObjectSize),
 		[]byte(BasicIncomeRateConfig), encodeUintConfig(prm.NetmapContract.Config.StoragePrice),
-		[]byte(AuditFeeConfig), encodeUintConfig(prm.NetmapContract.Config.AuditFee),
 		[]byte(EpochDurationConfig), encodeUintConfig(prm.NetmapContract.Config.EpochDuration),
 		[]byte(ContainerFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerFee),
 		[]byte(ContainerAliasFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerAliasFee),
