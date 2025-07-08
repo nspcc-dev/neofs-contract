@@ -21,7 +21,6 @@ const (
 
 	nnsDir        = "nns"
 	alphabetDir   = "alphabet"
-	auditDir      = "audit"
 	balanceDir    = "balance"
 	containerDir  = "container"
 	netmapDir     = "netmap"
@@ -48,7 +47,6 @@ var (
 	fsContracts = []string{
 		nnsDir,
 		proxyDir,
-		auditDir,
 		netmapDir,
 		balanceDir,
 		reputationDir,

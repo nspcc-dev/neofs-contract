@@ -33,7 +33,6 @@ func ExampleContractReader_ResolveFSContract() {
 	nnsContract := nns.NewReader(invoker.New(c, nil), nnsAddress)
 
 	for _, name := range []string{
-		nns.NameAudit,
 		nns.NameBalance,
 		nns.NameContainer,
 		nns.NameNetmap,

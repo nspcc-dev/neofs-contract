@@ -8,6 +8,9 @@ contract, they rarely mix in a single issue):
 
 - alphabet
 - audit
+
+  Should not be used for new issues since the contract is gone, but kept for
+  old ones.
 - balance
 - container
 - neofs

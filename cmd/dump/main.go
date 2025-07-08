@@ -88,7 +88,6 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 	nnsReader := nns.NewReader(from.actor, nnsHash)
 	for _, name := range []string{
 		"alphabet0",
-		"audit",
 		"balance",
 		"container",
 		"netmap",

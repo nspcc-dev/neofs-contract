@@ -27,7 +27,6 @@ Main chain (mainnet) contracts:
 FS chain contracts:
 
 - alphabet
-- audit
 - balance
 - container
 - netmap
