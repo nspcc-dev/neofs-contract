@@ -79,11 +79,6 @@ type AlphabetContractPrm struct {
 	Common CommonDeployPrm
 }
 
-// AuditContractPrm groups deployment parameters of the NeoFS Audit contract.
-type AuditContractPrm struct {
-	Common CommonDeployPrm
-}
-
 // BalanceContractPrm groups deployment parameters of the NeoFS Balance contract.
 type BalanceContractPrm struct {
 	Common CommonDeployPrm
@@ -128,7 +123,6 @@ type Prm struct {
 	NNS NNSPrm
 
 	AlphabetContract   AlphabetContractPrm
-	AuditContract      AuditContractPrm
 	BalanceContract    BalanceContractPrm
 	ContainerContract  ContainerContractPrm
 	NetmapContract     NetmapContractPrm
@@ -435,22 +429,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("on-chain NNS contract successfully updated")
 
-	// 2. Audit
-	syncPrm.localNEF = prm.AuditContract.Common.NEF
-	syncPrm.localManifest = prm.AuditContract.Common.Manifest
-	syncPrm.domainName = domainAudit
-	syncPrm.buildExtraDeployArgs = noExtraDeployArgs
-
-	prm.Logger.Info("synchronizing Audit contract with the chain...")
-
-	auditContractAddress, err := syncNeoFSContract(ctx, syncPrm)
-	if err != nil {
-		return fmt.Errorf("sync Audit contract with the chain: %w", err)
-	}
-
-	prm.Logger.Info("Audit contract successfully synchronized", zap.Stringer("address", auditContractAddress))
-
-	// 3. Netmap
+	// 2. Netmap
 	//
 	// Required for:
 	//  - Balance
@@ -458,7 +437,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 	netConfig := []any{
 		[]byte(MaxObjectSizeConfig), encodeUintConfig(prm.NetmapContract.Config.MaxObjectSize),
 		[]byte(BasicIncomeRateConfig), encodeUintConfig(prm.NetmapContract.Config.StoragePrice),
-		[]byte(AuditFeeConfig), encodeUintConfig(prm.NetmapContract.Config.AuditFee),
 		[]byte(EpochDurationConfig), encodeUintConfig(prm.NetmapContract.Config.EpochDuration),
 		[]byte(ContainerFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerFee),
 		[]byte(ContainerAliasFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerAliasFee),
@@ -496,7 +474,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("Netmap contract successfully synchronized", zap.Stringer("address", netmapContractAddress))
 
-	// 4. Balance
+	// 3. Balance
 	syncPrm.localNEF = prm.BalanceContract.Common.NEF
 	syncPrm.localManifest = prm.BalanceContract.Common.Manifest
 	syncPrm.domainName = domainBalance
@@ -516,7 +494,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 	syncPrm.deployWitness = 0
 	syncPrm.validatorsDeployAllowedContracts = nil
 
-	// 5. Reputation
+	// 4. Reputation
 	syncPrm.localNEF = prm.ReputationContract.Common.NEF
 	syncPrm.localManifest = prm.ReputationContract.Common.Manifest
 	syncPrm.domainName = domainReputation
@@ -531,7 +509,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 
 	prm.Logger.Info("Reputation contract successfully synchronized", zap.Stringer("address", reputationContractAddress))
 
-	// 7. Container
+	// 5. Container
 	syncPrm.localNEF = prm.ContainerContract.Common.NEF
 	syncPrm.localManifest = prm.ContainerContract.Common.Manifest
 	syncPrm.domainName = domainContainer
@@ -562,7 +540,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 	syncPrm.validatorsDeployAllowedContracts = nil
 	syncPrm.prefilledNNSRecord = false
 
-	// 8. Alphabet
+	// 6. Alphabet
 	syncPrm.localNEF = prm.AlphabetContract.Common.NEF
 	syncPrm.localManifest = prm.AlphabetContract.Common.Manifest
 

@@ -33,7 +33,6 @@ const (
 	domainContainers            = "container"
 
 	domainAlphabetFmt = "alphabet%d"
-	domainAudit       = "audit"
 	domainBalance     = "balance"
 	domainContainer   = "container"
 	domainNetmap      = "netmap"

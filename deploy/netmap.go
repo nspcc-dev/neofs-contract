@@ -3,7 +3,6 @@ package deploy
 const (
 	MaxObjectSizeConfig           = "MaxObjectSize"
 	BasicIncomeRateConfig         = "BasicIncomeRate"
-	AuditFeeConfig                = "AuditFee"
 	EpochDurationConfig           = "EpochDuration"
 	ContainerFeeConfig            = "ContainerFee"
 	ContainerAliasFeeConfig       = "ContainerAliasFee"
@@ -30,7 +29,6 @@ type RawNetworkParameter struct {
 type NetworkConfiguration struct {
 	MaxObjectSize              uint64
 	StoragePrice               uint64
-	AuditFee                   uint64
 	EpochDuration              uint64
 	ContainerFee               uint64
 	ContainerAliasFee          uint64

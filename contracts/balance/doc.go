@@ -6,7 +6,7 @@ contract, so it can be tracked and controlled by N3 compatible network
 monitors and wallet software.
 
 This contract is used to store all micro transactions in FS chain, such as
-data audit settlements or container fee payments. It is inefficient to make such
+basic income settlements or container fee payments. It is inefficient to make such
 small payment transactions in main chain. To process small transfers, balance
 contract has higher (12) decimal precision than native GAS contract.
 
