@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Minimal required version for upgrade is 0.19.0 now (#500)
 
 ### Updated
 

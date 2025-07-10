@@ -83,11 +83,6 @@ const (
 	snapshotEpoch        = "snapshotEpoch"
 	snapshotBlockKey     = "snapshotBlock"
 
-	// nolint:unused // used only in _deploy func which is nolinted too
-	containerContractKey = "containerScriptHash"
-	// nolint:unused // used only in _deploy func which is nolinted too
-	balanceContractKey = "balanceScriptHash"
-
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
 
@@ -122,18 +117,6 @@ func _deploy(data any, isUpdate bool) {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
-
-		if version < 19_000 {
-			balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
-			key := append([]byte(newEpochSubscribersPrefix), append([]byte{byte(0)}, balanceContract...)...)
-			storage.Put(ctx, key, []byte{})
-			storage.Delete(ctx, balanceContractKey)
-
-			containerContract := storage.Get(ctx, containerContractKey).(interop.Hash160)
-			key = append([]byte(newEpochSubscribersPrefix), append([]byte{byte(1)}, containerContract...)...)
-			storage.Put(ctx, key, []byte{})
-			storage.Delete(ctx, containerContractKey)
-		}
 
 		if version < 21_000 {
 			storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)

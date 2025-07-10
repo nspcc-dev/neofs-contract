@@ -1,7 +1,6 @@
 package netmap_test
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -27,35 +26,11 @@ func TestMigration(t *testing.T) {
 
 var (
 	notaryDisabledKey = []byte("notary")
-
-	newEpochSubsNewPrefix = []byte("e")
-	containerHashOldKey   = []byte("containerScriptHash")
-	balanceHashOldKey     = []byte("balanceScriptHash")
 )
 
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
-	var containerHash util.Uint160
-	var balanceHash util.Uint160
-	var err error
-
 	// init test contract shell
-	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{
-		StorageDumpHandler: func(key, value []byte) {
-			if bytes.Equal(containerHashOldKey, key) {
-				containerHash, err = util.Uint160DecodeBytesLE(value)
-				require.NoError(t, err)
-
-				return
-			}
-
-			if bytes.Equal(balanceHashOldKey, key) {
-				balanceHash, err = util.Uint160DecodeBytesLE(value)
-				require.NoError(t, err)
-
-				return
-			}
-		},
-	})
+	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
 
 	updPrm := []any{
 		false,
@@ -171,12 +146,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.CheckUpdateSuccess(t, updPrm...)
 
-	if prevVersion < 19_000 {
-		require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
-		require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
-		checkNewEpochSubscribers(t, c, balanceHash, containerHash)
-	}
-
 	// check that contract was updates as expected
 	newPendingVotes := readPendingVotes()
 	newVersion := readVersion()
@@ -199,8 +168,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.ElementsMatch(t, prevCurrentNetmap, newCurrentNetmap, "current netmap should remain")
 	require.ElementsMatch(t, prevNetmapCandidates, newNetmapCandidates, "netmap candidates should remain")
 	require.ElementsMatch(t, ir, c.InnerRing(t))
-	require.Nil(t, c.GetStorageItem(balanceHashOldKey), "balance contract address should be removed")
-	require.Nil(t, c.GetStorageItem(containerHashOldKey), "container contract address should be removed")
 
 	require.Equal(t, len(prevDiffToSnapshots), len(newDiffToSnapshots))
 	for k, vPrev := range prevDiffToSnapshots {
@@ -212,34 +179,4 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	var cleanupThreshItem = c.GetStorageItem([]byte("t"))
 	cleanupThresh := io.NewBinReaderFromBuf(cleanupThreshItem).ReadVarUint()
 	require.EqualValues(t, 3, cleanupThresh)
-}
-
-func checkNewEpochSubscribers(t *testing.T, contract *migration.Contract, balanceWant, containerWant util.Uint160) {
-	// contracts are migrated in alphabetical order at least for now
-
-	var balanceMigrated bool
-	var containerMigrated bool
-
-	contract.SeekStorage(append(newEpochSubsNewPrefix, 0), func(k, v []byte) bool {
-		balanceGot, err := util.Uint160DecodeBytesLE(k)
-		require.NoError(t, err)
-		require.Equal(t, balanceWant, balanceGot)
-
-		balanceMigrated = true
-
-		return true
-	})
-
-	contract.SeekStorage(append(newEpochSubsNewPrefix, 1), func(k, v []byte) bool {
-		containerGot, err := util.Uint160DecodeBytesLE(k)
-		require.NoError(t, err)
-		require.Equal(t, containerWant, containerGot)
-
-		containerMigrated = true
-
-		return true
-	})
-
-	require.True(t, balanceMigrated, "balance contact hash migration")
-	require.True(t, containerMigrated, "container contact hash migration")
 }
