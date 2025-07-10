@@ -170,29 +170,6 @@ func TestContainerCount(t *testing.T) {
 }
 
 func checkContainerList(t *testing.T, c *neotest.ContractInvoker, expected [][]byte) {
-	t.Run("check with `list`", func(t *testing.T) {
-		s, err := c.TestInvoke(t, "list", nil)
-		require.NoError(t, err)
-		require.Equal(t, 1, s.Len())
-
-		if len(expected) == 0 {
-			_, ok := s.Top().Item().(stackitem.Null)
-			require.True(t, ok)
-			return
-		}
-
-		arr, ok := s.Top().Value().([]stackitem.Item)
-		require.True(t, ok)
-		require.Equal(t, len(expected), len(arr))
-
-		actual := make([][]byte, 0, len(expected))
-		for i := range arr {
-			id, ok := arr[i].Value().([]byte)
-			require.True(t, ok)
-			actual = append(actual, id)
-		}
-		require.ElementsMatch(t, expected, actual)
-	})
 	t.Run("check with `containersOf`", func(t *testing.T) {
 		s, err := c.TestInvoke(t, "containersOf", nil)
 		require.NoError(t, err)

@@ -11,6 +11,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- Obsolete list method from container contract (#500)
 
 ### Fixed
 
