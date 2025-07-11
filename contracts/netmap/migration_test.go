@@ -24,10 +24,6 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var (
-	notaryDisabledKey = []byte("notary")
-)
-
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// init test contract shell
 	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
@@ -46,25 +42,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	vSnapshotCount := c.GetStorageItem([]byte("snapshotCount"))
 	require.NotNil(t, vSnapshotCount)
 	snapshotCount := io.NewBinReaderFromBuf(vSnapshotCount).ReadVarUint()
-
-	v := c.GetStorageItem(notaryDisabledKey)
-	notaryDisabled := len(v) == 1 && v[0] == 1
-
-	readPendingVotes := func() bool {
-		if v := c.GetStorageItem([]byte("ballots")); v != nil {
-			item, err := stackitem.Deserialize(v)
-			require.NoError(t, err)
-			arr, ok := item.Value().([]stackitem.Item)
-			if ok {
-				return len(arr) > 0
-			} else {
-				require.Equal(t, stackitem.Null{}, item)
-			}
-		}
-		return false
-	}
-
-	prevPendingVote := readPendingVotes()
 
 	// read previous values using contract API
 	readUint64 := func(method string, args ...any) uint64 {
@@ -138,16 +115,9 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.SetInnerRing(t, ir)
 
-	// try to update the contract
-	if notaryDisabled && prevPendingVote {
-		c.CheckUpdateFail(t, "pending vote detected", updPrm...)
-		return
-	}
-
 	c.CheckUpdateSuccess(t, updPrm...)
 
 	// check that contract was updates as expected
-	newPendingVotes := readPendingVotes()
 	newVersion := readVersion()
 	newDiffToSnapshots := readDiffToSnapshots(newVersion)
 	newCurrentEpoch := readCurrentEpoch()
@@ -156,8 +126,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	newNetmapCandidates := readNetmapCandidates(newVersion)
 	newConfigs := readConfigs()
 
-	require.False(t, newPendingVotes, "notary flag should be removed")
-	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
 	require.Equal(t, prevCurrentEpoch, newCurrentEpoch, "current epoch should remain")
 	require.Equal(t, prevCurrentEpochBlock, newCurrentEpochBlock, "current epoch block should remain (method)")

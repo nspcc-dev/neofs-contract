@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/nspcc-dev/neofs-contract/tests/migration"
 	"github.com/stretchr/testify/require"
@@ -22,33 +21,11 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var notaryDisabledKey = []byte("notary")
-
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// init test contract shell
 	c := migration.NewContract(t, d, name, migration.ContractOptions{})
 
 	migration.SkipUnsupportedVersions(t, c)
-
-	// gather values which can't be fetched via contract API
-	v := c.GetStorageItem(notaryDisabledKey)
-	notaryDisabled := len(v) == 1 && v[0] == 1
-
-	readPendingVotes := func() bool {
-		if v := c.GetStorageItem([]byte("ballots")); v != nil {
-			item, err := stackitem.Deserialize(v)
-			require.NoError(t, err)
-			arr, ok := item.Value().([]stackitem.Item)
-			if ok {
-				return len(arr) > 0
-			} else {
-				require.Equal(t, stackitem.Null{}, item)
-			}
-		}
-		return false
-	}
-
-	prevPendingVotes := readPendingVotes()
 
 	// read previous values using contract API
 	readTotalSupply := func() int64 {
@@ -58,12 +35,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	}
 
 	prevTotalSupply := readTotalSupply()
-
-	// try to update the contract
-	if notaryDisabled && prevPendingVotes {
-		c.CheckUpdateFail(t, "pending vote detected")
-		return
-	}
 
 	var accounts []util.Uint160
 
@@ -87,10 +58,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	// check that contract was updates as expected
 	newTotalSupply := readTotalSupply()
-	newPendingVotes := readPendingVotes()
 
-	require.False(t, newPendingVotes, "there should be no more pending votes")
-	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("containerScriptHash")), "Container contract address should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("netmapScriptHash")), "Netmap contract address should be removed")
 
