@@ -692,25 +692,6 @@ func ContainersOf(owner []byte) iterator.Iterator {
 	return storage.Find(ctx, key, storage.ValuesOnly)
 }
 
-// List method returns a list of all container IDs owned by the specified owner.
-func List(owner []byte) [][]byte {
-	ctx := storage.GetReadOnlyContext()
-
-	if len(owner) == 0 {
-		return getAllContainers(ctx)
-	}
-
-	var list [][]byte
-
-	it := storage.Find(ctx, append([]byte{ownerKeyPrefix}, owner...), storage.ValuesOnly)
-	for iterator.Next(it) {
-		id := iterator.Value(it).([]byte)
-		list = append(list, id)
-	}
-
-	return list
-}
-
 // maxNumOfREPs is a max supported number of REP value in container's policy
 // and also a max number of REPs.
 const maxNumOfREPs = 255
@@ -1216,19 +1197,6 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
 	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
-}
-
-func getAllContainers(ctx storage.Context) [][]byte {
-	var list [][]byte
-
-	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly|storage.RemovePrefix)
-	for iterator.Next(it) {
-		key := iterator.Value(it).([]byte) // it MUST BE `storage.KeysOnly`
-		// V2 format
-		list = append(list, key)
-	}
-
-	return list
 }
 
 func getEACL(ctx storage.Context, cid []byte) ExtendedACL {

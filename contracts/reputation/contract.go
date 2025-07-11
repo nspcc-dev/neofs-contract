@@ -30,34 +30,6 @@ func _deploy(data any, isUpdate bool) {
 	runtime.Log("reputation contract initialized")
 }
 
-// re-initializes contract from non-notary to notary mode. Does nothing if
-// action has already been done. The function is called on contract update with
-// storage.Context from _deploy.
-//
-// If contract stores non-empty value by 'ballots' key, switchToNotary panics.
-// Otherwise, existing value is removed.
-//
-// switchToNotary removes value stored by 'notary' key.
-//
-// nolint:unused
-func switchToNotary(ctx storage.Context) {
-	const notaryDisabledKey = "notary" // non-notary legacy
-
-	notaryVal := storage.Get(ctx, notaryDisabledKey)
-	if notaryVal == nil {
-		runtime.Log("contract is already notarized")
-		return
-	} else if notaryVal.(bool) && !common.TryPurgeVotes(ctx) {
-		panic("pending vote detected")
-	}
-
-	storage.Delete(ctx, notaryDisabledKey)
-
-	if notaryVal.(bool) {
-		runtime.Log("contract successfully notarized")
-	}
-}
-
 // Update method updates contract source code and manifest. It can be invoked
 // only by committee.
 func Update(nefFile, manifest []byte, data any) {

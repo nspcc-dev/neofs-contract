@@ -222,11 +222,6 @@ func (c *ContractReader) IterateContainerSizesExpanded(epoch *big.Int, cid util.
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateContainerSizes", _numOfIteratorItems, epoch, cid))
 }
 
-// List invokes `list` method of contract.
-func (c *ContractReader) List(owner []byte) ([][]byte, error) {
-	return unwrap.ArrayOfBytes(c.invoker.Call(c.hash, "list", owner))
-}
-
 // ListContainerSizes invokes `listContainerSizes` method of contract.
 func (c *ContractReader) ListContainerSizes(epoch *big.Int) ([][]byte, error) {
 	return unwrap.ArrayOfBytes(c.invoker.Call(c.hash, "listContainerSizes", epoch))

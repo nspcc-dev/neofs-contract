@@ -8,7 +8,6 @@ const (
 	ContainerAliasFeeConfig       = "ContainerAliasFee"
 	EigenTrustIterationsConfig    = "EigenTrustIterations"
 	EigenTrustAlphaConfig         = "EigenTrustAlpha"
-	InnerRingCandidateFeeConfig   = "InnerRingCandidateFee"
 	WithdrawFeeConfig             = "WithdrawFee"
 	HomomorphicHashingDisabledKey = "HomomorphicHashingDisabled"
 	MaintenanceModeAllowedConfig  = "MaintenanceModeAllowed"
@@ -34,7 +33,6 @@ type NetworkConfiguration struct {
 	ContainerAliasFee          uint64
 	EigenTrustIterations       uint64
 	EigenTrustAlpha            float64
-	IRCandidateFee             uint64
 	WithdrawalFee              uint64
 	HomomorphicHashingDisabled bool
 	MaintenanceModeAllowed     bool
