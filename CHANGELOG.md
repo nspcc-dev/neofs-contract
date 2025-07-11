@@ -12,6 +12,8 @@ Changelog for NeoFS Contract
 
 ### Removed
 - Obsolete list method from container contract (#500)
+- Unused candidate management methods from neofs contract (#500)
+- Unused InnerRingCandidateFee setting from neofs and netmap contracts (#500)
 
 ### Fixed
 

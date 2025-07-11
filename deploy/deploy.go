@@ -442,7 +442,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 		[]byte(ContainerAliasFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerAliasFee),
 		[]byte(EigenTrustIterationsConfig), encodeUintConfig(prm.NetmapContract.Config.EigenTrustIterations),
 		[]byte(EigenTrustAlphaConfig), encodeFloatConfig(prm.NetmapContract.Config.EigenTrustAlpha),
-		[]byte(InnerRingCandidateFeeConfig), encodeUintConfig(prm.NetmapContract.Config.IRCandidateFee),
 		[]byte(WithdrawFeeConfig), encodeUintConfig(prm.NetmapContract.Config.WithdrawalFee),
 		[]byte(HomomorphicHashingDisabledKey), encodeBoolConfig(prm.NetmapContract.Config.HomomorphicHashingDisabled),
 		[]byte(MaintenanceModeAllowedConfig), encodeBoolConfig(prm.NetmapContract.Config.MaintenanceModeAllowed),

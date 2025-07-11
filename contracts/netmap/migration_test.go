@@ -1,6 +1,8 @@
 package netmap_test
 
 import (
+	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -132,6 +134,11 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.Nil(t, c.GetStorageItem([]byte("snapshotBlock")), "current epoch block should be removed (storage)")
 	require.EqualValues(t, prevCurrentEpochBlock, readUint64("getEpochBlock", prevCurrentEpoch),
 		"current epoch block should be resolvable")
+	// IR fee is dropped in 0.24.0.
+	prevConfigs = slices.DeleteFunc(prevConfigs, func(s stackitem.Item) bool {
+		sa := s.Value().([]stackitem.Item)
+		return len(sa) > 0 && bytes.Equal(sa[0].Value().([]byte), []byte("InnerRingCandidateFee"))
+	})
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.ElementsMatch(t, prevCurrentNetmap, newCurrentNetmap, "current netmap should remain")
 	require.ElementsMatch(t, prevNetmapCandidates, newNetmapCandidates, "netmap candidates should remain")
