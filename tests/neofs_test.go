@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bytes"
 	"path"
 	"slices"
 	"testing"
@@ -11,10 +10,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
-	"github.com/nspcc-dev/neofs-contract/contracts/neofs"
 	"github.com/stretchr/testify/require"
 )
 
@@ -89,46 +86,4 @@ func TestNeoFS_AlphabetList(t *testing.T) {
 	}
 
 	e.Invoke(t, stackitem.NewArray(arr), "alphabetList")
-}
-
-func TestNeoFS_InnerRingCandidate(t *testing.T) {
-	e, _, _ := newNeoFSInvoker(t, 4, neofs.CandidateFeeConfigKey, int64(10))
-
-	const candidateCount = 3
-
-	accs := make([]neotest.Signer, candidateCount)
-	for i := range accs {
-		accs[i] = e.NewAccount(t)
-	}
-
-	arr := make([]stackitem.Item, candidateCount)
-	pubs := make([][]byte, candidateCount)
-	slices.SortFunc(accs, func(a, b neotest.Signer) int {
-		return bytes.Compare(a.Script(), b.Script())
-	})
-
-	for i, acc := range accs {
-		cAcc := e.WithSigners(acc)
-		pub, ok := vm.ParseSignatureContract(acc.Script())
-		require.True(t, ok)
-		cAcc.Invoke(t, stackitem.Null{}, "innerRingCandidateAdd", pub)
-		cAcc.InvokeFail(t, "candidate already in the list", "innerRingCandidateAdd", pub)
-
-		pubs[i] = pub
-		arr[i] = stackitem.NewStruct([]stackitem.Item{stackitem.NewBuffer(pub)})
-	}
-
-	e.Invoke(t, stackitem.NewArray(arr), "innerRingCandidates")
-
-	cAcc := e.WithSigners(accs[1])
-	cAcc.Invoke(t, stackitem.Null{}, "innerRingCandidateRemove", pubs[1])
-	e.Invoke(t, stackitem.NewArray([]stackitem.Item{arr[0], arr[2]}), "innerRingCandidates")
-
-	cAcc = e.WithSigners(accs[2])
-	cAcc.Invoke(t, stackitem.Null{}, "innerRingCandidateRemove", pubs[2])
-	e.Invoke(t, stackitem.NewArray([]stackitem.Item{arr[0]}), "innerRingCandidates")
-
-	cAcc = e.WithSigners(accs[0])
-	cAcc.Invoke(t, stackitem.Null{}, "innerRingCandidateRemove", pubs[0])
-	e.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "innerRingCandidates")
 }

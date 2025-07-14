@@ -149,29 +149,6 @@ func (c *ContractReader) Config(key []byte) (any, error) {
 	}(unwrap.Item(c.invoker.Call(c.hash, "config", key)))
 }
 
-// InnerRingCandidates invokes `innerRingCandidates` method of contract.
-func (c *ContractReader) InnerRingCandidates() ([]*CommonIRNode, error) {
-	return func(item stackitem.Item, err error) ([]*CommonIRNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*CommonIRNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*CommonIRNode, len(arr))
-			for i := range res {
-				res[i], err = itemToCommonIRNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "innerRingCandidates")))
-}
-
 // ListConfig invokes `listConfig` method of contract.
 func (c *ContractReader) ListConfig() ([]*NeofsRecord, error) {
 	return func(item stackitem.Item, err error) ([]*NeofsRecord, error) {
@@ -242,50 +219,6 @@ func (c *Contract) ChequeTransaction(id []byte, user util.Uint160, amount *big.I
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) ChequeUnsigned(id []byte, user util.Uint160, amount *big.Int, lockAcc []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "cheque", nil, id, user, amount, lockAcc)
-}
-
-// InnerRingCandidateAdd creates a transaction invoking `innerRingCandidateAdd` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) InnerRingCandidateAdd(key *keys.PublicKey) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "innerRingCandidateAdd", key)
-}
-
-// InnerRingCandidateAddTransaction creates a transaction invoking `innerRingCandidateAdd` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) InnerRingCandidateAddTransaction(key *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "innerRingCandidateAdd", key)
-}
-
-// InnerRingCandidateAddUnsigned creates a transaction invoking `innerRingCandidateAdd` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) InnerRingCandidateAddUnsigned(key *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "innerRingCandidateAdd", nil, key)
-}
-
-// InnerRingCandidateRemove creates a transaction invoking `innerRingCandidateRemove` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) InnerRingCandidateRemove(key *keys.PublicKey) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "innerRingCandidateRemove", key)
-}
-
-// InnerRingCandidateRemoveTransaction creates a transaction invoking `innerRingCandidateRemove` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) InnerRingCandidateRemoveTransaction(key *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "innerRingCandidateRemove", key)
-}
-
-// InnerRingCandidateRemoveUnsigned creates a transaction invoking `innerRingCandidateRemove` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) InnerRingCandidateRemoveUnsigned(key *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "innerRingCandidateRemove", nil, key)
 }
 
 // SetConfig creates a transaction invoking `setConfig` method of the contract.

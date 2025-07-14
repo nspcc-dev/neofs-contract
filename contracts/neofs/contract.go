@@ -4,7 +4,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -21,12 +20,9 @@ type (
 )
 
 const (
-	// CandidateFeeConfigKey contains fee for a candidate registration.
-	CandidateFeeConfigKey = "InnerRingCandidateFee"
-	withdrawFeeConfigKey  = "WithdrawFee"
+	withdrawFeeConfigKey = "WithdrawFee"
 
 	alphabetKey       = "alphabet"
-	candidatesKey     = "candidates"
 	notaryDisabledKey = "notary"
 
 	processingContractKey = "processingScriptHash"
@@ -49,7 +45,21 @@ func _deploy(data any, isUpdate bool) {
 
 	if isUpdate {
 		args := data.([]any)
-		common.CheckVersion(args[len(args)-1].(int))
+		version := args[len(args)-1].(int)
+		common.CheckVersion(version)
+
+		if version < 24_000 {
+			const candidatesKey = "candidates"
+
+			it := storage.Find(ctx, candidatesKey, storage.KeysOnly)
+			for iterator.Next(it) {
+				storage.Delete(ctx, iterator.Value(it))
+			}
+
+			const candidateFeeConfigKey = "InnerRingCandidateFee"
+			storage.Delete(ctx, append(configPrefix, []byte(candidateFeeConfigKey)...))
+		}
+
 		return
 	}
 
@@ -130,99 +140,6 @@ func AlphabetList() []common.IRNode {
 func AlphabetAddress() interop.Hash160 {
 	ctx := storage.GetReadOnlyContext()
 	return multiaddress(getAlphabetNodes(ctx))
-}
-
-// InnerRingCandidates returns an array of structures that contain an Inner Ring
-// candidate node key.
-func InnerRingCandidates() []common.IRNode {
-	ctx := storage.GetReadOnlyContext()
-	nodes := []common.IRNode{}
-
-	it := storage.Find(ctx, candidatesKey, storage.KeysOnly|storage.RemovePrefix)
-	for iterator.Next(it) {
-		pub := iterator.Value(it).([]byte)
-		nodes = append(nodes, common.IRNode{PublicKey: pub})
-	}
-	return nodes
-}
-
-// InnerRingCandidateRemove removes a key from a list of Inner Ring candidates.
-// It can be invoked by Alphabet nodes or the candidate itself.
-//
-// This method does not return fee back to the candidate.
-func InnerRingCandidateRemove(key interop.PublicKey) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
-
-	var ( // for invocation collection without notary
-		alphabet []interop.PublicKey
-		nodeKey  []byte
-	)
-
-	keyOwner := runtime.CheckWitness(key)
-
-	if !keyOwner {
-		if notaryDisabled {
-			alphabet = getAlphabetNodes(ctx)
-			nodeKey = common.InnerRingInvoker(alphabet)
-			if len(nodeKey) == 0 {
-				panic("this method must be invoked by candidate or alphabet")
-			}
-		} else {
-			multiaddr := AlphabetAddress()
-			if !runtime.CheckWitness(multiaddr) {
-				panic("this method must be invoked by candidate or alphabet")
-			}
-		}
-	}
-
-	if notaryDisabled && !keyOwner {
-		threshold := len(alphabet)*2/3 + 1
-		id := append(key, []byte("delete")...)
-		hashID := crypto.Sha256(id)
-
-		n := common.Vote(ctx, hashID, nodeKey)
-		if n < threshold {
-			return
-		}
-
-		common.RemoveVotes(ctx, hashID)
-	}
-
-	prefix := []byte(candidatesKey)
-	stKey := append(prefix, key...)
-	if storage.Get(ctx, stKey) != nil {
-		storage.Delete(ctx, stKey)
-		runtime.Log("candidate has been removed")
-	}
-}
-
-// InnerRingCandidateAdd adds a key to a list of Inner Ring candidates.
-// It can be invoked only by the candidate itself.
-//
-// This method transfers fee from a candidate to the contract account.
-// Fee value is specified in NeoFS network config with the key InnerRingCandidateFee.
-func InnerRingCandidateAdd(key interop.PublicKey) {
-	ctx := storage.GetContext()
-
-	common.CheckWitness(key)
-
-	stKey := append([]byte(candidatesKey), key...)
-	if storage.Get(ctx, stKey) != nil {
-		panic("candidate already in the list")
-	}
-
-	from := contract.CreateStandardAccount(key)
-	to := runtime.GetExecutingScriptHash()
-	fee := getConfig(ctx, CandidateFeeConfigKey).(int)
-
-	transferred := gas.Transfer(from, to, fee, []byte(ignoreDepositNotification))
-	if !transferred {
-		panic("failed to transfer funds, aborting")
-	}
-
-	storage.Put(ctx, stKey, []byte{1})
-	runtime.Log("candidate has been added")
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.

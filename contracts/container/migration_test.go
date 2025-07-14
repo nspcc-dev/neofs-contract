@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mr-tron/base58"
+	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/nspcc-dev/neofs-contract/tests/migration"
@@ -46,8 +47,14 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	// read previous values using contract API
 	readAllContainers := func() []stackitem.Item {
-		containers, ok := c.Call(t, "list", []byte{}).Value().([]stackitem.Item)
+		iter, ok := c.Call(t, "containersOf", nil).Value().(*storage.Iterator)
 		require.True(t, ok)
+
+		var containers []stackitem.Item
+		for iter.Next() {
+			containers = append(containers, iter.Value())
+		}
+
 		return containers
 	}
 
@@ -60,7 +67,11 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	readOwnersToContainers := func() map[string][]stackitem.Item {
 		m := make(map[string][]stackitem.Item, len(owners))
 		for i := range owners {
-			m[string(owners[i])] = c.Call(t, "list", owners[i]).Value().([]stackitem.Item)
+			iter := c.Call(t, "containersOf", owners[i]).Value().(*storage.Iterator)
+
+			for iter.Next() {
+				m[string(owners[i])] = append(m[string(owners[i])], iter.Value())
+			}
 		}
 		return m
 	}

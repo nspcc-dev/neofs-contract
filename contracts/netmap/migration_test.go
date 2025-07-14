@@ -2,6 +2,7 @@ package netmap_test
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -25,37 +26,9 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var (
-	notaryDisabledKey = []byte("notary")
-
-	newEpochSubsNewPrefix = []byte("e")
-	containerHashOldKey   = []byte("containerScriptHash")
-	balanceHashOldKey     = []byte("balanceScriptHash")
-)
-
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
-	var containerHash util.Uint160
-	var balanceHash util.Uint160
-	var err error
-
 	// init test contract shell
-	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{
-		StorageDumpHandler: func(key, value []byte) {
-			if bytes.Equal(containerHashOldKey, key) {
-				containerHash, err = util.Uint160DecodeBytesLE(value)
-				require.NoError(t, err)
-
-				return
-			}
-
-			if bytes.Equal(balanceHashOldKey, key) {
-				balanceHash, err = util.Uint160DecodeBytesLE(value)
-				require.NoError(t, err)
-
-				return
-			}
-		},
-	})
+	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
 
 	updPrm := []any{
 		false,
@@ -71,25 +44,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	vSnapshotCount := c.GetStorageItem([]byte("snapshotCount"))
 	require.NotNil(t, vSnapshotCount)
 	snapshotCount := io.NewBinReaderFromBuf(vSnapshotCount).ReadVarUint()
-
-	v := c.GetStorageItem(notaryDisabledKey)
-	notaryDisabled := len(v) == 1 && v[0] == 1
-
-	readPendingVotes := func() bool {
-		if v := c.GetStorageItem([]byte("ballots")); v != nil {
-			item, err := stackitem.Deserialize(v)
-			require.NoError(t, err)
-			arr, ok := item.Value().([]stackitem.Item)
-			if ok {
-				return len(arr) > 0
-			} else {
-				require.Equal(t, stackitem.Null{}, item)
-			}
-		}
-		return false
-	}
-
-	prevPendingVote := readPendingVotes()
 
 	// read previous values using contract API
 	readUint64 := func(method string, args ...any) uint64 {
@@ -163,22 +117,9 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.SetInnerRing(t, ir)
 
-	// try to update the contract
-	if notaryDisabled && prevPendingVote {
-		c.CheckUpdateFail(t, "pending vote detected", updPrm...)
-		return
-	}
-
 	c.CheckUpdateSuccess(t, updPrm...)
 
-	if prevVersion < 19_000 {
-		require.NotZerof(t, balanceHash, "missing storage item %q with Balance contract address", balanceHashOldKey)
-		require.NotZerof(t, containerHash, "missing storage item %q with Container contract address", containerHashOldKey)
-		checkNewEpochSubscribers(t, c, balanceHash, containerHash)
-	}
-
 	// check that contract was updates as expected
-	newPendingVotes := readPendingVotes()
 	newVersion := readVersion()
 	newDiffToSnapshots := readDiffToSnapshots(newVersion)
 	newCurrentEpoch := readCurrentEpoch()
@@ -187,20 +128,21 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	newNetmapCandidates := readNetmapCandidates(newVersion)
 	newConfigs := readConfigs()
 
-	require.False(t, newPendingVotes, "notary flag should be removed")
-	require.Nil(t, c.GetStorageItem(notaryDisabledKey), "notary flag should be removed")
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
 	require.Equal(t, prevCurrentEpoch, newCurrentEpoch, "current epoch should remain")
 	require.Equal(t, prevCurrentEpochBlock, newCurrentEpochBlock, "current epoch block should remain (method)")
 	require.Nil(t, c.GetStorageItem([]byte("snapshotBlock")), "current epoch block should be removed (storage)")
 	require.EqualValues(t, prevCurrentEpochBlock, readUint64("getEpochBlock", prevCurrentEpoch),
 		"current epoch block should be resolvable")
+	// IR fee is dropped in 0.24.0.
+	prevConfigs = slices.DeleteFunc(prevConfigs, func(s stackitem.Item) bool {
+		sa := s.Value().([]stackitem.Item)
+		return len(sa) > 0 && bytes.Equal(sa[0].Value().([]byte), []byte("InnerRingCandidateFee"))
+	})
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.ElementsMatch(t, prevCurrentNetmap, newCurrentNetmap, "current netmap should remain")
 	require.ElementsMatch(t, prevNetmapCandidates, newNetmapCandidates, "netmap candidates should remain")
 	require.ElementsMatch(t, ir, c.InnerRing(t))
-	require.Nil(t, c.GetStorageItem(balanceHashOldKey), "balance contract address should be removed")
-	require.Nil(t, c.GetStorageItem(containerHashOldKey), "container contract address should be removed")
 
 	require.Equal(t, len(prevDiffToSnapshots), len(newDiffToSnapshots))
 	for k, vPrev := range prevDiffToSnapshots {
@@ -212,34 +154,4 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	var cleanupThreshItem = c.GetStorageItem([]byte("t"))
 	cleanupThresh := io.NewBinReaderFromBuf(cleanupThreshItem).ReadVarUint()
 	require.EqualValues(t, 3, cleanupThresh)
-}
-
-func checkNewEpochSubscribers(t *testing.T, contract *migration.Contract, balanceWant, containerWant util.Uint160) {
-	// contracts are migrated in alphabetical order at least for now
-
-	var balanceMigrated bool
-	var containerMigrated bool
-
-	contract.SeekStorage(append(newEpochSubsNewPrefix, 0), func(k, v []byte) bool {
-		balanceGot, err := util.Uint160DecodeBytesLE(k)
-		require.NoError(t, err)
-		require.Equal(t, balanceWant, balanceGot)
-
-		balanceMigrated = true
-
-		return true
-	})
-
-	contract.SeekStorage(append(newEpochSubsNewPrefix, 1), func(k, v []byte) bool {
-		containerGot, err := util.Uint160DecodeBytesLE(k)
-		require.NoError(t, err)
-		require.Equal(t, containerWant, containerGot)
-
-		containerMigrated = true
-
-		return true
-	})
-
-	require.True(t, balanceMigrated, "balance contact hash migration")
-	require.True(t, containerMigrated, "container contact hash migration")
 }
