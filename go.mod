@@ -28,6 +28,7 @@ require (
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/nspcc-dev/dbft v0.4.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20250226190835-fb3f82b1f468 // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.3 // indirect
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.13.0.20250411071756-31796f64ee16 // indirect
