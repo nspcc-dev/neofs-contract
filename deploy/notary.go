@@ -932,18 +932,18 @@ func autoReplenishNotaryBalance(ctx context.Context, l *zap.Logger, b Blockchain
 	localAccID := localAcc.ScriptHash()
 
 	for {
-		select {
-		case <-ctx.Done():
-			l.Info("Notary balance tracker stopped by context", zap.Error(ctx.Err()))
-			return
-		case _, ok := <-chTrigger:
-			if !ok {
-				l.Info("Notary balance tracker stopped by closed block channel")
+		if localActor != nil {
+			select {
+			case <-ctx.Done():
+				l.Info("Notary balance tracker stopped by context", zap.Error(ctx.Err()))
 				return
+			case _, ok := <-chTrigger:
+				if !ok {
+					l.Info("Notary balance tracker stopped by closed block channel")
+					return
+				}
 			}
-		}
-
-		if localActor == nil {
+		} else {
 			localActor, err = actor.NewSimple(b, localAcc)
 			if err != nil {
 				l.Error("failed to init transaction sender from local account, will try again later", zap.Error(err))
