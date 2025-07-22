@@ -331,9 +331,13 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 	}
 
 	nnsRecordWithoutContractIsOK := prm.prefilledNNSRecord && prm.tryDeploy
-	for ; ; err = prm.monitor.waitForNextBlock(ctx) {
-		if err != nil {
-			return util.Uint160{}, fmt.Errorf("wait for the contract synchronization: %w", err)
+	for {
+		if deployTxMonitor.isPending() || updateTxMonitor.isPending() ||
+			setContractRecordPrm.setRecordTxMonitor.isPending() || setContractRecordPrm.registerTLDTxMonitor.isPending() {
+			err = prm.monitor.waitForNextBlock(ctx)
+			if err != nil {
+				return util.Uint160{}, fmt.Errorf("wait for the contract synchronization: %w", err)
+			}
 		}
 
 		l.Info("reading on-chain state of the contract by NNS domain name...")
