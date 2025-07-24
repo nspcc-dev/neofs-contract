@@ -85,7 +85,7 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 
 	nativeContracts := native.NewContracts(config.ProtocolConfiguration{})
 
-	err := nativeContracts.Management.InitializeCache(0, _dao)
+	err := nativeContracts.Management.InitializeCache(nil, 0, _dao)
 	require.NoError(tb, err)
 
 	mNameToID := make(map[string]int32)
