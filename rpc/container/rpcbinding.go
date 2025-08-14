@@ -26,6 +26,12 @@ type ContainerContainer struct {
 	Token []byte
 }
 
+// ContainerContainerEstimation is a contract-specific container.ContainerEstimation type used by its methods.
+type ContainerContainerEstimation struct {
+	SizeEstimation          *big.Int
+	ObjectsNumberEstimation *big.Int
+}
+
 // ContainerContainerSizes is a contract-specific container.ContainerSizes type used by its methods.
 type ContainerContainerSizes struct {
 	CID         []byte
@@ -44,6 +50,14 @@ type ContainerExtendedACL struct {
 	Sig   []byte
 	Pub   *keys.PublicKey
 	Token []byte
+}
+
+// ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
+type ContainerNodeReport struct {
+	PublicKey       *keys.PublicKey
+	ContainerSize   *big.Int
+	NumberOfObjects *big.Int
+	NumberOfReports *big.Int
 }
 
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
@@ -78,16 +92,6 @@ type SetEACLSuccessEvent struct {
 // EACLChangedEvent represents "EACLChanged" event emitted by the contract.
 type EACLChangedEvent struct {
 	ContainerID util.Uint256
-}
-
-// StartEstimationEvent represents "StartEstimation" event emitted by the contract.
-type StartEstimationEvent struct {
-	Epoch *big.Int
-}
-
-// StopEstimationEvent represents "StopEstimation" event emitted by the contract.
-type StopEstimationEvent struct {
-	Epoch *big.Int
 }
 
 // NodesUpdateEvent represents "NodesUpdate" event emitted by the contract.
@@ -194,6 +198,16 @@ func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
 }
 
+// GetEstimation invokes `getEstimation` method of contract.
+func (c *ContractReader) GetEstimation(epoch *big.Int, cid util.Uint256) (*ContainerContainerEstimation, error) {
+	return itemToContainerContainerEstimation(unwrap.Item(c.invoker.Call(c.hash, "getEstimation", epoch, cid)))
+}
+
+// GetEstimationByNode invokes `getEstimationByNode` method of contract.
+func (c *ContractReader) GetEstimationByNode(epoch *big.Int, cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
+	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getEstimationByNode", epoch, cid, pubKey)))
+}
+
 // IterateAllContainerSizes invokes `iterateAllContainerSizes` method of contract.
 func (c *ContractReader) IterateAllContainerSizes(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
 	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllContainerSizes", epoch))
@@ -208,6 +222,20 @@ func (c *ContractReader) IterateAllContainerSizesExpanded(epoch *big.Int, _numOf
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllContainerSizes", _numOfIteratorItems, epoch))
 }
 
+// IterateAllEstimations invokes `iterateAllEstimations` method of contract.
+func (c *ContractReader) IterateAllEstimations(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllEstimations", epoch))
+}
+
+// IterateAllEstimationsExpanded is similar to IterateAllEstimations (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) IterateAllEstimationsExpanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllEstimations", _numOfIteratorItems, epoch))
+}
+
 // IterateContainerSizes invokes `iterateContainerSizes` method of contract.
 func (c *ContractReader) IterateContainerSizes(epoch *big.Int, cid util.Uint256) (uuid.UUID, result.Iterator, error) {
 	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateContainerSizes", epoch, cid))
@@ -220,6 +248,20 @@ func (c *ContractReader) IterateContainerSizes(epoch *big.Int, cid util.Uint256)
 // you. It's only limited by VM stack and GAS available for RPC invocations.
 func (c *ContractReader) IterateContainerSizesExpanded(epoch *big.Int, cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateContainerSizes", _numOfIteratorItems, epoch, cid))
+}
+
+// IterateEstimations invokes `iterateEstimations` method of contract.
+func (c *ContractReader) IterateEstimations(epoch *big.Int, cid util.Uint256) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateEstimations", epoch, cid))
+}
+
+// IterateEstimationsExpanded is similar to IterateEstimations (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) IterateEstimationsExpanded(epoch *big.Int, cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateEstimations", _numOfIteratorItems, epoch, cid))
 }
 
 // ListContainerSizes invokes `listContainerSizes` method of contract.
@@ -446,6 +488,28 @@ func (c *Contract) PutEACLUnsigned(eACL []byte, invocScript []byte, verifScript 
 	return c.actor.MakeUnsignedCall(c.hash, "putEACL", nil, eACL, invocScript, verifScript, sessionToken)
 }
 
+// PutEstimation creates a transaction invoking `putEstimation` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) PutEstimation(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "putEstimation", cid, sizeBytes, objsNumber, pubKey)
+}
+
+// PutEstimationTransaction creates a transaction invoking `putEstimation` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) PutEstimationTransaction(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "putEstimation", cid, sizeBytes, objsNumber, pubKey)
+}
+
+// PutEstimationUnsigned creates a transaction invoking `putEstimation` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) PutEstimationUnsigned(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "putEstimation", nil, cid, sizeBytes, objsNumber, pubKey)
+}
+
 // Put2 creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -554,50 +618,6 @@ func (c *Contract) SetEACLTransaction(eACL []byte, signature []byte, publicKey *
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetEACLUnsigned(eACL []byte, signature []byte, publicKey *keys.PublicKey, token []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setEACL", nil, eACL, signature, publicKey, token)
-}
-
-// StartContainerEstimation creates a transaction invoking `startContainerEstimation` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) StartContainerEstimation(epoch *big.Int) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "startContainerEstimation", epoch)
-}
-
-// StartContainerEstimationTransaction creates a transaction invoking `startContainerEstimation` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) StartContainerEstimationTransaction(epoch *big.Int) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "startContainerEstimation", epoch)
-}
-
-// StartContainerEstimationUnsigned creates a transaction invoking `startContainerEstimation` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) StartContainerEstimationUnsigned(epoch *big.Int) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "startContainerEstimation", nil, epoch)
-}
-
-// StopContainerEstimation creates a transaction invoking `stopContainerEstimation` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) StopContainerEstimation(epoch *big.Int) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "stopContainerEstimation", epoch)
-}
-
-// StopContainerEstimationTransaction creates a transaction invoking `stopContainerEstimation` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) StopContainerEstimationTransaction(epoch *big.Int) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "stopContainerEstimation", epoch)
-}
-
-// StopContainerEstimationUnsigned creates a transaction invoking `stopContainerEstimation` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) StopContainerEstimationUnsigned(epoch *big.Int) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "stopContainerEstimation", nil, epoch)
 }
 
 // SubmitObjectPut creates a transaction invoking `submitObjectPut` method of the contract.
@@ -791,6 +811,113 @@ func (res *ContainerContainer) ToSCParameter() (smartcontract.Parameter, error) 
 	prm, err = smartcontract.NewParameterFromValue(res.Token)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field Token: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
+// itemToContainerContainerEstimation converts stack item into *ContainerContainerEstimation.
+// NULL item is returned as nil pointer without error.
+func itemToContainerContainerEstimation(item stackitem.Item, err error) (*ContainerContainerEstimation, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerContainerEstimation)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerContainerEstimation is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerContainerEstimation{})
+
+// Ensure *ContainerContainerEstimation is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerContainerEstimation{})
+
+// FromStackItem retrieves fields of ContainerContainerEstimation from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerContainerEstimation) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.SizeEstimation, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field SizeEstimation: %w", err)
+	}
+
+	index++
+	res.ObjectsNumberEstimation, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field ObjectsNumberEstimation: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerContainerEstimation.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerContainerEstimation) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = (*stackitem.BigInteger)(res.SizeEstimation), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field SizeEstimation: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.ObjectsNumberEstimation), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ObjectsNumberEstimation: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerContainerEstimation.
+// It implements [smartcontract.Convertible] interface so that ContainerContainerEstimation
+// could be used with invokers.
+func (res *ContainerContainerEstimation) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.SizeEstimation)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field SizeEstimation: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.ObjectsNumberEstimation)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ObjectsNumberEstimation: %w", err)
 	}
 	prms = append(prms, prm)
 
@@ -1215,6 +1342,159 @@ func (res *ContainerExtendedACL) ToSCParameter() (smartcontract.Parameter, error
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
+// itemToContainerNodeReport converts stack item into *ContainerNodeReport.
+// NULL item is returned as nil pointer without error.
+func itemToContainerNodeReport(item stackitem.Item, err error) (*ContainerNodeReport, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerNodeReport)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerNodeReport is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerNodeReport{})
+
+// Ensure *ContainerNodeReport is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerNodeReport{})
+
+// FromStackItem retrieves fields of ContainerNodeReport from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 4 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return nil, err
+		}
+		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
+		if err != nil {
+			return nil, err
+		}
+		return k, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field PublicKey: %w", err)
+	}
+
+	index++
+	res.ContainerSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field ContainerSize: %w", err)
+	}
+
+	index++
+	res.NumberOfObjects, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field NumberOfObjects: %w", err)
+	}
+
+	index++
+	res.NumberOfReports, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field NumberOfReports: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerNodeReport.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 4)
+	)
+	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field PublicKey: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.ContainerSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ContainerSize: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.NumberOfObjects), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field NumberOfObjects: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.NumberOfReports), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field NumberOfReports: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerNodeReport.
+// It implements [smartcontract.Convertible] interface so that ContainerNodeReport
+// could be used with invokers.
+func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 4)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PublicKey: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.ContainerSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ContainerSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.NumberOfObjects)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field NumberOfObjects: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.NumberOfReports)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field NumberOfReports: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // PutSuccessEventsFromApplicationLog retrieves a set of all emitted events
 // with "PutSuccess" name from the provided [result.ApplicationLog].
 func PutSuccessEventsFromApplicationLog(log *result.ApplicationLog) ([]*PutSuccessEvent, error) {
@@ -1606,110 +1886,6 @@ func (e *EACLChangedEvent) FromStackItem(item *stackitem.Array) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field ContainerID: %w", err)
-	}
-
-	return nil
-}
-
-// StartEstimationEventsFromApplicationLog retrieves a set of all emitted events
-// with "StartEstimation" name from the provided [result.ApplicationLog].
-func StartEstimationEventsFromApplicationLog(log *result.ApplicationLog) ([]*StartEstimationEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*StartEstimationEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "StartEstimation" {
-				continue
-			}
-			event := new(StartEstimationEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize StartEstimationEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to StartEstimationEvent or
-// returns an error if it's not possible to do to so.
-func (e *StartEstimationEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 1 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.Epoch, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field Epoch: %w", err)
-	}
-
-	return nil
-}
-
-// StopEstimationEventsFromApplicationLog retrieves a set of all emitted events
-// with "StopEstimation" name from the provided [result.ApplicationLog].
-func StopEstimationEventsFromApplicationLog(log *result.ApplicationLog) ([]*StopEstimationEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*StopEstimationEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "StopEstimation" {
-				continue
-			}
-			event := new(StopEstimationEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize StopEstimationEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to StopEstimationEvent or
-// returns an error if it's not possible to do to so.
-func (e *StopEstimationEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 1 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.Epoch, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field Epoch: %w", err)
 	}
 
 	return nil

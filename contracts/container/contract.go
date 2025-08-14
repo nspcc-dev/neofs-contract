@@ -3,7 +3,6 @@ package container
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
-	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
@@ -43,6 +42,22 @@ type (
 		Size int
 	}
 
+	// NodeReport is a report by a certain storage node about its storage
+	// engine's volume it uses for a certain container.
+	NodeReport struct {
+		PublicKey       interop.PublicKey
+		ContainerSize   int
+		NumberOfObjects int
+		NumberOfReports int
+	}
+
+	// ContainerEstimation is an average container size and objects number
+	// each container's storage node stores.
+	ContainerEstimation struct {
+		SizeEstimation          int
+		ObjectsNumberEstimation int
+	}
+
 	ContainerSizes struct {
 		CID         []byte
 		Estimations []Estimation
@@ -63,16 +78,18 @@ const (
 	// V2 format.
 	containerIDSize = interop.Hash256Len // SHA256 size
 
-	singleEstimatePrefix     = "est"
-	estimateKeyPrefix        = "cnr"
-	containersWithMetaPrefix = 'm'
-	containerKeyPrefix       = 'x'
-	ownerKeyPrefix           = 'o'
-	deletedKeyPrefix         = 'd'
-	nodesPrefix              = 'n'
-	replicasNumberPrefix     = 'r'
-	nextEpochNodesPrefix     = 'u'
-	estimatePostfixSize      = 10
+	estimationsV2InfoPrefix        = 's'
+	maxNumberOfEstimationsPerEpoch = 3
+	estimationsV2Reporters         = 'i'
+	estimateKeyPrefix              = "cnr"
+	containersWithMetaPrefix       = 'm'
+	containerKeyPrefix             = 'x'
+	ownerKeyPrefix                 = 'o'
+	deletedKeyPrefix               = 'd'
+	nodesPrefix                    = 'n'
+	replicasNumberPrefix           = 'r'
+	nextEpochNodesPrefix           = 'u'
+	estimatePostfixSize            = 10
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -123,6 +140,14 @@ func _deploy(data any, isUpdate bool) {
 				panic("NNS does not know Proxy address")
 			}
 			storage.Put(ctx, proxyContractKey, addrProxy)
+		}
+
+		if version < 24_000 {
+			it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
+			for iterator.Next(it) {
+				k := iterator.Value(it).([]byte)
+				storage.Delete(ctx, k)
+			}
 		}
 
 		return
@@ -1013,6 +1038,162 @@ func GetEACLData(id []byte) []byte {
 	return storage.Get(ctx, append(eACLPrefix, id...)).([]byte)
 }
 
+// PutEstimation method saves container size estimation in contract memory.
+// It can be invoked only by Storage nodes from the network map. This method
+// checks witness based on the provided public key of the Storage node. sizeBytes
+// is a total storage that is used by storage node for storing all marshaled
+// objects that belong to the specified container. objsNumber is a total number
+// of container's object storage node have.
+//
+// If the container doesn't exist, it panics with [cst.NotFoundError].
+func PutEstimation(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
+	common.CheckWitness(pubKey)
+	ctx := storage.GetContext()
+	if getOwnerByID(ctx, cid) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
+
+	if !isStorageNode(ctx, currEpoch.(int), pubKey) {
+		panic("method must be invoked by storage node from network map")
+	}
+
+	infoKey := append([]byte{estimationsV2InfoPrefix}, currEpoch.([]byte)...)
+	infoKey = append(infoKey, cid...)
+	reportersKey := append([]byte{estimationsV2Reporters}, currEpoch.([]byte)...)
+	reportersKey = append(reportersKey, cid...)
+	var estInfo ContainerEstimation
+	estInfoRaw := storage.Get(ctx, infoKey).([]byte)
+	if estInfoRaw != nil {
+		index := -1
+
+		var reportersCounter int
+		var reporter NodeReport
+		it := storage.Find(ctx, reportersKey, storage.ValuesOnly|storage.DeserializeValues)
+		for iterator.Next(it) {
+			reporter = iterator.Value(it).(NodeReport)
+			if index == -1 && reporter.PublicKey.Equals(pubKey) {
+				// reporters have BE counter suffix, this is why iterating them
+				// is always done in ascending order, and reporter's counter
+				// always corresponds to its position in `storage.Find` results
+				index = reportersCounter
+			}
+			reportersCounter++
+		}
+
+		estInfo = std.Deserialize(estInfoRaw).(ContainerEstimation)
+		if index == -1 {
+			estInfo.SizeEstimation = (estInfo.SizeEstimation*reportersCounter + sizeBytes) / (reportersCounter + 1)
+			estInfo.ObjectsNumberEstimation = (estInfo.ObjectsNumberEstimation*reportersCounter + objsNumber) / (reportersCounter + 1)
+
+			reporter = NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
+			storage.Put(ctx, append(reportersKey, counterToBytes(reportersCounter)...), std.Serialize(reporter))
+		} else {
+			if reporter.NumberOfReports == maxNumberOfEstimationsPerEpoch {
+				panic("max number of estimations (" + std.Itoa10(maxNumberOfEstimationsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
+			}
+
+			estInfo.SizeEstimation = (estInfo.SizeEstimation*reportersCounter - reporter.ContainerSize + sizeBytes) / reportersCounter
+			estInfo.ObjectsNumberEstimation = (estInfo.ObjectsNumberEstimation*reportersCounter - reporter.NumberOfObjects + objsNumber) / reportersCounter
+
+			reporter.NumberOfReports += 1
+			reporter.ContainerSize = sizeBytes
+			reporter.NumberOfObjects = objsNumber
+
+			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
+		}
+	} else {
+		estInfo = ContainerEstimation{
+			SizeEstimation:          sizeBytes,
+			ObjectsNumberEstimation: objsNumber,
+		}
+		reporter := NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
+		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
+	}
+
+	storage.Put(ctx, infoKey, std.Serialize(estInfo))
+	runtime.Log("saved container size estimation")
+}
+
+// GetEstimation method returns an average load container's storage
+// nodes have and reported with [PutEstimation].
+//
+// If the container doesn't exist, it panics with [cst.NotFoundError]. If no
+// reports were claimed, it returns zero values.
+func GetEstimation(epoch int, cid interop.Hash256) ContainerEstimation {
+	ctx := storage.GetReadOnlyContext()
+	if getOwnerByID(ctx, cid) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	key := append([]byte{estimationsV2InfoPrefix}, any(epoch).([]byte)...)
+	key = append(key, cid...)
+
+	estInfoRaw := storage.Get(ctx, key).([]byte)
+	if estInfoRaw == nil {
+		return ContainerEstimation{}
+	}
+
+	return std.Deserialize(estInfoRaw).(ContainerEstimation)
+}
+
+// GetEstimationByNode method returns the latest report, that node with pubKey
+// reported for the specified container and epoch via [PutEstimation].
+//
+// If the container doesn't exist, it panics with [cst.NotFoundError]. If no
+// reports were claimed, it returns zero values.
+func GetEstimationByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
+	ctx := storage.GetReadOnlyContext()
+	if getOwnerByID(ctx, cid) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	key := append([]byte{estimationsV2Reporters}, any(epoch).([]byte)...)
+	key = append(key, cid...)
+	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+	for iterator.Next(it) {
+		reporter := iterator.Value(it).(NodeReport)
+		if reporter.PublicKey.Equals(pubKey) {
+			return reporter
+		}
+	}
+
+	return NodeReport{}
+}
+
+// IterateEstimations method returns iterator over nodes' reports
+// that were claimed for specified epoch and container.
+func IterateEstimations(epoch int, cid interop.Hash256) iterator.Iterator {
+	if len(cid) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+
+	key := []byte{estimationsV2Reporters}
+	key = append(key, any(epoch).([]byte)...)
+	key = append(key, cid...)
+
+	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+}
+
+// IterateAllEstimations method returns iterator over all container size estimations
+// that have been registered for the specified epoch. Items returned from this iterator
+// are key-value pairs with keys having container ID as a prefix and values being
+// [ContainerEstimation] structures.
+func IterateAllEstimations(epoch int) iterator.Iterator {
+	ctx := storage.GetReadOnlyContext()
+
+	key := []byte{estimationsV2InfoPrefix}
+	key = append(key, any(epoch).([]byte)...)
+
+	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
+}
+
+// Deprecated: method is no-op, use [PutEstimation] instead.
+//
 // PutContainerSize method saves container size estimation in contract
 // memory. It can be invoked only by Storage nodes from the network map. This method
 // checks witness based on the provided public key of the Storage node.
@@ -1027,23 +1208,16 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 
 	common.CheckWitness(pubKey)
 
-	if !isStorageNode(ctx, pubKey) {
+	if !isStorageNode(ctx, epoch, pubKey) {
 		panic("method must be invoked by storage node from network map")
 	}
 
-	key := estimationKey(epoch, cid, pubKey)
-
-	s := Estimation{
-		From: pubKey,
-		Size: usedSize,
-	}
-
-	storage.Put(ctx, key, std.Serialize(s))
-	updateEstimations(ctx, epoch, cid, pubKey, false)
-
-	runtime.Log("saved container size estimation")
+	runtime.Log("deprecated estimations call")
 }
 
+// Deprecated: method always returns zero values, use [GetEstimation]
+// or [GetEstimationByNode] instead.
+//
 // GetContainerSize method returns the container ID and a slice of container
 // estimations. Container estimation includes the public key of the Storage Node
 // that registered estimation and value of estimation.
@@ -1056,22 +1230,16 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
 func GetContainerSize(id []byte) ContainerSizes {
-	ctx := storage.GetReadOnlyContext()
-
 	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
 		string(id[:len(estimateKeyPrefix)]) != estimateKeyPrefix {
 		panic("wrong estimation prefix")
 	}
 
-	// V2 format
-	// this `id` expected to be from `ListContainerSizes`
-	// therefore it is not contains postfix, we ignore it in the cut.
-	ln := len(id)
-	cid := id[ln-containerIDSize : ln]
-
-	return getContainerSizeEstimation(ctx, id, cid)
+	return ContainerSizes{}
 }
 
+// Deprecated: method always returns empty array. Use [IterateAllEstimations] instead.
+//
 // ListContainerSizes method returns the IDs of container size estimations
 // that have been registered for the specified epoch.
 //
@@ -1079,35 +1247,11 @@ func GetContainerSize(id []byte) ContainerSizes {
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
 func ListContainerSizes(epoch int) [][]byte {
-	ctx := storage.GetReadOnlyContext()
-
-	var buf any = epoch
-
-	key := []byte(estimateKeyPrefix)
-	key = append(key, buf.([]byte)...)
-
-	it := storage.Find(ctx, key, storage.KeysOnly)
-
-	uniq := map[string]struct{}{}
-
-	for iterator.Next(it) {
-		storageKey := iterator.Value(it).([]byte)
-
-		ln := len(storageKey)
-		storageKey = storageKey[:ln-estimatePostfixSize]
-
-		uniq[string(storageKey)] = struct{}{}
-	}
-
-	var result [][]byte
-
-	for k := range uniq {
-		result = append(result, []byte(k))
-	}
-
-	return result
+	return [][]byte{}
 }
 
+// Deprecated: method iterates nothing, use [IterateEstimations] instead.
+//
 // IterateContainerSizes method returns iterator over specific container size
 // estimations that have been registered for the specified epoch. The iterator items
 // are Estimation structures.
@@ -1127,6 +1271,8 @@ func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 }
 
+// Deprecated: method iterates nothing, use [IterateAllEstimations] instead.
+//
 // IterateAllContainerSizes method returns iterator over all container size estimations
 // that have been registered for the specified epoch. Items returned from this iterator
 // are key-value pairs with keys having container ID as a prefix and values being Estimation
@@ -1150,24 +1296,6 @@ func NewEpoch(epochNum int) {
 	common.CheckAlphabetWitness()
 
 	cleanupContainers(ctx, epochNum)
-}
-
-// StartContainerEstimation method produces StartEstimation notification.
-// It can be invoked only by Alphabet nodes of the Inner Ring.
-func StartContainerEstimation(epoch int) {
-	common.CheckAlphabetWitness()
-
-	runtime.Notify("StartEstimation", epoch)
-	runtime.Log("notification has been produced")
-}
-
-// StopContainerEstimation method produces StopEstimation notification.
-// It can be invoked only by Alphabet nodes of the Inner Ring.
-func StopContainerEstimation(epoch int) {
-	common.CheckAlphabetWitness()
-
-	runtime.Notify("StopEstimation", epoch)
-	runtime.Log("notification has been produced")
 }
 
 // Version returns the version of the contract.
@@ -1234,77 +1362,29 @@ func ownerFromBinaryContainer(container []byte) []byte {
 	return container[offset : offset+25] // offset + size of owner
 }
 
-func estimationKey(epoch int, cid []byte, key interop.PublicKey) []byte {
-	var buf any = epoch
-
-	hash := crypto.Ripemd160(key)
-
-	result := []byte(estimateKeyPrefix)
-	result = append(result, buf.([]byte)...)
-	result = append(result, cid...)
-
-	return append(result, hash[:estimatePostfixSize]...)
-}
-
-func getContainerSizeEstimation(ctx storage.Context, key, cid []byte) ContainerSizes {
-	var estimations []Estimation
-
-	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
-	for iterator.Next(it) {
-		est := iterator.Value(it).(Estimation)
-		estimations = append(estimations, est)
-	}
-
-	return ContainerSizes{
-		CID:         cid,
-		Estimations: estimations,
-	}
-}
-
 // isStorageNode looks into _previous_ epoch network map, because storage node
 // announces container size estimation of the previous epoch.
-func isStorageNode(ctx storage.Context, key interop.PublicKey) bool {
+func isStorageNode(ctx storage.Context, epoch int, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	epoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 	return contract.Call(netmapContractAddr, "isStorageNode", contract.ReadOnly, key, epoch-1).(bool)
 }
 
-func updateEstimations(ctx storage.Context, epoch int, cid []byte, pub interop.PublicKey, isUpdate bool) {
-	h := crypto.Ripemd160(pub)
-	estKey := append([]byte(singleEstimatePrefix), cid...)
-	estKey = append(estKey, h...)
-
-	var newEpochs []int
-	rawList := storage.Get(ctx, estKey).([]byte)
-
-	if rawList != nil {
-		epochs := std.Deserialize(rawList).([]int)
-		for _, oldEpoch := range epochs {
-			if !isUpdate && epoch-oldEpoch > cst.CleanupDelta {
-				key := append([]byte(estimateKeyPrefix), convert.ToBytes(oldEpoch)...)
-				key = append(key, cid...)
-				key = append(key, h[:estimatePostfixSize]...)
-				storage.Delete(ctx, key)
-			} else {
-				newEpochs = append(newEpochs, oldEpoch)
-			}
-		}
-	}
-
-	newEpochs = append(newEpochs, epoch)
-	common.SetSerialized(ctx, estKey, newEpochs)
-}
-
 func cleanupContainers(ctx storage.Context, epoch int) {
-	it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
+	it := storage.Find(ctx, []byte{estimationsV2InfoPrefix}, storage.KeysOnly)
 	for iterator.Next(it) {
 		k := iterator.Value(it).([]byte)
-		// V2 format
-		nbytes := k[len(estimateKeyPrefix) : len(k)-containerIDSize-estimatePostfixSize]
+		nbytes := k[1 : len(k)-interop.Hash256Len]
 
-		var n any = nbytes
+		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
+			storage.Delete(ctx, k)
+		}
+	}
+	it = storage.Find(ctx, []byte{estimationsV2Reporters}, storage.KeysOnly)
+	for iterator.Next(it) {
+		k := iterator.Value(it).([]byte)
+		nbytes := k[1 : len(k)-interop.Hash256Len-2] // reporter counter is 2 bytes
 
-		if epoch-n.(int) > cst.TotalCleanupDelta {
+		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
 			storage.Delete(ctx, k)
 		}
 	}
