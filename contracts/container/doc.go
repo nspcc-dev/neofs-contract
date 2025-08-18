@@ -100,13 +100,12 @@ Key-value storage format:
    user-by-user containers
  - 'nnsHasAlias<cid>' -> string
    domains registered for containers in the NNS
- - 'cnr<epoch><cid>' + [10]byte -> std.Serialize(estimation)
-   estimation of the container size sent by the storage node. Key suffix is first
-   10 bytes of RIPEMD-160 hash of the storage node's public key
-   (interop.PublicKey). Here estimation is a type.
- - 'est' + [20]byte -> []<epoch>
-   list of NeoFS epochs when particular storage node sent estimations. Suffix is
-   RIPEMD-160 hash of the storage node's public key (interop.PublicKey).
+ - 's'<epoch><cid> -> std.Serialize(ContainerEstimation)
+   average container size and objects number according to information
+   sent by storage nodes.
+ - 'i'<epoch><cid><counter> -> std.Serialize(NodeEstimation)
+   latest estimation sent by <counter>-th storage node for specified
+   epoch and container; counter is a 2-bytes long BE positive integer
  - 'n<cid><placement_index><counter>' -> interop.PublicKey
    one of the container nodes' public key, counter is 2-bytes long BE
  - 'u<cid><placement_index><counter>' -> interop.PublicKey

@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
@@ -26,6 +25,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
+	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -444,160 +444,258 @@ func TestContainerSizeEstimation(t *testing.T) {
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
 
 	t.Run("must be witnessed by key in the argument", func(t *testing.T) {
-		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putContainerSize",
-			int64(2), cnt.id[:], int64(123), nodes[0].pub)
+		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putEstimation",
+			cnt.id[:], int64(123), int64(456), nodes[0].pub)
 	})
 
-	t.Run("incorrect key fails", func(t *testing.T) {
-		_, err := c.TestInvoke(t, "getContainerSize", cnt.id[:]) // Incorrect length.
-		require.Error(t, err)
-		_, err = c.TestInvoke(t, "getContainerSize", append([]byte("0"), cnt.id[:]...)) // Incorrect prefix.
-		require.Error(t, err)
-	})
-	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
-		int64(2), cnt.id[:], int64(123), nodes[0].pub)
-	estimations := []estimation{{nodes[0].pub, 123}}
-	checkEstimations(t, c, 2, cnt, estimations...)
+	t.Run("not a netmap node", func(t *testing.T) {
+		notNode := c.NewAccount(t)
 
-	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
-		int64(2), cnt.id[:], int64(42), nodes[1].pub)
-	estimations = append(estimations, estimation{nodes[1].pub, int64(42)})
-	checkEstimations(t, c, 2, cnt, estimations...)
-
-	t.Run("add estimation for a different epoch", func(t *testing.T) {
-		c.WithSigners(nodes[2].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
-			int64(1), cnt.id[:], int64(777), nodes[2].pub)
-		checkEstimations(t, c, 1, cnt, estimation{nodes[2].pub, 777})
-		checkEstimations(t, c, 2, cnt, estimations...)
+		c.WithSigners(notNode).InvokeFail(t, "must be invoked by storage node", "putEstimation",
+			cnt.id[:], int64(123), int64(456), notNode.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes())
 	})
 
-	c.WithSigners(nodes[2].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
-		int64(3), cnt.id[:], int64(888), nodes[2].pub)
-	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
+	t.Run("max number of reports", func(t *testing.T) {
+		const allowedReportsNumber = 3
 
-	// Remove old estimations.
-	for i := int64(1); i <= containerconst.CleanupDelta; i++ {
-		cNm.Invoke(t, stackitem.Null{}, "newEpoch", 2+i)
-		checkEstimations(t, c, 2, cnt, estimations...)
-		checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
-	}
-
-	epoch := int64(2 + containerconst.CleanupDelta + 1)
-	cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
-	checkEstimations(t, c, 2, cnt, estimations...) // not yet removed
-	checkEstimations(t, c, 3, cnt, estimation{nodes[2].pub, 888})
-
-	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putContainerSize",
-		epoch, cnt.id[:], int64(999), nodes[1].pub)
-
-	checkEstimations(t, c, 2, cnt, estimations[:1]...)
-	checkEstimations(t, c, epoch, cnt, estimation{nodes[1].pub, int64(999)})
-
-	// Estimation from node 0 should be cleaned during epoch tick.
-	for i := int64(1); i <= containerconst.TotalCleanupDelta-containerconst.CleanupDelta; i++ {
-		cNm.Invoke(t, stackitem.Null{}, "newEpoch", epoch+i)
-	}
-	checkEstimations(t, c, 2, cnt)
-	checkEstimations(t, c, epoch, cnt, estimation{nodes[1].pub, int64(999)})
-}
-
-type estimation struct {
-	from []byte
-	size int64
-}
-
-func checkEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt testContainer, estimations ...estimation) {
-	// Check that listed estimations match expected
-	listEstimations := getListEstimations(t, c, epoch, cnt)
-	requireEstimationsMatch(t, estimations, listEstimations)
-
-	// Check that iterated estimations match expected
-	iterEstimations := getIterEstimations(t, c, epoch, cnt.id[:])
-	requireEstimationsMatch(t, estimations, iterEstimations)
-}
-
-func getListEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cnt testContainer) []estimation {
-	s, err := c.TestInvoke(t, "listContainerSizes", epoch)
-	require.NoError(t, err)
-
-	var id []byte
-
-	// When there are no estimations, listContainerSizes can also return nothing.
-	item := s.Top().Item()
-	switch it := item.(type) {
-	case stackitem.Null:
-		require.Equal(t, stackitem.Null{}, it)
-		return make([]estimation, 0)
-	case *stackitem.Array:
-		id, err = it.Value().([]stackitem.Item)[0].TryBytes()
-		require.NoError(t, err)
-	default:
-		require.FailNow(t, "invalid return type for listContainerSizes")
-	}
-
-	s, err = c.TestInvoke(t, "getContainerSize", id)
-	require.NoError(t, err)
-
-	// Here and below we assume that all estimations in the contract are related to our container
-	sizes := s.Top().Array()
-	require.Equal(t, cnt.id[:], sizes[0].Value())
-
-	return convertStackToEstimations(sizes[1].Value().([]stackitem.Item))
-}
-
-func getIterEstimations(t *testing.T, c *neotest.ContractInvoker, epoch int64, cid []byte) []estimation {
-	iterStack, err := c.TestInvoke(t, "iterateAllContainerSizes", epoch)
-	require.NoError(t, err)
-	iter := iterStack.Pop().Value().(*storage.Iterator)
-
-	// Iterator contains pairs: key + estimation (as stack item).
-	pairs := iteratorToArray(iter)
-	estimationItems := make([]stackitem.Item, len(pairs))
-	for i, pair := range pairs {
-		pairItems := pair.Value().([]stackitem.Item)
-		estimationItems[i] = pairItems[1]
-
-		// Assuming a single container.
-		cntId := pairItems[0].Value().([]byte)
-		require.Less(t, len(cid), len(cntId))
-		require.Equal(t, cid, cntId[:len(cid)])
-	}
-	cidSpecificIter, err := c.TestInvoke(t, "iterateContainerSizes", epoch, cid)
-	require.NoError(t, err)
-	iter = cidSpecificIter.Pop().Value().(*storage.Iterator)
-
-	// Iterator contains pairs: key + estimation (as stack item).
-	cidSpecificArray := iteratorToArray(iter)
-	require.Equal(t, estimationItems, cidSpecificArray)
-
-	return convertStackToEstimations(estimationItems)
-}
-
-func convertStackToEstimations(stackItems []stackitem.Item) []estimation {
-	estimations := make([]estimation, 0, len(stackItems))
-	for _, item := range stackItems {
-		value := item.Value().([]stackitem.Item)
-		from := value[0].Value().([]byte)
-		size := value[1].Value().(*big.Int)
-
-		estimation := estimation{from: from, size: size.Int64()}
-		estimations = append(estimations, estimation)
-	}
-	return estimations
-}
-
-func requireEstimationsMatch(t *testing.T, expected []estimation, actual []estimation) {
-	require.Equal(t, len(expected), len(actual))
-	for _, e := range expected {
-		found := false
-		for _, a := range actual {
-			if found = bytes.Equal(e.from, a.from); found {
-				require.Equal(t, e.size, a.size)
-				break
-			}
+		for range allowedReportsNumber {
+			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+				cnt.id[:], int64(123), int64(456), nodes[0].pub,
+			)
 		}
-		require.True(t, found, "expected estimation from %x to be present", e.from)
-	}
+
+		c.WithSigners(nodes[0].signer).InvokeFail(t, "max number of estimations", "putEstimation",
+			cnt.id[:], int64(123), int64(456), nodes[0].pub,
+		)
+	})
+
+	t.Run("result numbers", func(t *testing.T) {
+		type record struct{ size, objs int64 }
+		type tc struct {
+			name    string
+			reports []record
+			result  record
+		}
+
+		cases := []tc{
+			{
+				name:    "empty records",
+				reports: nil,
+				result:  record{size: 0, objs: 0},
+			},
+			{
+				name:    "single report",
+				reports: []record{{size: 1234, objs: 5678}},
+				result:  record{size: 1234, objs: 5678},
+			},
+			{
+				name:    "zero values",
+				reports: []record{{size: 0, objs: 0}},
+				result:  record{size: 0, objs: 0},
+			},
+			{
+				name:    "same values",
+				reports: []record{{size: 12345, objs: 67890}, {size: 12345, objs: 67890}, {size: 12345, objs: 67890}},
+				result:  record{size: 12345, objs: 67890},
+			},
+			{
+				name:    "average values",
+				reports: []record{{size: 10, objs: 100}, {size: 50, objs: 500}, {size: 500, objs: 5000}},
+				result:  record{size: 186, objs: 1866},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, anotherCnr := addContainer(t, c, cBal)
+
+				for i, r := range tc.reports {
+					c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+						anotherCnr.id[:], r.size, r.objs, nodes[i].pub,
+					)
+				}
+
+				res, err := c.TestInvoke(t, "getEstimation", int64(2), anotherCnr.id[:])
+				require.NoError(t, err, "receiving estimations")
+
+				ii := res.Top().Array()
+				size, err := ii[0].TryInteger()
+				require.NoError(t, err)
+				objs, err := ii[1].TryInteger()
+				require.NoError(t, err)
+
+				require.Equal(t, tc.result.size, size.Int64(), "sizes are not equal")
+				require.Equal(t, tc.result.objs, objs.Int64(), "object numbers are not equal")
+			})
+		}
+	})
+
+	t.Run("get estimations by node", func(t *testing.T) {
+		_, anotherCnr := addContainer(t, c, cBal)
+
+		const (
+			nodeSize1 = 1234
+			nodeObjs1 = 5678
+			nodeSize2 = 4321
+			nodeObjs2 = 8765
+		)
+
+		// node 1
+		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			anotherCnr.id[:], nodeSize1, nodeObjs1, nodes[0].pub,
+		)
+
+		// node 2
+		c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			anotherCnr.id[:], nodeSize2, nodeObjs2, nodes[1].pub,
+		)
+
+		// averages for the whole container
+		res, err := c.TestInvoke(t, "getEstimation", int64(2), anotherCnr.id[:])
+		require.NoError(t, err, "receiving estimations")
+		ii := res.Top().Array()
+		size, err := ii[0].TryInteger()
+		require.NoError(t, err)
+		objs, err := ii[1].TryInteger()
+		require.NoError(t, err)
+		require.Equal(t, int64((nodeSize1+nodeSize2)/2), size.Int64(), "average sizes are not equal")
+		require.Equal(t, int64((nodeObjs1+nodeObjs2)/2), objs.Int64(), "average object numbers are not equal")
+
+		// separate value for node 1
+		res, err = c.TestInvoke(t, "getEstimationByNode", int64(2), anotherCnr.id[:], nodes[0].pub)
+		require.NoError(t, err, "receiving estimations for node 1")
+		ii = res.Top().Array()
+		pk, err := ii[0].TryBytes()
+		require.NoError(t, err)
+		size, err = ii[1].TryInteger()
+		require.NoError(t, err)
+		objs, err = ii[2].TryInteger()
+		require.NoError(t, err)
+		reportNumber, err := ii[3].TryInteger()
+		require.NoError(t, err)
+
+		require.Equal(t, nodes[0].pub, pk)
+		require.Equal(t, int64(nodeSize1), size.Int64(), "node 1 sizes are not equal")
+		require.Equal(t, int64(nodeObjs1), objs.Int64(), "node 1 object numbers are not equal")
+		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 1 report number")
+
+		// separate value for node 2
+		res, err = c.TestInvoke(t, "getEstimationByNode", int64(2), anotherCnr.id[:], nodes[1].pub)
+		require.NoError(t, err, "receiving estimations for node 2")
+		ii = res.Top().Array()
+		pk, err = ii[0].TryBytes()
+		require.NoError(t, err)
+		size, err = ii[1].TryInteger()
+		require.NoError(t, err)
+		objs, err = ii[2].TryInteger()
+		require.NoError(t, err)
+		reportNumber, err = ii[3].TryInteger()
+		require.NoError(t, err)
+
+		require.Equal(t, nodes[1].pub, pk)
+		require.Equal(t, int64(nodeSize2), size.Int64(), "node 2 sizes are not equal")
+		require.Equal(t, int64(nodeObjs2), objs.Int64(), "node 2 object numbers are not equal")
+		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 2 report number")
+	})
+
+	t.Run("iterate container's estimations", func(t *testing.T) {
+		const reportersNumber = 3
+		_, anotherCnr := addContainer(t, c, cBal)
+
+		for i := range reportersNumber {
+			c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+				anotherCnr.id[:], i, i, nodes[i].pub,
+			)
+		}
+
+		res, err := c.TestInvoke(t, "iterateEstimations", int64(2), anotherCnr.id[:])
+		require.NoError(t, err, "receiving estimations iterator")
+
+		it := res.Pop().Value().(*storage.Iterator)
+		reporters := iteratorToArray(it)
+		require.Len(t, reporters, reportersNumber, "reporters number are not equal")
+		for i := range reportersNumber {
+			fields := reporters[i].Value().([]stackitem.Item)
+			pk, err := fields[0].TryBytes()
+			require.NoError(t, err)
+			size, err := fields[1].TryInteger()
+			require.NoError(t, err)
+			objs, err := fields[2].TryInteger()
+			require.NoError(t, err)
+			reportNumber, err := fields[3].TryInteger()
+			require.NoError(t, err)
+
+			require.Equal(t, nodes[i].pub, pk)
+			require.Equal(t, int64(i), size.Int64())
+			require.Equal(t, int64(i), objs.Int64())
+			require.Equal(t, int64(1), reportNumber.Int64())
+		}
+	})
+
+	t.Run("iterate all containers", func(t *testing.T) {
+		const numOfContainers = 3
+		const newEpoch = 3
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(newEpoch))
+
+		type cnrEstimation struct {
+			size int64
+			objs int64
+		}
+
+		want := make(map[cid.ID]cnrEstimation)
+		for i := range numOfContainers {
+			_, cnr := addContainer(t, c, cBal)
+			want[cnr.id] = cnrEstimation{size: int64(i), objs: int64(i)}
+
+			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+				cnr.id[:], i, i, nodes[0].pub,
+			)
+		}
+
+		res, err := c.TestInvoke(t, "iterateAllEstimations", int64(newEpoch))
+		require.NoError(t, err, "receiving all estimations iterator")
+
+		it := res.Pop().Value().(*storage.Iterator)
+		estimations := iteratorToArray(it)
+		require.Len(t, estimations, numOfContainers, "unexpected estimations number")
+		for _, e := range estimations {
+			kv := e.Value().([]stackitem.Item)
+			cID, err := kv[0].TryBytes()
+			require.NoError(t, err)
+			require.Len(t, cID, cid.Size)
+
+			v := kv[1].Value().([]stackitem.Item)
+			size, err := v[0].TryInteger()
+			require.NoError(t, err)
+			objs, err := v[1].TryInteger()
+			require.NoError(t, err)
+
+			require.Equal(t, want[cid.ID(cID)].size, size.Int64())
+			require.Equal(t, want[cid.ID(cID)].objs, objs.Int64())
+		}
+	})
+
+	t.Run("cleanup estimations", func(t *testing.T) {
+		const newEpoch = 100
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch)
+
+		_, anotherCnr := addContainer(t, c, cBal)
+		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			anotherCnr.id[:], 123, 455, nodes[0].pub,
+		)
+		res, err := c.TestInvoke(t, "iterateAllEstimations", int64(newEpoch))
+		require.NoError(t, err, "receiving all estimations iterator")
+		it := res.Pop().Value().(*storage.Iterator)
+		estimations := iteratorToArray(it)
+		require.Len(t, estimations, 1)
+
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch+containerconst.TotalCleanupDelta+1)
+		res, err = c.TestInvoke(t, "iterateAllEstimations", int64(newEpoch))
+		require.NoError(t, err, "receiving all estimations iterator")
+		it = res.Pop().Value().(*storage.Iterator)
+		estimations = iteratorToArray(it)
+		require.Empty(t, estimations)
+	})
 }
 
 func TestContainerList(t *testing.T) {

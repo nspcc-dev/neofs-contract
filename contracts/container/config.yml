@@ -1,6 +1,9 @@
 name: "NeoFS Container"
 supportedstandards: ["NEP-22"]
-safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures", "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes", "version", "getContainerData", "getEACLData"]
+safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
+              "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes",
+              "version", "getContainerData", "getEACLData", "getEstimation", "getEstimationByNode",
+              "iterateEstimations", "iterateAllEstimations"]
 permissions:
   - methods: ["update", "addKey", "transferX",
               "register", "registerTLD", "addRecord", "deleteRecords", "subscribeForNewEpoch"]
@@ -37,14 +40,6 @@ events:
     parameters:
       - name: containerID
         type: Hash256
-  - name: StartEstimation
-    parameters:
-      - name: epoch
-        type: Integer
-  - name: StopEstimation
-    parameters:
-      - name: epoch
-        type: Integer
   - name: NodesUpdate
     parameters:
       - name: ContainerID
