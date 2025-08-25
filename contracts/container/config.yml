@@ -2,8 +2,8 @@ name: "NeoFS Container"
 supportedstandards: ["NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
               "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes",
-              "version", "getContainerData", "getEACLData", "getEstimation", "getEstimationByNode",
-              "iterateEstimations", "iterateAllEstimations"]
+              "version", "getContainerData", "getEACLData", "getEstimation", "getReportByNode",
+              "iterateReports", "iterateAllEstimations"]
 permissions:
   - methods: ["update", "addKey", "transferX",
               "register", "registerTLD", "addRecord", "deleteRecords", "subscribeForNewEpoch"]

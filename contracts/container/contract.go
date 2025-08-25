@@ -1038,7 +1038,7 @@ func GetEACLData(id []byte) []byte {
 	return storage.Get(ctx, append(eACLPrefix, id...)).([]byte)
 }
 
-// PutEstimation method saves container size estimation in contract memory.
+// PutReport method saves container's state report in contract memory.
 // It can be invoked only by Storage nodes from the network map. This method
 // checks witness based on the provided public key of the Storage node. sizeBytes
 // is a total storage that is used by storage node for storing all marshaled
@@ -1046,7 +1046,7 @@ func GetEACLData(id []byte) []byte {
 // of container's object storage node have.
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError].
-func PutEstimation(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
+func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
 	common.CheckWitness(pubKey)
 	ctx := storage.GetContext()
 	if getOwnerByID(ctx, cid) == nil {
@@ -1118,7 +1118,7 @@ func PutEstimation(cid interop.Hash256, sizeBytes, objsNumber int, pubKey intero
 }
 
 // GetEstimation method returns an average load container's storage
-// nodes have and reported with [PutEstimation].
+// nodes have and reported with [PutReport].
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
@@ -1139,12 +1139,12 @@ func GetEstimation(epoch int, cid interop.Hash256) ContainerEstimation {
 	return std.Deserialize(estInfoRaw).(ContainerEstimation)
 }
 
-// GetEstimationByNode method returns the latest report, that node with pubKey
-// reported for the specified container and epoch via [PutEstimation].
+// GetReportByNode method returns the latest report, that node with pubKey
+// reported for the specified container and epoch via [PutReport].
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
-func GetEstimationByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
+func GetReportByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
 	ctx := storage.GetReadOnlyContext()
 	if getOwnerByID(ctx, cid) == nil {
 		panic(cst.NotFoundError)
@@ -1163,9 +1163,9 @@ func GetEstimationByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKe
 	return NodeReport{}
 }
 
-// IterateEstimations method returns iterator over nodes' reports
+// IterateReports method returns iterator over nodes' reports
 // that were claimed for specified epoch and container.
-func IterateEstimations(epoch int, cid interop.Hash256) iterator.Iterator {
+func IterateReports(epoch int, cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
 	}
@@ -1192,7 +1192,7 @@ func IterateAllEstimations(epoch int) iterator.Iterator {
 	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
 }
 
-// Deprecated: method is no-op, use [PutEstimation] instead.
+// Deprecated: method is no-op, use [PutReport] instead.
 //
 // PutContainerSize method saves container size estimation in contract
 // memory. It can be invoked only by Storage nodes from the network map. This method
@@ -1216,7 +1216,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 }
 
 // Deprecated: method always returns zero values, use [GetEstimation]
-// or [GetEstimationByNode] instead.
+// or [GetReportByNode] instead.
 //
 // GetContainerSize method returns the container ID and a slice of container
 // estimations. Container estimation includes the public key of the Storage Node
@@ -1250,7 +1250,7 @@ func ListContainerSizes(epoch int) [][]byte {
 	return [][]byte{}
 }
 
-// Deprecated: method iterates nothing, use [IterateEstimations] instead.
+// Deprecated: method iterates nothing, use [IterateReports] instead.
 //
 // IterateContainerSizes method returns iterator over specific container size
 // estimations that have been registered for the specified epoch. The iterator items
