@@ -203,9 +203,9 @@ func (c *ContractReader) GetEstimation(epoch *big.Int, cid util.Uint256) (*Conta
 	return itemToContainerContainerEstimation(unwrap.Item(c.invoker.Call(c.hash, "getEstimation", epoch, cid)))
 }
 
-// GetEstimationByNode invokes `getEstimationByNode` method of contract.
-func (c *ContractReader) GetEstimationByNode(epoch *big.Int, cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
-	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getEstimationByNode", epoch, cid, pubKey)))
+// GetReportByNode invokes `getReportByNode` method of contract.
+func (c *ContractReader) GetReportByNode(epoch *big.Int, cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
+	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByNode", epoch, cid, pubKey)))
 }
 
 // IterateAllContainerSizes invokes `iterateAllContainerSizes` method of contract.
@@ -250,18 +250,18 @@ func (c *ContractReader) IterateContainerSizesExpanded(epoch *big.Int, cid util.
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateContainerSizes", _numOfIteratorItems, epoch, cid))
 }
 
-// IterateEstimations invokes `iterateEstimations` method of contract.
-func (c *ContractReader) IterateEstimations(epoch *big.Int, cid util.Uint256) (uuid.UUID, result.Iterator, error) {
-	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateEstimations", epoch, cid))
+// IterateReports invokes `iterateReports` method of contract.
+func (c *ContractReader) IterateReports(epoch *big.Int, cid util.Uint256) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateReports", epoch, cid))
 }
 
-// IterateEstimationsExpanded is similar to IterateEstimations (uses the same contract
+// IterateReportsExpanded is similar to IterateReports (uses the same contract
 // method), but can be useful if the server used doesn't support sessions and
 // doesn't expand iterators. It creates a script that will get the specified
 // number of result items from the iterator right in the VM and return them to
 // you. It's only limited by VM stack and GAS available for RPC invocations.
-func (c *ContractReader) IterateEstimationsExpanded(epoch *big.Int, cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
-	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateEstimations", _numOfIteratorItems, epoch, cid))
+func (c *ContractReader) IterateReportsExpanded(epoch *big.Int, cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateReports", _numOfIteratorItems, epoch, cid))
 }
 
 // ListContainerSizes invokes `listContainerSizes` method of contract.
@@ -488,28 +488,6 @@ func (c *Contract) PutEACLUnsigned(eACL []byte, invocScript []byte, verifScript 
 	return c.actor.MakeUnsignedCall(c.hash, "putEACL", nil, eACL, invocScript, verifScript, sessionToken)
 }
 
-// PutEstimation creates a transaction invoking `putEstimation` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) PutEstimation(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "putEstimation", cid, sizeBytes, objsNumber, pubKey)
-}
-
-// PutEstimationTransaction creates a transaction invoking `putEstimation` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) PutEstimationTransaction(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "putEstimation", cid, sizeBytes, objsNumber, pubKey)
-}
-
-// PutEstimationUnsigned creates a transaction invoking `putEstimation` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) PutEstimationUnsigned(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "putEstimation", nil, cid, sizeBytes, objsNumber, pubKey)
-}
-
 // Put2 creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -574,6 +552,28 @@ func (c *Contract) Put3Transaction(container []byte, signature []byte, publicKey
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) Put3Unsigned(container []byte, signature []byte, publicKey *keys.PublicKey, token []byte, name string, zone string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "put", nil, container, signature, publicKey, token, name, zone)
+}
+
+// PutReport creates a transaction invoking `putReport` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) PutReport(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "putReport", cid, sizeBytes, objsNumber, pubKey)
+}
+
+// PutReportTransaction creates a transaction invoking `putReport` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) PutReportTransaction(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "putReport", cid, sizeBytes, objsNumber, pubKey)
+}
+
+// PutReportUnsigned creates a transaction invoking `putReport` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) PutReportUnsigned(cid util.Uint256, sizeBytes *big.Int, objsNumber *big.Int, pubKey *keys.PublicKey) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "putReport", nil, cid, sizeBytes, objsNumber, pubKey)
 }
 
 // Remove creates a transaction invoking `remove` method of the contract.

@@ -444,14 +444,14 @@ func TestContainerSizeEstimation(t *testing.T) {
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
 
 	t.Run("must be witnessed by key in the argument", func(t *testing.T) {
-		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putEstimation",
+		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putReport",
 			cnt.id[:], int64(123), int64(456), nodes[0].pub)
 	})
 
 	t.Run("not a netmap node", func(t *testing.T) {
 		notNode := c.NewAccount(t)
 
-		c.WithSigners(notNode).InvokeFail(t, "must be invoked by storage node", "putEstimation",
+		c.WithSigners(notNode).InvokeFail(t, "must be invoked by storage node", "putReport",
 			cnt.id[:], int64(123), int64(456), notNode.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes())
 	})
 
@@ -459,12 +459,12 @@ func TestContainerSizeEstimation(t *testing.T) {
 		const allowedReportsNumber = 3
 
 		for range allowedReportsNumber {
-			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 				cnt.id[:], int64(123), int64(456), nodes[0].pub,
 			)
 		}
 
-		c.WithSigners(nodes[0].signer).InvokeFail(t, "max number of estimations", "putEstimation",
+		c.WithSigners(nodes[0].signer).InvokeFail(t, "max number of estimations", "putReport",
 			cnt.id[:], int64(123), int64(456), nodes[0].pub,
 		)
 	})
@@ -510,7 +510,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 				_, anotherCnr := addContainer(t, c, cBal)
 
 				for i, r := range tc.reports {
-					c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+					c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putReport",
 						anotherCnr.id[:], r.size, r.objs, nodes[i].pub,
 					)
 				}
@@ -541,12 +541,12 @@ func TestContainerSizeEstimation(t *testing.T) {
 		)
 
 		// node 1
-		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 			anotherCnr.id[:], nodeSize1, nodeObjs1, nodes[0].pub,
 		)
 
 		// node 2
-		c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+		c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putReport",
 			anotherCnr.id[:], nodeSize2, nodeObjs2, nodes[1].pub,
 		)
 
@@ -562,7 +562,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 		require.Equal(t, int64((nodeObjs1+nodeObjs2)/2), objs.Int64(), "average object numbers are not equal")
 
 		// separate value for node 1
-		res, err = c.TestInvoke(t, "getEstimationByNode", int64(2), anotherCnr.id[:], nodes[0].pub)
+		res, err = c.TestInvoke(t, "getReportByNode", int64(2), anotherCnr.id[:], nodes[0].pub)
 		require.NoError(t, err, "receiving estimations for node 1")
 		ii = res.Top().Array()
 		pk, err := ii[0].TryBytes()
@@ -580,7 +580,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 1 report number")
 
 		// separate value for node 2
-		res, err = c.TestInvoke(t, "getEstimationByNode", int64(2), anotherCnr.id[:], nodes[1].pub)
+		res, err = c.TestInvoke(t, "getReportByNode", int64(2), anotherCnr.id[:], nodes[1].pub)
 		require.NoError(t, err, "receiving estimations for node 2")
 		ii = res.Top().Array()
 		pk, err = ii[0].TryBytes()
@@ -603,12 +603,12 @@ func TestContainerSizeEstimation(t *testing.T) {
 		_, anotherCnr := addContainer(t, c, cBal)
 
 		for i := range reportersNumber {
-			c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putReport",
 				anotherCnr.id[:], i, i, nodes[i].pub,
 			)
 		}
 
-		res, err := c.TestInvoke(t, "iterateEstimations", int64(2), anotherCnr.id[:])
+		res, err := c.TestInvoke(t, "iterateReports", int64(2), anotherCnr.id[:])
 		require.NoError(t, err, "receiving estimations iterator")
 
 		it := res.Pop().Value().(*storage.Iterator)
@@ -647,7 +647,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 			_, cnr := addContainer(t, c, cBal)
 			want[cnr.id] = cnrEstimation{size: int64(i), objs: int64(i)}
 
-			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 				cnr.id[:], i, i, nodes[0].pub,
 			)
 		}
@@ -680,7 +680,7 @@ func TestContainerSizeEstimation(t *testing.T) {
 		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch)
 
 		_, anotherCnr := addContainer(t, c, cBal)
-		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putEstimation",
+		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 			anotherCnr.id[:], 123, 455, nodes[0].pub,
 		)
 		res, err := c.TestInvoke(t, "iterateAllEstimations", int64(newEpoch))
