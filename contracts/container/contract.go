@@ -89,7 +89,6 @@ const (
 	nodesPrefix                = 'n'
 	replicasNumberPrefix       = 'r'
 	nextEpochNodesPrefix       = 'u'
-	estimatePostfixSize        = 10
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
