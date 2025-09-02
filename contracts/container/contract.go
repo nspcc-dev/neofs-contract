@@ -1192,13 +1192,13 @@ func IterateAllEstimations(epoch int) iterator.Iterator {
 	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
 }
 
-// Deprecated: method is no-op, use [PutReport] instead.
-//
 // PutContainerSize method saves container size estimation in contract
 // memory. It can be invoked only by Storage nodes from the network map. This method
 // checks witness based on the provided public key of the Storage node.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+//
+// Deprecated: method is no-op, use [PutReport] instead.
 func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
 	ctx := storage.GetContext()
 
@@ -1215,9 +1215,6 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 	runtime.Log("deprecated estimations call")
 }
 
-// Deprecated: method always returns zero values, use [GetEstimation]
-// or [GetReportByNode] instead.
-//
 // GetContainerSize method returns the container ID and a slice of container
 // estimations. Container estimation includes the public key of the Storage Node
 // that registered estimation and value of estimation.
@@ -1229,6 +1226,9 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 // Deprecated: please use IterateContainerSizes API, this one is not convenient
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
+//
+// Deprecated: method always returns zero values, use [GetEstimation]
+// or [GetReportByNode] instead.
 func GetContainerSize(id []byte) ContainerSizes {
 	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
 		string(id[:len(estimateKeyPrefix)]) != estimateKeyPrefix {
@@ -1238,23 +1238,23 @@ func GetContainerSize(id []byte) ContainerSizes {
 	return ContainerSizes{}
 }
 
-// Deprecated: method always returns empty array. Use [IterateAllEstimations] instead.
-//
 // ListContainerSizes method returns the IDs of container size estimations
 // that have been registered for the specified epoch.
 //
 // Deprecated: please use IterateAllContainerSizes API, this one is not convenient
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
+//
+// Deprecated: method always returns empty array. Use [IterateAllEstimations] instead.
 func ListContainerSizes(epoch int) [][]byte {
 	return [][]byte{}
 }
 
-// Deprecated: method iterates nothing, use [IterateReports] instead.
-//
 // IterateContainerSizes method returns iterator over specific container size
 // estimations that have been registered for the specified epoch. The iterator items
 // are Estimation structures.
+//
+// Deprecated: method iterates nothing, use [IterateReports] instead.
 func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("wrong container id")
@@ -1271,12 +1271,12 @@ func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
 	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 }
 
-// Deprecated: method iterates nothing, use [IterateAllEstimations] instead.
-//
 // IterateAllContainerSizes method returns iterator over all container size estimations
 // that have been registered for the specified epoch. Items returned from this iterator
 // are key-value pairs with keys having container ID as a prefix and values being Estimation
 // structures.
+//
+// Deprecated: method iterates nothing, use [IterateAllEstimations] instead.
 func IterateAllContainerSizes(epoch int) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 
