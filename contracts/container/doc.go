@@ -56,21 +56,6 @@ present.
 	    type: PublicKey
 	  - name: token
 	    type: ByteArray
-
-StartEstimation notification. This notification is produced when Storage nodes
-should exchange estimation values of container sizes among other Storage nodes.
-
-	StartEstimation:
-	  - name: epoch
-	    type: Integer
-
-StopEstimation notification. This notification is produced when Storage nodes
-should calculate average container size based on received estimations and store
-it in Container contract.
-
-	StopEstimation:
-	  - name: epoch
-	    type: Integer
 */
 package container
 
