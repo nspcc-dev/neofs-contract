@@ -3,7 +3,7 @@ supportedstandards: ["NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
               "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes",
               "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
-              "iterateReports", "iterateAllReportSummaries"]
+              "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota"]
 permissions:
   - methods: ["update", "addKey", "transferX",
               "register", "registerTLD", "addRecord", "deleteRecords", "subscribeForNewEpoch"]
@@ -52,6 +52,22 @@ events:
         type: hash256
       - name: Meta
         type: Map
+  - name: ContainerQuotaSet
+    parameters:
+      - name: ContainerID
+        type: Hash256
+      - name: LimitValue
+        type: Integer
+      - name: Hard
+        type: Boolean
+  - name: UserQuotaSet
+    parameters:
+      - name: UserID
+        type: ByteArray # 25 byte N3 address
+      - name: LimitValue
+        type: Integer
+      - name: Hard
+        type: Boolean
 overloads:
   putMeta: put
   putNamedOverloaded: put

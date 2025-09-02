@@ -60,6 +60,12 @@ type ContainerNodeReportSummary struct {
 	NumberOfObjects *big.Int
 }
 
+// ContainerQuota is a contract-specific container.Quota type used by its methods.
+type ContainerQuota struct {
+	SoftLimit *big.Int
+	HardLimit *big.Int
+}
+
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
 type PutSuccessEvent struct {
 	ContainerID util.Uint256
@@ -104,6 +110,20 @@ type ObjectPutEvent struct {
 	ContainerID util.Uint256
 	ObjectID    util.Uint256
 	Meta        map[any]any
+}
+
+// ContainerQuotaSetEvent represents "ContainerQuotaSet" event emitted by the contract.
+type ContainerQuotaSetEvent struct {
+	ContainerID util.Uint256
+	LimitValue  *big.Int
+	Hard        bool
+}
+
+// UserQuotaSetEvent represents "UserQuotaSet" event emitted by the contract.
+type UserQuotaSetEvent struct {
+	UserID     []byte
+	LimitValue *big.Int
+	Hard       bool
 }
 
 // Invoker is used by ContractReader to call various safe methods.
@@ -152,6 +172,11 @@ func New(actor Actor, hash util.Uint160) *Contract {
 // Alias invokes `alias` method of contract.
 func (c *ContractReader) Alias(cid []byte) (string, error) {
 	return unwrap.UTF8String(c.invoker.Call(c.hash, "alias", cid))
+}
+
+// ContainerQuota invokes `containerQuota` method of contract.
+func (c *ContractReader) ContainerQuota(cID util.Uint256) (*ContainerQuota, error) {
+	return itemToContainerQuota(unwrap.Item(c.invoker.Call(c.hash, "containerQuota", cID)))
 }
 
 // ContainersOf invokes `containersOf` method of contract.
@@ -300,6 +325,11 @@ func (c *ContractReader) ReplicasNumbers(cID util.Uint256) (uuid.UUID, result.It
 // you. It's only limited by VM stack and GAS available for RPC invocations.
 func (c *ContractReader) ReplicasNumbersExpanded(cID util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "replicasNumbers", _numOfIteratorItems, cID))
+}
+
+// UserQuota invokes `userQuota` method of contract.
+func (c *ContractReader) UserQuota(user []byte) (*ContainerQuota, error) {
+	return itemToContainerQuota(unwrap.Item(c.invoker.Call(c.hash, "userQuota", user)))
 }
 
 // VerifyPlacementSignatures invokes `verifyPlacementSignatures` method of contract.
@@ -618,6 +648,94 @@ func (c *Contract) SetEACLTransaction(eACL []byte, signature []byte, publicKey *
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetEACLUnsigned(eACL []byte, signature []byte, publicKey *keys.PublicKey, token []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setEACL", nil, eACL, signature, publicKey, token)
+}
+
+// SetHardContainerQuota creates a transaction invoking `setHardContainerQuota` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetHardContainerQuota(cID util.Uint256, size *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setHardContainerQuota", cID, size)
+}
+
+// SetHardContainerQuotaTransaction creates a transaction invoking `setHardContainerQuota` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetHardContainerQuotaTransaction(cID util.Uint256, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setHardContainerQuota", cID, size)
+}
+
+// SetHardContainerQuotaUnsigned creates a transaction invoking `setHardContainerQuota` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetHardContainerQuotaUnsigned(cID util.Uint256, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setHardContainerQuota", nil, cID, size)
+}
+
+// SetHardUserQuota creates a transaction invoking `setHardUserQuota` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetHardUserQuota(user []byte, size *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setHardUserQuota", user, size)
+}
+
+// SetHardUserQuotaTransaction creates a transaction invoking `setHardUserQuota` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetHardUserQuotaTransaction(user []byte, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setHardUserQuota", user, size)
+}
+
+// SetHardUserQuotaUnsigned creates a transaction invoking `setHardUserQuota` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetHardUserQuotaUnsigned(user []byte, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setHardUserQuota", nil, user, size)
+}
+
+// SetSoftContainerQuota creates a transaction invoking `setSoftContainerQuota` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetSoftContainerQuota(cID util.Uint256, size *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setSoftContainerQuota", cID, size)
+}
+
+// SetSoftContainerQuotaTransaction creates a transaction invoking `setSoftContainerQuota` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetSoftContainerQuotaTransaction(cID util.Uint256, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setSoftContainerQuota", cID, size)
+}
+
+// SetSoftContainerQuotaUnsigned creates a transaction invoking `setSoftContainerQuota` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetSoftContainerQuotaUnsigned(cID util.Uint256, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setSoftContainerQuota", nil, cID, size)
+}
+
+// SetSoftUserQuota creates a transaction invoking `setSoftUserQuota` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetSoftUserQuota(user []byte, size *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setSoftUserQuota", user, size)
+}
+
+// SetSoftUserQuotaTransaction creates a transaction invoking `setSoftUserQuota` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetSoftUserQuotaTransaction(user []byte, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setSoftUserQuota", user, size)
+}
+
+// SetSoftUserQuotaUnsigned creates a transaction invoking `setSoftUserQuota` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetSoftUserQuotaUnsigned(user []byte, size *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setSoftUserQuota", nil, user, size)
 }
 
 // SubmitObjectPut creates a transaction invoking `submitObjectPut` method of the contract.
@@ -1495,6 +1613,113 @@ func (res *ContainerNodeReportSummary) ToSCParameter() (smartcontract.Parameter,
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
+// itemToContainerQuota converts stack item into *ContainerQuota.
+// NULL item is returned as nil pointer without error.
+func itemToContainerQuota(item stackitem.Item, err error) (*ContainerQuota, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerQuota)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerQuota is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerQuota{})
+
+// Ensure *ContainerQuota is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerQuota{})
+
+// FromStackItem retrieves fields of ContainerQuota from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerQuota) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.SoftLimit, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field SoftLimit: %w", err)
+	}
+
+	index++
+	res.HardLimit, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field HardLimit: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerQuota.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerQuota) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = (*stackitem.BigInteger)(res.SoftLimit), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field SoftLimit: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.HardLimit), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field HardLimit: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerQuota.
+// It implements [smartcontract.Convertible] interface so that ContainerQuota
+// could be used with invokers.
+func (res *ContainerQuota) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.SoftLimit)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field SoftLimit: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.HardLimit)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field HardLimit: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // PutSuccessEventsFromApplicationLog retrieves a set of all emitted events
 // with "PutSuccess" name from the provided [result.ApplicationLog].
 func PutSuccessEventsFromApplicationLog(log *result.ApplicationLog) ([]*PutSuccessEvent, error) {
@@ -2050,6 +2275,144 @@ func (e *ObjectPutEvent) FromStackItem(item *stackitem.Array) error {
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field Meta: %w", err)
+	}
+
+	return nil
+}
+
+// ContainerQuotaSetEventsFromApplicationLog retrieves a set of all emitted events
+// with "ContainerQuotaSet" name from the provided [result.ApplicationLog].
+func ContainerQuotaSetEventsFromApplicationLog(log *result.ApplicationLog) ([]*ContainerQuotaSetEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*ContainerQuotaSetEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "ContainerQuotaSet" {
+				continue
+			}
+			event := new(ContainerQuotaSetEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize ContainerQuotaSetEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to ContainerQuotaSetEvent or
+// returns an error if it's not possible to do to so.
+func (e *ContainerQuotaSetEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.LimitValue, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LimitValue: %w", err)
+	}
+
+	index++
+	e.Hard, err = arr[index].TryBool()
+	if err != nil {
+		return fmt.Errorf("field Hard: %w", err)
+	}
+
+	return nil
+}
+
+// UserQuotaSetEventsFromApplicationLog retrieves a set of all emitted events
+// with "UserQuotaSet" name from the provided [result.ApplicationLog].
+func UserQuotaSetEventsFromApplicationLog(log *result.ApplicationLog) ([]*UserQuotaSetEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*UserQuotaSetEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "UserQuotaSet" {
+				continue
+			}
+			event := new(UserQuotaSetEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize UserQuotaSetEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to UserQuotaSetEvent or
+// returns an error if it's not possible to do to so.
+func (e *UserQuotaSetEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.UserID, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field UserID: %w", err)
+	}
+
+	index++
+	e.LimitValue, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LimitValue: %w", err)
+	}
+
+	index++
+	e.Hard, err = arr[index].TryBool()
+	if err != nil {
+		return fmt.Errorf("field Hard: %w", err)
 	}
 
 	return nil

@@ -56,6 +56,30 @@ present.
 	    type: PublicKey
 	  - name: token
 	    type: ByteArray
+
+ContainerQuotaSet notification. This notification is produced when container's
+owner sets (updates) size limitation for storage used for all objects in this
+container.
+
+	ContainerQuotaSet
+	  - name: ContainerID
+		type: Hash256
+	  - name: LimitValue
+		type: Integer
+	  - name: Hard
+		type: Boolean
+
+UserQuotaSet notification. This notification is produced when container's
+owner sets (updates) size limitation for storage used for all objects in
+_all_ containers he owns.
+
+	UserQuotaSet
+	  - name: UserID
+		type: ByteArray # 25 byte N3 address
+	  - name: LimitValue
+		type: Integer
+	  - name: Hard
+		type: Boolean
 */
 package container
 
@@ -101,6 +125,10 @@ Key-value storage format:
    REP clause from placement policy for <placement index>
  - 'eACL<cid>' -> []byte
    container eACLs encoded into NeoFS API binary protocol format
+ - `a<cid>' -> std.Serialize(Quota)
+   all container's objects size limitation quota
+ - `b<owner>' -> std.Serialize(Quota)
+   all owner's containers' objects size limitation quota
 
 # Setting
 To handle some events, the contract refers to other contracts.
