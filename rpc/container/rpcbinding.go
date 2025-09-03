@@ -26,12 +26,6 @@ type ContainerContainer struct {
 	Token []byte
 }
 
-// ContainerContainerEstimation is a contract-specific container.ContainerEstimation type used by its methods.
-type ContainerContainerEstimation struct {
-	SizeEstimation          *big.Int
-	ObjectsNumberEstimation *big.Int
-}
-
 // ContainerContainerSizes is a contract-specific container.ContainerSizes type used by its methods.
 type ContainerContainerSizes struct {
 	CID         []byte
@@ -58,6 +52,12 @@ type ContainerNodeReport struct {
 	ContainerSize   *big.Int
 	NumberOfObjects *big.Int
 	NumberOfReports *big.Int
+}
+
+// ContainerNodeReportSummary is a contract-specific container.NodeReportSummary type used by its methods.
+type ContainerNodeReportSummary struct {
+	ContainerSize   *big.Int
+	NumberOfObjects *big.Int
 }
 
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
@@ -198,9 +198,9 @@ func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
 }
 
-// GetEstimation invokes `getEstimation` method of contract.
-func (c *ContractReader) GetEstimation(epoch *big.Int, cid util.Uint256) (*ContainerContainerEstimation, error) {
-	return itemToContainerContainerEstimation(unwrap.Item(c.invoker.Call(c.hash, "getEstimation", epoch, cid)))
+// GetNodeReportSummary invokes `getNodeReportSummary` method of contract.
+func (c *ContractReader) GetNodeReportSummary(epoch *big.Int, cid util.Uint256) (*ContainerNodeReportSummary, error) {
+	return itemToContainerNodeReportSummary(unwrap.Item(c.invoker.Call(c.hash, "getNodeReportSummary", epoch, cid)))
 }
 
 // GetReportByNode invokes `getReportByNode` method of contract.
@@ -222,18 +222,18 @@ func (c *ContractReader) IterateAllContainerSizesExpanded(epoch *big.Int, _numOf
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllContainerSizes", _numOfIteratorItems, epoch))
 }
 
-// IterateAllEstimations invokes `iterateAllEstimations` method of contract.
-func (c *ContractReader) IterateAllEstimations(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
-	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllEstimations", epoch))
+// IterateAllReportSummaries invokes `iterateAllReportSummaries` method of contract.
+func (c *ContractReader) IterateAllReportSummaries(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllReportSummaries", epoch))
 }
 
-// IterateAllEstimationsExpanded is similar to IterateAllEstimations (uses the same contract
+// IterateAllReportSummariesExpanded is similar to IterateAllReportSummaries (uses the same contract
 // method), but can be useful if the server used doesn't support sessions and
 // doesn't expand iterators. It creates a script that will get the specified
 // number of result items from the iterator right in the VM and return them to
 // you. It's only limited by VM stack and GAS available for RPC invocations.
-func (c *ContractReader) IterateAllEstimationsExpanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
-	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllEstimations", _numOfIteratorItems, epoch))
+func (c *ContractReader) IterateAllReportSummariesExpanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllReportSummaries", _numOfIteratorItems, epoch))
 }
 
 // IterateContainerSizes invokes `iterateContainerSizes` method of contract.
@@ -817,113 +817,6 @@ func (res *ContainerContainer) ToSCParameter() (smartcontract.Parameter, error) 
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
-// itemToContainerContainerEstimation converts stack item into *ContainerContainerEstimation.
-// NULL item is returned as nil pointer without error.
-func itemToContainerContainerEstimation(item stackitem.Item, err error) (*ContainerContainerEstimation, error) {
-	if err != nil {
-		return nil, err
-	}
-	_, null := item.(stackitem.Null)
-	if null {
-		return nil, nil
-	}
-	var res = new(ContainerContainerEstimation)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// Ensure *ContainerContainerEstimation is a proper [stackitem.Convertible].
-var _ = stackitem.Convertible(&ContainerContainerEstimation{})
-
-// Ensure *ContainerContainerEstimation is a proper [smartcontract.Convertible].
-var _ = smartcontract.Convertible(&ContainerContainerEstimation{})
-
-// FromStackItem retrieves fields of ContainerContainerEstimation from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerContainerEstimation) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	res.SizeEstimation, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field SizeEstimation: %w", err)
-	}
-
-	index++
-	res.ObjectsNumberEstimation, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field ObjectsNumberEstimation: %w", err)
-	}
-
-	return nil
-}
-
-// ToStackItem creates [stackitem.Item] representing ContainerContainerEstimation.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerContainerEstimation) ToStackItem() (stackitem.Item, error) {
-	if res == nil {
-		return stackitem.Null{}, nil
-	}
-
-	var (
-		err   error
-		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 2)
-	)
-	itm, err = (*stackitem.BigInteger)(res.SizeEstimation), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field SizeEstimation: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = (*stackitem.BigInteger)(res.ObjectsNumberEstimation), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field ObjectsNumberEstimation: %w", err)
-	}
-	items = append(items, itm)
-
-	return stackitem.NewStruct(items), nil
-}
-
-// ToSCParameter creates [smartcontract.Parameter] representing ContainerContainerEstimation.
-// It implements [smartcontract.Convertible] interface so that ContainerContainerEstimation
-// could be used with invokers.
-func (res *ContainerContainerEstimation) ToSCParameter() (smartcontract.Parameter, error) {
-	if res == nil {
-		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
-	}
-
-	var (
-		err  error
-		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 2)
-	)
-	prm, err = smartcontract.NewParameterFromValue(res.SizeEstimation)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field SizeEstimation: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.ObjectsNumberEstimation)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field ObjectsNumberEstimation: %w", err)
-	}
-	prms = append(prms, prm)
-
-	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
-}
-
 // itemToContainerContainerSizes converts stack item into *ContainerContainerSizes.
 // NULL item is returned as nil pointer without error.
 func itemToContainerContainerSizes(item stackitem.Item, err error) (*ContainerContainerSizes, error) {
@@ -1489,6 +1382,113 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	prm, err = smartcontract.NewParameterFromValue(res.NumberOfReports)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field NumberOfReports: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
+// itemToContainerNodeReportSummary converts stack item into *ContainerNodeReportSummary.
+// NULL item is returned as nil pointer without error.
+func itemToContainerNodeReportSummary(item stackitem.Item, err error) (*ContainerNodeReportSummary, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerNodeReportSummary)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerNodeReportSummary is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerNodeReportSummary{})
+
+// Ensure *ContainerNodeReportSummary is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerNodeReportSummary{})
+
+// FromStackItem retrieves fields of ContainerNodeReportSummary from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerNodeReportSummary) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.ContainerSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field ContainerSize: %w", err)
+	}
+
+	index++
+	res.NumberOfObjects, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field NumberOfObjects: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerNodeReportSummary.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerNodeReportSummary) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = (*stackitem.BigInteger)(res.ContainerSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ContainerSize: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.NumberOfObjects), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field NumberOfObjects: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerNodeReportSummary.
+// It implements [smartcontract.Convertible] interface so that ContainerNodeReportSummary
+// could be used with invokers.
+func (res *ContainerNodeReportSummary) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.ContainerSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ContainerSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.NumberOfObjects)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field NumberOfObjects: %w", err)
 	}
 	prms = append(prms, prm)
 

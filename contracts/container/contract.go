@@ -51,11 +51,11 @@ type (
 		NumberOfReports int
 	}
 
-	// ContainerEstimation is an average container size and objects number
-	// each container's storage node stores.
-	ContainerEstimation struct {
-		SizeEstimation          int
-		ObjectsNumberEstimation int
+	// NodeReportSummary is the summary of all [NodeReport] claimed by all
+	// storage nodes.
+	NodeReportSummary struct {
+		ContainerSize   int
+		NumberOfObjects int
 	}
 
 	ContainerSizes struct {
@@ -78,18 +78,18 @@ const (
 	// V2 format.
 	containerIDSize = interop.Hash256Len // SHA256 size
 
-	estimationsV2InfoPrefix        = 's'
-	maxNumberOfEstimationsPerEpoch = 3
-	estimationsV2Reporters         = 'i'
-	estimateKeyPrefix              = "cnr"
-	containersWithMetaPrefix       = 'm'
-	containerKeyPrefix             = 'x'
-	ownerKeyPrefix                 = 'o'
-	deletedKeyPrefix               = 'd'
-	nodesPrefix                    = 'n'
-	replicasNumberPrefix           = 'r'
-	nextEpochNodesPrefix           = 'u'
-	estimatePostfixSize            = 10
+	reportsSummary             = 's'
+	maxNumberOfReportsPerEpoch = 3
+	reportersPrefix            = 'i'
+	estimateKeyPrefix          = "cnr"
+	containersWithMetaPrefix   = 'm'
+	containerKeyPrefix         = 'x'
+	ownerKeyPrefix             = 'o'
+	deletedKeyPrefix           = 'd'
+	nodesPrefix                = 'n'
+	replicasNumberPrefix       = 'r'
+	nextEpochNodesPrefix       = 'u'
+	estimatePostfixSize        = 10
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -1060,13 +1060,13 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		panic("method must be invoked by storage node from network map")
 	}
 
-	infoKey := append([]byte{estimationsV2InfoPrefix}, currEpoch.([]byte)...)
-	infoKey = append(infoKey, cid...)
-	reportersKey := append([]byte{estimationsV2Reporters}, currEpoch.([]byte)...)
+	summaryKey := append([]byte{reportsSummary}, currEpoch.([]byte)...)
+	summaryKey = append(summaryKey, cid...)
+	reportersKey := append([]byte{reportersPrefix}, currEpoch.([]byte)...)
 	reportersKey = append(reportersKey, cid...)
-	var estInfo ContainerEstimation
-	estInfoRaw := storage.Get(ctx, infoKey).([]byte)
-	if estInfoRaw != nil {
+	var reportsSummary NodeReportSummary
+	reportsSummaryRaw := storage.Get(ctx, summaryKey).([]byte)
+	if reportsSummaryRaw != nil {
 		index := -1
 
 		var reportersCounter int
@@ -1083,20 +1083,20 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			reportersCounter++
 		}
 
-		estInfo = std.Deserialize(estInfoRaw).(ContainerEstimation)
+		reportsSummary = std.Deserialize(reportsSummaryRaw).(NodeReportSummary)
 		if index == -1 {
-			estInfo.SizeEstimation = (estInfo.SizeEstimation*reportersCounter + sizeBytes) / (reportersCounter + 1)
-			estInfo.ObjectsNumberEstimation = (estInfo.ObjectsNumberEstimation*reportersCounter + objsNumber) / (reportersCounter + 1)
+			reportsSummary.ContainerSize += sizeBytes
+			reportsSummary.NumberOfObjects += objsNumber
 
 			reporter = NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
 			storage.Put(ctx, append(reportersKey, counterToBytes(reportersCounter)...), std.Serialize(reporter))
 		} else {
-			if reporter.NumberOfReports == maxNumberOfEstimationsPerEpoch {
-				panic("max number of estimations (" + std.Itoa10(maxNumberOfEstimationsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
+			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
+				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
 			}
 
-			estInfo.SizeEstimation = (estInfo.SizeEstimation*reportersCounter - reporter.ContainerSize + sizeBytes) / reportersCounter
-			estInfo.ObjectsNumberEstimation = (estInfo.ObjectsNumberEstimation*reportersCounter - reporter.NumberOfObjects + objsNumber) / reportersCounter
+			reportsSummary.ContainerSize = reportsSummary.ContainerSize - reporter.ContainerSize + sizeBytes
+			reportsSummary.NumberOfObjects = reportsSummary.NumberOfObjects - reporter.NumberOfObjects + objsNumber
 
 			reporter.NumberOfReports += 1
 			reporter.ContainerSize = sizeBytes
@@ -1105,38 +1105,38 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
 		}
 	} else {
-		estInfo = ContainerEstimation{
-			SizeEstimation:          sizeBytes,
-			ObjectsNumberEstimation: objsNumber,
+		reportsSummary = NodeReportSummary{
+			ContainerSize:   sizeBytes,
+			NumberOfObjects: objsNumber,
 		}
 		reporter := NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
 		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
 	}
 
-	storage.Put(ctx, infoKey, std.Serialize(estInfo))
-	runtime.Log("saved container size estimation")
+	storage.Put(ctx, summaryKey, std.Serialize(reportsSummary))
+	runtime.Log("saved container size report")
 }
 
-// GetEstimation method returns an average load container's storage
-// nodes have and reported with [PutReport].
+// GetNodeReportSummary method returns a sum of object count and occupied
+// volume as reported by storage nodes provided via [PutReport].
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
-func GetEstimation(epoch int, cid interop.Hash256) ContainerEstimation {
+func GetNodeReportSummary(epoch int, cid interop.Hash256) NodeReportSummary {
 	ctx := storage.GetReadOnlyContext()
 	if getOwnerByID(ctx, cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
-	key := append([]byte{estimationsV2InfoPrefix}, any(epoch).([]byte)...)
+	key := append([]byte{reportsSummary}, any(epoch).([]byte)...)
 	key = append(key, cid...)
 
-	estInfoRaw := storage.Get(ctx, key).([]byte)
-	if estInfoRaw == nil {
-		return ContainerEstimation{}
+	cnrSummaryRaw := storage.Get(ctx, key).([]byte)
+	if cnrSummaryRaw == nil {
+		return NodeReportSummary{}
 	}
 
-	return std.Deserialize(estInfoRaw).(ContainerEstimation)
+	return std.Deserialize(cnrSummaryRaw).(NodeReportSummary)
 }
 
 // GetReportByNode method returns the latest report, that node with pubKey
@@ -1150,7 +1150,7 @@ func GetReportByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) N
 		panic(cst.NotFoundError)
 	}
 
-	key := append([]byte{estimationsV2Reporters}, any(epoch).([]byte)...)
+	key := append([]byte{reportersPrefix}, any(epoch).([]byte)...)
 	key = append(key, cid...)
 	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(it) {
@@ -1172,21 +1172,21 @@ func IterateReports(epoch int, cid interop.Hash256) iterator.Iterator {
 
 	ctx := storage.GetReadOnlyContext()
 
-	key := []byte{estimationsV2Reporters}
+	key := []byte{reportersPrefix}
 	key = append(key, any(epoch).([]byte)...)
 	key = append(key, cid...)
 
 	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 }
 
-// IterateAllEstimations method returns iterator over all container size estimations
+// IterateAllReportSummaries method returns iterator over all total container sizes
 // that have been registered for the specified epoch. Items returned from this iterator
 // are key-value pairs with keys having container ID as a prefix and values being
-// [ContainerEstimation] structures.
-func IterateAllEstimations(epoch int) iterator.Iterator {
+// [NodeReportSummary] structures.
+func IterateAllReportSummaries(epoch int) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 
-	key := []byte{estimationsV2InfoPrefix}
+	key := []byte{reportsSummary}
 	key = append(key, any(epoch).([]byte)...)
 
 	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
@@ -1227,7 +1227,7 @@ func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.Public
 // to use and limited in the number of items it can return. It will be removed in
 // future versions.
 //
-// Deprecated: method always returns zero values, use [GetEstimation]
+// Deprecated: method always returns zero values, use [GetNodeReportSummary]
 // or [GetReportByNode] instead.
 func GetContainerSize(id []byte) ContainerSizes {
 	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
@@ -1370,7 +1370,7 @@ func isStorageNode(ctx storage.Context, epoch int, key interop.PublicKey) bool {
 }
 
 func cleanupContainers(ctx storage.Context, epoch int) {
-	it := storage.Find(ctx, []byte{estimationsV2InfoPrefix}, storage.KeysOnly)
+	it := storage.Find(ctx, []byte{reportsSummary}, storage.KeysOnly)
 	for iterator.Next(it) {
 		k := iterator.Value(it).([]byte)
 		nbytes := k[1 : len(k)-interop.Hash256Len]
@@ -1379,7 +1379,7 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 			storage.Delete(ctx, k)
 		}
 	}
-	it = storage.Find(ctx, []byte{estimationsV2Reporters}, storage.KeysOnly)
+	it = storage.Find(ctx, []byte{reportersPrefix}, storage.KeysOnly)
 	for iterator.Next(it) {
 		k := iterator.Value(it).([]byte)
 		nbytes := k[1 : len(k)-interop.Hash256Len-2] // reporter counter is 2 bytes

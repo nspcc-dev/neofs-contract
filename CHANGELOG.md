@@ -7,7 +7,7 @@ Changelog for NeoFS Contract
 
 ### Changed
 - Minimal required version for upgrade is 0.19.0 now (#500)
-- Container load estimations are calculated on `container` contract side and every node's report is taken into account (#501)
+- Container load reports are calculated on `container` contract side and every node's report is taken into account (#501)
 
 ### Updated
 

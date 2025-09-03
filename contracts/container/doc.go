@@ -100,11 +100,11 @@ Key-value storage format:
    user-by-user containers
  - 'nnsHasAlias<cid>' -> string
    domains registered for containers in the NNS
- - 's'<epoch><cid> -> std.Serialize(ContainerEstimation)
-   average container size and objects number according to information
+ - 's'<epoch><cid> -> std.Serialize(NodeReportSummary)
+   total container size and objects number according to information
    sent by storage nodes.
- - 'i'<epoch><cid><counter> -> std.Serialize(NodeEstimation)
-   latest estimation sent by <counter>-th storage node for specified
+ - 'i'<epoch><cid><counter> -> std.Serialize(NodeReport)
+   latest report sent by <counter>-th storage node for specified
    epoch and container; counter is a 2-bytes long BE positive integer
  - 'n<cid><placement_index><counter>' -> interop.PublicKey
    one of the container nodes' public key, counter is 2-bytes long BE
