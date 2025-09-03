@@ -407,39 +407,17 @@ func TestContainerSetEACL(t *testing.T) {
 
 func TestContainerSizeReports(t *testing.T) {
 	c, cBal, cNm := newContainerInvoker(t, false)
-
-	_, cnt := addContainer(t, c, cBal)
 	nodes := []testNodeInfo{
 		newStorageNode(t, c),
 		newStorageNode(t, c),
 		newStorageNode(t, c),
 	}
-	// Never clean up the map.
-	cNm.Invoke(t, stackitem.Null{}, "setCleanupThreshold", 0)
-	for i := range nodes {
-		var cAcc = new(neotest.ContractInvoker)
-		*cAcc = *cNm
-		cAcc.Signers = append(cAcc.Signers, nodes[i].signer)
-		// It's not correct to have nodes in different maps, but it's good enough
-		// to test both map versions wrt estimations.
-		if i%2 == 0 {
-			cAcc.Invoke(t, stackitem.Null{}, "addPeer", nodes[i].raw)
-		} else {
-			nodeStruct := stackitem.NewStruct([]stackitem.Item{
-				stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
-				stackitem.NewMapWithValue([]stackitem.MapElement{
-					{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
-					{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
-				}),
-				stackitem.NewByteArray(nodes[i].pub),
-				stackitem.Make(nodes[i].state),
-			})
-			cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
-		}
+	nodesKeys := make([]any, 0, len(nodes))
+	for _, node := range nodes {
+		nodesKeys = append(nodesKeys, node.pub)
 	}
 
-	// putContainerSize retrieves storage nodes from the previous snapshot,
-	// so epoch must be incremented twice.
+	cnt := addContainerWithNodes(t, c, cBal, nodesKeys)
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
 
@@ -502,7 +480,7 @@ func TestContainerSizeReports(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				_, anotherCnr := addContainer(t, c, cBal)
+				anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 
 				for i, r := range tc.reports {
 					c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putReport",
@@ -526,7 +504,7 @@ func TestContainerSizeReports(t *testing.T) {
 	})
 
 	t.Run("get estimations by node", func(t *testing.T) {
-		_, anotherCnr := addContainer(t, c, cBal)
+		anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 
 		const (
 			nodeSize1 = 1234
@@ -595,7 +573,7 @@ func TestContainerSizeReports(t *testing.T) {
 
 	t.Run("iterate container's reports", func(t *testing.T) {
 		const reportersNumber = 3
-		_, anotherCnr := addContainer(t, c, cBal)
+		anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 
 		for i := range reportersNumber {
 			c.WithSigners(nodes[i].signer).Invoke(t, stackitem.Null{}, "putReport",
@@ -639,11 +617,11 @@ func TestContainerSizeReports(t *testing.T) {
 
 		want := make(map[cid.ID]cnrInfo)
 		for i := range numOfContainers {
-			_, cnr := addContainer(t, c, cBal)
-			want[cnr.id] = cnrInfo{size: int64(i), objs: int64(i)}
+			anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
+			want[anotherCnr.id] = cnrInfo{size: int64(i), objs: int64(i)}
 
 			c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
-				cnr.id[:], i, i, nodes[0].pub,
+				anotherCnr.id[:], i, i, nodes[0].pub,
 			)
 		}
 
@@ -674,7 +652,7 @@ func TestContainerSizeReports(t *testing.T) {
 		const newEpoch = 100
 		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch)
 
-		_, anotherCnr := addContainer(t, c, cBal)
+		anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 			anotherCnr.id[:], 123, 455, nodes[0].pub,
 		)
@@ -691,6 +669,15 @@ func TestContainerSizeReports(t *testing.T) {
 		estimations = iteratorToArray(it)
 		require.Empty(t, estimations)
 	})
+}
+
+func addContainerWithNodes(t *testing.T, cnrInv, balInv *neotest.ContractInvoker, keys []any) testContainer {
+	_, cnr := addContainer(t, cnrInv, balInv)
+
+	cnrInv.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnr.id[:], 0, keys)
+	cnrInv.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{uint8(len(keys))})
+
+	return cnr
 }
 
 func TestContainerList(t *testing.T) {

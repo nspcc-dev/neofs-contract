@@ -1039,11 +1039,11 @@ func GetEACLData(id []byte) []byte {
 }
 
 // PutReport method saves container's state report in contract memory.
-// It can be invoked only by Storage nodes from the network map. This method
-// checks witness based on the provided public key of the Storage node. sizeBytes
-// is a total storage that is used by storage node for storing all marshaled
-// objects that belong to the specified container. objsNumber is a total number
-// of container's object storage node have.
+// It must be invoked only by Storage nodes that belong to reported container.
+// This method checks witness based on the provided public key of the Storage
+// node. sizeBytes is a total storage that is used by storage node for storing
+// all marshaled objects that belong to the specified container. objsNumber is
+// a total number of container's object storage node have.
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError].
 func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
@@ -1053,12 +1053,12 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		panic(cst.NotFoundError)
 	}
 
+	if !nodeFromContainer(ctx, cid, pubKey) {
+		panic("method must be invoked by storage node from container")
+	}
+
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
-
-	if !isStorageNode(ctx, currEpoch.(int), pubKey) {
-		panic("method must be invoked by storage node from network map")
-	}
 
 	summaryKey := append([]byte{reportsSummary}, currEpoch.([]byte)...)
 	summaryKey = append(summaryKey, cid...)
@@ -1367,6 +1367,21 @@ func ownerFromBinaryContainer(container []byte) []byte {
 func isStorageNode(ctx storage.Context, epoch int, key interop.PublicKey) bool {
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	return contract.Call(netmapContractAddr, "isStorageNode", contract.ReadOnly, key, epoch-1).(bool)
+}
+
+func nodeFromContainer(ctx storage.Context, cID interop.Hash256, key interop.PublicKey) bool {
+	k := []byte{nodesPrefix}
+	k = append(k, cID[:]...)
+
+	it := storage.Find(ctx, k, storage.ValuesOnly)
+	for iterator.Next(it) {
+		pk := iterator.Value(it).(interop.PublicKey)
+		if key.Equals(pk) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func cleanupContainers(ctx storage.Context, epoch int) {
