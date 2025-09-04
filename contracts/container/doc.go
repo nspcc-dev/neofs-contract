@@ -129,6 +129,8 @@ Key-value storage format:
    all container's objects size limitation quota
  - `b<owner>' -> std.Serialize(Quota)
    all owner's containers' objects size limitation quota
+ - 'e<epoch><user>' -> int
+   total space taken to serve all containers that belong to user
 
 # Setting
 To handle some events, the contract refers to other contracts.

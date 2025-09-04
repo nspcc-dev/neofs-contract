@@ -99,6 +99,7 @@ const (
 	nextEpochNodesPrefix       = 'u'
 	containerQuotaKeyPrefix    = 'a'
 	userQuotaKeyPrefix         = 'b'
+	userLoadKeyPrefix          = 'e'
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -1058,7 +1059,8 @@ func GetEACLData(id []byte) []byte {
 func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
 	common.CheckWitness(pubKey)
 	ctx := storage.GetContext()
-	if getOwnerByID(ctx, cid) == nil {
+	owner := getOwnerByID(ctx, cid)
+	if owner == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1069,6 +1071,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
 
+	var storageDiff int
 	summaryKey := append([]byte{reportsSummary}, currEpoch.([]byte)...)
 	summaryKey = append(summaryKey, cid...)
 	reportersKey := append([]byte{reportersPrefix}, currEpoch.([]byte)...)
@@ -1094,6 +1097,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 
 		reportsSummary = std.Deserialize(reportsSummaryRaw).(NodeReportSummary)
 		if index == -1 {
+			storageDiff = sizeBytes
 			reportsSummary.ContainerSize += sizeBytes
 			reportsSummary.NumberOfObjects += objsNumber
 
@@ -1103,6 +1107,8 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
 				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
 			}
+
+			storageDiff = sizeBytes - reporter.ContainerSize
 
 			reportsSummary.ContainerSize = reportsSummary.ContainerSize - reporter.ContainerSize + sizeBytes
 			reportsSummary.NumberOfObjects = reportsSummary.NumberOfObjects - reporter.NumberOfObjects + objsNumber
@@ -1114,6 +1120,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
 		}
 	} else {
+		storageDiff = sizeBytes
 		reportsSummary = NodeReportSummary{
 			ContainerSize:   sizeBytes,
 			NumberOfObjects: objsNumber,
@@ -1122,8 +1129,32 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
 	}
 
+	userSummaryKey := userTotalStorageKey(currEpoch.(int), owner)
+	v := storage.Get(ctx, userSummaryKey)
+	if v == nil {
+		storage.Put(ctx, userSummaryKey, storageDiff)
+	} else {
+		oldSize := v.(int)
+		storage.Put(ctx, userSummaryKey, oldSize+storageDiff)
+	}
+
 	storage.Put(ctx, summaryKey, std.Serialize(reportsSummary))
 	runtime.Log("saved container size report")
+}
+
+// GetTakenSpaceByUser returns total load space in all containers user owns.
+// If user have no containers, it returns 0.
+func GetTakenSpaceByUser(user []byte) int {
+	ctx := storage.GetReadOnlyContext()
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
+
+	v := storage.Get(ctx, userTotalStorageKey(currEpoch.(int), user))
+	if v == nil {
+		return 0
+	}
+
+	return v.(int)
 }
 
 // GetNodeReportSummary method returns a sum of object count and occupied
@@ -1548,6 +1579,15 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 			storage.Delete(ctx, k)
 		}
 	}
+	it = storage.Find(ctx, []byte{userLoadKeyPrefix}, storage.KeysOnly)
+	for iterator.Next(it) {
+		k := iterator.Value(it).([]byte)
+		nbytes := k[1 : len(k)-common.NeoFSUserAccountLength]
+
+		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
+			storage.Delete(ctx, k)
+		}
+	}
 }
 
 func deleteByPrefix(ctx storage.Context, prefix []byte) {
@@ -1566,6 +1606,14 @@ func containerQuotaKey(cID interop.Hash256) []byte {
 
 func userQuotaKey(user []byte) []byte {
 	key := []byte{userQuotaKeyPrefix}
+	key = append(key, user...)
+
+	return key
+}
+
+func userTotalStorageKey(epoch int, user []byte) []byte {
+	key := []byte{userLoadKeyPrefix}
+	key = append(key, any(epoch).([]byte)...)
 	key = append(key, user...)
 
 	return key

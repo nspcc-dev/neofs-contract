@@ -233,6 +233,11 @@ func (c *ContractReader) GetReportByNode(epoch *big.Int, cid util.Uint256, pubKe
 	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByNode", epoch, cid, pubKey)))
 }
 
+// GetTakenSpaceByUser invokes `getTakenSpaceByUser` method of contract.
+func (c *ContractReader) GetTakenSpaceByUser(user []byte) (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "getTakenSpaceByUser", user))
+}
+
 // IterateAllContainerSizes invokes `iterateAllContainerSizes` method of contract.
 func (c *ContractReader) IterateAllContainerSizes(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
 	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllContainerSizes", epoch))

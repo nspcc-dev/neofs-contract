@@ -802,6 +802,51 @@ func TestQuotas(t *testing.T) {
 	})
 }
 
+func TestTotalUserSpace(t *testing.T) {
+	c, cBal, cNm := newContainerInvoker(t, false)
+	node := newStorageNode(t, c)
+	nodeKey := node.pub
+	ownerAcc := c.NewAccount(t)
+	ownerSH := ownerAcc.ScriptHash()
+	owner := user.NewFromScriptHash(ownerSH)
+
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
+
+	const numOfCnrs = 10
+	cnrs := make([]cid.ID, 0, numOfCnrs)
+	for range numOfCnrs {
+		cnr := containertest.Container()
+		cnr.SetOwner(owner)
+		rawCnr := cnr.Marshal()
+		cID := cid.NewFromMarshalledContainer(rawCnr)
+
+		balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+
+		cnrs = append(cnrs, cID)
+	}
+
+	var sum int
+	for i, cID := range cnrs {
+		sum += i
+		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i, 1234, nodeKey)
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+	}
+
+	// decrease values
+	for i, cID := range cnrs {
+		if i == 0 {
+			continue
+		}
+		sum--
+		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i-1, 1234, nodeKey)
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+	}
+}
+
 func TestContainerList(t *testing.T) {
 	c, _, _ := newContainerInvoker(t, false)
 
