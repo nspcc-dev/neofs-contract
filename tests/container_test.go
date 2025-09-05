@@ -26,6 +26,8 @@ import (
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
+	containertest "github.com/nspcc-dev/neofs-sdk-go/container/test"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -678,6 +680,171 @@ func addContainerWithNodes(t *testing.T, cnrInv, balInv *neotest.ContractInvoker
 	cnrInv.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{uint8(len(keys))})
 
 	return cnr
+}
+
+func TestQuotas(t *testing.T) {
+	var (
+		c, cBal, cNm = newContainerInvoker(t, false)
+		ownerAcc     = c.NewAccount(t)
+		ownerSH      = ownerAcc.ScriptHash()
+		owner        = user.NewFromScriptHash(ownerSH)
+		cnr          = containertest.Container()
+	)
+	cnr.SetOwner(owner)
+	rawCnr := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(rawCnr)
+	balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+	c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+
+	nodes := []testNodeInfo{
+		newStorageNode(t, c),
+		newStorageNode(t, c),
+		newStorageNode(t, c),
+	}
+	nodesKeys := make([]any, 0, len(nodes))
+	for _, node := range nodes {
+		nodesKeys = append(nodesKeys, node.pub)
+	}
+	c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, nodesKeys)
+	c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{uint8(len(nodesKeys))})
+
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
+
+	const node1Report = 1000
+	const node2Report = 10000
+	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
+		cID[:], int64(node1Report), int64(node1Report), nodes[0].pub,
+	)
+	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putReport",
+		cID[:], int64(node2Report), int64(node2Report), nodes[1].pub,
+	)
+
+	t.Run("witness checks", func(t *testing.T) {
+		t.Run("container quota", func(t *testing.T) {
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cID[:], 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cID[:], 0)
+		})
+
+		t.Run("user quota", func(t *testing.T) {
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftUserQuota", owner[:], 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardUserQuota", owner[:], 0)
+		})
+	})
+
+	t.Run("wrong input arg", func(t *testing.T) {
+		t.Run("container quota", func(t *testing.T) {
+			c.WithSigners(ownerAcc).InvokeFail(t, "invalid container id", "setSoftContainerQuota", []byte{0}, 0)
+			c.WithSigners(ownerAcc).InvokeFail(t, "invalid container id", "setHardContainerQuota", []byte{0}, 0)
+		})
+		t.Run("user quota", func(t *testing.T) {
+			c.WithSigners(ownerAcc).InvokeFail(t, "invalid user id", "setSoftUserQuota", []byte{0}, 0)
+			c.WithSigners(ownerAcc).InvokeFail(t, "invalid user id", "setHardUserQuota", []byte{0}, 0)
+		})
+	})
+
+	t.Run("default values", func(t *testing.T) {
+		exp := stackitem.NewStruct([]stackitem.Item{
+			stackitem.Make(0),
+			stackitem.Make(0),
+		})
+
+		t.Run("container quota", func(t *testing.T) {
+			c.Invoke(t, exp, "containerQuota", cID[:])
+		})
+		t.Run("container quota", func(t *testing.T) {
+			c.Invoke(t, exp, "userQuota", owner[:])
+		})
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		softLimit := node2Report
+		hardLimit := node1Report
+
+		t.Run("container quota", func(t *testing.T) {
+			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftContainerQuota", cID[:], softLimit)
+			res := c.Executor.GetTxExecResult(t, txH)
+			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(softLimit)), false)
+			exp := stackitem.NewStruct([]stackitem.Item{
+				stackitem.Make(softLimit),
+				stackitem.Make(0),
+			})
+			c.Invoke(t, exp, "containerQuota", cID[:])
+
+			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardContainerQuota", cID[:], hardLimit)
+			res = c.Executor.GetTxExecResult(t, txH)
+			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(hardLimit)), true)
+			exp = stackitem.NewStruct([]stackitem.Item{
+				stackitem.Make(softLimit),
+				stackitem.Make(hardLimit),
+			})
+			c.Invoke(t, exp, "containerQuota", cID[:])
+		})
+		t.Run("user quota", func(t *testing.T) {
+			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftUserQuota", owner[:], softLimit)
+			res := c.Executor.GetTxExecResult(t, txH)
+			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(softLimit)), false)
+			exp := stackitem.NewStruct([]stackitem.Item{
+				stackitem.Make(softLimit),
+				stackitem.Make(0),
+			})
+			c.Invoke(t, exp, "userQuota", owner[:])
+
+			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardUserQuota", owner[:], hardLimit)
+			res = c.Executor.GetTxExecResult(t, txH)
+			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(hardLimit)), true)
+			exp = stackitem.NewStruct([]stackitem.Item{
+				stackitem.Make(softLimit),
+				stackitem.Make(hardLimit),
+			})
+			c.Invoke(t, exp, "userQuota", owner[:])
+		})
+	})
+}
+
+func TestTotalUserSpace(t *testing.T) {
+	c, cBal, cNm := newContainerInvoker(t, false)
+	node := newStorageNode(t, c)
+	nodeKey := node.pub
+	ownerAcc := c.NewAccount(t)
+	ownerSH := ownerAcc.ScriptHash()
+	owner := user.NewFromScriptHash(ownerSH)
+
+	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
+
+	const numOfCnrs = 10
+	cnrs := make([]cid.ID, 0, numOfCnrs)
+	for range numOfCnrs {
+		cnr := containertest.Container()
+		cnr.SetOwner(owner)
+		rawCnr := cnr.Marshal()
+		cID := cid.NewFromMarshalledContainer(rawCnr)
+
+		balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+
+		cnrs = append(cnrs, cID)
+	}
+
+	var sum int
+	for i, cID := range cnrs {
+		sum += i
+		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i, 1234, nodeKey)
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+	}
+
+	// decrease values
+	for i, cID := range cnrs {
+		if i == 0 {
+			continue
+		}
+		sum--
+		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i-1, 1234, nodeKey)
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+	}
 }
 
 func TestContainerList(t *testing.T) {

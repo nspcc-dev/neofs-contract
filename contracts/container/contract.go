@@ -62,6 +62,14 @@ type (
 		CID         []byte
 		Estimations []Estimation
 	}
+
+	// Quota describes size limitation for a container or
+	// for a user as a sum of all objects in all his
+	// containers.
+	Quota struct {
+		SoftLimit int
+		HardLimit int
+	}
 )
 
 const (
@@ -89,7 +97,9 @@ const (
 	nodesPrefix                = 'n'
 	replicasNumberPrefix       = 'r'
 	nextEpochNodesPrefix       = 'u'
-	estimatePostfixSize        = 10
+	containerQuotaKeyPrefix    = 'a'
+	userQuotaKeyPrefix         = 'b'
+	userLoadKeyPrefix          = 'e'
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -1049,7 +1059,8 @@ func GetEACLData(id []byte) []byte {
 func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
 	common.CheckWitness(pubKey)
 	ctx := storage.GetContext()
-	if getOwnerByID(ctx, cid) == nil {
+	owner := getOwnerByID(ctx, cid)
+	if owner == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1060,6 +1071,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
 
+	var storageDiff int
 	summaryKey := append([]byte{reportsSummary}, currEpoch.([]byte)...)
 	summaryKey = append(summaryKey, cid...)
 	reportersKey := append([]byte{reportersPrefix}, currEpoch.([]byte)...)
@@ -1085,6 +1097,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 
 		reportsSummary = std.Deserialize(reportsSummaryRaw).(NodeReportSummary)
 		if index == -1 {
+			storageDiff = sizeBytes
 			reportsSummary.ContainerSize += sizeBytes
 			reportsSummary.NumberOfObjects += objsNumber
 
@@ -1094,6 +1107,8 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
 				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
 			}
+
+			storageDiff = sizeBytes - reporter.ContainerSize
 
 			reportsSummary.ContainerSize = reportsSummary.ContainerSize - reporter.ContainerSize + sizeBytes
 			reportsSummary.NumberOfObjects = reportsSummary.NumberOfObjects - reporter.NumberOfObjects + objsNumber
@@ -1105,6 +1120,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
 		}
 	} else {
+		storageDiff = sizeBytes
 		reportsSummary = NodeReportSummary{
 			ContainerSize:   sizeBytes,
 			NumberOfObjects: objsNumber,
@@ -1113,8 +1129,32 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
 	}
 
+	userSummaryKey := userTotalStorageKey(currEpoch.(int), owner)
+	v := storage.Get(ctx, userSummaryKey)
+	if v == nil {
+		storage.Put(ctx, userSummaryKey, storageDiff)
+	} else {
+		oldSize := v.(int)
+		storage.Put(ctx, userSummaryKey, oldSize+storageDiff)
+	}
+
 	storage.Put(ctx, summaryKey, std.Serialize(reportsSummary))
 	runtime.Log("saved container size report")
+}
+
+// GetTakenSpaceByUser returns total load space in all containers user owns.
+// If user have no containers, it returns 0.
+func GetTakenSpaceByUser(user []byte) int {
+	ctx := storage.GetReadOnlyContext()
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
+
+	v := storage.Get(ctx, userTotalStorageKey(currEpoch.(int), user))
+	if v == nil {
+		return 0
+	}
+
+	return v.(int)
 }
 
 // GetNodeReportSummary method returns a sum of object count and occupied
@@ -1298,6 +1338,142 @@ func NewEpoch(epochNum int) {
 	cleanupContainers(ctx, epochNum)
 }
 
+// SetSoftContainerQuota sets soft size quota that limits all space used for
+// storing objects in cID (including object replicas). Non-positive size sets
+// no limitation. After exceeding the limit nodes are instructed to warn only,
+// without denial of service. Call must be signed by cID's owner. Limit can be
+// changed with a repeated call. See also [SetHardContainerQuota].
+// Panics if cID is incorrect or container does not exist.
+func SetSoftContainerQuota(cID interop.Hash256, size int) {
+	setContainerQuota(cID, size, false)
+}
+
+// SetHardContainerQuota sets hard size quota that limits all space used for
+// storing objects in cID (including object replicas). Non-positive size sets
+// no limitation. After exceeding the limit nodes will refuse any further PUTs.
+// Call must be signed by cID's owner. Limit can be changed with a repeated
+// call. See also [SetSoftContainerQuota].
+// Panics if cID is incorrect or container does not exist.
+func SetHardContainerQuota(cID interop.Hash256, size int) {
+	setContainerQuota(cID, size, true)
+}
+
+func setContainerQuota(cID interop.Hash256, size int, hard bool) {
+	if len(cID) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+	ctx := storage.GetContext()
+	ownerID := getOwnerByID(ctx, cID)
+	if ownerID == nil {
+		panic(cst.NotFoundError)
+	}
+
+	ownerSH := common.WalletToScriptHash(ownerID)
+	common.CheckOwnerWitness(ownerSH)
+
+	var q Quota
+	v := storage.Get(ctx, containerQuotaKey(cID))
+	if v != nil {
+		q = std.Deserialize(v.([]byte)).(Quota)
+	}
+	if hard {
+		q.HardLimit = size
+	} else {
+		q.SoftLimit = size
+	}
+
+	storage.Put(ctx, containerQuotaKey(cID), std.Serialize(q))
+	runtime.Notify("ContainerQuotaSet", cID, size, hard)
+}
+
+// ContainerQuota returns container size quota set by cID's owner. If no
+// limitation has been set, returns empty values (both limitations are set
+// to 0). Non-positive limitation must be treated as no limits.
+// Panics if cID is incorrect or container does not exist.
+func ContainerQuota(cID interop.Hash256) Quota {
+	if len(cID) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+	ctx := storage.GetReadOnlyContext()
+	ownerID := getOwnerByID(ctx, cID)
+	if ownerID == nil {
+		panic(cst.NotFoundError)
+	}
+
+	v := storage.Get(ctx, containerQuotaKey(cID))
+	if v == nil {
+		return Quota{}
+	}
+
+	q := std.Deserialize(v.([]byte))
+
+	return q.(Quota)
+}
+
+// SetSoftUserQuota sets size quota that limits all space used for storing
+// objects in all containers that belong to user (including object replicas).
+// Non-positive size sets no limitation. After exceeding the limit nodes are
+// instructed to warn only, without denial of service. Call must be signed
+// by user. Limit can be changed with a repeated call. See also
+// [SetHardUserQuota].
+// Panics if user is incorrect.
+func SetSoftUserQuota(user []byte, size int) {
+	setUserQuota(user, size, false)
+}
+
+// SetHardUserQuota sets size quota that limits all space used for storing
+// objects in all containers that belong to user (including object replicas).
+// Non-positive size sets no limitation. After exceeding the limit nodes will
+// refuse any further PUTs. Call must be signed by user. Limit can be changed
+// with a repeated call. See also [SetSoftUserQuota].
+// Panics if user is incorrect.
+func SetHardUserQuota(user []byte, size int) {
+	setUserQuota(user, size, true)
+}
+
+func setUserQuota(user []byte, size int, hard bool) {
+	if len(user) != common.NeoFSUserAccountLength {
+		panic("invalid user id")
+	}
+	ctx := storage.GetContext()
+	userSH := common.WalletToScriptHash(user)
+	common.CheckOwnerWitness(userSH)
+
+	var q Quota
+	v := storage.Get(ctx, userQuotaKey(user))
+	if v != nil {
+		q = std.Deserialize(v.([]byte)).(Quota)
+	}
+	if hard {
+		q.HardLimit = size
+	} else {
+		q.SoftLimit = size
+	}
+
+	storage.Put(ctx, userQuotaKey(user), std.Serialize(q))
+	runtime.Notify("UserQuotaSet", user, size, hard)
+}
+
+// UserQuota returns user size quota for every container he owns. If no
+// limitation has been set, returns empty values (both limitations are set
+// to 0). Non-positive limitation must be treated as no limits.
+// Panics if user is incorrect.
+func UserQuota(user []byte) Quota {
+	if len(user) != common.NeoFSUserAccountLength {
+		panic("invalid user id")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	v := storage.Get(ctx, userQuotaKey(user))
+	if v == nil {
+		return Quota{}
+	}
+
+	q := std.Deserialize(v.([]byte))
+
+	return q.(Quota)
+}
+
 // Version returns the version of the contract.
 func Version() int {
 	return common.Version
@@ -1403,6 +1579,15 @@ func cleanupContainers(ctx storage.Context, epoch int) {
 			storage.Delete(ctx, k)
 		}
 	}
+	it = storage.Find(ctx, []byte{userLoadKeyPrefix}, storage.KeysOnly)
+	for iterator.Next(it) {
+		k := iterator.Value(it).([]byte)
+		nbytes := k[1 : len(k)-common.NeoFSUserAccountLength]
+
+		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
+			storage.Delete(ctx, k)
+		}
+	}
 }
 
 func deleteByPrefix(ctx storage.Context, prefix []byte) {
@@ -1410,4 +1595,26 @@ func deleteByPrefix(ctx storage.Context, prefix []byte) {
 	for iterator.Next(it) {
 		storage.Delete(ctx, iterator.Value(it).([]byte))
 	}
+}
+
+func containerQuotaKey(cID interop.Hash256) []byte {
+	key := []byte{containerQuotaKeyPrefix}
+	key = append(key, cID...)
+
+	return key
+}
+
+func userQuotaKey(user []byte) []byte {
+	key := []byte{userQuotaKeyPrefix}
+	key = append(key, user...)
+
+	return key
+}
+
+func userTotalStorageKey(epoch int, user []byte) []byte {
+	key := []byte{userLoadKeyPrefix}
+	key = append(key, any(epoch).([]byte)...)
+	key = append(key, user...)
+
+	return key
 }

@@ -57,20 +57,29 @@ present.
 	  - name: token
 	    type: ByteArray
 
-StartEstimation notification. This notification is produced when Storage nodes
-should exchange estimation values of container sizes among other Storage nodes.
+ContainerQuotaSet notification. This notification is produced when container's
+owner sets (updates) size limitation for storage used for all objects in this
+container.
 
-	StartEstimation:
-	  - name: epoch
-	    type: Integer
+	ContainerQuotaSet
+	  - name: ContainerID
+		type: Hash256
+	  - name: LimitValue
+		type: Integer
+	  - name: Hard
+		type: Boolean
 
-StopEstimation notification. This notification is produced when Storage nodes
-should calculate average container size based on received estimations and store
-it in Container contract.
+UserQuotaSet notification. This notification is produced when container's
+owner sets (updates) size limitation for storage used for all objects in
+_all_ containers he owns.
 
-	StopEstimation:
-	  - name: epoch
-	    type: Integer
+	UserQuotaSet
+	  - name: UserID
+		type: ByteArray # 25 byte N3 address
+	  - name: LimitValue
+		type: Integer
+	  - name: Hard
+		type: Boolean
 */
 package container
 
@@ -116,6 +125,12 @@ Key-value storage format:
    REP clause from placement policy for <placement index>
  - 'eACL<cid>' -> []byte
    container eACLs encoded into NeoFS API binary protocol format
+ - `a<cid>' -> std.Serialize(Quota)
+   all container's objects size limitation quota
+ - `b<owner>' -> std.Serialize(Quota)
+   all owner's containers' objects size limitation quota
+ - 'e<epoch><user>' -> int
+   total space taken to serve all containers that belong to user
 
 # Setting
 To handle some events, the contract refers to other contracts.
