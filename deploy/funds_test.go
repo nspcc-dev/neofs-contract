@@ -64,9 +64,8 @@ func BenchmarkDivideFundsEvenly(b *testing.B) {
 	} {
 		b.Run(fmt.Sprintf("N=%d,amount=%d", tc.n, tc.a), func(b *testing.B) {
 			b.ReportAllocs()
-			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				divideFundsEvenly(tc.a, tc.n, func(ind int, amount uint64) {})
 			}
 		})
