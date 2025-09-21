@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 ### Changed
 - Minimal required version for upgrade is 0.19.0 now (#500)
 - Container load reports are calculated on `container` contract side and every node's report is taken into account (#501)
+- Go 1.24+ is required now (#467)
 
 ### Updated
 
