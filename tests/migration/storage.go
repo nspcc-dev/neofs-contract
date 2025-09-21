@@ -83,9 +83,9 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	var id int32
 	found := false
 
-	nativeContracts := native.NewContracts(config.ProtocolConfiguration{})
+	nativeContracts := native.NewContracts(native.NewDefaultContracts(config.ProtocolConfiguration{}))
 
-	err := nativeContracts.Management.InitializeCache(nil, 0, _dao)
+	err := nativeContracts.Management().InitializeCache(nil, 0, _dao)
 	require.NoError(tb, err)
 
 	mNameToID := make(map[string]int32)
@@ -93,7 +93,7 @@ func NewContract(tb testing.TB, d *dump.Reader, name string, opts ContractOption
 	err = d.IterateContractStates(func(_name string, _state state.Contract) {
 		_state.UpdateCounter = 0 // contract could be dumped as already updated
 
-		err = native.PutContractState(_dao, &_state)
+		err = native.PutContractState(_dao, -1, &_state)
 		require.NoError(tb, err)
 
 		if !found {
