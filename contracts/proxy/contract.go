@@ -86,46 +86,39 @@ func Verify() bool {
 
 	// Container's `SubmitObjectPut` case is only expected then
 
-	script := runtime.GetScriptContainer().Script
-	var i int
-	var sigsLen int
-	var sigs []interop.Signature
-	for i < len(script) {
+	var (
+		script          = runtime.GetScriptContainer().Script
+		i               int
+		vectors         [][]interop.Signature
+		placementVector []interop.Signature
+		vectorsLen      int
+		done            bool
+	)
+	for i < len(script) && !done {
 		op := script[i]
-		var done bool
-
 		switch {
 		case op == 0x0C: // PUSHDATA1
-			i++
-			if script[i] != interop.SignatureLen {
-				panic("invalid signature length " + std.Itoa(int(script[i]), 10))
-			}
-			i++
-			sigs = append(sigs, script[i:i+interop.SignatureLen])
-			i += interop.SignatureLen
+			placementVector, i = parseSignaturesVector(i, script)
+			vectors = append(vectors, placementVector)
 		case op <= 0x05: // PUSHINT8 to PUSHINT256
 			lenInBytes := int(op + 1)
 			i++
-			sigsLen = convert.ToInteger(script[i : i+lenInBytes])
+			vectorsLen = convert.ToInteger(script[i : i+lenInBytes])
 			i += lenInBytes
 			done = true
 		case 0x10 < op && op <= 0x20: // PUSH1 to PUSH16
-			sigsLen = int(op - 0x10)
+			vectorsLen = int(op - 0x10)
 			i++
 			done = true
 		default:
 			panic("invalid op in signatures " + std.Itoa(int(op), 16))
 		}
-
-		if done {
-			break
-		}
 	}
-	if sigsLen != len(sigs) {
-		panic("number of signatures and pack opcode do not match")
+	if vectorsLen != len(vectors) {
+		panic("number of vectors and pack opcode do not match")
 	}
 	if script[i] != 0xC0 { // PACK
-		panic("signatures array does not start with PACK")
+		panic("vectors array does not start with PACK")
 	}
 	i++
 
@@ -194,7 +187,54 @@ func Verify() bool {
 		panic("not a contract call")
 	}
 
-	return contract.Call(cnrH, "verifyPlacementSignatures", contract.ReadOnly, cID, metaData, sigs).(bool)
+	return contract.Call(cnrH, "verifyPlacementSignatures", contract.ReadOnly, cID, metaData, vectors).(bool)
+}
+
+func parseSignaturesVector(i int, script []byte) ([]interop.Signature, int) {
+	var (
+		vector  []interop.Signature
+		sigsLen int
+	)
+	for i < len(script) {
+		op := script[i]
+		var done bool
+
+		switch {
+		case op == 0x0C: // PUSHDATA1
+			i++
+			if script[i] != interop.SignatureLen {
+				panic("invalid signature length " + std.Itoa(int(script[i]), 10))
+			}
+			i++
+			vector = append(vector, script[i:i+interop.SignatureLen])
+			i += interop.SignatureLen
+		case op <= 0x05: // PUSHINT8 to PUSHINT256
+			lenInBytes := int(op + 1)
+			i++
+			sigsLen = convert.ToInteger(script[i : i+lenInBytes])
+			i += lenInBytes
+			done = true
+		case 0x10 < op && op <= 0x20: // PUSH1 to PUSH16
+			sigsLen = int(op - 0x10)
+			i++
+			done = true
+		default:
+			panic("invalid op in signatures " + std.Itoa(int(op), 16))
+		}
+
+		if done {
+			break
+		}
+	}
+	if sigsLen != len(vector) {
+		panic("number of signatures in vector and pack opcode do not match")
+	}
+	if script[i] != 0xC0 { // PACK
+		panic("signatures vector array does not start with PACK")
+	}
+	i++
+
+	return vector, i
 }
 
 // Version returns the version of the contract.
