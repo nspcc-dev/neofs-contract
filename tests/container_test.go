@@ -17,6 +17,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -1086,9 +1087,18 @@ func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
 
 func TestPutMeta(t *testing.T) {
 	cSingleWithProxy, cCommitee, cBal := newProxySponsorInvoker(t)
+	const (
+		numOfVectors  = 5
+		nodesInVector = 5
+	)
+
 	var sigs []any
-	for range 5 {
-		sigs = append(sigs, make([]byte, 64))
+	for range numOfVectors {
+		vector := make([]any, 0, nodesInVector)
+		for range nodesInVector {
+			vector = append(vector, make([]byte, interop.SignatureLen))
+		}
+		sigs = append(sigs, vector)
 	}
 
 	t.Run("meta disabled", func(t *testing.T) {

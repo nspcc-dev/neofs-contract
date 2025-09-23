@@ -753,7 +753,7 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
 	commonPrefix = append(commonPrefix, placementVector)
 
-	counter := 0
+	counter := -1
 	c := storage.Find(ctx, commonPrefix, storage.RemovePrefix|storage.KeysOnly|storage.Backwards)
 	if iterator.Next(c) {
 		counter = counterFromBytes(iterator.Value(c).([]byte))
