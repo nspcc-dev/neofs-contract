@@ -853,8 +853,7 @@ func TestContainerList(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		cID := make([]byte, sha256.Size)
-		_, err := rand.Read(cID)
-		require.NoError(t, err)
+		_, _ = rand.Read(cID)
 
 		const nodesNumber = 1024
 		const numberOfVectors = 4
@@ -948,8 +947,7 @@ func TestContainerList(t *testing.T) {
 
 	t.Run("invalid public key", func(t *testing.T) {
 		cID := make([]byte, sha256.Size)
-		_, err := rand.Read(cID)
-		require.NoError(t, err)
+		_, _ = rand.Read(cID)
 
 		badPublicKey := []byte{1, 2, 3, 4, 5}
 
@@ -958,8 +956,7 @@ func TestContainerList(t *testing.T) {
 
 	t.Run("not alphabet", func(t *testing.T) {
 		cID := make([]byte, sha256.Size)
-		_, err := rand.Read(cID)
-		require.NoError(t, err)
+		_, _ = rand.Read(cID)
 
 		notAlphabet := c.Executor.NewInvoker(c.Hash, c.NewAccount(t))
 		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "addNextEpochNodes", cID, 0, nil)
@@ -999,11 +996,9 @@ func stackIteratorToUint8Array(t *testing.T, stack *vm.Stack) []uint8 {
 
 func TestVerifyPlacementSignature(t *testing.T) {
 	testData := make([]byte, 1024)
-	_, err := rand.Read(testData)
-	require.NoError(t, err)
+	_, _ = rand.Read(testData)
 	cID := make([]byte, sha256.Size)
-	_, err = rand.Read(cID)
-	require.NoError(t, err)
+	_, _ = rand.Read(cID)
 
 	c, _, _ := newContainerInvoker(t, false)
 
