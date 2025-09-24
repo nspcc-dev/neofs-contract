@@ -3,12 +3,12 @@ package container
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
-	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -280,7 +280,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 
 	// optional
 
-	if v, ok := getFromMap(metaMap, "type"); ok {
+	if v, ok := metaMap["type"]; ok {
 		typ := v.(int)
 		switch typ {
 		case 0, 1, 2, 3, 4: // regular, tombstone, storage group, lock, link
@@ -288,19 +288,19 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 			panic("incorrect object type")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "firstPart"); ok {
+	if v, ok := metaMap["firstPart"]; ok {
 		firstPart := v.(interop.Hash256)
 		if len(firstPart) != interop.Hash256Len {
 			panic("incorrect first part object ID")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "previousPart"); ok {
+	if v, ok := metaMap["previousPart"]; ok {
 		previousPart := v.(interop.Hash256)
 		if len(previousPart) != interop.Hash256Len {
 			panic("incorrect previous part object ID")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "locked"); ok {
+	if v, ok := metaMap["locked"]; ok {
 		locked := v.([]interop.Hash256)
 		for i, l := range locked {
 			if len(l) != interop.Hash256Len {
@@ -308,7 +308,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 			}
 		}
 	}
-	if v, ok := getFromMap(metaMap, "deleted"); ok {
+	if v, ok := metaMap["deleted"]; ok {
 		deleted := v.([]interop.Hash256)
 		for i, d := range deleted {
 			if len(d) != interop.Hash256Len {
@@ -321,20 +321,12 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 }
 
 func requireMapValue(m map[string]any, key string) any {
-	v, ok := getFromMap(m, key)
+	v, ok := m[key]
 	if !ok {
 		panic("'" + key + "'" + " not found")
 	}
 
 	return v
-}
-
-func getFromMap(m map[string]any, key string) (any, bool) {
-	if neogointernal.Opcode2("HASKEY", m, key).(bool) { // https://github.com/nspcc-dev/neo-go/issues/3716
-		return m[key], true
-	}
-
-	return nil, false
 }
 
 // PutMeta is the same as [Put] and [PutNamed] (and exposed as put from
@@ -756,7 +748,7 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	counter := -1
 	c := storage.Find(ctx, commonPrefix, storage.RemovePrefix|storage.KeysOnly|storage.Backwards)
 	if iterator.Next(c) {
-		counter = counterFromBytes(iterator.Value(c).([]byte))
+		counter = int(convert.BytesBEToUint16(iterator.Value(c).([]byte)))
 	}
 
 	for _, publicKey := range publicKeys {
@@ -766,40 +758,9 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 
 		counter++
 
-		storageKey := append(commonPrefix, counterToBytes(counter)...)
+		storageKey := append(commonPrefix, convert.Uint16ToBytesBE(uint16(counter))...)
 		storage.Put(ctx, storageKey, publicKey)
 	}
-}
-
-func counterToBytes(counter int) []byte {
-	var anyCounter any = counter
-	res := anyCounter.([]byte)
-
-	switch len(res) {
-	case 0:
-		return []byte{0, 0}
-	case 1:
-		return []byte{0, res[0]}
-	default:
-		// only 2 bytes are expected, it should be ensured on the upper levels
-	}
-
-	// BE for correct sorting
-	first := res[0]
-	res[0] = res[1]
-	res[1] = first
-
-	return res
-}
-
-func counterFromBytes(counter []byte) int {
-	first := counter[0]
-	counter[0] = counter[1]
-	counter[1] = first
-
-	var anyCounter any = counter
-
-	return anyCounter.(int)
 }
 
 func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8) {
@@ -883,15 +844,12 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 
 	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
 	for iterator.Next(newNodes) {
-		newNode := iterator.Value(newNodes).(struct {
-			key []byte
-			val []byte
-		})
+		newNode := iterator.Value(newNodes).(storage.KeyValue)
 
-		storage.Delete(ctx, newNode.key)
+		storage.Delete(ctx, newNode.Key)
 
-		newKey := append([]byte{nodesPrefix}, newNode.key[1:]...)
-		storage.Put(ctx, newKey, newNode.val)
+		newKey := append([]byte{nodesPrefix}, newNode.Key[1:]...)
+		storage.Put(ctx, newKey, newNode.Value)
 	}
 
 	rr := storage.Find(ctx, replicasPrefix, storage.KeysOnly)
@@ -1102,7 +1060,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			reportsSummary.NumberOfObjects += objsNumber
 
 			reporter = NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-			storage.Put(ctx, append(reportersKey, counterToBytes(reportersCounter)...), std.Serialize(reporter))
+			storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(reportersCounter))...), std.Serialize(reporter))
 		} else {
 			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
 				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
@@ -1117,7 +1075,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			reporter.ContainerSize = sizeBytes
 			reporter.NumberOfObjects = objsNumber
 
-			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
+			storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(index))...), std.Serialize(reporter))
 		}
 	} else {
 		storageDiff = sizeBytes
@@ -1126,7 +1084,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			NumberOfObjects: objsNumber,
 		}
 		reporter := NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
+		storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(0))...), std.Serialize(reporter))
 	}
 
 	userSummaryKey := userTotalStorageKey(currEpoch.(int), owner)
