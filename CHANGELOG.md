@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 ### Changed
 
 ### Updated
+- NeoGo dependency to 0.113.0 (#521)
 
 ### Removed
 
