@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
-	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -283,7 +282,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 
 	// optional
 
-	if v, ok := getFromMap(metaMap, "type"); ok {
+	if v, ok := metaMap["type"]; ok {
 		typ := v.(int)
 		switch typ {
 		case 0, 1, 2, 3, 4: // regular, tombstone, storage group, lock, link
@@ -291,19 +290,19 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 			panic("incorrect object type")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "firstPart"); ok {
+	if v, ok := metaMap["firstPart"]; ok {
 		firstPart := v.(interop.Hash256)
 		if len(firstPart) != interop.Hash256Len {
 			panic("incorrect first part object ID")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "previousPart"); ok {
+	if v, ok := metaMap["previousPart"]; ok {
 		previousPart := v.(interop.Hash256)
 		if len(previousPart) != interop.Hash256Len {
 			panic("incorrect previous part object ID")
 		}
 	}
-	if v, ok := getFromMap(metaMap, "locked"); ok {
+	if v, ok := metaMap["locked"]; ok {
 		locked := v.([]interop.Hash256)
 		for i, l := range locked {
 			if len(l) != interop.Hash256Len {
@@ -311,7 +310,7 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 			}
 		}
 	}
-	if v, ok := getFromMap(metaMap, "deleted"); ok {
+	if v, ok := metaMap["deleted"]; ok {
 		deleted := v.([]interop.Hash256)
 		for i, d := range deleted {
 			if len(d) != interop.Hash256Len {
@@ -324,20 +323,12 @@ func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
 }
 
 func requireMapValue(m map[string]any, key string) any {
-	v, ok := getFromMap(m, key)
+	v, ok := m[key]
 	if !ok {
 		panic("'" + key + "'" + " not found")
 	}
 
 	return v
-}
-
-func getFromMap(m map[string]any, key string) (any, bool) {
-	if neogointernal.Opcode2("HASKEY", m, key).(bool) { // https://github.com/nspcc-dev/neo-go/issues/3716
-		return m[key], true
-	}
-
-	return nil, false
 }
 
 // PutMeta is the same as [Put] and [PutNamed] (and exposed as put from
