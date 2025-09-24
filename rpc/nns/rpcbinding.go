@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep11"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep22"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -70,6 +71,7 @@ type ContractReader struct {
 type Contract struct {
 	ContractReader
 	nep11.BaseWriter
+	nep22.Contract
 	actor Actor
 	hash  util.Uint160
 }
@@ -82,7 +84,7 @@ func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
 	var nep11ndt = nep11.NewNonDivisible(actor, hash)
-	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, actor, hash}
+	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, *nep22.NewContract(actor, hash), actor, hash}
 }
 
 // GetAllRecords invokes `getAllRecords` method of contract.
@@ -350,28 +352,6 @@ func (c *Contract) SetRecordTransaction(name string, typ *big.Int, id *big.Int, 
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetRecordUnsigned(name string, typ *big.Int, id *big.Int, data string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setRecord", nil, name, typ, id, data)
-}
-
-// Update creates a transaction invoking `update` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Update(nefFile []byte, manifest []byte, data any) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "update", nefFile, manifest, data)
-}
-
-// UpdateTransaction creates a transaction invoking `update` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) UpdateTransaction(nefFile []byte, manifest []byte, data any) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "update", nefFile, manifest, data)
-}
-
-// UpdateUnsigned creates a transaction invoking `update` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) UpdateUnsigned(nefFile []byte, manifest []byte, data any) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "update", nil, nefFile, manifest, data)
 }
 
 // UpdateSOA creates a transaction invoking `updateSOA` method of the contract.
