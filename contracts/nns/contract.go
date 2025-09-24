@@ -881,7 +881,7 @@ func safeSplitAndCheck(name string) ([]string, string) {
 	}
 	fragments := std.StringSplit(name, ".")
 	l = len(fragments)
-	for i := 0; i < l; i++ { //nolint:intrange // Not supported by NeoGo
+	for i := range l {
 		if !checkFragment(fragments[i], i == l-1) {
 			return nil, "invalid domain fragment"
 		}
@@ -1015,7 +1015,7 @@ func tokenIDFromName(ctx storage.Context, name string) string {
 
 	sum := 0
 	l := len(fragments) - 1
-	for i := 0; i < l; i++ { //nolint:intrange // Not supported by NeoGo
+	for i := range l {
 		tokenKey := getTokenKey([]byte(name[sum:]))
 		nameKey := getNameStateKey(tokenKey)
 		nsBytes := storage.Get(ctx, nameKey)

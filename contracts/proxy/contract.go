@@ -136,8 +136,7 @@ func Verify() bool {
 		panic("invalid meta push opcode " + std.Itoa(op, 16))
 	}
 	var metaLen int
-	//nolint:intrange
-	for j := 0; j < metaLenInBytes; j++ {
+	for j := range metaLenInBytes {
 		metaLen += int(script[i]) << (8 * j)
 		i++
 	}
