@@ -764,7 +764,7 @@ func TestQuotas(t *testing.T) {
 
 		t.Run("container quota", func(t *testing.T) {
 			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftContainerQuota", cID[:], softLimit)
-			res := c.Executor.GetTxExecResult(t, txH)
+			res := c.GetTxExecResult(t, txH)
 			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(softLimit)), false)
 			exp := stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
@@ -773,7 +773,7 @@ func TestQuotas(t *testing.T) {
 			c.Invoke(t, exp, "containerQuota", cID[:])
 
 			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardContainerQuota", cID[:], hardLimit)
-			res = c.Executor.GetTxExecResult(t, txH)
+			res = c.GetTxExecResult(t, txH)
 			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(hardLimit)), true)
 			exp = stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
@@ -783,7 +783,7 @@ func TestQuotas(t *testing.T) {
 		})
 		t.Run("user quota", func(t *testing.T) {
 			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftUserQuota", owner[:], softLimit)
-			res := c.Executor.GetTxExecResult(t, txH)
+			res := c.GetTxExecResult(t, txH)
 			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(softLimit)), false)
 			exp := stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
@@ -792,7 +792,7 @@ func TestQuotas(t *testing.T) {
 			c.Invoke(t, exp, "userQuota", owner[:])
 
 			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardUserQuota", owner[:], hardLimit)
-			res = c.Executor.GetTxExecResult(t, txH)
+			res = c.GetTxExecResult(t, txH)
 			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(hardLimit)), true)
 			exp = stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
@@ -958,7 +958,7 @@ func TestContainerList(t *testing.T) {
 		cID := make([]byte, sha256.Size)
 		_, _ = rand.Read(cID)
 
-		notAlphabet := c.Executor.NewInvoker(c.Hash, c.NewAccount(t))
+		notAlphabet := c.NewInvoker(c.Hash, c.NewAccount(t))
 		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "addNextEpochNodes", cID, 0, nil)
 		notAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, "commitContainerListUpdate", cID, 0)
 	})
