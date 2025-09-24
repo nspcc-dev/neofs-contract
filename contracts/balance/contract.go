@@ -83,17 +83,14 @@ func _deploy(data any, isUpdate bool) {
 func switchToAccPrefixes(ctx storage.Context) {
 	it := storage.Find(ctx, []byte{}, storage.None)
 	for iterator.Next(it) {
-		item := iterator.Value(it).(struct {
-			key   []byte
-			value []byte
-		})
+		item := iterator.Value(it).(storage.KeyValue)
 
-		if len(item.key) != interop.Hash160Len {
+		if len(item.Key) != interop.Hash160Len {
 			continue
 		}
 
-		storage.Put(ctx, append([]byte{accPrefix}, item.key...), item.value)
-		storage.Delete(ctx, item.key)
+		storage.Put(ctx, append([]byte{accPrefix}, item.Key...), item.Value)
+		storage.Delete(ctx, item.Key)
 	}
 }
 
