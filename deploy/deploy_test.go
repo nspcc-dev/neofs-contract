@@ -189,6 +189,7 @@ func TestContractAutodeploy(t *testing.T) {
 	require.NoError(t, err)
 	netSrv.AddConsensusService(cons, cons.OnPayload, cons.OnTransaction)
 	netSrv.Start()
+	t.Cleanup(netSrv.Shutdown)
 
 	errCh := make(chan error, 2)
 	rpcServer := rpcsrv.New(bc, cfg.ApplicationConfiguration.RPC, netSrv, nil, logger, errCh)
