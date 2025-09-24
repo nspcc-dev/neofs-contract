@@ -80,7 +80,7 @@ const (
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
 
-	// nolint:deadcode,unused
+	// nolint:unused
 	nnsDefaultTLD = "container"
 
 	// V2 format.
@@ -116,7 +116,7 @@ var (
 func OnNEP11Payment(a interop.Hash160, b int, c []byte, d any) {
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	args := data.([]any)
@@ -216,7 +216,7 @@ func _deploy(data any, isUpdate bool) {
 	runtime.Log("container contract initialized")
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 func registerNiceNameTLD(addrNNS interop.Hash160, nnsRoot string) {
 	isAvail := contract.Call(addrNNS, "isAvailable", contract.AllowCall|contract.ReadStates,
 		nnsRoot).(bool)

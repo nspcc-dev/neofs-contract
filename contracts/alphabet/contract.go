@@ -29,7 +29,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	}
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
