@@ -84,13 +84,6 @@ type RecordState struct {
 	ID   byte
 }
 
-// nsIteratorValue is used for upgrade from 0.17.0 to 0.18.0.
-// nolint:unused
-type nsIteratorValue struct {
-	k []byte
-	v NameState
-}
-
 // Update updates NameService contract.
 func Update(nefFile, manifest []byte, data any) {
 	checkCommittee()
