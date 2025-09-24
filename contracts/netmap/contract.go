@@ -597,9 +597,7 @@ func UpdateSnapshotCount(count int) {
 			moveSnapshot(ctx, k-diff, k)
 		}
 		delStart, delFinish = id+1, id+1+diff
-		if oldCount < delFinish {
-			delFinish = oldCount
-		}
+		delFinish = min(oldCount, delFinish)
 	} else {
 		// Decrease history size.
 		//
