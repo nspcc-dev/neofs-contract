@@ -90,6 +90,7 @@ Contract storage model.
 Current conventions:
  <cid>: 32-byte container identifier (SHA-256 hashes of container data)
  <owner>: 25-byte NEO3 account of owner of the particular container
+ <account>: 20-byte NEO3 account
  <epoch>: little-endian unsigned integer NeoFS epoch
 
 Key-value storage format:
@@ -109,15 +110,15 @@ Key-value storage format:
    user-by-user containers
  - 'nnsHasAlias<cid>' -> string
    domains registered for containers in the NNS
- - 's'<epoch><cid> -> std.Serialize(NodeReportSummary)
+ - 's'<cid> -> std.Serialize(NodeReportSummary)
    total container size and objects number according to information
    sent by storage nodes.
- - 'i'<epoch><cid><counter> -> std.Serialize(NodeReport)
+ - 'i'<cid><account> -> std.Serialize(NodeReport)
    latest report sent by <counter>-th storage node for specified
-   epoch and container; counter is a 2-bytes long BE positive integer
- - 'n<cid><placement_index><counter>' -> interop.PublicKey
+   container; counter is a 2-bytes long BE positive integer
+ - 'n<cid><placement_index><counter><account>' -> interop.PublicKey
    one of the container nodes' public key, counter is 2-bytes long BE
- - 'u<cid><placement_index><counter>' -> interop.PublicKey
+ - 'u<cid><placement_index><counter><account>' -> interop.PublicKey
    one of the container nodes' public key _for the next epoch_, they will become
    the current ones (with the 'n' prefix) once the Alphabet handles epoch update.
    Counter is 2-bytes long BE
@@ -129,7 +130,7 @@ Key-value storage format:
    all container's objects size limitation quota
  - `b<owner>' -> std.Serialize(Quota)
    all owner's containers' objects size limitation quota
- - 'e<epoch><user>' -> int
+ - 'e<user>' -> int
    total space taken to serve all containers that belong to user
 
 # Setting
