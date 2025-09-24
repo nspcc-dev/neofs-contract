@@ -3,6 +3,7 @@ package container
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
@@ -747,7 +748,7 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	counter := -1
 	c := storage.Find(ctx, commonPrefix, storage.RemovePrefix|storage.KeysOnly|storage.Backwards)
 	if iterator.Next(c) {
-		counter = counterFromBytes(iterator.Value(c).([]byte))
+		counter = int(convert.BytesBEToUint16(iterator.Value(c).([]byte)))
 	}
 
 	for _, publicKey := range publicKeys {
@@ -757,40 +758,9 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 
 		counter++
 
-		storageKey := append(commonPrefix, counterToBytes(counter)...)
+		storageKey := append(commonPrefix, convert.Uint16ToBytesBE(uint16(counter))...)
 		storage.Put(ctx, storageKey, publicKey)
 	}
-}
-
-func counterToBytes(counter int) []byte {
-	var anyCounter any = counter
-	res := anyCounter.([]byte)
-
-	switch len(res) {
-	case 0:
-		return []byte{0, 0}
-	case 1:
-		return []byte{0, res[0]}
-	default:
-		// only 2 bytes are expected, it should be ensured on the upper levels
-	}
-
-	// BE for correct sorting
-	first := res[0]
-	res[0] = res[1]
-	res[1] = first
-
-	return res
-}
-
-func counterFromBytes(counter []byte) int {
-	first := counter[0]
-	counter[0] = counter[1]
-	counter[1] = first
-
-	var anyCounter any = counter
-
-	return anyCounter.(int)
 }
 
 func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8) {
@@ -1090,7 +1060,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			reportsSummary.NumberOfObjects += objsNumber
 
 			reporter = NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-			storage.Put(ctx, append(reportersKey, counterToBytes(reportersCounter)...), std.Serialize(reporter))
+			storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(reportersCounter))...), std.Serialize(reporter))
 		} else {
 			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
 				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
@@ -1105,7 +1075,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			reporter.ContainerSize = sizeBytes
 			reporter.NumberOfObjects = objsNumber
 
-			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
+			storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(index))...), std.Serialize(reporter))
 		}
 	} else {
 		storageDiff = sizeBytes
@@ -1114,7 +1084,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			NumberOfObjects: objsNumber,
 		}
 		reporter := NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
+		storage.Put(ctx, append(reportersKey, convert.Uint16ToBytesBE(uint16(0))...), std.Serialize(reporter))
 	}
 
 	userSummaryKey := userTotalStorageKey(currEpoch.(int), owner)
