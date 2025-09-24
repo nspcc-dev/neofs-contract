@@ -62,12 +62,6 @@ type Candidate struct {
 	LastActiveEpoch int
 }
 
-// nolint:unused
-type kv struct {
-	k []byte
-	v []byte
-}
-
 type epochItem struct {
 	height int
 	time   int
@@ -890,12 +884,12 @@ func fillNetmap(ctx storage.Context, epoch int) {
 		it               = storage.Find(ctx, []byte(node2CandidatePrefix), storage.RemovePrefix)
 	)
 	for iterator.Next(it) {
-		kv := iterator.Value(it).(kv)
+		kv := iterator.Value(it).(storage.KeyValue)
 
-		cand := std.Deserialize(kv.v).(Candidate)
+		cand := std.Deserialize(kv.Value).(Candidate)
 		if cleanupThreshold > 0 && cand.LastActiveEpoch < epoch-cleanupThreshold {
 			// Forget about stale nodes.
-			updateCandidateState(ctx, interop.PublicKey(kv.k), nodestate.Offline)
+			updateCandidateState(ctx, interop.PublicKey(kv.Key), nodestate.Offline)
 		} else {
 			var n2 = Node2{
 				Addresses:  cand.Addresses,
@@ -904,7 +898,7 @@ func fillNetmap(ctx storage.Context, epoch int) {
 				State:      cand.State,
 			}
 			// Offline nodes are just deleted, so we can omit state check.
-			storage.Put(ctx, append(epochPrefix, kv.k...), std.Serialize(n2))
+			storage.Put(ctx, append(epochPrefix, kv.Key...), std.Serialize(n2))
 		}
 	}
 }

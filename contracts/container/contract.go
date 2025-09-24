@@ -871,15 +871,12 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 
 	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
 	for iterator.Next(newNodes) {
-		newNode := iterator.Value(newNodes).(struct {
-			key []byte
-			val []byte
-		})
+		newNode := iterator.Value(newNodes).(storage.KeyValue)
 
-		storage.Delete(ctx, newNode.key)
+		storage.Delete(ctx, newNode.Key)
 
-		newKey := append([]byte{nodesPrefix}, newNode.key[1:]...)
-		storage.Put(ctx, newKey, newNode.val)
+		newKey := append([]byte{nodesPrefix}, newNode.Key[1:]...)
+		storage.Put(ctx, newKey, newNode.Value)
 	}
 
 	rr := storage.Find(ctx, replicasPrefix, storage.KeysOnly)
