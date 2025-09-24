@@ -900,7 +900,7 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		storage.Delete(ctx, oldReplicasNumber)
 	}
 
-	// nolint:gosimple // https://github.com/nspcc-dev/neo-go/issues/3608
+	// nolint:staticcheck // https://github.com/nspcc-dev/neo-go/issues/3608
 	if replicas != nil {
 		for i, replica := range replicas {
 			if replica > maxNumOfREPs {
