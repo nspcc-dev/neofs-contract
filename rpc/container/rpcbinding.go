@@ -52,6 +52,7 @@ type ContainerNodeReport struct {
 	ContainerSize   *big.Int
 	NumberOfObjects *big.Int
 	NumberOfReports *big.Int
+	LastUpdateEpoch *big.Int
 }
 
 // ContainerNodeReportSummary is a contract-specific container.NodeReportSummary type used by its methods.
@@ -224,13 +225,13 @@ func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 }
 
 // GetNodeReportSummary invokes `getNodeReportSummary` method of contract.
-func (c *ContractReader) GetNodeReportSummary(epoch *big.Int, cid util.Uint256) (*ContainerNodeReportSummary, error) {
-	return itemToContainerNodeReportSummary(unwrap.Item(c.invoker.Call(c.hash, "getNodeReportSummary", epoch, cid)))
+func (c *ContractReader) GetNodeReportSummary(cid util.Uint256) (*ContainerNodeReportSummary, error) {
+	return itemToContainerNodeReportSummary(unwrap.Item(c.invoker.Call(c.hash, "getNodeReportSummary", cid)))
 }
 
 // GetReportByNode invokes `getReportByNode` method of contract.
-func (c *ContractReader) GetReportByNode(epoch *big.Int, cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
-	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByNode", epoch, cid, pubKey)))
+func (c *ContractReader) GetReportByNode(cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
+	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByNode", cid, pubKey)))
 }
 
 // GetTakenSpaceByUser invokes `getTakenSpaceByUser` method of contract.
@@ -253,8 +254,8 @@ func (c *ContractReader) IterateAllContainerSizesExpanded(epoch *big.Int, _numOf
 }
 
 // IterateAllReportSummaries invokes `iterateAllReportSummaries` method of contract.
-func (c *ContractReader) IterateAllReportSummaries(epoch *big.Int) (uuid.UUID, result.Iterator, error) {
-	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllReportSummaries", epoch))
+func (c *ContractReader) IterateAllReportSummaries() (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateAllReportSummaries"))
 }
 
 // IterateAllReportSummariesExpanded is similar to IterateAllReportSummaries (uses the same contract
@@ -262,8 +263,8 @@ func (c *ContractReader) IterateAllReportSummaries(epoch *big.Int) (uuid.UUID, r
 // doesn't expand iterators. It creates a script that will get the specified
 // number of result items from the iterator right in the VM and return them to
 // you. It's only limited by VM stack and GAS available for RPC invocations.
-func (c *ContractReader) IterateAllReportSummariesExpanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
-	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllReportSummaries", _numOfIteratorItems, epoch))
+func (c *ContractReader) IterateAllReportSummariesExpanded(_numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllReportSummaries", _numOfIteratorItems))
 }
 
 // IterateContainerSizes invokes `iterateContainerSizes` method of contract.
@@ -281,8 +282,8 @@ func (c *ContractReader) IterateContainerSizesExpanded(epoch *big.Int, cid util.
 }
 
 // IterateReports invokes `iterateReports` method of contract.
-func (c *ContractReader) IterateReports(epoch *big.Int, cid util.Uint256) (uuid.UUID, result.Iterator, error) {
-	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateReports", epoch, cid))
+func (c *ContractReader) IterateReports(cid util.Uint256) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateReports", cid))
 }
 
 // IterateReportsExpanded is similar to IterateReports (uses the same contract
@@ -290,8 +291,8 @@ func (c *ContractReader) IterateReports(epoch *big.Int, cid util.Uint256) (uuid.
 // doesn't expand iterators. It creates a script that will get the specified
 // number of result items from the iterator right in the VM and return them to
 // you. It's only limited by VM stack and GAS available for RPC invocations.
-func (c *ContractReader) IterateReportsExpanded(epoch *big.Int, cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
-	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateReports", _numOfIteratorItems, epoch, cid))
+func (c *ContractReader) IterateReportsExpanded(cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateReports", _numOfIteratorItems, cid))
 }
 
 // ListContainerSizes invokes `listContainerSizes` method of contract.
@@ -1387,7 +1388,7 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 	if !ok {
 		return errors.New("not an array")
 	}
-	if len(arr) != 4 {
+	if len(arr) != 5 {
 		return errors.New("wrong number of structure elements")
 	}
 
@@ -1429,6 +1430,12 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 		return fmt.Errorf("field NumberOfReports: %w", err)
 	}
 
+	index++
+	res.LastUpdateEpoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LastUpdateEpoch: %w", err)
+	}
+
 	return nil
 }
 
@@ -1442,7 +1449,7 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	var (
 		err   error
 		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 4)
+		items = make([]stackitem.Item, 0, 5)
 	)
 	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
 	if err != nil {
@@ -1468,6 +1475,12 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	}
 	items = append(items, itm)
 
+	itm, err = (*stackitem.BigInteger)(res.LastUpdateEpoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LastUpdateEpoch: %w", err)
+	}
+	items = append(items, itm)
+
 	return stackitem.NewStruct(items), nil
 }
 
@@ -1482,7 +1495,7 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	var (
 		err  error
 		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 4)
+		prms = make([]smartcontract.Parameter, 0, 5)
 	)
 	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
 	if err != nil {
@@ -1505,6 +1518,12 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	prm, err = smartcontract.NewParameterFromValue(res.NumberOfReports)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field NumberOfReports: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateEpoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateEpoch: %w", err)
 	}
 	prms = append(prms, prm)
 

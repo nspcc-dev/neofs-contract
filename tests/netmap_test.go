@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"math/big"
 	"math/rand/v2"
 	"path"
@@ -188,33 +189,53 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 		netmapInvoker.Invoke(t, stackitem.Null{}, "newEpoch", 1) // no panic so registrations and calls are OK
 	})
 
+	const subscribersPrefix = "e"
+
 	t.Run("double subscription", func(t *testing.T) {
 		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
 		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
 
 		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
 
-		const subscribersPrefix = "e"
-		var foundThirdSubscriber bool
+		var unknownSubscriberFound bool
 		var balanceSubscribers int
 		var containerSubscribers int
 
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 0), func(k, v []byte) bool {
-			balanceSubscribers++
-			return false
-		})
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 1), func(k, v []byte) bool {
-			containerSubscribers++
-			return false
-		})
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 2), func(k, v []byte) bool {
-			foundThirdSubscriber = true
-			return false
+		netmapInvoker.Chain.SeekStorage(netmapContractID, []byte(subscribersPrefix), func(k, v []byte) bool {
+			switch {
+			case bytes.Equal(k[1:], ctrBalance.Hash[:]):
+				balanceSubscribers++
+			case bytes.Equal(k[1:], ctrContainer.Hash[:]):
+				containerSubscribers++
+			default:
+				unknownSubscriberFound = true
+			}
+
+			return true
 		})
 
 		require.Equal(t, 1, balanceSubscribers)
-		require.Equal(t, 1, containerSubscribers)
-		require.False(t, foundThirdSubscriber)
+		require.Equal(t, 0, containerSubscribers)
+		require.False(t, unknownSubscriberFound)
+	})
+
+	t.Run("unsubscribe", func(t *testing.T) {
+		hash := netmapInvoker.Invoke(t, stackitem.Null{}, "unsubscribeFromNewEpoch", ctrBalance.Hash)
+		res := e.GetTxExecResult(t, hash)
+		require.Len(t, res.Events, 1)
+		require.Equal(t, "NewEpochUnsubscription", res.Events[0].Name)
+
+		var foundCnrHash bool
+		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
+		netmapInvoker.Chain.SeekStorage(netmapContractID, []byte(subscribersPrefix), func(k, v []byte) bool {
+			if bytes.Equal(k[1:], ctrBalance.Hash[:]) {
+				foundCnrHash = true
+				return false
+			}
+			return true
+		})
+
+		require.False(t, foundCnrHash)
 	})
 }
 

@@ -15,3 +15,13 @@ func SubscribeForNewEpoch() {
 	netmapContract := ResolveFSContract("netmap")
 	contract.Call(netmapContract, "subscribeForNewEpoch", contract.All, runtime.GetExecutingScriptHash())
 }
+
+// UnsubscribeFromNewEpoch unregisters calling contract from new epoch events.
+// Netmap contract's address is taken from the NNS contract, therefore, it must
+// be presented and filled with netmap information for a correct
+// UnsubscribeFromNewEpoch call; otherwise a successive call is not guaranteed.
+// Calling if no subscription has been done is safe.
+func UnsubscribeFromNewEpoch() {
+	netmapContract := ResolveFSContract("netmap")
+	contract.Call(netmapContract, "unsubscribeFromNewEpoch", contract.All, runtime.GetExecutingScriptHash())
+}

@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
@@ -415,14 +417,21 @@ func TestContainerSizeReports(t *testing.T) {
 		newStorageNode(t, c),
 		newStorageNode(t, c),
 	}
+	slices.SortFunc(nodes, func(a, b testNodeInfo) int {
+		keyA, err := keys.NewPublicKeyFromBytes(a.pub, elliptic.P256())
+		require.NoError(t, err)
+		keyB, err := keys.NewPublicKeyFromBytes(b.pub, elliptic.P256())
+		require.NoError(t, err)
+
+		return bytes.Compare(keyA.GetScriptHash().BytesBE(), keyB.GetScriptHash().BytesBE())
+	})
+
 	nodesKeys := make([]any, 0, len(nodes))
 	for _, node := range nodes {
 		nodesKeys = append(nodesKeys, node.pub)
 	}
 
 	cnt := addContainerWithNodes(t, c, cBal, nodesKeys)
-	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
-	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
 
 	t.Run("must be witnessed by key in the argument", func(t *testing.T) {
 		c.WithSigners(nodes[1].signer).InvokeFail(t, common.ErrWitnessFailed, "putReport",
@@ -446,6 +455,11 @@ func TestContainerSizeReports(t *testing.T) {
 		}
 
 		c.WithSigners(nodes[0].signer).InvokeFail(t, "max number of reports", "putReport",
+			cnt.id[:], int64(123), int64(456), nodes[0].pub,
+		)
+
+		cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
+		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 			cnt.id[:], int64(123), int64(456), nodes[0].pub,
 		)
 	})
@@ -491,7 +505,7 @@ func TestContainerSizeReports(t *testing.T) {
 					)
 				}
 
-				res, err := c.TestInvoke(t, "getNodeReportSummary", int64(2), anotherCnr.id[:])
+				res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 				require.NoError(t, err, "receiving container info")
 
 				ii := res.Top().Array()
@@ -527,7 +541,7 @@ func TestContainerSizeReports(t *testing.T) {
 		)
 
 		// summaries for the whole container
-		res, err := c.TestInvoke(t, "getNodeReportSummary", int64(2), anotherCnr.id[:])
+		res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 		require.NoError(t, err, "receiving estimations")
 		ii := res.Top().Array()
 		size, err := ii[0].TryInteger()
@@ -538,7 +552,7 @@ func TestContainerSizeReports(t *testing.T) {
 		require.Equal(t, int64(nodeObjs1+nodeObjs2), objs.Int64(), "average object numbers are not equal")
 
 		// separate value for node 1
-		res, err = c.TestInvoke(t, "getReportByNode", int64(2), anotherCnr.id[:], nodes[0].pub)
+		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[0].pub)
 		require.NoError(t, err, "receiving estimations for node 1")
 		ii = res.Top().Array()
 		pk, err := ii[0].TryBytes()
@@ -556,7 +570,7 @@ func TestContainerSizeReports(t *testing.T) {
 		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 1 report number")
 
 		// separate value for node 2
-		res, err = c.TestInvoke(t, "getReportByNode", int64(2), anotherCnr.id[:], nodes[1].pub)
+		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[1].pub)
 		require.NoError(t, err, "receiving estimations for node 2")
 		ii = res.Top().Array()
 		pk, err = ii[0].TryBytes()
@@ -584,7 +598,7 @@ func TestContainerSizeReports(t *testing.T) {
 			)
 		}
 
-		res, err := c.TestInvoke(t, "iterateReports", int64(2), anotherCnr.id[:])
+		res, err := c.TestInvoke(t, "iterateReports", anotherCnr.id[:])
 		require.NoError(t, err, "receiving reports iterator")
 
 		it := res.Pop().Value().(*storage.Iterator)
@@ -609,10 +623,19 @@ func TestContainerSizeReports(t *testing.T) {
 	})
 
 	t.Run("iterate all containers", func(t *testing.T) {
-		const numOfContainers = 3
-		const newEpoch = 3
-		cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(newEpoch))
+		// drop all the previous containers
 
+		res, err := c.TestInvoke(t, "containersOf", nil)
+		require.NoError(t, err)
+		cIDs := iteratorToArray(res.Pop().Value().(*storage.Iterator))
+		for _, cID := range cIDs {
+			cIDRaw, err := cID.TryBytes()
+			require.NoError(t, err)
+
+			c.Invoke(t, stackitem.Null{}, "remove", cIDRaw, []byte{}, []byte{}, []byte{})
+		}
+
+		const numOfContainers = 3
 		type cnrInfo struct {
 			size int64
 			objs int64
@@ -628,7 +651,7 @@ func TestContainerSizeReports(t *testing.T) {
 			)
 		}
 
-		res, err := c.TestInvoke(t, "iterateAllReportSummaries", int64(newEpoch))
+		res, err = c.TestInvoke(t, "iterateAllReportSummaries")
 		require.NoError(t, err, "receiving all container infos iterator")
 
 		it := res.Pop().Value().(*storage.Iterator)
@@ -652,21 +675,30 @@ func TestContainerSizeReports(t *testing.T) {
 	})
 
 	t.Run("cleanup container infos", func(t *testing.T) {
-		const newEpoch = 100
-		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch)
+		// drop all the previous containers
+
+		res, err := c.TestInvoke(t, "containersOf", nil)
+		require.NoError(t, err)
+		cIDs := iteratorToArray(res.Pop().Value().(*storage.Iterator))
+		for _, cID := range cIDs {
+			cIDRaw, err := cID.TryBytes()
+			require.NoError(t, err)
+
+			c.Invoke(t, stackitem.Null{}, "remove", cIDRaw, []byte{}, []byte{}, []byte{})
+		}
 
 		anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 		c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
 			anotherCnr.id[:], 123, 455, nodes[0].pub,
 		)
-		res, err := c.TestInvoke(t, "iterateAllReportSummaries", int64(newEpoch))
+		res, err = c.TestInvoke(t, "iterateAllReportSummaries")
 		require.NoError(t, err, "receiving all container infos iterator")
 		it := res.Pop().Value().(*storage.Iterator)
 		estimations := iteratorToArray(it)
 		require.Len(t, estimations, 1)
 
-		cNm.Invoke(t, stackitem.Null{}, "newEpoch", newEpoch+containerconst.TotalCleanupDelta+1)
-		res, err = c.TestInvoke(t, "iterateAllReportSummaries", int64(newEpoch))
+		c.Invoke(t, stackitem.Null{}, "remove", anotherCnr.id[:], []byte{1}, []byte{1}, []byte{1})
+		res, err = c.TestInvoke(t, "iterateAllReportSummaries")
 		require.NoError(t, err, "receiving all container infos iterator")
 		it = res.Pop().Value().(*storage.Iterator)
 		estimations = iteratorToArray(it)
@@ -813,9 +845,49 @@ func TestTotalUserSpace(t *testing.T) {
 
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
 
-	const numOfCnrs = 10
-	cnrs := make([]cid.ID, 0, numOfCnrs)
-	for range numOfCnrs {
+	t.Run("values", func(t *testing.T) {
+		const numOfCnrs = 10
+		cnrs := make([]cid.ID, 0, numOfCnrs)
+		for range numOfCnrs {
+			cnr := containertest.Container()
+			cnr.SetOwner(owner)
+			rawCnr := cnr.Marshal()
+			cID := cid.NewFromMarshalledContainer(rawCnr)
+
+			balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+			c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+
+			c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
+			c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+
+			cnrs = append(cnrs, cID)
+		}
+
+		var sum int
+		for i, cID := range cnrs {
+			sum += i
+			c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i, 1234, nodeKey)
+			c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+		}
+
+		// decrease values
+		for i, cID := range cnrs {
+			if i == 0 {
+				continue
+			}
+			sum--
+			c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i-1, 1234, nodeKey)
+			c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+		}
+
+		// container removal handling
+		for _, cID := range cnrs {
+			c.Invoke(t, stackitem.Null{}, "remove", cID[:], []byte{}, []byte{}, []byte{})
+		}
+		c.Invoke(t, stackitem.Make(0), "getTakenSpaceByUser", owner[:])
+	})
+
+	t.Run("netmap changes", func(t *testing.T) {
 		cnr := containertest.Container()
 		cnr.SetOwner(owner)
 		rawCnr := cnr.Marshal()
@@ -824,28 +896,38 @@ func TestTotalUserSpace(t *testing.T) {
 		balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
 		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
 
-		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
+		const nodesInNetmap = 10
+		var (
+			signers  []neotest.Signer
+			oldNodes []any
+		)
+		for range nodesInNetmap {
+			acc := c.NewAccount(t)
+			key := acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+
+			signers = append(signers, acc)
+			oldNodes = append(oldNodes, key)
+		}
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, oldNodes)
 		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
 
-		cnrs = append(cnrs, cID)
-	}
-
-	var sum int
-	for i, cID := range cnrs {
-		sum += i
-		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i, 1234, nodeKey)
-		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
-	}
-
-	// decrease values
-	for i, cID := range cnrs {
-		if i == 0 {
-			continue
+		const spaceMultiplier = 1000
+		var sum int
+		for i := range nodesInNetmap {
+			sum += i * spaceMultiplier
+			c.WithSigners(signers[i]).Invoke(t, stackitem.Null{}, "putReport", cID[:], i*spaceMultiplier, i*spaceMultiplier, oldNodes[i])
 		}
-		sum--
-		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i-1, 1234, nodeKey)
 		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
-	}
+
+		newNodes := oldNodes[:len(oldNodes)/2]
+		var newSum int
+		for i := range newNodes {
+			newSum += i * spaceMultiplier
+		}
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, newNodes)
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+		c.Invoke(t, stackitem.Make(newSum), "getTakenSpaceByUser", owner[:])
+	})
 }
 
 func TestContainerList(t *testing.T) {

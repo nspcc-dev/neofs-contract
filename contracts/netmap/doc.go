@@ -42,6 +42,13 @@ in the network by invoking NewEpoch method.
 	NewEpoch
 	  - name: epoch
 	    type: Integer
+
+NewEpochSubscription notification. This notification is produced when a new
+contract was subscribed to new epoch event.
+
+	NewEpochSubscription
+	  - name: contract
+		type: Hash160
 */
 package netmap
 
@@ -74,6 +81,9 @@ Key-value storage format:
    Per-epoch node list, epoch is encoded as 4-byte BE integer.
  - 't' -> int
    Cleanup threshold value.
+ - 'e<counter><contractHash>' -> empty byte array
+   Contracts that are subscribed for new epoch events. <counter> is a 1-byte
+   monotonically increasing number unique for every subscription.
 
 # Setting
 To handle some events, the contract refers to other contracts.

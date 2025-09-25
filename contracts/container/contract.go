@@ -49,6 +49,7 @@ type (
 		ContainerSize   int
 		NumberOfObjects int
 		NumberOfReports int
+		LastUpdateEpoch int
 	}
 
 	// NodeReportSummary is the summary of all [NodeReport] claimed by all
@@ -160,6 +161,10 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
+		//if version < 25_000 {
+		//	common.UnsubscribeFromNewEpoch()
+		//}
+
 		return
 	}
 
@@ -210,8 +215,6 @@ func _deploy(data any, isUpdate bool) {
 
 	// add NNS root for container alias domains
 	registerNiceNameTLD(addrNNS, nnsRoot)
-
-	common.SubscribeForNewEpoch()
 
 	runtime.Log("container contract initialized")
 }
@@ -616,22 +619,13 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 
 	owner := ownerFromBinaryContainer(cnrItem.([]byte))
 
-	storage.Delete(ctx, cnrItemKey)
-	storage.Delete(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...))
-	storage.Delete(ctx, append(eACLPrefix, id...))
-	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
-
-	deleteByPrefix(ctx, append([]byte{nodesPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
+	removeContainer(ctx, id, owner)
 
 	domainKey := append([]byte(nnsHasAliasKey), id...)
 	if domain := storage.Get(ctx, domainKey).(string); len(domain) != 0 { // != "" not working
 		storage.Delete(ctx, domainKey)
 		deleteNNSRecords(ctx, domain)
 	}
-
-	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
 
 	runtime.Notify("Removed", interop.Hash256(id), owner)
 }
@@ -753,53 +747,15 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
 	commonPrefix = append(commonPrefix, placementVector)
 
-	counter := -1
-	c := storage.Find(ctx, commonPrefix, storage.RemovePrefix|storage.KeysOnly|storage.Backwards)
-	if iterator.Next(c) {
-		counter = counterFromBytes(iterator.Value(c).([]byte))
-	}
-
 	for _, publicKey := range publicKeys {
 		if len(publicKey) != interop.PublicKeyCompressedLen {
 			panic(cst.ErrorInvalidPublicKey + ": length: " + std.Itoa10(len(publicKey)))
 		}
 
-		counter++
-
-		storageKey := append(commonPrefix, counterToBytes(counter)...)
+		account := contract.CreateStandardAccount(publicKey)
+		storageKey := append(commonPrefix, account...)
 		storage.Put(ctx, storageKey, publicKey)
 	}
-}
-
-func counterToBytes(counter int) []byte {
-	var anyCounter any = counter
-	res := anyCounter.([]byte)
-
-	switch len(res) {
-	case 0:
-		return []byte{0, 0}
-	case 1:
-		return []byte{0, res[0]}
-	default:
-		// only 2 bytes are expected, it should be ensured on the upper levels
-	}
-
-	// BE for correct sorting
-	first := res[0]
-	res[0] = res[1]
-	res[1] = first
-
-	return res
-}
-
-func counterFromBytes(counter []byte) int {
-	first := counter[0]
-	counter[0] = counter[1]
-	counter[1] = first
-
-	var anyCounter any = counter
-
-	return anyCounter.(int)
 }
 
 func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8) {
@@ -875,10 +831,42 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 	newNodesPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
 	replicasPrefix := append([]byte{replicasNumberPrefix}, cID...)
 
-	oldNodes := storage.Find(ctx, oldNodesPrefix, storage.KeysOnly)
+	var (
+		spaceDiff int
+		objsDiff  int
+	)
+	oldNodes := storage.Find(ctx, oldNodesPrefix, storage.None)
 	for iterator.Next(oldNodes) {
-		oldNode := iterator.Value(oldNodes).(string)
-		storage.Delete(ctx, oldNode)
+		oldNode := iterator.Value(oldNodes).(struct{ k, v []byte })
+
+		// check if node left network map (it does not belong to
+		// any placement vector)
+		var stillInNetmap bool
+		newNodeKey := append([]byte{nextEpochNodesPrefix}, oldNode.k[1:]...)
+		// nolint:intrange // Not supported by NeoGo
+		for i := 0; i < len(replicas); i++ {
+			newNodeKey[1+interop.Hash256Len] = uint8(i)
+			stillInNetmap = storage.Get(ctx, newNodeKey) != nil
+			if stillInNetmap {
+				break
+			}
+		}
+
+		if !stillInNetmap {
+			reportKey := append([]byte{reportersPrefix}, oldNode.k[1:1+interop.Hash256Len]...)
+			reportKey = append(reportKey, oldNode.k[1+interop.Hash256Len+1:]...)
+			reportRaw := storage.Get(ctx, reportKey)
+			if reportRaw != nil {
+				report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
+
+				spaceDiff -= report.ContainerSize
+				objsDiff -= report.NumberOfObjects
+
+				storage.Delete(ctx, reportKey)
+			}
+		}
+
+		storage.Delete(ctx, oldNode.k)
 	}
 
 	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
@@ -909,6 +897,25 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 
 			storage.Put(ctx, append(replicasPrefix, uint8(i)), replica)
 		}
+	}
+
+	// update reports stat after netmap change
+
+	if spaceDiff != 0 || objsDiff != 0 {
+		// summary update
+
+		summaryKey := append([]byte{reportsSummary}, cID...)
+		rSummary := std.Deserialize(storage.Get(ctx, summaryKey).([]byte)).(NodeReportSummary)
+		rSummary.ContainerSize += spaceDiff
+		rSummary.NumberOfObjects += objsDiff
+		storage.Put(ctx, summaryKey, std.Serialize(rSummary))
+
+		// user stat update
+
+		owner := getOwnerByID(ctx, cID)
+		totalUserKey := userTotalStorageKey(owner)
+		oldVal := storage.Get(ctx, totalUserKey).(int)
+		storage.Put(ctx, totalUserKey, oldVal+spaceDiff)
 	}
 
 	runtime.Notify("NodesUpdate", cID)
@@ -1069,67 +1076,72 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	}
 
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
+	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 
-	var storageDiff int
-	summaryKey := append([]byte{reportsSummary}, currEpoch.([]byte)...)
-	summaryKey = append(summaryKey, cid...)
-	reportersKey := append([]byte{reportersPrefix}, currEpoch.([]byte)...)
-	reportersKey = append(reportersKey, cid...)
-	var reportsSummary NodeReportSummary
-	reportsSummaryRaw := storage.Get(ctx, summaryKey).([]byte)
+	var (
+		nodeAcc           = contract.CreateStandardAccount(pubKey)
+		storageDiff       int
+		summaryKey        = append([]byte{reportsSummary}, cid...)
+		reportsSummaryRaw = storage.Get(ctx, summaryKey)
+		summary           NodeReportSummary
+	)
+	reportKey := append([]byte{reportersPrefix}, cid...)
+	reportKey = append(reportKey, nodeAcc...)
 	if reportsSummaryRaw != nil {
-		index := -1
-
-		var reportersCounter int
-		var reporter NodeReport
-		it := storage.Find(ctx, reportersKey, storage.ValuesOnly|storage.DeserializeValues)
-		for iterator.Next(it) {
-			reporter = iterator.Value(it).(NodeReport)
-			if index == -1 && reporter.PublicKey.Equals(pubKey) {
-				// reporters have BE counter suffix, this is why iterating them
-				// is always done in ascending order, and reporter's counter
-				// always corresponds to its position in `storage.Find` results
-				index = reportersCounter
-			}
-			reportersCounter++
-		}
-
-		reportsSummary = std.Deserialize(reportsSummaryRaw).(NodeReportSummary)
-		if index == -1 {
+		summary = std.Deserialize(reportsSummaryRaw.([]byte)).(NodeReportSummary)
+		reportRaw := storage.Get(ctx, reportKey)
+		if reportRaw == nil {
 			storageDiff = sizeBytes
-			reportsSummary.ContainerSize += sizeBytes
-			reportsSummary.NumberOfObjects += objsNumber
+			summary.ContainerSize += sizeBytes
+			summary.NumberOfObjects += objsNumber
 
-			reporter = NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-			storage.Put(ctx, append(reportersKey, counterToBytes(reportersCounter)...), std.Serialize(reporter))
+			report := NodeReport{
+				PublicKey:       pubKey,
+				NumberOfReports: 1,
+				ContainerSize:   sizeBytes,
+				NumberOfObjects: objsNumber,
+				LastUpdateEpoch: currEpoch,
+			}
+			storage.Put(ctx, reportKey, std.Serialize(report))
 		} else {
-			if reporter.NumberOfReports == maxNumberOfReportsPerEpoch {
-				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") for " + std.Itoa10(currEpoch.(int)) + " epoch reached")
+			report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
+			if report.LastUpdateEpoch == currEpoch && report.NumberOfReports == maxNumberOfReportsPerEpoch {
+				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") reached")
 			}
 
-			storageDiff = sizeBytes - reporter.ContainerSize
+			storageDiff = sizeBytes - report.ContainerSize
 
-			reportsSummary.ContainerSize = reportsSummary.ContainerSize - reporter.ContainerSize + sizeBytes
-			reportsSummary.NumberOfObjects = reportsSummary.NumberOfObjects - reporter.NumberOfObjects + objsNumber
+			summary.ContainerSize = summary.ContainerSize - report.ContainerSize + sizeBytes
+			summary.NumberOfObjects = summary.NumberOfObjects - report.NumberOfObjects + objsNumber
 
-			reporter.NumberOfReports += 1
-			reporter.ContainerSize = sizeBytes
-			reporter.NumberOfObjects = objsNumber
+			if report.LastUpdateEpoch == currEpoch {
+				report.NumberOfReports += 1
+			} else {
+				report.LastUpdateEpoch = currEpoch
+				report.NumberOfReports = 1
+			}
+			report.ContainerSize = sizeBytes
+			report.NumberOfObjects = objsNumber
 
-			storage.Put(ctx, append(reportersKey, counterToBytes(index)...), std.Serialize(reporter))
+			storage.Put(ctx, reportKey, std.Serialize(report))
 		}
 	} else {
 		storageDiff = sizeBytes
-		reportsSummary = NodeReportSummary{
+		summary = NodeReportSummary{
 			ContainerSize:   sizeBytes,
 			NumberOfObjects: objsNumber,
 		}
-		reporter := NodeReport{PublicKey: pubKey, NumberOfReports: 1, ContainerSize: sizeBytes, NumberOfObjects: objsNumber}
-		storage.Put(ctx, append(reportersKey, counterToBytes(0)...), std.Serialize(reporter))
+		report := NodeReport{
+			PublicKey:       pubKey,
+			NumberOfReports: 1,
+			ContainerSize:   sizeBytes,
+			NumberOfObjects: objsNumber,
+			LastUpdateEpoch: currEpoch,
+		}
+		storage.Put(ctx, reportKey, std.Serialize(report))
 	}
 
-	userSummaryKey := userTotalStorageKey(currEpoch.(int), owner)
+	userSummaryKey := userTotalStorageKey(owner)
 	v := storage.Get(ctx, userSummaryKey)
 	if v == nil {
 		storage.Put(ctx, userSummaryKey, storageDiff)
@@ -1138,7 +1150,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		storage.Put(ctx, userSummaryKey, oldSize+storageDiff)
 	}
 
-	storage.Put(ctx, summaryKey, std.Serialize(reportsSummary))
+	storage.Put(ctx, summaryKey, std.Serialize(summary))
 	runtime.Log("saved container size report")
 }
 
@@ -1146,10 +1158,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 // If user have no containers, it returns 0.
 func GetTakenSpaceByUser(user []byte) int {
 	ctx := storage.GetReadOnlyContext()
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly)
-
-	v := storage.Get(ctx, userTotalStorageKey(currEpoch.(int), user))
+	v := storage.Get(ctx, userTotalStorageKey(user))
 	if v == nil {
 		return 0
 	}
@@ -1162,15 +1171,13 @@ func GetTakenSpaceByUser(user []byte) int {
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
-func GetNodeReportSummary(epoch int, cid interop.Hash256) NodeReportSummary {
+func GetNodeReportSummary(cid interop.Hash256) NodeReportSummary {
 	ctx := storage.GetReadOnlyContext()
 	if getOwnerByID(ctx, cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
-	key := append([]byte{reportsSummary}, any(epoch).([]byte)...)
-	key = append(key, cid...)
-
+	key := append([]byte{reportsSummary}, cid...)
 	cnrSummaryRaw := storage.Get(ctx, key).([]byte)
 	if cnrSummaryRaw == nil {
 		return NodeReportSummary{}
@@ -1180,24 +1187,21 @@ func GetNodeReportSummary(epoch int, cid interop.Hash256) NodeReportSummary {
 }
 
 // GetReportByNode method returns the latest report, that node with pubKey
-// reported for the specified container and epoch via [PutReport].
+// reported for the specified container via [PutReport].
 //
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
-func GetReportByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
+func GetReportByNode(cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
 	ctx := storage.GetReadOnlyContext()
 	if getOwnerByID(ctx, cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
-	key := append([]byte{reportersPrefix}, any(epoch).([]byte)...)
-	key = append(key, cid...)
-	it := storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
-	for iterator.Next(it) {
-		reporter := iterator.Value(it).(NodeReport)
-		if reporter.PublicKey.Equals(pubKey) {
-			return reporter
-		}
+	key := append([]byte{reportersPrefix}, cid...)
+	key = append(key, contract.CreateStandardAccount(pubKey)...)
+	reportRaw := storage.Get(ctx, key)
+	if reportRaw != nil {
+		return std.Deserialize(reportRaw.([]byte)).(NodeReport)
 	}
 
 	return NodeReport{}
@@ -1205,16 +1209,13 @@ func GetReportByNode(epoch int, cid interop.Hash256, pubKey interop.PublicKey) N
 
 // IterateReports method returns iterator over nodes' reports
 // that were claimed for specified epoch and container.
-func IterateReports(epoch int, cid interop.Hash256) iterator.Iterator {
+func IterateReports(cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
 	}
 
 	ctx := storage.GetReadOnlyContext()
-
-	key := []byte{reportersPrefix}
-	key = append(key, any(epoch).([]byte)...)
-	key = append(key, cid...)
+	key := append([]byte{reportersPrefix}, cid...)
 
 	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 }
@@ -1223,13 +1224,8 @@ func IterateReports(epoch int, cid interop.Hash256) iterator.Iterator {
 // that have been registered for the specified epoch. Items returned from this iterator
 // are key-value pairs with keys having container ID as a prefix and values being
 // [NodeReportSummary] structures.
-func IterateAllReportSummaries(epoch int) iterator.Iterator {
-	ctx := storage.GetReadOnlyContext()
-
-	key := []byte{reportsSummary}
-	key = append(key, any(epoch).([]byte)...)
-
-	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
+func IterateAllReportSummaries() iterator.Iterator {
+	return storage.Find(storage.GetReadOnlyContext(), []byte{reportsSummary}, storage.RemovePrefix|storage.DeserializeValues)
 }
 
 // PutContainerSize method saves container size estimation in contract
@@ -1328,15 +1324,8 @@ func IterateAllContainerSizes(epoch int) iterator.Iterator {
 	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
 }
 
-// NewEpoch method removes all container size estimations from epoch older than
-// epochNum + 3. It can be invoked only by NewEpoch method of the Netmap contract.
-func NewEpoch(epochNum int) {
-	ctx := storage.GetContext()
-
-	common.CheckAlphabetWitness()
-
-	cleanupContainers(ctx, epochNum)
-}
+// NewEpoch method does nothing.
+func NewEpoch(epochNum int) {}
 
 // SetSoftContainerQuota sets soft size quota that limits all space used for
 // storing objects in cID (including object replicas). Non-positive size sets
@@ -1489,6 +1478,25 @@ func addContainer(ctx storage.Context, id, owner, container []byte) {
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
+	// reports stat update
+
+	summaryKey := append([]byte{reportsSummary}, id...)
+	summaryRaw := storage.Get(ctx, summaryKey)
+	if summaryRaw != nil {
+		rSummary := std.Deserialize(summaryRaw.([]byte)).(NodeReportSummary)
+		diff := -rSummary.ContainerSize
+
+		totalUserKey := userTotalStorageKey(owner)
+		oldVal := storage.Get(ctx, totalUserKey).(int)
+		if oldVal <= 0 {
+			storage.Delete(ctx, totalUserKey)
+		} else {
+			storage.Put(ctx, totalUserKey, oldVal+diff)
+		}
+	}
+
+	// indexes clean up
+
 	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
 	containerListKey = append(containerListKey, id...)
 	storage.Delete(ctx, containerListKey)
@@ -1496,6 +1504,9 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	deleteByPrefix(ctx, append([]byte{nodesPrefix}, id...))
 	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
 	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{reportersPrefix}, id...))
+	storage.Delete(ctx, containerQuotaKey(id))
+	storage.Delete(ctx, summaryKey)
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
 	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
@@ -1560,36 +1571,6 @@ func nodeFromContainer(ctx storage.Context, cID interop.Hash256, key interop.Pub
 	return false
 }
 
-func cleanupContainers(ctx storage.Context, epoch int) {
-	it := storage.Find(ctx, []byte{reportsSummary}, storage.KeysOnly)
-	for iterator.Next(it) {
-		k := iterator.Value(it).([]byte)
-		nbytes := k[1 : len(k)-interop.Hash256Len]
-
-		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
-			storage.Delete(ctx, k)
-		}
-	}
-	it = storage.Find(ctx, []byte{reportersPrefix}, storage.KeysOnly)
-	for iterator.Next(it) {
-		k := iterator.Value(it).([]byte)
-		nbytes := k[1 : len(k)-interop.Hash256Len-2] // reporter counter is 2 bytes
-
-		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
-			storage.Delete(ctx, k)
-		}
-	}
-	it = storage.Find(ctx, []byte{userLoadKeyPrefix}, storage.KeysOnly)
-	for iterator.Next(it) {
-		k := iterator.Value(it).([]byte)
-		nbytes := k[1 : len(k)-common.NeoFSUserAccountLength]
-
-		if epoch-any(nbytes).(int) > cst.TotalCleanupDelta {
-			storage.Delete(ctx, k)
-		}
-	}
-}
-
 func deleteByPrefix(ctx storage.Context, prefix []byte) {
 	it := storage.Find(ctx, prefix, storage.KeysOnly)
 	for iterator.Next(it) {
@@ -1611,10 +1592,8 @@ func userQuotaKey(user []byte) []byte {
 	return key
 }
 
-func userTotalStorageKey(epoch int, user []byte) []byte {
-	key := []byte{userLoadKeyPrefix}
-	key = append(key, any(epoch).([]byte)...)
-	key = append(key, user...)
+func userTotalStorageKey(user []byte) []byte {
+	key := append([]byte{userLoadKeyPrefix}, user...)
 
 	return key
 }

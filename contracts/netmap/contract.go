@@ -706,6 +706,29 @@ func ListConfig() []ConfigRecord {
 	return config
 }
 
+// UnsubscribeFromNewEpoch removes new epoch subscription made by
+// [SubscribeForNewEpoch] beforehand. Does nothing if subscription has not
+// been made. Transactions that call UnsubscribeFromNewEpoch must be witnessed
+// by the Alphabet.
+// Produces `NewEpochUnsubscription` notification event if any unsubscription
+// was made.
+func UnsubscribeFromNewEpoch(contract interop.Hash160) {
+	common.CheckAlphabetWitness()
+
+	ctx := storage.GetContext()
+	it := storage.Find(ctx, []byte(newEpochSubscribersPrefix), storage.KeysOnly)
+	for iterator.Next(it) {
+		k := iterator.Value(it).([]byte)
+		contractHash := k[2:] // prefix and 1-byte index
+		if contract.Equals(contractHash) {
+			storage.Delete(ctx, k)
+			runtime.Notify("NewEpochUnsubscription", contract)
+
+			return
+		}
+	}
+}
+
 // SubscribeForNewEpoch registers passed contract as a NewEpoch event
 // subscriber. Such a contract must have a `NewEpoch` method with a single
 // numeric parameter. Transactions that call SubscribeForNewEpoch must be
