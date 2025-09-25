@@ -81,6 +81,11 @@ type NewEpochSubscriptionEvent struct {
 	Contract util.Uint160
 }
 
+// NewEpochUnsubscriptionEvent represents "NewEpochUnsubscription" event emitted by the contract.
+type NewEpochUnsubscriptionEvent struct {
+	Contract util.Uint160
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
@@ -555,6 +560,28 @@ func (c *Contract) SubscribeForNewEpochTransaction(contract util.Uint160) (*tran
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SubscribeForNewEpochUnsigned(contract util.Uint160) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "subscribeForNewEpoch", nil, contract)
+}
+
+// UnsubscribeFromNewEpoch creates a transaction invoking `unsubscribeFromNewEpoch` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) UnsubscribeFromNewEpoch(contract util.Uint160) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "unsubscribeFromNewEpoch", contract)
+}
+
+// UnsubscribeFromNewEpochTransaction creates a transaction invoking `unsubscribeFromNewEpoch` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) UnsubscribeFromNewEpochTransaction(contract util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "unsubscribeFromNewEpoch", contract)
+}
+
+// UnsubscribeFromNewEpochUnsigned creates a transaction invoking `unsubscribeFromNewEpoch` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) UnsubscribeFromNewEpochUnsigned(contract util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "unsubscribeFromNewEpoch", nil, contract)
 }
 
 // Update creates a transaction invoking `update` method of the contract.
@@ -1841,6 +1868,68 @@ func NewEpochSubscriptionEventsFromApplicationLog(log *result.ApplicationLog) ([
 // FromStackItem converts provided [stackitem.Array] to NewEpochSubscriptionEvent or
 // returns an error if it's not possible to do to so.
 func (e *NewEpochSubscriptionEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 1 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Contract, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Contract: %w", err)
+	}
+
+	return nil
+}
+
+// NewEpochUnsubscriptionEventsFromApplicationLog retrieves a set of all emitted events
+// with "NewEpochUnsubscription" name from the provided [result.ApplicationLog].
+func NewEpochUnsubscriptionEventsFromApplicationLog(log *result.ApplicationLog) ([]*NewEpochUnsubscriptionEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*NewEpochUnsubscriptionEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "NewEpochUnsubscription" {
+				continue
+			}
+			event := new(NewEpochUnsubscriptionEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize NewEpochUnsubscriptionEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to NewEpochUnsubscriptionEvent or
+// returns an error if it's not possible to do to so.
+func (e *NewEpochUnsubscriptionEvent) FromStackItem(item *stackitem.Array) error {
 	if item == nil {
 		return errors.New("nil item")
 	}

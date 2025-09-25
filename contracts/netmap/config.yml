@@ -30,6 +30,10 @@ events:
     parameters:
       - name: contract
         type: Hash160
+  - name: NewEpochUnsubscription
+    parameters:
+    - name: contract
+      type: Hash160
 overloads:
   listNodesEpoch: listNodes
   isStorageNodeInEpoch: isStorageNode
