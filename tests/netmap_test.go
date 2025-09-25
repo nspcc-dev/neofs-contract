@@ -197,26 +197,26 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 
 		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
 
-		var foundThirdSubscriber bool
+		var unknownSubscriberFound bool
 		var balanceSubscribers int
 		var containerSubscribers int
 
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 0), func(k, v []byte) bool {
-			balanceSubscribers++
-			return false
-		})
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 1), func(k, v []byte) bool {
-			containerSubscribers++
-			return false
-		})
-		netmapInvoker.Chain.SeekStorage(netmapContractID, append([]byte(subscribersPrefix), 2), func(k, v []byte) bool {
-			foundThirdSubscriber = true
-			return false
+		netmapInvoker.Chain.SeekStorage(netmapContractID, []byte(subscribersPrefix), func(k, v []byte) bool {
+			switch {
+			case bytes.Equal(k[1:], ctrBalance.Hash[:]):
+				balanceSubscribers++
+			case bytes.Equal(k[1:], ctrContainer.Hash[:]):
+				containerSubscribers++
+			default:
+				unknownSubscriberFound = true
+			}
+
+			return true
 		})
 
 		require.Equal(t, 1, balanceSubscribers)
-		require.Equal(t, 1, containerSubscribers)
-		require.False(t, foundThirdSubscriber)
+		require.Equal(t, 0, containerSubscribers)
+		require.False(t, unknownSubscriberFound)
 	})
 
 	t.Run("unsubscribe", func(t *testing.T) {

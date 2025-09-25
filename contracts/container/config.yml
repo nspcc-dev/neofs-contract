@@ -6,7 +6,7 @@ safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replic
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser"]
 permissions:
   - methods: ["update", "addKey", "transferX",
-              "register", "registerTLD", "addRecord", "deleteRecords", "subscribeForNewEpoch"]
+              "register", "registerTLD", "addRecord", "deleteRecords"]
 events:
   - name: PutSuccess
     parameters:

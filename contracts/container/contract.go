@@ -161,6 +161,10 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
+		//if version < 25_000 {
+		//	common.UnsubscribeFromNewEpoch()
+		//}
+
 		return
 	}
 
@@ -211,8 +215,6 @@ func _deploy(data any, isUpdate bool) {
 
 	// add NNS root for container alias domains
 	registerNiceNameTLD(addrNNS, nnsRoot)
-
-	common.SubscribeForNewEpoch()
 
 	runtime.Log("container contract initialized")
 }
