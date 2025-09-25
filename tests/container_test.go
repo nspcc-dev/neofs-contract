@@ -26,9 +26,6 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
-	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	containertest "github.com/nspcc-dev/neofs-sdk-go/container/test"
-	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -618,7 +615,7 @@ func TestContainerSizeReports(t *testing.T) {
 			objs int64
 		}
 
-		want := make(map[cid.ID]cnrInfo)
+		want := make(map[[sha256.Size]byte]cnrInfo)
 		for i := range numOfContainers {
 			anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
 			want[anotherCnr.id] = cnrInfo{size: int64(i), objs: int64(i)}
@@ -638,7 +635,7 @@ func TestContainerSizeReports(t *testing.T) {
 			kv := e.Value().([]stackitem.Item)
 			cID, err := kv[0].TryBytes()
 			require.NoError(t, err)
-			require.Len(t, cID, cid.Size)
+			require.Len(t, cID, sha256.Size)
 
 			v := kv[1].Value().([]stackitem.Item)
 			size, err := v[0].TryInteger()
@@ -646,8 +643,8 @@ func TestContainerSizeReports(t *testing.T) {
 			objs, err := v[1].TryInteger()
 			require.NoError(t, err)
 
-			require.Equal(t, want[cid.ID(cID)].size, size.Int64())
-			require.Equal(t, want[cid.ID(cID)].objs, objs.Int64())
+			require.Equal(t, want[[sha256.Size]byte(cID)].size, size.Int64())
+			require.Equal(t, want[[sha256.Size]byte(cID)].objs, objs.Int64())
 		}
 	})
 
@@ -688,12 +685,13 @@ func TestQuotas(t *testing.T) {
 		c, cBal, cNm = newContainerInvoker(t, false)
 		ownerAcc     = c.NewAccount(t)
 		ownerSH      = ownerAcc.ScriptHash()
-		owner        = user.NewFromScriptHash(ownerSH)
-		cnr          = containertest.Container()
+		owner25      = make([]byte, 25)
+		rawCnr       = make([]byte, 8+len(owner25)) // See ownerFromBinaryContainer().
 	)
-	cnr.SetOwner(owner)
-	rawCnr := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(rawCnr)
+	copy(owner25[1:], ownerSH[:])
+	copy(rawCnr[6:], owner25)
+
+	cID := sha256.Sum256(rawCnr)
 	balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
 
@@ -728,8 +726,8 @@ func TestQuotas(t *testing.T) {
 		})
 
 		t.Run("user quota", func(t *testing.T) {
-			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftUserQuota", owner[:], 0)
-			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardUserQuota", owner[:], 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftUserQuota", owner25, 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardUserQuota", owner25, 0)
 		})
 	})
 
@@ -754,7 +752,7 @@ func TestQuotas(t *testing.T) {
 			c.Invoke(t, exp, "containerQuota", cID[:])
 		})
 		t.Run("container quota", func(t *testing.T) {
-			c.Invoke(t, exp, "userQuota", owner[:])
+			c.Invoke(t, exp, "userQuota", owner25)
 		})
 	})
 
@@ -782,23 +780,23 @@ func TestQuotas(t *testing.T) {
 			c.Invoke(t, exp, "containerQuota", cID[:])
 		})
 		t.Run("user quota", func(t *testing.T) {
-			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftUserQuota", owner[:], softLimit)
+			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftUserQuota", owner25, softLimit)
 			res := c.Executor.GetTxExecResult(t, txH)
-			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(softLimit)), false)
+			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner25, big.NewInt(int64(softLimit)), false)
 			exp := stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
 				stackitem.Make(0),
 			})
-			c.Invoke(t, exp, "userQuota", owner[:])
+			c.Invoke(t, exp, "userQuota", owner25)
 
-			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardUserQuota", owner[:], hardLimit)
+			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardUserQuota", owner25, hardLimit)
 			res = c.Executor.GetTxExecResult(t, txH)
-			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner[:], big.NewInt(int64(hardLimit)), true)
+			assertNotificationEvent(t, res.Events[0], "UserQuotaSet", owner25, big.NewInt(int64(hardLimit)), true)
 			exp = stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
 				stackitem.Make(hardLimit),
 			})
-			c.Invoke(t, exp, "userQuota", owner[:])
+			c.Invoke(t, exp, "userQuota", owner25)
 		})
 	})
 }
@@ -809,17 +807,19 @@ func TestTotalUserSpace(t *testing.T) {
 	nodeKey := node.pub
 	ownerAcc := c.NewAccount(t)
 	ownerSH := ownerAcc.ScriptHash()
-	owner := user.NewFromScriptHash(ownerSH)
+	owner25 := make([]byte, 25)
+
+	copy(owner25[1:], ownerSH[:])
 
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
 
 	const numOfCnrs = 10
-	cnrs := make([]cid.ID, 0, numOfCnrs)
-	for range numOfCnrs {
-		cnr := containertest.Container()
-		cnr.SetOwner(owner)
-		rawCnr := cnr.Marshal()
-		cID := cid.NewFromMarshalledContainer(rawCnr)
+	cnrs := make([][sha256.Size]byte, 0, numOfCnrs)
+	for i := range numOfCnrs {
+		rawCnr := make([]byte, 8+len(owner25)) // See ownerFromBinaryContainer().
+		rawCnr[2] = byte(i)
+		copy(rawCnr[6:], owner25)
+		cID := sha256.Sum256(rawCnr)
 
 		balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
 		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
@@ -834,7 +834,7 @@ func TestTotalUserSpace(t *testing.T) {
 	for i, cID := range cnrs {
 		sum += i
 		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i, 1234, nodeKey)
-		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner25)
 	}
 
 	// decrease values
@@ -844,7 +844,7 @@ func TestTotalUserSpace(t *testing.T) {
 		}
 		sum--
 		c.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport", cID[:], i-1, 1234, nodeKey)
-		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
+		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner25)
 	}
 }
 

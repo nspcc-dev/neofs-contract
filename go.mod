@@ -7,7 +7,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0
 	github.com/nspcc-dev/neo-go v0.112.0
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20250827092051-0d90ffc70f57
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.14
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
 )
@@ -32,6 +31,7 @@ require (
 	github.com/nspcc-dev/dbft v0.4.0 // indirect
 	github.com/nspcc-dev/go-ordered-json v0.0.0-20250226190835-fb3f82b1f468 // indirect
 	github.com/nspcc-dev/hrw/v2 v2.0.3 // indirect
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.14 // indirect
 	github.com/nspcc-dev/rfc6979 v0.2.3 // indirect
 	github.com/nspcc-dev/tzhash v1.8.2 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
