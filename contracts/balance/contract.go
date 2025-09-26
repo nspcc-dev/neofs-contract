@@ -55,7 +55,7 @@ func init() {
 	token = createToken()
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {

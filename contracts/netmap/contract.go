@@ -62,7 +62,7 @@ type Candidate struct {
 	LastActiveEpoch int
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 type kv struct {
 	k []byte
 	v []byte
@@ -109,7 +109,7 @@ var (
 )
 
 // _deploy function sets up initial list of inner ring public keys.
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 

@@ -85,7 +85,7 @@ type RecordState struct {
 }
 
 // nsIteratorValue is used for upgrade from 0.17.0 to 0.18.0.
-// nolint:deadcode,unused
+// nolint:unused
 type nsIteratorValue struct {
 	k []byte
 	v NameState
@@ -104,7 +104,7 @@ func Update(nefFile, manifest []byte, data any) {
 }
 
 // _deploy initializes defaults (total supply and registration price) on contract deploy.
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	if isUpdate {
 		args := data.([]any)
@@ -858,7 +858,7 @@ func checkFragment(v string, isRoot bool) bool {
 	}
 	c := v[0]
 	if isRoot {
-		if !(c >= 'a' && c <= 'z') {
+		if c < 'a' || c > 'z' {
 			return false
 		}
 	} else {

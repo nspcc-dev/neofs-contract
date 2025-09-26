@@ -16,7 +16,7 @@ const (
 	reputationCountPrefix = 'c'
 )
 
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	if isUpdate {
 		args := data.([]any)

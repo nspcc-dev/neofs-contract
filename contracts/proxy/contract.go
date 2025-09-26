@@ -24,7 +24,7 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	}
 }
 
-// nolint:deadcode,unused
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	args := data.([]any)
@@ -150,25 +150,25 @@ func Verify() bool {
 		panic("invalid cID length " + std.Itoa(len(cID), 10))
 	}
 
-	if !(script[i] == 0x12 && script[i+1] == 0xC0) { // PUSH2 and PACK for method's args packing
+	if script[i] != 0x12 || script[i+1] != 0xC0 { // PUSH2 and PACK for method's args packing
 		panic("invalid method arguments packing")
 	}
 	i += 2
 
-	if !(0x10 <= script[i] && script[i] <= 0x1F) { // PUSH0 to PUSH15
+	if script[i] < 0x10 || script[i] > 0x1F { // PUSH0 to PUSH15
 		panic("invalid call flag " + std.Itoa(int(script[i]), 16))
 	}
 	i++
 
 	expMethodLen := len(submitObjectPutMethod)
-	if !(script[i] == 0x0C &&
-		script[i+1] == byte(expMethodLen) &&
-		string(script[i+2:i+2+expMethodLen]) == submitObjectPutMethod) {
+	if script[i] != 0x0C ||
+		script[i+1] != byte(expMethodLen) ||
+		string(script[i+2:i+2+expMethodLen]) != submitObjectPutMethod {
 		panic("invalid method name")
 	}
 	i += 2 + expMethodLen
 
-	if !(script[i] == 0x0C && script[i+1] == byte(interop.Hash160Len)) {
+	if script[i] != 0x0C || script[i+1] != byte(interop.Hash160Len) {
 		panic("invalid container address")
 	}
 	i += 2
