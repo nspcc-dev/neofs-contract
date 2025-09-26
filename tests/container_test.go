@@ -765,6 +765,36 @@ func TestQuotas(t *testing.T) {
 		})
 	})
 
+	t.Run("alphabet management", func(t *testing.T) {
+		t.Run("turned on", func(t *testing.T) {
+			cNm.Invoke(t, stackitem.Null{}, "setConfig", []byte{}, containerconst.AlphabetManagesQuotasKey, true)
+
+			t.Run("container quota", func(t *testing.T) {
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setSoftContainerQuota", cID[:], 0)
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setHardContainerQuota", cID[:], 0)
+			})
+
+			t.Run("user quota", func(t *testing.T) {
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setSoftUserQuota", owner[:], 0)
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setHardUserQuota", owner[:], 0)
+			})
+		})
+
+		t.Run("turned off", func(t *testing.T) {
+			cNm.Invoke(t, stackitem.Null{}, "setConfig", []byte{}, containerconst.AlphabetManagesQuotasKey, false)
+
+			t.Run("container quota", func(t *testing.T) {
+				c.InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cID[:], 0)
+				c.InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cID[:], 0)
+			})
+
+			t.Run("user quota", func(t *testing.T) {
+				c.InvokeFail(t, common.ErrWitnessFailed, "setSoftUserQuota", owner[:], 0)
+				c.InvokeFail(t, common.ErrWitnessFailed, "setHardUserQuota", owner[:], 0)
+			})
+		})
+	})
+
 	t.Run("wrong input arg", func(t *testing.T) {
 		t.Run("container quota", func(t *testing.T) {
 			c.WithSigners(ownerAcc).InvokeFail(t, "invalid container id", "setSoftContainerQuota", []byte{0}, 0)

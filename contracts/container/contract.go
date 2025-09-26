@@ -1347,6 +1347,16 @@ func SetHardContainerQuota(cID interop.Hash256, size int) {
 	setContainerQuota(cID, size, true)
 }
 
+func checkQuotaSigner(ctx storage.Context, userScriptHash []byte) {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	vRaw := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AlphabetManagesQuotasKey)
+	if vRaw == nil || !vRaw.(bool) {
+		common.CheckOwnerWitness(userScriptHash)
+	} else {
+		common.CheckAlphabetWitness()
+	}
+}
+
 func setContainerQuota(cID interop.Hash256, size int, hard bool) {
 	if len(cID) != interop.Hash256Len {
 		panic("invalid container id")
@@ -1357,8 +1367,7 @@ func setContainerQuota(cID interop.Hash256, size int, hard bool) {
 		panic(cst.NotFoundError)
 	}
 
-	ownerSH := common.WalletToScriptHash(ownerID)
-	common.CheckOwnerWitness(ownerSH)
+	checkQuotaSigner(ctx, common.WalletToScriptHash(ownerID))
 
 	var q Quota
 	v := storage.Get(ctx, containerQuotaKey(cID))
@@ -1425,8 +1434,8 @@ func setUserQuota(user []byte, size int, hard bool) {
 		panic("invalid user id")
 	}
 	ctx := storage.GetContext()
-	userSH := common.WalletToScriptHash(user)
-	common.CheckOwnerWitness(userSH)
+
+	checkQuotaSigner(ctx, common.WalletToScriptHash(user))
 
 	var q Quota
 	v := storage.Get(ctx, userQuotaKey(user))

@@ -5,6 +5,9 @@ const (
 	RegistrationFeeKey = "ContainerFee"
 	// AliasFeeKey is a key in netmap config which contains fee for nice-name registration.
 	AliasFeeKey = "ContainerAliasFee"
+	// AlphabetManagesQuotasKey is a key in netmap config which defines if
+	// Alphabet is allowed to manage space quotas instead of users.
+	AlphabetManagesQuotasKey = "AlphabetManagesQuotas"
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
