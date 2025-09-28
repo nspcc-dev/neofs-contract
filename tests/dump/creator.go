@@ -38,7 +38,7 @@ func NewCreator(dir string, id ID) (*Creator, error) {
 		return nil, err
 	}
 
-	res.storageItemsCSV = csv.NewWriter(res.dumpStreams.storageItems)
+	res.storageItemsCSV = csv.NewWriter(res.storageItems)
 
 	return &res, nil
 }
