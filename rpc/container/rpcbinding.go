@@ -32,6 +32,12 @@ type ContainerContainerSizes struct {
 	Estimations []*ContainerEstimation
 }
 
+// ContainerEpochAverages is a contract-specific container.EpochAverages type used by its methods.
+type ContainerEpochAverages struct {
+	Epoch       *big.Int
+	AverageSize *big.Int
+}
+
 // ContainerEstimation is a contract-specific container.Estimation type used by its methods.
 type ContainerEstimation struct {
 	From *keys.PublicKey
@@ -48,11 +54,13 @@ type ContainerExtendedACL struct {
 
 // ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
 type ContainerNodeReport struct {
-	PublicKey       *keys.PublicKey
-	ContainerSize   *big.Int
-	NumberOfObjects *big.Int
-	NumberOfReports *big.Int
-	LastUpdateEpoch *big.Int
+	PublicKey        *keys.PublicKey
+	ContainerSize    *big.Int
+	NumberOfObjects  *big.Int
+	NumberOfReports  *big.Int
+	LastUpdateEpoch  *big.Int
+	CurrentEpochAvg  *ContainerEpochAverages
+	PreviousEpochAvg *ContainerEpochAverages
 }
 
 // ContainerNodeReportSummary is a contract-specific container.NodeReportSummary type used by its methods.
@@ -1089,6 +1097,113 @@ func (res *ContainerContainerSizes) ToSCParameter() (smartcontract.Parameter, er
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
+// itemToContainerEpochAverages converts stack item into *ContainerEpochAverages.
+// NULL item is returned as nil pointer without error.
+func itemToContainerEpochAverages(item stackitem.Item, err error) (*ContainerEpochAverages, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerEpochAverages)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerEpochAverages is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerEpochAverages{})
+
+// Ensure *ContainerEpochAverages is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerEpochAverages{})
+
+// FromStackItem retrieves fields of ContainerEpochAverages from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerEpochAverages) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Epoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Epoch: %w", err)
+	}
+
+	index++
+	res.AverageSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field AverageSize: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerEpochAverages.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerEpochAverages) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = (*stackitem.BigInteger)(res.Epoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Epoch: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.AverageSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field AverageSize: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerEpochAverages.
+// It implements [smartcontract.Convertible] interface so that ContainerEpochAverages
+// could be used with invokers.
+func (res *ContainerEpochAverages) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Epoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Epoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.AverageSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field AverageSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToContainerEstimation converts stack item into *ContainerEstimation.
 // NULL item is returned as nil pointer without error.
 func itemToContainerEstimation(item stackitem.Item, err error) (*ContainerEstimation, error) {
@@ -1388,7 +1503,7 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 	if !ok {
 		return errors.New("not an array")
 	}
-	if len(arr) != 5 {
+	if len(arr) != 7 {
 		return errors.New("wrong number of structure elements")
 	}
 
@@ -1436,6 +1551,18 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 		return fmt.Errorf("field LastUpdateEpoch: %w", err)
 	}
 
+	index++
+	res.CurrentEpochAvg, err = itemToContainerEpochAverages(arr[index], nil)
+	if err != nil {
+		return fmt.Errorf("field CurrentEpochAvg: %w", err)
+	}
+
+	index++
+	res.PreviousEpochAvg, err = itemToContainerEpochAverages(arr[index], nil)
+	if err != nil {
+		return fmt.Errorf("field PreviousEpochAvg: %w", err)
+	}
+
 	return nil
 }
 
@@ -1449,7 +1576,7 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	var (
 		err   error
 		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 5)
+		items = make([]stackitem.Item, 0, 7)
 	)
 	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
 	if err != nil {
@@ -1481,6 +1608,18 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	}
 	items = append(items, itm)
 
+	itm, err = res.CurrentEpochAvg.ToStackItem()
+	if err != nil {
+		return nil, fmt.Errorf("field CurrentEpochAvg: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = res.PreviousEpochAvg.ToStackItem()
+	if err != nil {
+		return nil, fmt.Errorf("field PreviousEpochAvg: %w", err)
+	}
+	items = append(items, itm)
+
 	return stackitem.NewStruct(items), nil
 }
 
@@ -1495,7 +1634,7 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	var (
 		err  error
 		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 5)
+		prms = make([]smartcontract.Parameter, 0, 7)
 	)
 	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
 	if err != nil {
@@ -1524,6 +1663,18 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateEpoch)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateEpoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = res.CurrentEpochAvg.ToSCParameter()
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field CurrentEpochAvg: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = res.PreviousEpochAvg.ToSCParameter()
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PreviousEpochAvg: %w", err)
 	}
 	prms = append(prms, prm)
 
