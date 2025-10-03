@@ -42,6 +42,13 @@ type (
 		Size int
 	}
 
+	// EpochAverages describes average load storage nodes experience in an
+	// epoch according to their reports.
+	EpochAverages struct {
+		Epoch       int
+		AverageSize int
+	}
+
 	// NodeReport is a report by a certain storage node about its storage
 	// engine's volume it uses for a certain container.
 	NodeReport struct {
@@ -50,6 +57,11 @@ type (
 		NumberOfObjects int
 		NumberOfReports int
 		LastUpdateEpoch int
+		CurrentEpochAvg EpochAverages
+		// one of the previous epoch averages, the latest known one, not
+		// necessarily `LastUpdateEpoch - 1`: nodes may not report values
+		// if storage had been kept the same
+		PreviousEpochAvg EpochAverages
 	}
 
 	// NodeReportSummary is the summary of all [NodeReport] claimed by all
@@ -1101,6 +1113,10 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 				ContainerSize:   sizeBytes,
 				NumberOfObjects: objsNumber,
 				LastUpdateEpoch: currEpoch,
+				CurrentEpochAvg: EpochAverages{
+					Epoch:       currEpoch,
+					AverageSize: sizeBytes,
+				},
 			}
 			storage.Put(ctx, reportKey, std.Serialize(report))
 		} else {
@@ -1115,11 +1131,18 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			summary.NumberOfObjects = summary.NumberOfObjects - report.NumberOfObjects + objsNumber
 
 			if report.LastUpdateEpoch == currEpoch {
+				report.CurrentEpochAvg.AverageSize = (report.CurrentEpochAvg.AverageSize*report.NumberOfReports + sizeBytes) / (report.NumberOfReports + 1)
 				report.NumberOfReports += 1
 			} else {
 				report.LastUpdateEpoch = currEpoch
 				report.NumberOfReports = 1
+				report.PreviousEpochAvg = report.CurrentEpochAvg
+				report.CurrentEpochAvg = EpochAverages{
+					Epoch:       currEpoch,
+					AverageSize: sizeBytes,
+				}
 			}
+
 			report.ContainerSize = sizeBytes
 			report.NumberOfObjects = objsNumber
 
@@ -1137,7 +1160,12 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			ContainerSize:   sizeBytes,
 			NumberOfObjects: objsNumber,
 			LastUpdateEpoch: currEpoch,
+			CurrentEpochAvg: EpochAverages{
+				Epoch:       currEpoch,
+				AverageSize: sizeBytes,
+			},
 		}
+
 		storage.Put(ctx, reportKey, std.Serialize(report))
 	}
 
