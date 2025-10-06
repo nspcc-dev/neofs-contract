@@ -6,18 +6,36 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Minimal required version for upgrade is 0.19.0 now (#500)
-- Container load reports are calculated on `container` contract side and every node's report is taken into account (#501)
-- Go 1.24+ is required now (#467)
 
 ### Updated
 
 ### Removed
+
+### Fixed
+
+## [0.24.0] - 2025-10-06
+
+### Added
+- Quotas (#514, #526)
+
+### Changed
+- Minimal required version for upgrade is 0.19.0 now (#500)
+- Deployment works faster now (#503)
+- Container load reports are calculated on `container` contract side and every node's report is taken into account (#501, #510, #515, #517)
+- Go 1.24+ is required now (#467)
+
+### Updated
+- NeoGo compiler to 0.110.0 (#503)
+- NeoGo package dependencies to 0.111.0 (#503)
+
+### Removed
+- Unused audit contract (#499)
 - Obsolete list method from container contract (#500)
 - Unused candidate management methods from neofs contract (#500)
 - Unused InnerRingCandidateFee setting from neofs and netmap contracts (#500)
 
 ### Fixed
+- Object meta submission via proxy contract (#519)
 
 ## [0.23.0] - 2025-06-10
 
@@ -573,7 +591,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...master
+[0.24.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.20.0...v0.21.0
