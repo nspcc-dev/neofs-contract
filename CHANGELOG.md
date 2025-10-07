@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
 
 ### Updated
 
