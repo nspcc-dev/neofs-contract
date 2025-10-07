@@ -47,7 +47,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 		return nil, fmt.Errorf("request Neo protocol configuration: %w", err)
 	}
 
-	initialBlock, err := b.GetBlockCount()
+	initialBlockCount, err := b.GetBlockCount()
 	if err != nil {
 		return nil, fmt.Errorf("get current blockchain height: %w", err)
 	}
@@ -65,7 +65,7 @@ func newBlockchainMonitor(l *zap.Logger, b Blockchain, chNewBlock chan<- struct{
 		chExit:        make(chan struct{}),
 	}
 
-	res.height.Store(initialBlock)
+	res.height.Store(initialBlockCount - 1)
 
 	go func() {
 		l.Info("listening to new blocks...")
