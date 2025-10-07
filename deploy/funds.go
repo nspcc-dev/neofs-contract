@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	initialAlphabetGASAmount = 300
+	initialAlphabetGASAmount = 10000
 	// lower threshold of GAS remaining on validator multi-sig account. It is needed
 	// to pay fees for transfer transaction(s). The value is big enough for
 	// transfer, and not very big to leave no tail on the account.
@@ -53,7 +53,7 @@ type makeInitialGASTransferToCommitteePrm struct {
 // makes initial transfer of funds to the committee for deployment procedure. In
 // the initial state of the Blockchain, all funds are on the validator multisig
 // account. Transfers:
-//   - 300GAS to each account of the Alphabet members
+//   - initialAlphabetGASAmount to each account of the Alphabet members
 //   - all other GAS to the committee multisig account
 //   - all NEO to the committee multisig account
 func makeInitialTransferToCommittee(ctx context.Context, prm makeInitialGASTransferToCommitteePrm) error {
