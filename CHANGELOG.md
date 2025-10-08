@@ -13,6 +13,7 @@ Changelog for NeoFS Contract
 ### Removed
 
 ### Fixed
+- Waiting for one more block in deployment code (#530)
 
 ## [0.24.0] - 2025-10-06
 
