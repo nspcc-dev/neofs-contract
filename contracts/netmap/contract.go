@@ -9,7 +9,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
-	"github.com/nspcc-dev/neo-go/pkg/interop/neogointernal"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -60,12 +59,6 @@ type Candidate struct {
 
 	// LastActiveEpoch is the last epoch this node was active in.
 	LastActiveEpoch int
-}
-
-// nolint:unused
-type kv struct {
-	k []byte
-	v []byte
 }
 
 type epochItem struct {
@@ -126,7 +119,7 @@ func _deploy(data any, isUpdate bool) {
 		if version < 22_000 {
 			curEpoch := storage.Get(ctx, snapshotEpoch).(int)
 			curEpochHeight := storage.Get(ctx, snapshotBlockKey).(int)
-			storage.Put(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...), std.Serialize(epochItem{height: curEpochHeight}))
+			storage.Put(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...), std.Serialize(epochItem{height: curEpochHeight}))
 			storage.Delete(ctx, snapshotBlockKey)
 		}
 
@@ -152,7 +145,7 @@ func _deploy(data any, isUpdate bool) {
 		panic("bad configuration")
 	}
 
-	for i := 0; i < ln/2; i++ { //nolint:intrange // Not supported by NeoGo
+	for i := range ln / 2 {
 		key := args.config[i*2]
 		val := args.config[i*2+1]
 
@@ -166,7 +159,7 @@ func _deploy(data any, isUpdate bool) {
 	setConfig(ctx, "UseNodeV2", []byte{1})
 
 	prefix := []byte(snapshotKeyPrefix)
-	for i := 0; i < DefaultSnapshotCount; i++ { //nolint:intrange // Not supported by NeoGo
+	for i := range DefaultSnapshotCount {
 		common.SetSerialized(ctx, append(prefix, byte(i)), []Node{})
 	}
 	storage.Put(ctx, snapshotCurrentIDKey, 0)
@@ -396,7 +389,7 @@ func NewEpoch(epochNum int) {
 	// make clean up routines in other contracts
 	cleanup(ctx, epochNum)
 
-	storage.Put(ctx, append([]byte{epochIndexKey}, fourBytesBE(epochNum)...), std.Serialize(epochItem{
+	storage.Put(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(epochNum))...), std.Serialize(epochItem{
 		height: ledger.CurrentIndex(),
 		time:   runtime.GetTime(),
 	}))
@@ -417,7 +410,7 @@ func Epoch() int {
 func LastEpochBlock() int {
 	ctx := storage.GetReadOnlyContext()
 	curEpoch := storage.Get(ctx, snapshotEpoch).(int)
-	val := storage.Get(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...))
+	val := storage.Get(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...))
 	if val == nil {
 		return 0
 	}
@@ -431,7 +424,7 @@ func LastEpochBlock() int {
 func LastEpochTime() int {
 	ctx := storage.GetReadOnlyContext()
 	curEpoch := storage.Get(ctx, snapshotEpoch).(int)
-	val := storage.Get(ctx, append([]byte{epochIndexKey}, fourBytesBE(curEpoch)...))
+	val := storage.Get(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...))
 	if val == nil {
 		return 0
 	}
@@ -478,7 +471,7 @@ func ListNodes() iterator.Iterator {
 // iterator.
 func ListNodesEpoch(epoch int) iterator.Iterator {
 	return storage.Find(storage.GetReadOnlyContext(),
-		append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...),
+		append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...),
 		storage.ValuesOnly|storage.DeserializeValues)
 }
 
@@ -507,7 +500,7 @@ func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
 	ctx := storage.GetReadOnlyContext()
 
 	// v2 check is rather trivial.
-	key2 := append(append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...), key...)
+	key2 := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
 	v := storage.Get(ctx, key2)
 	if v != nil {
 		return true
@@ -604,9 +597,7 @@ func UpdateSnapshotCount(count int) {
 			moveSnapshot(ctx, k-diff, k)
 		}
 		delStart, delFinish = id+1, id+1+diff
-		if oldCount < delFinish {
-			delFinish = oldCount
-		}
+		delFinish = min(oldCount, delFinish)
 	} else {
 		// Decrease history size.
 		//
@@ -799,7 +790,7 @@ func UnusedCandidate() Candidate {
 //
 // Use [LastEpochBlock] if you are interested in the current epoch.
 func GetEpochBlock(epoch int) int {
-	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, fourBytesBE(epoch)...))
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(epoch))...))
 	if val == nil {
 		return 0
 	}
@@ -811,7 +802,7 @@ func GetEpochBlock(epoch int) int {
 //
 // Use [LastEpochTime] if you are interested in the current epoch.
 func GetEpochTime(epoch int) int {
-	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, fourBytesBE(epoch)...))
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(epoch))...))
 	if val == nil {
 		return 0
 	}
@@ -876,26 +867,19 @@ func filterNetmap(ctx storage.Context) []Node {
 	return result
 }
 
-func fourBytesBE(num int) []byte {
-	var res = make([]byte, 4)
-	copy(res, convert.ToBytes(num))                    // LE
-	neogointernal.Opcode1NoReturn("REVERSEITEMS", res) // BE
-	return res
-}
-
 func fillNetmap(ctx storage.Context, epoch int) {
 	var (
 		cleanupThreshold = CleanupThreshold()
-		epochPrefix      = append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...)
+		epochPrefix      = append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...)
 		it               = storage.Find(ctx, []byte(node2CandidatePrefix), storage.RemovePrefix)
 	)
 	for iterator.Next(it) {
-		kv := iterator.Value(it).(kv)
+		kv := iterator.Value(it).(storage.KeyValue)
 
-		cand := std.Deserialize(kv.v).(Candidate)
+		cand := std.Deserialize(kv.Value).(Candidate)
 		if cleanupThreshold > 0 && cand.LastActiveEpoch < epoch-cleanupThreshold {
 			// Forget about stale nodes.
-			updateCandidateState(ctx, interop.PublicKey(kv.k), nodestate.Offline)
+			updateCandidateState(ctx, interop.PublicKey(kv.Key), nodestate.Offline)
 		} else {
 			var n2 = Node2{
 				Addresses:  cand.Addresses,
@@ -904,13 +888,13 @@ func fillNetmap(ctx storage.Context, epoch int) {
 				State:      cand.State,
 			}
 			// Offline nodes are just deleted, so we can omit state check.
-			storage.Put(ctx, append(epochPrefix, kv.k...), std.Serialize(n2))
+			storage.Put(ctx, append(epochPrefix, kv.Key...), std.Serialize(n2))
 		}
 	}
 }
 
 func dropNetmap(ctx storage.Context, epoch int) {
-	var it = storage.Find(ctx, append([]byte(node2NetmapPrefix), fourBytesBE(epoch)...), storage.KeysOnly)
+	var it = storage.Find(ctx, append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), storage.KeysOnly)
 	for iterator.Next(it) {
 		storage.Delete(ctx, iterator.Value(it).([]byte))
 	}

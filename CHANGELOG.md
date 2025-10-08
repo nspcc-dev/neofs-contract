@@ -9,6 +9,7 @@ Changelog for NeoFS Contract
 - Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
 
 ### Updated
+- NeoGo dependency to 0.113.0 (#521)
 
 ### Removed
 
