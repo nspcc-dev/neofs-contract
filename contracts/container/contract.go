@@ -407,13 +407,15 @@ func PutNamed(container []byte, signature interop.Signature,
 	for _, node := range alphabet {
 		to := contract.CreateStandardAccount(node)
 
-		contract.Call(balanceContractAddr, "transferX",
+		if !contract.Call(balanceContractAddr, "transferX",
 			contract.All,
 			from,
 			to,
 			containerFee,
 			details,
-		)
+		).(bool) {
+			panic("insufficient balance to create container")
+		}
 	}
 
 	addContainer(ctx, containerID, ownerID, container)
@@ -511,8 +513,10 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 
 		transferDetails := common.ContainerFeeTransferDetails(id)
 		for i := range alphabet {
-			contract.Call(balanceContract, "transferX", contract.All,
-				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails)
+			if !contract.Call(balanceContract, "transferX", contract.All,
+				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails).(bool) {
+				panic("insufficient balance to create container")
+			}
 		}
 	}
 

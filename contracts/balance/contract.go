@@ -153,17 +153,17 @@ func Transfer(from, to interop.Hash160, amount int, data any) bool {
 // TransferX method expands Transfer method by having extra details argument.
 // TransferX method also allows to transfer assets by Alphabet nodes of the
 // Inner Ring with multisignature.
-func TransferX(from, to interop.Hash160, amount int, details []byte) {
+func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
 
 	common.CheckAlphabetWitness()
 
 	result := token.transfer(ctx, from, to, amount, true, details)
-	if !result {
-		panic("can't transfer assets")
+	if result {
+		runtime.Log("successfully transferred assets")
 	}
 
-	runtime.Log("successfully transferred assets")
+	return result
 }
 
 // Lock is a method that transfers assets from a user account to the lock account

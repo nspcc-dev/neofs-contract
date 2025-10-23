@@ -188,18 +188,30 @@ func (c *Contract) NewEpochUnsigned(epochNum *big.Int) (*transaction.Transaction
 	return c.actor.MakeUnsignedCall(c.hash, "newEpoch", nil, epochNum)
 }
 
+func (c *Contract) scriptForTransferX(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) ([]byte, error) {
+	return smartcontract.CreateCallWithAssertScript(c.hash, "transferX", from, to, amount, details)
+}
+
 // TransferX creates a transaction invoking `transferX` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
 func (c *Contract) TransferX(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "transferX", from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return util.Uint256{}, 0, err
+	}
+	return c.actor.SendRun(script)
 }
 
 // TransferXTransaction creates a transaction invoking `transferX` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
 func (c *Contract) TransferXTransaction(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "transferX", from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeRun(script)
 }
 
 // TransferXUnsigned creates a transaction invoking `transferX` method of the contract.
@@ -207,7 +219,11 @@ func (c *Contract) TransferXTransaction(from util.Uint160, to util.Uint160, amou
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) TransferXUnsigned(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "transferX", nil, from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeUnsignedRun(script, nil)
 }
 
 // itemToBalanceAccount converts stack item into *BalanceAccount.
