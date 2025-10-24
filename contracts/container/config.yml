@@ -1,12 +1,11 @@
 name: "NeoFS Container"
 supportedstandards: ["NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
-              "eACL", "getContainerSize", "listContainerSizes", "iterateContainerSizes", "iterateAllContainerSizes",
-              "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
+              "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser"]
 permissions:
-  - methods: ["update", "addKey", "transferX",
-              "register", "registerTLD", "addRecord", "deleteRecords"]
+  - methods: ["update", "addKey", "transferX", "register", "registerTLD", "addRecord", "deleteRecords",
+              "unsubscribeFromNewEpoch"]
 events:
   - name: PutSuccess
     parameters:

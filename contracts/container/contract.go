@@ -34,13 +34,6 @@ type (
 		Token []byte
 	}
 
-	// Estimation contains the public key of the estimator (storage node) and
-	// the size this estimator has for the container.
-	Estimation struct {
-		From interop.PublicKey
-		Size int
-	}
-
 	// NodeReport is a report by a certain storage node about its storage
 	// engine's volume it uses for a certain container.
 	NodeReport struct {
@@ -56,11 +49,6 @@ type (
 	NodeReportSummary struct {
 		ContainerSize   int
 		NumberOfObjects int
-	}
-
-	ContainerSizes struct {
-		CID         []byte
-		Estimations []Estimation
 	}
 
 	// Quota describes size limitation for a container or
@@ -160,9 +148,9 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
-		//if version < 25_000 {
-		//	common.UnsubscribeFromNewEpoch()
-		//}
+		if version < 25_000 {
+			common.UnsubscribeFromNewEpoch()
+		}
 
 		return
 	}
@@ -1216,105 +1204,6 @@ func IterateAllReportSummaries() iterator.Iterator {
 	return storage.Find(storage.GetReadOnlyContext(), []byte{reportsSummary}, storage.RemovePrefix|storage.DeserializeValues)
 }
 
-// PutContainerSize method saves container size estimation in contract
-// memory. It can be invoked only by Storage nodes from the network map. This method
-// checks witness based on the provided public key of the Storage node.
-//
-// If the container doesn't exist, it panics with NotFoundError.
-//
-// Deprecated: method is no-op, use [PutReport] instead.
-func PutContainerSize(epoch int, cid []byte, usedSize int, pubKey interop.PublicKey) {
-	ctx := storage.GetContext()
-
-	if getOwnerByID(ctx, cid) == nil {
-		panic(cst.NotFoundError)
-	}
-
-	common.CheckWitness(pubKey)
-
-	if !isStorageNode(ctx, epoch, pubKey) {
-		panic("method must be invoked by storage node from network map")
-	}
-
-	runtime.Log("deprecated estimations call")
-}
-
-// GetContainerSize method returns the container ID and a slice of container
-// estimations. Container estimation includes the public key of the Storage Node
-// that registered estimation and value of estimation.
-//
-// Use the ID obtained from ListContainerSizes method. Estimations are removed
-// from contract storage every epoch, see NewEpoch method; therefore, this method
-// can return different results during different epochs.
-//
-// Deprecated: please use IterateContainerSizes API, this one is not convenient
-// to use and limited in the number of items it can return. It will be removed in
-// future versions.
-//
-// Deprecated: method always returns zero values, use [GetNodeReportSummary]
-// or [GetReportByNode] instead.
-func GetContainerSize(id []byte) ContainerSizes {
-	if len(id) < len(estimateKeyPrefix)+containerIDSize ||
-		string(id[:len(estimateKeyPrefix)]) != estimateKeyPrefix {
-		panic("wrong estimation prefix")
-	}
-
-	return ContainerSizes{}
-}
-
-// ListContainerSizes method returns the IDs of container size estimations
-// that have been registered for the specified epoch.
-//
-// Deprecated: please use IterateAllContainerSizes API, this one is not convenient
-// to use and limited in the number of items it can return. It will be removed in
-// future versions.
-//
-// Deprecated: method always returns empty array. Use [IterateAllEstimations] instead.
-func ListContainerSizes(epoch int) [][]byte {
-	return [][]byte{}
-}
-
-// IterateContainerSizes method returns iterator over specific container size
-// estimations that have been registered for the specified epoch. The iterator items
-// are Estimation structures.
-//
-// Deprecated: method iterates nothing, use [IterateReports] instead.
-func IterateContainerSizes(epoch int, cid interop.Hash256) iterator.Iterator {
-	if len(cid) != interop.Hash256Len {
-		panic("wrong container id")
-	}
-
-	ctx := storage.GetReadOnlyContext()
-
-	var buf any = epoch
-
-	key := []byte(estimateKeyPrefix)
-	key = append(key, buf.([]byte)...)
-	key = append(key, cid...)
-
-	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
-}
-
-// IterateAllContainerSizes method returns iterator over all container size estimations
-// that have been registered for the specified epoch. Items returned from this iterator
-// are key-value pairs with keys having container ID as a prefix and values being Estimation
-// structures.
-//
-// Deprecated: method iterates nothing, use [IterateAllEstimations] instead.
-func IterateAllContainerSizes(epoch int) iterator.Iterator {
-	ctx := storage.GetReadOnlyContext()
-
-	var buf any = epoch
-
-	key := []byte(estimateKeyPrefix)
-	key = append(key, buf.([]byte)...)
-
-	return storage.Find(ctx, key, storage.RemovePrefix|storage.DeserializeValues)
-}
-
-// NewEpoch method does nothing.
-func NewEpoch(epochNum int) {}
-
 // SetSoftContainerQuota sets soft size quota that limits all space used for
 // storing objects in cID (including object replicas). Non-positive size sets
 // no limitation. After exceeding the limit nodes are instructed to warn only,
@@ -1544,13 +1433,6 @@ func ownerFromBinaryContainer(container []byte) []byte {
 	offset := int(container[1])
 	offset = 2 + offset + 4              // version prefix + version size + owner prefix
 	return container[offset : offset+25] // offset + size of owner
-}
-
-// isStorageNode looks into _previous_ epoch network map, because storage node
-// announces container size estimation of the previous epoch.
-func isStorageNode(ctx storage.Context, epoch int, key interop.PublicKey) bool {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	return contract.Call(netmapContractAddr, "isStorageNode", contract.ReadOnly, key, epoch-1).(bool)
 }
 
 func nodeFromContainer(ctx storage.Context, cID interop.Hash256, key interop.PublicKey) bool {
