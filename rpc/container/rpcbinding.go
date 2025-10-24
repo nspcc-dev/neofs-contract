@@ -37,11 +37,13 @@ type ContainerExtendedACL struct {
 
 // ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
 type ContainerNodeReport struct {
-	PublicKey       *keys.PublicKey
-	ContainerSize   *big.Int
-	NumberOfObjects *big.Int
-	NumberOfReports *big.Int
-	LastUpdateEpoch *big.Int
+	PublicKey        *keys.PublicKey
+	ContainerSize    *big.Int
+	NumberOfObjects  *big.Int
+	NumberOfReports  *big.Int
+	LastUpdateEpoch  *big.Int
+	LastUpdateTime   *big.Int
+	EpochAverageSize *big.Int
 }
 
 // ContainerNodeReportSummary is a contract-specific container.NodeReportSummary type used by its methods.
@@ -1011,7 +1013,7 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 	if !ok {
 		return errors.New("not an array")
 	}
-	if len(arr) != 5 {
+	if len(arr) != 7 {
 		return errors.New("wrong number of structure elements")
 	}
 
@@ -1059,6 +1061,18 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 		return fmt.Errorf("field LastUpdateEpoch: %w", err)
 	}
 
+	index++
+	res.LastUpdateTime, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+
+	index++
+	res.EpochAverageSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field EpochAverageSize: %w", err)
+	}
+
 	return nil
 }
 
@@ -1072,7 +1086,7 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	var (
 		err   error
 		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 5)
+		items = make([]stackitem.Item, 0, 7)
 	)
 	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
 	if err != nil {
@@ -1104,6 +1118,18 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	}
 	items = append(items, itm)
 
+	itm, err = (*stackitem.BigInteger)(res.LastUpdateTime), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.EpochAverageSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field EpochAverageSize: %w", err)
+	}
+	items = append(items, itm)
+
 	return stackitem.NewStruct(items), nil
 }
 
@@ -1118,7 +1144,7 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	var (
 		err  error
 		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 5)
+		prms = make([]smartcontract.Parameter, 0, 7)
 	)
 	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
 	if err != nil {
@@ -1147,6 +1173,18 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateEpoch)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateEpoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateTime)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.EpochAverageSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field EpochAverageSize: %w", err)
 	}
 	prms = append(prms, prm)
 
