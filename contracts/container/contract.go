@@ -148,9 +148,9 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
-		//if version < 25_000 {
-		//	common.UnsubscribeFromNewEpoch()
-		//}
+		if version < 25_000 {
+			common.UnsubscribeFromNewEpoch()
+		}
 
 		return
 	}
@@ -1203,9 +1203,6 @@ func IterateReports(cid interop.Hash256) iterator.Iterator {
 func IterateAllReportSummaries() iterator.Iterator {
 	return storage.Find(storage.GetReadOnlyContext(), []byte{reportsSummary}, storage.RemovePrefix|storage.DeserializeValues)
 }
-
-// NewEpoch method does nothing.
-func NewEpoch(epochNum int) {}
 
 // SetSoftContainerQuota sets soft size quota that limits all space used for
 // storing objects in cID (including object replicas). Non-positive size sets

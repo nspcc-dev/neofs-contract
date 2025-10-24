@@ -4,8 +4,8 @@ safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replic
               "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser"]
 permissions:
-  - methods: ["update", "addKey", "transferX",
-              "register", "registerTLD", "addRecord", "deleteRecords"]
+  - methods: ["update", "addKey", "transferX", "register", "registerTLD", "addRecord", "deleteRecords",
+              "unsubscribeFromNewEpoch"]
 events:
   - name: PutSuccess
     parameters:
