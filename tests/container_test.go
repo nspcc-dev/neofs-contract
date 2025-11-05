@@ -28,6 +28,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
+	containerrpc "github.com/nspcc-dev/neofs-contract/rpc/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	containertest "github.com/nspcc-dev/neofs-sdk-go/container/test"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
@@ -41,6 +42,7 @@ const containerDomain = "container"
 const (
 	containerFee      = 0_0100_0000
 	containerAliasFee = 0_0050_0000
+	epochDuration     = 100 // in seconds
 )
 
 func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addrBalance, addrNNS *util.Uint160) util.Uint160 {
@@ -75,7 +77,7 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 
 	nnsHash := deployDefaultNNS(t, e)
 	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
-		containerconst.AliasFeeKey, int64(containerAliasFee))
+		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration))
 	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
 	deployProxyContract(t, e)
 	if !autohashes {
@@ -588,6 +590,149 @@ func TestContainerSizeReports(t *testing.T) {
 		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 2 report number")
 	})
 
+	t.Run("billing values", func(t *testing.T) {
+		const objsNumber = 1234
+
+		cNm.Invoke(t, stackitem.Null{}, "setConfig", []byte{}, containerconst.EpochDurationKey, epochDuration)
+		var currentEpoch = 100
+
+		type (
+			reportValue struct {
+				reportedAt int64 // epoch duration is 100, this val should be in [0; 100] segment
+				value      int64
+			}
+
+			testCase struct {
+				name            string
+				previousValue   int64
+				reports         []reportValue
+				expectedAverage int64
+			}
+		)
+
+		cases := []testCase{
+			{
+				name:          "single report at the beginning",
+				previousValue: 100,
+				reports: []reportValue{
+					{reportedAt: 0, value: 12345},
+				},
+				expectedAverage: 100*0/100 + 12345*100/100,
+			},
+			{
+				name:          "single report in the middle",
+				previousValue: 400,
+				reports: []reportValue{
+					{reportedAt: 50, value: 12345},
+				},
+				expectedAverage: 400*50/100 + 12345*50/100,
+			},
+			{
+				name:          "single report at the end",
+				previousValue: 200,
+				reports: []reportValue{
+					{reportedAt: 100, value: 300},
+				},
+				expectedAverage: 200*100/100 + 300*0/100,
+			},
+			{
+				name:          "reports at the beginning",
+				previousValue: 200,
+				reports: []reportValue{
+					{reportedAt: 0, value: 100},
+					{reportedAt: 30, value: 200},
+					{reportedAt: 80, value: 300},
+				},
+				expectedAverage: 200*0/100 + 100*30/100 + 200*50/100 + 300*20/100,
+			},
+			{
+				name:          "reports in the middle",
+				previousValue: 500,
+				reports: []reportValue{
+					{reportedAt: 20, value: 100},
+					{reportedAt: 60, value: 200},
+					{reportedAt: 90, value: 300},
+				},
+				expectedAverage: 500*20/100 + 100*40/100 + 200*30/100 + 300*10/100,
+			},
+			{
+				name:          "reports at the end",
+				previousValue: 600,
+				reports: []reportValue{
+					{reportedAt: 40, value: 100},
+					{reportedAt: 70, value: 200},
+					{reportedAt: 100, value: 300},
+				},
+				expectedAverage: 600*40/100 + 100*30/100 + 200*30/100,
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
+				c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport", anotherCnr.id[:], tc.previousValue, objsNumber, nodes[0].pub)
+
+				var (
+					lastBlock    = c.TopBlock(t)
+					newEpochTime = (lastBlock.Timestamp + 1000) / 1000 * 1000
+
+					latestReportedValue = tc.reports[len(tc.reports)-1].value
+					numberOfReports     = len(tc.reports)
+					latestReportTime    int
+				)
+
+				currentEpoch++
+				newEpochBlockTXs := []*transaction.Transaction{cNm.PrepareInvoke(t, "newEpoch", currentEpoch)}
+				if tc.reports[0].reportedAt == 0 {
+					if len(tc.reports) == 1 {
+						latestReportTime = int(newEpochTime)
+					}
+
+					tx := c.WithSigners(nodes[0].signer).PrepareInvoke(t, "putReport", anotherCnr.id[:], tc.reports[0].value, objsNumber, nodes[0].pub)
+					tx.SystemFee = 1_0000_0000
+					newEpochBlockTXs = append(newEpochBlockTXs, tx)
+
+					tc.reports = tc.reports[1:]
+				}
+				b := c.NewUnsignedBlock(t, newEpochBlockTXs...)
+				b.Timestamp = newEpochTime
+				c.SignBlock(b)
+				require.NoError(t, c.Chain.AddBlock(b))
+				for _, tx := range newEpochBlockTXs {
+					c.CheckHalt(t, tx.Hash(), stackitem.Make(nil))
+				}
+
+				for i, r := range tc.reports {
+					tx := c.WithSigners(nodes[0].signer).PrepareInvoke(t, "putReport", anotherCnr.id[:], r.value, objsNumber, nodes[0].pub)
+					tx.SystemFee = 1_0000_0000
+					b := c.NewUnsignedBlock(t, tx)
+					if r.reportedAt != 0 {
+						b.Timestamp = newEpochTime + uint64(r.reportedAt)*1000 // in milliseconds
+					}
+					c.SignBlock(b)
+					require.NoError(t, c.Chain.AddBlock(b))
+					c.CheckHalt(t, tx.Hash(), stackitem.Make(nil))
+
+					if i == len(tc.reports)-1 {
+						latestReportTime = int(b.Timestamp)
+					}
+				}
+
+				res, err := c.TestInvoke(t, "iterateReports", anotherCnr.id[:])
+				require.NoError(t, err)
+
+				reports := parseNodeReportsFromStackIterator(t, res)
+				require.Len(t, reports, 1)
+				require.EqualValues(t, numberOfReports, reports[0].NumberOfReports.Int64())
+				require.EqualValues(t, objsNumber, reports[0].NumberOfObjects.Int64())
+				require.EqualValues(t, latestReportedValue, reports[0].ContainerSize.Int64())
+				require.EqualValues(t, latestReportTime, reports[0].LastUpdateTime.Int64())
+				require.EqualValues(t, currentEpoch, reports[0].LastUpdateEpoch.Int64())
+				require.EqualValues(t, tc.expectedAverage, reports[0].EpochAverageSize.Int64())
+			})
+		}
+	})
+
 	t.Run("iterate container's reports", func(t *testing.T) {
 		const reportersNumber = 3
 		anotherCnr := addContainerWithNodes(t, c, cBal, nodesKeys)
@@ -704,6 +849,19 @@ func TestContainerSizeReports(t *testing.T) {
 		estimations = iteratorToArray(it)
 		require.Empty(t, estimations)
 	})
+}
+
+func parseNodeReportsFromStackIterator(t *testing.T, stack *vm.Stack) []containerrpc.ContainerNodeReport {
+	var res []containerrpc.ContainerNodeReport
+
+	it := stack.Pop().Value().(*storage.Iterator)
+	for it.Next() {
+		var r containerrpc.ContainerNodeReport
+		require.NoError(t, r.FromStackItem(it.Value()))
+		res = append(res, r)
+	}
+
+	return res
 }
 
 func addContainerWithNodes(t *testing.T, cnrInv, balInv *neotest.ContractInvoker, keys []any) testContainer {

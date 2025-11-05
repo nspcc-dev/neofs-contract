@@ -41,7 +41,10 @@ type (
 		ContainerSize   int
 		NumberOfObjects int
 		NumberOfReports int
-		LastUpdateEpoch int
+
+		LastUpdateEpoch  int
+		LastUpdateTime   int
+		EpochAverageSize int
 	}
 
 	// NodeReportSummary is the summary of all [NodeReport] claimed by all
@@ -1060,60 +1063,60 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		summaryKey        = append([]byte{reportsSummary}, cid...)
 		reportsSummaryRaw = storage.Get(ctx, summaryKey)
 		summary           NodeReportSummary
+		currTime          = runtime.GetTime()
 	)
-	reportKey := append([]byte{reportersPrefix}, cid...)
-	reportKey = append(reportKey, nodeAcc...)
 	if reportsSummaryRaw != nil {
 		summary = std.Deserialize(reportsSummaryRaw.([]byte)).(NodeReportSummary)
-		reportRaw := storage.Get(ctx, reportKey)
-		if reportRaw == nil {
-			storageDiff = sizeBytes
-			summary.ContainerSize += sizeBytes
-			summary.NumberOfObjects += objsNumber
+	}
 
-			report := NodeReport{
-				PublicKey:       pubKey,
-				NumberOfReports: 1,
-				ContainerSize:   sizeBytes,
-				NumberOfObjects: objsNumber,
-				LastUpdateEpoch: currEpoch,
-			}
-			storage.Put(ctx, reportKey, std.Serialize(report))
-		} else {
-			report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
-			if report.LastUpdateEpoch == currEpoch && report.NumberOfReports == maxNumberOfReportsPerEpoch {
-				panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") reached")
-			}
-
-			storageDiff = sizeBytes - report.ContainerSize
-
-			summary.ContainerSize = summary.ContainerSize - report.ContainerSize + sizeBytes
-			summary.NumberOfObjects = summary.NumberOfObjects - report.NumberOfObjects + objsNumber
-
-			if report.LastUpdateEpoch == currEpoch {
-				report.NumberOfReports += 1
-			} else {
-				report.LastUpdateEpoch = currEpoch
-				report.NumberOfReports = 1
-			}
-			report.ContainerSize = sizeBytes
-			report.NumberOfObjects = objsNumber
-
-			storage.Put(ctx, reportKey, std.Serialize(report))
-		}
-	} else {
+	reportKey := append([]byte{reportersPrefix}, cid...)
+	reportKey = append(reportKey, nodeAcc...)
+	reportRaw := storage.Get(ctx, reportKey)
+	if reportRaw == nil {
 		storageDiff = sizeBytes
-		summary = NodeReportSummary{
-			ContainerSize:   sizeBytes,
-			NumberOfObjects: objsNumber,
-		}
+		summary.ContainerSize += sizeBytes
+		summary.NumberOfObjects += objsNumber
+
 		report := NodeReport{
-			PublicKey:       pubKey,
-			NumberOfReports: 1,
-			ContainerSize:   sizeBytes,
-			NumberOfObjects: objsNumber,
-			LastUpdateEpoch: currEpoch,
+			PublicKey:        pubKey,
+			NumberOfReports:  1,
+			ContainerSize:    sizeBytes,
+			NumberOfObjects:  objsNumber,
+			LastUpdateEpoch:  currEpoch,
+			LastUpdateTime:   currTime,
+			EpochAverageSize: sizeBytes,
 		}
+		storage.Put(ctx, reportKey, std.Serialize(report))
+	} else {
+		report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
+		if report.LastUpdateEpoch == currEpoch && report.NumberOfReports == maxNumberOfReportsPerEpoch {
+			panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") reached")
+		}
+
+		storageDiff = sizeBytes - report.ContainerSize
+
+		summary.ContainerSize = summary.ContainerSize - report.ContainerSize + sizeBytes
+		summary.NumberOfObjects = summary.NumberOfObjects - report.NumberOfObjects + objsNumber
+
+		var (
+			epochDuration = contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.EpochDurationKey).(int) * 1000 // in milliseconds now
+			lastEpochTick = contract.Call(netmapContractAddr, "lastEpochTime", contract.ReadOnly).(int)
+			nextEpochTick = lastEpochTick + epochDuration
+			epochRest     = nextEpochTick - currTime
+		)
+		if report.LastUpdateEpoch == currEpoch {
+			report.EpochAverageSize += (sizeBytes - report.ContainerSize) * epochRest / epochDuration
+			report.NumberOfReports += 1
+			report.LastUpdateTime = currTime
+		} else {
+			report.LastUpdateEpoch = currEpoch
+			report.LastUpdateTime = currTime
+			report.NumberOfReports = 1
+			report.EpochAverageSize = (report.ContainerSize * (currTime - lastEpochTick) / epochDuration) + (sizeBytes * (epochRest) / epochDuration)
+		}
+		report.ContainerSize = sizeBytes
+		report.NumberOfObjects = objsNumber
+
 		storage.Put(ctx, reportKey, std.Serialize(report))
 	}
 

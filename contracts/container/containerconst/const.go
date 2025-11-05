@@ -8,6 +8,8 @@ const (
 	// AlphabetManagesQuotasKey is a key in netmap config which defines if
 	// Alphabet is allowed to manage space quotas instead of users.
 	AlphabetManagesQuotasKey = "AlphabetManagesQuotas"
+	// EpochDurationKey is a key in netmap config which contains epoch duration in seconds.
+	EpochDurationKey = "EpochDuration"
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = "container does not exist"
