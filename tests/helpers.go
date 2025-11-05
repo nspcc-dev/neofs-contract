@@ -52,3 +52,25 @@ func assertNotificationEvent(t testing.TB, e state.NotificationEvent, name strin
 		require.Equal(t, items[i], gotItems[i].Value(), i)
 	}
 }
+
+func assertEqualItemArray(t testing.TB, exp, got []stackitem.Item) {
+	for i := range exp {
+		if expArr, err := exp[i].Convert(stackitem.ArrayT); err == nil {
+			gotArr, err := got[i].Convert(stackitem.ArrayT)
+			require.NoError(t, err)
+
+			assertEqualItemArray(t, stackItemToArray(expArr), stackItemToArray(gotArr))
+
+			continue
+		}
+
+		require.Equal(t, exp[i].Value(), got[i].Value(), i)
+	}
+}
+
+func stackItemToArray(item stackitem.Item) []stackitem.Item {
+	if _, ok := item.(stackitem.Null); !ok {
+		return item.Value().([]stackitem.Item)
+	}
+	return nil
+}

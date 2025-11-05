@@ -10,6 +10,7 @@ require (
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.14
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
+	google.golang.org/protobuf v1.36.8
 )
 
 require (
@@ -58,6 +59,5 @@ require (
 	golang.org/x/tools v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
 	google.golang.org/grpc v1.70.0 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
