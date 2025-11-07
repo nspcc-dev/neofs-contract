@@ -68,6 +68,10 @@ func _deploy(data any, isUpdate bool) {
 			switchToAccPrefixes(ctx)
 		}
 
+		if version < 25_000 {
+			common.SubscribeForNewEpoch()
+		}
+
 		return
 	}
 
