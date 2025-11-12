@@ -132,6 +132,8 @@ Key-value storage format:
    all owner's containers' objects size limitation quota
  - 'e<user>' -> int
    total space taken to serve all containers that belong to user
+ - 'f<cid><account>' -> std.Serialize(EpochBillingStat)
+   epoch statistics for billing
 
 # Setting
 To handle some events, the contract refers to other contracts.

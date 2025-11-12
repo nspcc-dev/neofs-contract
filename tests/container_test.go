@@ -723,12 +723,22 @@ func TestContainerSizeReports(t *testing.T) {
 
 				reports := parseNodeReportsFromStackIterator(t, res)
 				require.Len(t, reports, 1)
-				require.EqualValues(t, numberOfReports, reports[0].NumberOfReports.Int64())
-				require.EqualValues(t, objsNumber, reports[0].NumberOfObjects.Int64())
-				require.EqualValues(t, latestReportedValue, reports[0].ContainerSize.Int64())
-				require.EqualValues(t, latestReportTime, reports[0].LastUpdateTime.Int64())
-				require.EqualValues(t, currentEpoch, reports[0].LastUpdateEpoch.Int64())
-				require.EqualValues(t, tc.expectedAverage, reports[0].EpochAverageSize.Int64())
+				report := reports[0]
+				require.EqualValues(t, numberOfReports, report.NumberOfReports.Int64())
+				require.EqualValues(t, objsNumber, report.NumberOfObjects.Int64())
+				require.EqualValues(t, latestReportedValue, report.ContainerSize.Int64())
+
+				res, err = c.TestInvoke(t, "iterateBillingStats", anotherCnr.id[:])
+				require.NoError(t, err)
+
+				billingStats := parseEpochBillingStatFromStackIterator(t, res)
+				require.Len(t, billingStats, 1)
+				stat := billingStats[0]
+
+				require.EqualValues(t, latestReportTime, stat.LastUpdateTime.Int64())
+				require.EqualValues(t, currentEpoch, stat.LatestEpoch.Int64())
+				require.EqualValues(t, latestReportedValue, stat.LatestContainerSize.Int64())
+				require.EqualValues(t, tc.expectedAverage, stat.LatestEpochAverageSize.Int64())
 			})
 		}
 	})
@@ -746,24 +756,13 @@ func TestContainerSizeReports(t *testing.T) {
 		res, err := c.TestInvoke(t, "iterateReports", anotherCnr.id[:])
 		require.NoError(t, err, "receiving reports iterator")
 
-		it := res.Pop().Value().(*storage.Iterator)
-		reporters := iteratorToArray(it)
-		require.Len(t, reporters, reportersNumber, "reporters number are not equal")
+		reports := parseNodeReportsFromStackIterator(t, res)
+		require.Len(t, reports, reportersNumber, "reporters number are not equal")
 		for i := range reportersNumber {
-			fields := reporters[i].Value().([]stackitem.Item)
-			pk, err := fields[0].TryBytes()
-			require.NoError(t, err)
-			size, err := fields[1].TryInteger()
-			require.NoError(t, err)
-			objs, err := fields[2].TryInteger()
-			require.NoError(t, err)
-			reportNumber, err := fields[3].TryInteger()
-			require.NoError(t, err)
-
-			require.Equal(t, nodes[i].pub, pk)
-			require.Equal(t, int64(i), size.Int64())
-			require.Equal(t, int64(i), objs.Int64())
-			require.Equal(t, int64(1), reportNumber.Int64())
+			require.Equal(t, nodes[i].pub, reports[i].PublicKey.Bytes())
+			require.Equal(t, int64(i), reports[i].ContainerSize.Int64())
+			require.Equal(t, int64(i), reports[i].NumberOfObjects.Int64())
+			require.Equal(t, int64(1), reports[i].NumberOfReports.Int64())
 		}
 	})
 
@@ -857,6 +856,19 @@ func parseNodeReportsFromStackIterator(t *testing.T, stack *vm.Stack) []containe
 	it := stack.Pop().Value().(*storage.Iterator)
 	for it.Next() {
 		var r containerrpc.ContainerNodeReport
+		require.NoError(t, r.FromStackItem(it.Value()))
+		res = append(res, r)
+	}
+
+	return res
+}
+
+func parseEpochBillingStatFromStackIterator(t *testing.T, stack *vm.Stack) []containerrpc.ContainerEpochBillingStat {
+	var res []containerrpc.ContainerEpochBillingStat
+
+	it := stack.Pop().Value().(*storage.Iterator)
+	for it.Next() {
+		var r containerrpc.ContainerEpochBillingStat
 		require.NoError(t, r.FromStackItem(it.Value()))
 		res = append(res, r)
 	}
