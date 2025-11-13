@@ -1146,7 +1146,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			billingStat.PreviousEpochAverageSize = billingStat.LatestEpochAverageSize
 			billingStat.LastUpdateTime = currTime
 			billingStat.LatestEpoch = currEpoch
-			billingStat.LatestEpochAverageSize = (report.ContainerSize * (currTime - lastEpochTick) / epochDuration) + (sizeBytes * (epochRest) / epochDuration)
+			billingStat.LatestEpochAverageSize = (report.ContainerSize*(currTime-lastEpochTick) + (sizeBytes * epochRest)) / epochDuration
 
 			report.LastUpdateEpoch = currEpoch
 			report.NumberOfReports = 1
