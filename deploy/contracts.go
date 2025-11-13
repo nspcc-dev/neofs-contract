@@ -226,22 +226,42 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 
 	var proxyCommitteeActor *notary.Actor
 
-	initProxyCommitteeActor := func(proxyContract util.Uint160) error {
+	initProxyCommitteeActor := func(proxyContract, deployedContract util.Uint160) error {
 		var err error
-		proxyCommitteeActor, err = newProxyCommitteeNotaryActor(prm.blockchain, prm.localAcc, prm.committee, proxyContract)
+
+		if len(prm.validatorsDeployAllowedContracts) != 0 {
+			var (
+				scriptHashConditions      transaction.ConditionOr
+				calledByContractCondition = transaction.ConditionCalledByContract(deployedContract)
+			)
+			for _, cnr := range prm.validatorsDeployAllowedContracts {
+				condScriptHash := transaction.ConditionScriptHash(cnr)
+				scriptHashConditions = append(scriptHashConditions, &condScriptHash)
+			}
+
+			proxyCommitteeActor, err = _newCustomCommitteeNotaryActor(prm.blockchain, prm.localAcc, prm.committee, notary.FakeContractAccount(proxyContract), func(signer *transaction.Signer) {
+				signer.Scopes = transaction.Rules
+				signer.Rules = []transaction.WitnessRule{
+					{
+						Action:    transaction.WitnessAllow,
+						Condition: transaction.ConditionCalledByEntry{},
+					},
+					{
+						Action: transaction.WitnessAllow,
+						Condition: &transaction.ConditionAnd{
+							&calledByContractCondition,
+							&scriptHashConditions,
+						},
+					},
+				}
+			})
+		} else {
+			proxyCommitteeActor, err = newProxyCommitteeNotaryActor(prm.blockchain, prm.localAcc, prm.committee, proxyContract)
+		}
 		if err != nil {
 			return fmt.Errorf("create Notary service client sending transactions to be signed by the committee and paid by Proxy contract: %w", err)
 		}
 		return nil
-	}
-
-	if !prm.isProxy {
-		// otherwise, we dynamically receive Proxy contract address below and construct
-		// proxyCommitteeActor after
-		err = initProxyCommitteeActor(prm.proxyContract)
-		if err != nil {
-			return util.Uint160{}, err
-		}
 	}
 
 	// wrap the parent context into the context of the current function so that
@@ -468,8 +488,12 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 				return onChainState.Hash, nil
 			}
 		} else {
-			if prm.isProxy && proxyCommitteeActor == nil {
-				err = initProxyCommitteeActor(onChainState.Hash)
+			if proxyCommitteeActor == nil {
+				if prm.isProxy {
+					err = initProxyCommitteeActor(onChainState.Hash, onChainState.Hash)
+				} else {
+					err = initProxyCommitteeActor(prm.proxyContract, onChainState.Hash)
+				}
 				if err != nil {
 					return util.Uint160{}, err
 				}
