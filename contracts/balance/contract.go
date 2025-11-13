@@ -158,12 +158,7 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 
 	common.CheckAlphabetWitness()
 
-	result := token.transfer(ctx, from, to, amount, true, details)
-	if result {
-		runtime.Log("successfully transferred assets")
-	}
-
-	return result
+	return token.transfer(ctx, from, to, amount, true, details)
 }
 
 // Lock is a method that transfers assets from a user account to the lock account
