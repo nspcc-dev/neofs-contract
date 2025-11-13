@@ -56,6 +56,31 @@ Cheque method invocation of NeoFS contract.
 	    type: Integer
 	  - name: until
 	    type: Integer
+
+Payment notification. This notification is produced when container has
+been paid by its owner according to storage nodes' reports.
+
+	Payment
+	  - name: UserID
+		type: Hash160
+	  - name: ContainerID
+		type: Hash256
+	  - name: Epoch
+		type: Integer
+	  - name: Amount
+		type: Integer
+
+ChangePaymentStatus notification. This notification is produced when container's
+payment status is changed. It is produced in both cases: when a paid earlier
+container is marked unpaid, and when an unpaid container is paid successfully.
+
+	ChangePaymentStatus
+	  - name: ContainerID
+		type: Hash256
+	  - name: Epoch
+		type: Integer
+	  - name: Unpaid
+		type: Boolean
 */
 package balance
 
@@ -68,6 +93,12 @@ Key-value storage format:
    total amount of main chain GAS deployed in the NeoFS network in Fixed12
  - a<interop.Hash160> -> std.Serialize(Account)
    balance sheet of all NeoFS users (here Account is a structure defined in current package)
+ - 'b' -> interop.Hash160
+   Netmap contract reference
+ - 'c' -> interop.Hash160
+   Balance contract reference
+ - 'd'<cid> -> int
+   unpaid containers index, stores epoch when container was marked unpaid
 
 # Accounting
 Contract stores information about all NeoFS accounts.

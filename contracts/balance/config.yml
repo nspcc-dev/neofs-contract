@@ -34,3 +34,21 @@ events:
         type: Integer
       - name: details
         type: ByteArray
+  - name: Payment
+    parameters:
+      - name: UserID
+        type: Hash160
+      - name: ContainerID
+        type: Hash256
+      - name: Epoch
+        type: Integer
+      - name: Amount
+        type: Integer
+  - name: ChangePaymentStatus
+    parameters:
+      - name: ContainerID
+        type: Hash256
+      - name: Epoch
+        type: Integer
+      - name: Unpaid
+        type: Boolean
