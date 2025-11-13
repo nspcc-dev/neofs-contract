@@ -510,14 +510,12 @@ func TestContainerSizeReports(t *testing.T) {
 				res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 				require.NoError(t, err, "receiving container info")
 
-				ii := res.Top().Array()
-				size, err := ii[0].TryInteger()
-				require.NoError(t, err)
-				objs, err := ii[1].TryInteger()
+				var summ containerrpc.ContainerNodeReportSummary
+				err = summ.FromStackItem(res.Top().Item())
 				require.NoError(t, err)
 
-				require.Equal(t, tc.result.size, size.Int64(), "sizes are not equal")
-				require.Equal(t, tc.result.objs, objs.Int64(), "object numbers are not equal")
+				require.Equal(t, tc.result.size, summ.ContainerSize.Int64(), "sizes are not equal")
+				require.Equal(t, tc.result.objs, summ.NumberOfObjects.Int64(), "object numbers are not equal")
 			})
 		}
 	})
@@ -545,26 +543,21 @@ func TestContainerSizeReports(t *testing.T) {
 		// summaries for the whole container
 		res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 		require.NoError(t, err, "receiving estimations")
-		ii := res.Top().Array()
-		size, err := ii[0].TryInteger()
+		var summ containerrpc.ContainerNodeReportSummary
+		err = summ.FromStackItem(res.Pop().Item())
 		require.NoError(t, err)
-		objs, err := ii[1].TryInteger()
-		require.NoError(t, err)
-		require.Equal(t, int64(nodeSize1+nodeSize2), size.Int64(), "average sizes are not equal")
-		require.Equal(t, int64(nodeObjs1+nodeObjs2), objs.Int64(), "average object numbers are not equal")
+		require.Equal(t, int64(nodeSize1+nodeSize2), summ.ContainerSize.Int64(), "average sizes are not equal")
+		require.Equal(t, int64(nodeObjs1+nodeObjs2), summ.NumberOfObjects.Int64(), "average object numbers are not equal")
 
 		// separate value for node 1
 		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[0].pub)
 		require.NoError(t, err, "receiving estimations for node 1")
-		ii = res.Top().Array()
-		pk, err := ii[0].TryBytes()
-		require.NoError(t, err)
-		size, err = ii[1].TryInteger()
-		require.NoError(t, err)
-		objs, err = ii[2].TryInteger()
-		require.NoError(t, err)
-		reportNumber, err := ii[3].TryInteger()
-		require.NoError(t, err)
+		var r containerrpc.ContainerNodeReport
+		require.NoError(t, r.FromStackItem(res.Pop().Item()))
+		pk := r.PublicKey.Bytes()
+		size := r.ContainerSize
+		objs := r.NumberOfObjects
+		reportNumber := r.NumberOfReports
 
 		require.Equal(t, nodes[0].pub, pk)
 		require.Equal(t, int64(nodeSize1), size.Int64(), "node 1 sizes are not equal")
@@ -573,16 +566,12 @@ func TestContainerSizeReports(t *testing.T) {
 
 		// separate value for node 2
 		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[1].pub)
-		require.NoError(t, err, "receiving estimations for node 2")
-		ii = res.Top().Array()
-		pk, err = ii[0].TryBytes()
-		require.NoError(t, err)
-		size, err = ii[1].TryInteger()
-		require.NoError(t, err)
-		objs, err = ii[2].TryInteger()
-		require.NoError(t, err)
-		reportNumber, err = ii[3].TryInteger()
-		require.NoError(t, err)
+		require.NoError(t, err, "receiving estimations for node 1")
+		require.NoError(t, r.FromStackItem(res.Pop().Item()))
+		pk = r.PublicKey.Bytes()
+		size = r.ContainerSize
+		objs = r.NumberOfObjects
+		reportNumber = r.NumberOfReports
 
 		require.Equal(t, nodes[1].pub, pk)
 		require.Equal(t, int64(nodeSize2), size.Int64(), "node 2 sizes are not equal")
