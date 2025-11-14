@@ -17,7 +17,20 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"math/big"
+	"unicode/utf8"
 )
+
+// ContainerAPIVersion is a contract-specific container.APIVersion type used by its methods.
+type ContainerAPIVersion struct {
+	Major *big.Int
+	Minor *big.Int
+}
+
+// ContainerAttribute is a contract-specific container.Attribute type used by its methods.
+type ContainerAttribute struct {
+	Key   string
+	Value string
+}
 
 // ContainerContainer is a contract-specific container.Container type used by its methods.
 type ContainerContainer struct {
@@ -33,6 +46,16 @@ type ContainerExtendedACL struct {
 	Sig   []byte
 	Pub   *keys.PublicKey
 	Token []byte
+}
+
+// ContainerInfo is a contract-specific container.Info type used by its methods.
+type ContainerInfo struct {
+	Version       *ContainerAPIVersion
+	Owner         []byte
+	Nonce         []byte
+	BasicACL      *big.Int
+	Attributes    []*ContainerAttribute
+	StoragePolicy []byte
 }
 
 // ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
@@ -213,6 +236,11 @@ func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
 }
 
+// GetInfo invokes `getInfo` method of contract.
+func (c *ContractReader) GetInfo(id util.Uint256) (*ContainerInfo, error) {
+	return itemToContainerInfo(unwrap.Item(c.invoker.Call(c.hash, "getInfo", id)))
+}
+
 // GetNodeReportSummary invokes `getNodeReportSummary` method of contract.
 func (c *ContractReader) GetNodeReportSummary(cid util.Uint256) (*ContainerNodeReportSummary, error) {
 	return itemToContainerNodeReportSummary(unwrap.Item(c.invoker.Call(c.hash, "getNodeReportSummary", cid)))
@@ -368,6 +396,28 @@ func (c *Contract) CreateTransaction(cnr []byte, invocScript []byte, verifScript
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) CreateUnsigned(cnr []byte, invocScript []byte, verifScript []byte, sessionToken []byte, name string, zone string, metaOnChain bool) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "create", nil, cnr, invocScript, verifScript, sessionToken, name, zone, metaOnChain)
+}
+
+// CreateV2 creates a transaction invoking `createV2` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) CreateV2(cnr *ContainerInfo, invocScript []byte, verifScript []byte, sessionToken []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "createV2", cnr, invocScript, verifScript, sessionToken)
+}
+
+// CreateV2Transaction creates a transaction invoking `createV2` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) CreateV2Transaction(cnr *ContainerInfo, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "createV2", cnr, invocScript, verifScript, sessionToken)
+}
+
+// CreateV2Unsigned creates a transaction invoking `createV2` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) CreateV2Unsigned(cnr *ContainerInfo, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "createV2", nil, cnr, invocScript, verifScript, sessionToken)
 }
 
 // Delete creates a transaction invoking `delete` method of the contract.
@@ -678,6 +728,238 @@ func (c *Contract) SubmitObjectPutUnsigned(metaInformation []byte, sigs [][][]by
 	return c.actor.MakeUnsignedCall(c.hash, "submitObjectPut", nil, metaInformation, sigs)
 }
 
+// itemToContainerAPIVersion converts stack item into *ContainerAPIVersion.
+// NULL item is returned as nil pointer without error.
+func itemToContainerAPIVersion(item stackitem.Item, err error) (*ContainerAPIVersion, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerAPIVersion)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerAPIVersion is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerAPIVersion{})
+
+// Ensure *ContainerAPIVersion is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerAPIVersion{})
+
+// FromStackItem retrieves fields of ContainerAPIVersion from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerAPIVersion) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Major, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Major: %w", err)
+	}
+
+	index++
+	res.Minor, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Minor: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerAPIVersion.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerAPIVersion) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = (*stackitem.BigInteger)(res.Major), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Major: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.Minor), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Minor: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerAPIVersion.
+// It implements [smartcontract.Convertible] interface so that ContainerAPIVersion
+// could be used with invokers.
+func (res *ContainerAPIVersion) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Major)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Major: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Minor)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Minor: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
+// itemToContainerAttribute converts stack item into *ContainerAttribute.
+// NULL item is returned as nil pointer without error.
+func itemToContainerAttribute(item stackitem.Item, err error) (*ContainerAttribute, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerAttribute)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerAttribute is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerAttribute{})
+
+// Ensure *ContainerAttribute is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerAttribute{})
+
+// FromStackItem retrieves fields of ContainerAttribute from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerAttribute) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Key, err = func(item stackitem.Item) (string, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return "", err
+		}
+		if !utf8.Valid(b) {
+			return "", errors.New("not a UTF-8 string")
+		}
+		return string(b), nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Key: %w", err)
+	}
+
+	index++
+	res.Value, err = func(item stackitem.Item) (string, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return "", err
+		}
+		if !utf8.Valid(b) {
+			return "", errors.New("not a UTF-8 string")
+		}
+		return string(b), nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Value: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerAttribute.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerAttribute) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = stackitem.NewByteArray([]byte(res.Key)), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Key: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray([]byte(res.Value)), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Value: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerAttribute.
+// It implements [smartcontract.Convertible] interface so that ContainerAttribute
+// could be used with invokers.
+func (res *ContainerAttribute) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Key)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Key: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Value)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToContainerContainer converts stack item into *ContainerContainer.
 // NULL item is returned as nil pointer without error.
 func itemToContainerContainer(item stackitem.Item, err error) (*ContainerContainer, error) {
@@ -978,6 +1260,226 @@ func (res *ContainerExtendedACL) ToSCParameter() (smartcontract.Parameter, error
 	prm, err = smartcontract.NewParameterFromValue(res.Token)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field Token: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
+// itemToContainerInfo converts stack item into *ContainerInfo.
+// NULL item is returned as nil pointer without error.
+func itemToContainerInfo(item stackitem.Item, err error) (*ContainerInfo, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerInfo)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerInfo is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerInfo{})
+
+// Ensure *ContainerInfo is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerInfo{})
+
+// FromStackItem retrieves fields of ContainerInfo from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerInfo) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 6 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Version, err = itemToContainerAPIVersion(arr[index], nil)
+	if err != nil {
+		return fmt.Errorf("field Version: %w", err)
+	}
+
+	index++
+	res.Owner, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Owner: %w", err)
+	}
+
+	index++
+	res.Nonce, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field Nonce: %w", err)
+	}
+
+	index++
+	res.BasicACL, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field BasicACL: %w", err)
+	}
+
+	index++
+	res.Attributes, err = func(item stackitem.Item) ([]*ContainerAttribute, error) {
+		arr, ok := item.Value().([]stackitem.Item)
+		if !ok {
+			return nil, errors.New("not an array")
+		}
+		res := make([]*ContainerAttribute, len(arr))
+		for i := range res {
+			res[i], err = itemToContainerAttribute(arr[i], nil)
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+		}
+		return res, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Attributes: %w", err)
+	}
+
+	index++
+	res.StoragePolicy, err = arr[index].TryBytes()
+	if err != nil {
+		return fmt.Errorf("field StoragePolicy: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerInfo.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerInfo) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 6)
+	)
+	itm, err = res.Version.ToStackItem()
+	if err != nil {
+		return nil, fmt.Errorf("field Version: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Owner), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Owner: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.Nonce), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Nonce: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.BasicACL), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field BasicACL: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = func(in []*ContainerAttribute) (stackitem.Item, error) {
+		if in == nil {
+			return stackitem.Null{}, nil
+		}
+
+		var items = make([]stackitem.Item, 0, len(in))
+		for i, v := range in {
+			itm, err := v.ToStackItem()
+			if err != nil {
+				return nil, fmt.Errorf("item %d: %w", i, err)
+			}
+			items = append(items, itm)
+		}
+		return stackitem.NewArray(items), nil
+	}(res.Attributes)
+	if err != nil {
+		return nil, fmt.Errorf("field Attributes: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = stackitem.NewByteArray(res.StoragePolicy), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field StoragePolicy: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerInfo.
+// It implements [smartcontract.Convertible] interface so that ContainerInfo
+// could be used with invokers.
+func (res *ContainerInfo) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 6)
+	)
+	prm, err = res.Version.ToSCParameter()
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Version: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Owner)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Owner: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.Nonce)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Nonce: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.BasicACL)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field BasicACL: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = func(in []*ContainerAttribute) (smartcontract.Parameter, error) {
+		if in == nil {
+			return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+		}
+
+		var prms = make([]smartcontract.Parameter, 0, len(in))
+		for i, v := range in {
+			prm, err := v.ToSCParameter()
+			if err != nil {
+				return smartcontract.Parameter{}, fmt.Errorf("item %d: %w", i, err)
+			}
+			prms = append(prms, prm)
+		}
+		return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+	}(res.Attributes)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Attributes: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.StoragePolicy)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field StoragePolicy: %w", err)
 	}
 	prms = append(prms, prm)
 

@@ -104,6 +104,8 @@ Key-value storage format:
    NNS root domain zone for containers
  - 'x<cid>' -> []byte
    container descriptors encoded into NeoFS API binary protocol format
+ - '0<cid>' -> std.Serialize(Info)
+   container descriptors
  - 'd<cid>' -> ""
    deleted container IDs with no values for replay protection
  - 'o<owner><cid>' -> <cid>

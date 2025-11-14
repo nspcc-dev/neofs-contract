@@ -4,6 +4,8 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- Structured containers to Container contract storage (#534)
+- `createV2` and `getInfo` methods to Container contract (#534)
 
 ### Changed
 - Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
