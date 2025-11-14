@@ -552,7 +552,6 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 
 	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(fromBytes(cnr)))
 	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...), id)
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnr)
 	if metaOnChain {
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
 	}
@@ -653,7 +652,6 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) {
 
 	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
 	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, cnr.Owner[:]...), id...), id)
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnrBytes)
 	if metaOnChain {
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
 	}
@@ -729,7 +727,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	}
 
 	ctx := storage.GetContext()
-	cnrItemKey := append([]byte{containerKeyPrefix}, id...)
+	cnrItemKey := append([]byte{infoPrefix}, id...)
 	cnrItem := storage.Get(ctx, cnrItemKey)
 	if cnrItem == nil {
 		return
@@ -784,11 +782,11 @@ func GetInfo(id interop.Hash256) Info {
 // Deprecated: use [GetInfo] instead.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
-	cnt := getContainer(ctx, containerID)
-	if len(cnt.Value) == 0 {
+	val := storage.Get(ctx, append([]byte{infoPrefix}, containerID...))
+	if val == nil {
 		panic(cst.NotFoundError)
 	}
-	return cnt
+	return Container{Value: toBytes(std.Deserialize(val.([]byte)).(Info)), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
 // GetContainerData returns binary of the container it was created with by ID.
@@ -798,11 +796,11 @@ func Get(containerID []byte) Container {
 //
 // Deprecated: use [GetInfo] instead.
 func GetContainerData(id []byte) []byte {
-	cnr := storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...))
-	if cnr == nil {
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{infoPrefix}, id...))
+	if val == nil {
 		panic(cst.NotFoundError)
 	}
-	return cnr.([]byte)
+	return toBytes(std.Deserialize(val.([]byte)).(Info))
 }
 
 // Owner method returns a 25 byte Owner ID of the container.
@@ -834,7 +832,7 @@ func Alias(cid []byte) string {
 func Count() int {
 	count := 0
 	ctx := storage.GetReadOnlyContext()
-	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly)
+	it := storage.Find(ctx, []byte{infoPrefix}, storage.KeysOnly)
 	for iterator.Next(it) {
 		count++
 	}
@@ -1143,7 +1141,7 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 	id := eACL[idOff : idOff+containerIDSize]
 	ctx := storage.GetContext()
 
-	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+	if storage.Get(ctx, append([]byte{infoPrefix}, id...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1176,7 +1174,7 @@ func EACL(containerID []byte) ExtendedACL {
 // exception.
 func GetEACLData(id []byte) []byte {
 	ctx := storage.GetReadOnlyContext()
-	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+	if storage.Get(ctx, append([]byte{infoPrefix}, id...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1511,9 +1509,6 @@ func addContainer(ctx storage.Context, id, owner, container []byte) {
 	containerListKey = append(containerListKey, id...)
 	storage.Put(ctx, containerListKey, id)
 
-	idKey := append([]byte{containerKeyPrefix}, id...)
-	storage.Put(ctx, idKey, container)
-
 	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(fromBytes(container)))
 }
 
@@ -1565,22 +1560,13 @@ func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 	return ExtendedACL{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
-func getContainer(ctx storage.Context, cid []byte) Container {
-	data := storage.Get(ctx, append([]byte{containerKeyPrefix}, cid...))
-	if data != nil {
-		return Container{Value: data.([]byte), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
-	}
-
-	return Container{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
-}
-
 func getOwnerByID(ctx storage.Context, cid []byte) []byte {
-	container := getContainer(ctx, cid)
-	if len(container.Value) == 0 {
+	val := storage.Get(ctx, append([]byte{infoPrefix}, cid...))
+	if val == nil {
 		return nil
 	}
 
-	return ownerFromBinaryContainer(container.Value)
+	return std.Deserialize(val.([]byte)).(Info).Owner
 }
 
 func ownerFromBinaryContainer(container []byte) []byte {

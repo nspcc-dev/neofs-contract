@@ -1624,7 +1624,6 @@ func TestContainerCreate(t *testing.T) {
 			return getContractStorageItem(t, exec, containerContract.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
@@ -1705,7 +1704,7 @@ func TestContainerCreate(t *testing.T) {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-	require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
+
 	require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
@@ -1801,7 +1800,6 @@ func TestContainerRemove(t *testing.T) {
 		return getContractStorageItem(t, exec, containerContract.Hash, key)
 	}
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-	require.Nil(t, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
 	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'n'}, id[:])) {
@@ -2089,7 +2087,7 @@ func TestContainerCreateV2(t *testing.T) {
 	assertSuccessAPI := func(t *testing.T, id cid.ID, cnrFields []stackitem.Item, cnrBytes []byte) {
 		inv.Invoke(t, stackitem.NewStruct(cnrFields), "getInfo", id[:])
 		inv.Invoke(t, stackitem.NewBuffer(cnrBytes), "getContainerData", id[:])
-		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", id[:])
+		inv.Invoke(t, stackitem.NewByteArray(ownerID[:]), "owner", id[:])
 		inv.Invoke(t, stackitem.NewStruct([]stackitem.Item{
 			stackitem.NewBuffer(cnrBytes),
 			stackitem.NewBuffer([]byte{}),
@@ -2126,7 +2124,6 @@ func TestContainerCreateV2(t *testing.T) {
 
 		require.Equal(t, stackitem.NewStruct(cnrFields), gotStruct)
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerID[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	}
 
 	assertSuccessNotifications := func(t *testing.T, txHash util.Uint256, fee int64, id cid.ID, domain string) {

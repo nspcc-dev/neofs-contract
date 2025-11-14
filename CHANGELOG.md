@@ -9,6 +9,7 @@ Changelog for NeoFS Contract
 
 ### Changed
 - Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
+- Container contract no longer creates or reads container protobuf storage items (#XXX)
 
 ### Updated
 - NeoGo dependency to 0.113.0 (#521)
