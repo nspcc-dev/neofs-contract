@@ -363,6 +363,7 @@ func requireMapValue(m map[string]any, key string) any {
 // meta-information be handled and notified using the chain. If name and
 // zone are non-empty strings, it behaves the same as [PutNamed]; empty
 // strings make a regular [Put] call.
+//
 // Deprecated: use [CreateV2] instead.
 func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
@@ -381,6 +382,7 @@ func PutMeta(container []byte, signature interop.Signature, publicKey interop.Pu
 // PublicKey contains the public key of the signer.
 // Token is optional and should be a stable marshaled SessionToken structure from
 // API.
+//
 // Deprecated: use [CreateV2] instead.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	PutNamed(container, signature, publicKey, token, "", "")
@@ -388,6 +390,7 @@ func Put(container []byte, signature interop.Signature, publicKey interop.Public
 
 // PutNamedOverloaded is the same as [Put] (and exposed as put from the contract via
 // overload), but allows named container creation via NNS contract.
+//
 // Deprecated: use [CreateV2] instead.
 func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string) {
 	PutNamed(container, signature, publicKey, token, name, zone)
@@ -395,7 +398,8 @@ func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey
 
 // PutNamed is similar to put but also sets a TXT record in nns contract.
 // Note that zone must exist.
-// DEPRECATED: use [CreateV2] instead.
+//
+// Deprecated: use [CreateV2] instead.
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
@@ -684,6 +688,7 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 // API.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+//
 // Deprecated: use [Remove] instead.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
@@ -1082,6 +1087,7 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 // API.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+//
 // Deprecated: use [PutEACL] instead.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	ctx := storage.GetContext()
@@ -1150,6 +1156,7 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 // structure if it was provided.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+//
 // Deprecated: use [GetEACLData] instead.
 func EACL(containerID []byte) ExtendedACL {
 	ctx := storage.GetReadOnlyContext()
