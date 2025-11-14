@@ -49,6 +49,21 @@ type TransferXEvent struct {
 	Details []byte
 }
 
+// PaymentEvent represents "Payment" event emitted by the contract.
+type PaymentEvent struct {
+	UserID      util.Uint160
+	ContainerID util.Uint256
+	Epoch       *big.Int
+	Amount      *big.Int
+}
+
+// ChangePaymentStatusEvent represents "ChangePaymentStatus" event emitted by the contract.
+type ChangePaymentStatusEvent struct {
+	ContainerID util.Uint256
+	Epoch       *big.Int
+	Unpaid      bool
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	nep17.Invoker
@@ -122,6 +137,50 @@ func (c *Contract) BurnUnsigned(from util.Uint160, amount *big.Int, txDetails []
 	return c.actor.MakeUnsignedCall(c.hash, "burn", nil, from, amount, txDetails)
 }
 
+// GetUnpaidContainerEpoch creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) GetUnpaidContainerEpoch(cid util.Uint256) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "getUnpaidContainerEpoch", cid)
+}
+
+// GetUnpaidContainerEpochTransaction creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) GetUnpaidContainerEpochTransaction(cid util.Uint256) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "getUnpaidContainerEpoch", cid)
+}
+
+// GetUnpaidContainerEpochUnsigned creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) GetUnpaidContainerEpochUnsigned(cid util.Uint256) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "getUnpaidContainerEpoch", nil, cid)
+}
+
+// IterateUnpaid creates a transaction invoking `iterateUnpaid` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) IterateUnpaid() (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "iterateUnpaid")
+}
+
+// IterateUnpaidTransaction creates a transaction invoking `iterateUnpaid` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) IterateUnpaidTransaction() (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "iterateUnpaid")
+}
+
+// IterateUnpaidUnsigned creates a transaction invoking `iterateUnpaid` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) IterateUnpaidUnsigned() (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "iterateUnpaid", nil)
+}
+
 // Lock creates a transaction invoking `lock` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -188,18 +247,68 @@ func (c *Contract) NewEpochUnsigned(epochNum *big.Int) (*transaction.Transaction
 	return c.actor.MakeUnsignedCall(c.hash, "newEpoch", nil, epochNum)
 }
 
+func (c *Contract) scriptForSettleContainerPayment(cid util.Uint256) ([]byte, error) {
+	return smartcontract.CreateCallWithAssertScript(c.hash, "settleContainerPayment", cid)
+}
+
+// SettleContainerPayment creates a transaction invoking `settleContainerPayment` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SettleContainerPayment(cid util.Uint256) (util.Uint256, uint32, error) {
+	script, err := c.scriptForSettleContainerPayment(cid)
+	if err != nil {
+		return util.Uint256{}, 0, err
+	}
+	return c.actor.SendRun(script)
+}
+
+// SettleContainerPaymentTransaction creates a transaction invoking `settleContainerPayment` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SettleContainerPaymentTransaction(cid util.Uint256) (*transaction.Transaction, error) {
+	script, err := c.scriptForSettleContainerPayment(cid)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeRun(script)
+}
+
+// SettleContainerPaymentUnsigned creates a transaction invoking `settleContainerPayment` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SettleContainerPaymentUnsigned(cid util.Uint256) (*transaction.Transaction, error) {
+	script, err := c.scriptForSettleContainerPayment(cid)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeUnsignedRun(script, nil)
+}
+
+func (c *Contract) scriptForTransferX(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) ([]byte, error) {
+	return smartcontract.CreateCallWithAssertScript(c.hash, "transferX", from, to, amount, details)
+}
+
 // TransferX creates a transaction invoking `transferX` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
 func (c *Contract) TransferX(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "transferX", from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return util.Uint256{}, 0, err
+	}
+	return c.actor.SendRun(script)
 }
 
 // TransferXTransaction creates a transaction invoking `transferX` method of the contract.
 // This transaction is signed, but not sent to the network, instead it's
 // returned to the caller.
 func (c *Contract) TransferXTransaction(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "transferX", from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeRun(script)
 }
 
 // TransferXUnsigned creates a transaction invoking `transferX` method of the contract.
@@ -207,7 +316,11 @@ func (c *Contract) TransferXTransaction(from util.Uint160, to util.Uint160, amou
 // Any fields of it that do not affect fees can be changed (ValidUntilBlock,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) TransferXUnsigned(from util.Uint160, to util.Uint160, amount *big.Int, details []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "transferX", nil, from, to, amount, details)
+	script, err := c.scriptForTransferX(from, to, amount, details)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeUnsignedRun(script, nil)
 }
 
 // itemToBalanceAccount converts stack item into *BalanceAccount.
@@ -659,6 +772,170 @@ func (e *TransferXEvent) FromStackItem(item *stackitem.Array) error {
 	e.Details, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field Details: %w", err)
+	}
+
+	return nil
+}
+
+// PaymentEventsFromApplicationLog retrieves a set of all emitted events
+// with "Payment" name from the provided [result.ApplicationLog].
+func PaymentEventsFromApplicationLog(log *result.ApplicationLog) ([]*PaymentEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*PaymentEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "Payment" {
+				continue
+			}
+			event := new(PaymentEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize PaymentEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to PaymentEvent or
+// returns an error if it's not possible to do to so.
+func (e *PaymentEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 4 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.UserID, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field UserID: %w", err)
+	}
+
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Epoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Epoch: %w", err)
+	}
+
+	index++
+	e.Amount, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Amount: %w", err)
+	}
+
+	return nil
+}
+
+// ChangePaymentStatusEventsFromApplicationLog retrieves a set of all emitted events
+// with "ChangePaymentStatus" name from the provided [result.ApplicationLog].
+func ChangePaymentStatusEventsFromApplicationLog(log *result.ApplicationLog) ([]*ChangePaymentStatusEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*ChangePaymentStatusEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "ChangePaymentStatus" {
+				continue
+			}
+			event := new(ChangePaymentStatusEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize ChangePaymentStatusEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to ChangePaymentStatusEvent or
+// returns an error if it's not possible to do to so.
+func (e *ChangePaymentStatusEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 3 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Epoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Epoch: %w", err)
+	}
+
+	index++
+	e.Unpaid, err = arr[index].TryBool()
+	if err != nil {
+		return fmt.Errorf("field Unpaid: %w", err)
 	}
 
 	return nil

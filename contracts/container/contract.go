@@ -34,6 +34,20 @@ type (
 		Token []byte
 	}
 
+	// EpochBillingStat represents container statistics for a certain epoch.
+	EpochBillingStat struct {
+		Account interop.Hash160
+
+		LatestContainerSize    int
+		LatestEpoch            int
+		LastUpdateTime         int
+		LatestEpochAverageSize int
+
+		PreviousContainerSize    int
+		PreviousEpoch            int
+		PreviousEpochAverageSize int
+	}
+
 	// NodeReport is a report by a certain storage node about its storage
 	// engine's volume it uses for a certain container.
 	NodeReport struct {
@@ -41,10 +55,7 @@ type (
 		ContainerSize   int
 		NumberOfObjects int
 		NumberOfReports int
-
-		LastUpdateEpoch  int
-		LastUpdateTime   int
-		EpochAverageSize int
+		LastUpdateEpoch int
 	}
 
 	// NodeReportSummary is the summary of all [NodeReport] claimed by all
@@ -91,6 +102,7 @@ const (
 	containerQuotaKeyPrefix    = 'a'
 	userQuotaKeyPrefix         = 'b'
 	userLoadKeyPrefix          = 'e'
+	billingInfoKeyPrefix       = 'f'
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -407,13 +419,15 @@ func PutNamed(container []byte, signature interop.Signature,
 	for _, node := range alphabet {
 		to := contract.CreateStandardAccount(node)
 
-		contract.Call(balanceContractAddr, "transferX",
+		if !contract.Call(balanceContractAddr, "transferX",
 			contract.All,
 			from,
 			to,
 			containerFee,
 			details,
-		)
+		).(bool) {
+			panic("insufficient balance to create container")
+		}
 	}
 
 	addContainer(ctx, containerID, ownerID, container)
@@ -511,8 +525,10 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 
 		transferDetails := common.ContainerFeeTransferDetails(id)
 		for i := range alphabet {
-			contract.Call(balanceContract, "transferX", contract.All,
-				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails)
+			if !contract.Call(balanceContract, "transferX", contract.All,
+				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails).(bool) {
+				panic("insufficient balance to create container")
+			}
 		}
 	}
 
@@ -1058,37 +1074,52 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 
 	var (
-		nodeAcc           = contract.CreateStandardAccount(pubKey)
-		storageDiff       int
+		nodeAcc     = contract.CreateStandardAccount(pubKey)
+		storageDiff int
+		currTime    = runtime.GetTime()
+
 		summaryKey        = append([]byte{reportsSummary}, cid...)
 		reportsSummaryRaw = storage.Get(ctx, summaryKey)
 		summary           NodeReportSummary
-		currTime          = runtime.GetTime()
+
+		reportKey = append(append([]byte{reportersPrefix}, cid...), nodeAcc...)
+		reportRaw = storage.Get(ctx, reportKey)
+		report    NodeReport
+
+		billingStatKey = append(append([]byte{billingInfoKeyPrefix}, cid...), nodeAcc...)
+		billingStatRaw = storage.Get(ctx, billingStatKey)
+		billingStat    EpochBillingStat
 	)
 	if reportsSummaryRaw != nil {
 		summary = std.Deserialize(reportsSummaryRaw.([]byte)).(NodeReportSummary)
 	}
+	if reportRaw != nil {
+		report = std.Deserialize(reportRaw.([]byte)).(NodeReport)
+	}
+	if billingStatRaw != nil {
+		billingStat = std.Deserialize(billingStatRaw.([]byte)).(EpochBillingStat)
+	}
 
-	reportKey := append([]byte{reportersPrefix}, cid...)
-	reportKey = append(reportKey, nodeAcc...)
-	reportRaw := storage.Get(ctx, reportKey)
 	if reportRaw == nil {
 		storageDiff = sizeBytes
 		summary.ContainerSize += sizeBytes
 		summary.NumberOfObjects += objsNumber
 
-		report := NodeReport{
-			PublicKey:        pubKey,
-			NumberOfReports:  1,
-			ContainerSize:    sizeBytes,
-			NumberOfObjects:  objsNumber,
-			LastUpdateEpoch:  currEpoch,
-			LastUpdateTime:   currTime,
-			EpochAverageSize: sizeBytes,
+		report = NodeReport{
+			PublicKey:       pubKey,
+			NumberOfReports: 1,
+			ContainerSize:   sizeBytes,
+			NumberOfObjects: objsNumber,
+			LastUpdateEpoch: currEpoch,
 		}
-		storage.Put(ctx, reportKey, std.Serialize(report))
+		billingStat = EpochBillingStat{
+			Account:                nodeAcc,
+			LatestEpochAverageSize: sizeBytes,
+			LatestContainerSize:    sizeBytes,
+			LatestEpoch:            currEpoch,
+			LastUpdateTime:         currTime,
+		}
 	} else {
-		report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
 		if report.LastUpdateEpoch == currEpoch && report.NumberOfReports == maxNumberOfReportsPerEpoch {
 			panic("max number of reports (" + std.Itoa10(maxNumberOfReportsPerEpoch) + ") reached")
 		}
@@ -1105,20 +1136,28 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			epochRest     = nextEpochTick - currTime
 		)
 		if report.LastUpdateEpoch == currEpoch {
-			report.EpochAverageSize += (sizeBytes - report.ContainerSize) * epochRest / epochDuration
+			billingStat.LatestEpochAverageSize += (sizeBytes - report.ContainerSize) * epochRest / epochDuration
+			billingStat.LastUpdateTime = currTime
+
 			report.NumberOfReports += 1
-			report.LastUpdateTime = currTime
 		} else {
+			billingStat.PreviousContainerSize = billingStat.LatestContainerSize
+			billingStat.PreviousEpoch = billingStat.LatestEpoch
+			billingStat.PreviousEpochAverageSize = billingStat.LatestEpochAverageSize
+			billingStat.LastUpdateTime = currTime
+			billingStat.LatestEpoch = currEpoch
+			billingStat.LatestEpochAverageSize = (report.ContainerSize*(currTime-lastEpochTick) + (sizeBytes * epochRest)) / epochDuration
+
 			report.LastUpdateEpoch = currEpoch
-			report.LastUpdateTime = currTime
 			report.NumberOfReports = 1
-			report.EpochAverageSize = (report.ContainerSize * (currTime - lastEpochTick) / epochDuration) + (sizeBytes * (epochRest) / epochDuration)
 		}
+		billingStat.LatestContainerSize = sizeBytes
 		report.ContainerSize = sizeBytes
 		report.NumberOfObjects = objsNumber
-
-		storage.Put(ctx, reportKey, std.Serialize(report))
 	}
+
+	storage.Put(ctx, reportKey, std.Serialize(report))
+	storage.Put(ctx, billingStatKey, std.Serialize(billingStat))
 
 	userSummaryKey := userTotalStorageKey(owner)
 	v := storage.Get(ctx, userSummaryKey)
@@ -1195,6 +1234,40 @@ func IterateReports(cid interop.Hash256) iterator.Iterator {
 
 	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{reportersPrefix}, cid...)
+
+	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+}
+
+// GetBillingStatByNode method returns billing statistics based on submitted
+// reports made with [PutReport].
+//
+// If the container doesn't exist, it panics with [cst.NotFoundError]. If no
+// reports were claimed, it returns zero values.
+func GetBillingStatByNode(cid interop.Hash256, pubKey interop.PublicKey) EpochBillingStat {
+	ctx := storage.GetReadOnlyContext()
+	if getOwnerByID(ctx, cid) == nil {
+		panic(cst.NotFoundError)
+	}
+
+	key := append([]byte{billingInfoKeyPrefix}, cid...)
+	key = append(key, contract.CreateStandardAccount(pubKey)...)
+	reportRaw := storage.Get(ctx, key)
+	if reportRaw != nil {
+		return std.Deserialize(reportRaw.([]byte)).(EpochBillingStat)
+	}
+
+	return EpochBillingStat{}
+}
+
+// IterateBillingStats method returns iterator over container's billing
+// statistics made based on [NodeReport].
+func IterateBillingStats(cid interop.Hash256) iterator.Iterator {
+	if len(cid) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	key := append([]byte{billingInfoKeyPrefix}, cid...)
 
 	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
 }
@@ -1394,6 +1467,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
 	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
 	deleteByPrefix(ctx, append([]byte{reportersPrefix}, id...))
+	deleteByPrefix(ctx, append([]byte{billingInfoKeyPrefix}, id...))
 	storage.Delete(ctx, containerQuotaKey(id))
 	storage.Delete(ctx, summaryKey)
 

@@ -27,6 +27,18 @@ type ContainerContainer struct {
 	Token []byte
 }
 
+// ContainerEpochBillingStat is a contract-specific container.EpochBillingStat type used by its methods.
+type ContainerEpochBillingStat struct {
+	Account                  util.Uint160
+	LatestContainerSize      *big.Int
+	LatestEpoch              *big.Int
+	LastUpdateTime           *big.Int
+	LatestEpochAverageSize   *big.Int
+	PreviousContainerSize    *big.Int
+	PreviousEpoch            *big.Int
+	PreviousEpochAverageSize *big.Int
+}
+
 // ContainerExtendedACL is a contract-specific container.ExtendedACL type used by its methods.
 type ContainerExtendedACL struct {
 	Value []byte
@@ -37,13 +49,11 @@ type ContainerExtendedACL struct {
 
 // ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
 type ContainerNodeReport struct {
-	PublicKey        *keys.PublicKey
-	ContainerSize    *big.Int
-	NumberOfObjects  *big.Int
-	NumberOfReports  *big.Int
-	LastUpdateEpoch  *big.Int
-	LastUpdateTime   *big.Int
-	EpochAverageSize *big.Int
+	PublicKey       *keys.PublicKey
+	ContainerSize   *big.Int
+	NumberOfObjects *big.Int
+	NumberOfReports *big.Int
+	LastUpdateEpoch *big.Int
 }
 
 // ContainerNodeReportSummary is a contract-specific container.NodeReportSummary type used by its methods.
@@ -203,6 +213,11 @@ func (c *ContractReader) Get(containerID []byte) (*ContainerContainer, error) {
 	return itemToContainerContainer(unwrap.Item(c.invoker.Call(c.hash, "get", containerID)))
 }
 
+// GetBillingStatByNode invokes `getBillingStatByNode` method of contract.
+func (c *ContractReader) GetBillingStatByNode(cid util.Uint256, pubKey *keys.PublicKey) (*ContainerEpochBillingStat, error) {
+	return itemToContainerEpochBillingStat(unwrap.Item(c.invoker.Call(c.hash, "getBillingStatByNode", cid, pubKey)))
+}
+
 // GetContainerData invokes `getContainerData` method of contract.
 func (c *ContractReader) GetContainerData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getContainerData", id))
@@ -240,6 +255,20 @@ func (c *ContractReader) IterateAllReportSummaries() (uuid.UUID, result.Iterator
 // you. It's only limited by VM stack and GAS available for RPC invocations.
 func (c *ContractReader) IterateAllReportSummariesExpanded(_numOfIteratorItems int) ([]stackitem.Item, error) {
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateAllReportSummaries", _numOfIteratorItems))
+}
+
+// IterateBillingStats invokes `iterateBillingStats` method of contract.
+func (c *ContractReader) IterateBillingStats(cid util.Uint256) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateBillingStats", cid))
+}
+
+// IterateBillingStatsExpanded is similar to IterateBillingStats (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) IterateBillingStatsExpanded(cid util.Uint256, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateBillingStats", _numOfIteratorItems, cid))
 }
 
 // IterateReports invokes `iterateReports` method of contract.
@@ -831,6 +860,231 @@ func (res *ContainerContainer) ToSCParameter() (smartcontract.Parameter, error) 
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
+// itemToContainerEpochBillingStat converts stack item into *ContainerEpochBillingStat.
+// NULL item is returned as nil pointer without error.
+func itemToContainerEpochBillingStat(item stackitem.Item, err error) (*ContainerEpochBillingStat, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerEpochBillingStat)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerEpochBillingStat is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerEpochBillingStat{})
+
+// Ensure *ContainerEpochBillingStat is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerEpochBillingStat{})
+
+// FromStackItem retrieves fields of ContainerEpochBillingStat from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerEpochBillingStat) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 8 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Account, err = func(item stackitem.Item) (util.Uint160, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		u, err := util.Uint160DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint160{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Account: %w", err)
+	}
+
+	index++
+	res.LatestContainerSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LatestContainerSize: %w", err)
+	}
+
+	index++
+	res.LatestEpoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LatestEpoch: %w", err)
+	}
+
+	index++
+	res.LastUpdateTime, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+
+	index++
+	res.LatestEpochAverageSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field LatestEpochAverageSize: %w", err)
+	}
+
+	index++
+	res.PreviousContainerSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field PreviousContainerSize: %w", err)
+	}
+
+	index++
+	res.PreviousEpoch, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field PreviousEpoch: %w", err)
+	}
+
+	index++
+	res.PreviousEpochAverageSize, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field PreviousEpochAverageSize: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerEpochBillingStat.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerEpochBillingStat) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 8)
+	)
+	itm, err = stackitem.NewByteArray(res.Account.BytesBE()), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field Account: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.LatestContainerSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LatestContainerSize: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.LatestEpoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LatestEpoch: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.LastUpdateTime), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.LatestEpochAverageSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field LatestEpochAverageSize: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.PreviousContainerSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field PreviousContainerSize: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.PreviousEpoch), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field PreviousEpoch: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.PreviousEpochAverageSize), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field PreviousEpochAverageSize: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerEpochBillingStat.
+// It implements [smartcontract.Convertible] interface so that ContainerEpochBillingStat
+// could be used with invokers.
+func (res *ContainerEpochBillingStat) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 8)
+	)
+	prm, err = smartcontract.NewParameterFromValue(res.Account)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Account: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LatestContainerSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LatestContainerSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LatestEpoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LatestEpoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateTime)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateTime: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.LatestEpochAverageSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field LatestEpochAverageSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.PreviousContainerSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PreviousContainerSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.PreviousEpoch)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PreviousEpoch: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.PreviousEpochAverageSize)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field PreviousEpochAverageSize: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToContainerExtendedACL converts stack item into *ContainerExtendedACL.
 // NULL item is returned as nil pointer without error.
 func itemToContainerExtendedACL(item stackitem.Item, err error) (*ContainerExtendedACL, error) {
@@ -1013,7 +1267,7 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 	if !ok {
 		return errors.New("not an array")
 	}
-	if len(arr) != 7 {
+	if len(arr) != 5 {
 		return errors.New("wrong number of structure elements")
 	}
 
@@ -1061,18 +1315,6 @@ func (res *ContainerNodeReport) FromStackItem(item stackitem.Item) error {
 		return fmt.Errorf("field LastUpdateEpoch: %w", err)
 	}
 
-	index++
-	res.LastUpdateTime, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field LastUpdateTime: %w", err)
-	}
-
-	index++
-	res.EpochAverageSize, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field EpochAverageSize: %w", err)
-	}
-
 	return nil
 }
 
@@ -1086,7 +1328,7 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	var (
 		err   error
 		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 7)
+		items = make([]stackitem.Item, 0, 5)
 	)
 	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
 	if err != nil {
@@ -1118,18 +1360,6 @@ func (res *ContainerNodeReport) ToStackItem() (stackitem.Item, error) {
 	}
 	items = append(items, itm)
 
-	itm, err = (*stackitem.BigInteger)(res.LastUpdateTime), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field LastUpdateTime: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = (*stackitem.BigInteger)(res.EpochAverageSize), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field EpochAverageSize: %w", err)
-	}
-	items = append(items, itm)
-
 	return stackitem.NewStruct(items), nil
 }
 
@@ -1144,7 +1374,7 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	var (
 		err  error
 		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 7)
+		prms = make([]smartcontract.Parameter, 0, 5)
 	)
 	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
 	if err != nil {
@@ -1173,18 +1403,6 @@ func (res *ContainerNodeReport) ToSCParameter() (smartcontract.Parameter, error)
 	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateEpoch)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateEpoch: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.LastUpdateTime)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field LastUpdateTime: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.EpochAverageSize)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field EpochAverageSize: %w", err)
 	}
 	prms = append(prms, prm)
 

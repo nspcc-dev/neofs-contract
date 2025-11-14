@@ -7,6 +7,7 @@ Changelog for NeoFS Contract
 
 ### Changed
 - Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
+- Basic income payments are done inside `balance` contract (#493) 
 
 ### Updated
 - NeoGo dependency to 0.113.0 (#521)

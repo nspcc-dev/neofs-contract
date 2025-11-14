@@ -9,6 +9,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
+	"github.com/nspcc-dev/neofs-contract/contracts/balance/balanceconst"
 )
 
 type (
@@ -39,6 +40,13 @@ const (
 	decimals    = 12
 	circulation = "MainnetGAS"
 	accPrefix   = 'a'
+
+	netmapContractKey    = 'b'
+	containerContractKey = 'c'
+
+	unpaidContainersPrefix = 'd'
+
+	gigabyte = 1 << 30
 )
 
 var token Token
@@ -56,6 +64,22 @@ func init() {
 }
 
 // nolint:unused
+func storeNetmapAndContainer(ctx storage.Context) {
+	nnsAddr := common.InferNNSHash()
+	netmapAddr := common.ResolveFSContractWithNNS(nnsAddr, "netmap")
+	if len(netmapAddr) != interop.Hash160Len {
+		panic("NNS contract does not know Netmap address")
+	}
+	storage.Put(ctx, netmapContractKey, netmapAddr)
+
+	containerAddr := common.ResolveFSContractWithNNS(nnsAddr, "container")
+	if len(containerAddr) != interop.Hash160Len {
+		panic("NNS contract does not know Container address")
+	}
+	storage.Put(ctx, containerContractKey, containerAddr)
+}
+
+// nolint:unused
 func _deploy(data any, isUpdate bool) {
 	ctx := storage.GetContext()
 	if isUpdate {
@@ -69,6 +93,8 @@ func _deploy(data any, isUpdate bool) {
 		}
 
 		if version < 25_000 {
+			storeNetmapAndContainer(ctx)
+
 			common.SubscribeForNewEpoch()
 		}
 
@@ -153,17 +179,12 @@ func Transfer(from, to interop.Hash160, amount int, data any) bool {
 // TransferX method expands Transfer method by having extra details argument.
 // TransferX method also allows to transfer assets by Alphabet nodes of the
 // Inner Ring with multisignature.
-func TransferX(from, to interop.Hash160, amount int, details []byte) {
+func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 	ctx := storage.GetContext()
 
 	common.CheckAlphabetWitness()
 
-	result := token.transfer(ctx, from, to, amount, true, details)
-	if !result {
-		panic("can't transfer assets")
-	}
-
-	runtime.Log("successfully transferred assets")
+	return token.transfer(ctx, from, to, amount, true, details)
 }
 
 // Lock is a method that transfers assets from a user account to the lock account
@@ -289,6 +310,129 @@ func Burn(from interop.Hash160, amount int, txDetails []byte) {
 	runtime.Log("assets were burned")
 }
 
+// epochBillingStat is a copy of github.com/nspcc-dev/neofs-contract/contracts/container.EpochBillingStat
+// to prevent cross-contract imports that may fail due to internal `_deploy` calls.
+type epochBillingStat struct {
+	Account interop.Hash160
+
+	LatestContainerSize    int
+	LatestEpoch            int
+	LastUpdateTime         int
+	LatestEpochAverageSize int
+
+	PreviousContainerSize    int
+	PreviousEpoch            int
+	PreviousEpochAverageSize int
+}
+
+// SettleContainerPayment distributes storage payments from container's owner
+// account to storage nodes that serve container's objects. Transaction must be
+// witnessed by the actual Alphabet multi-signature. Produces `ChangePaymentStatus`
+// notification on any payment status changes. If payment is successful, `Payment`
+// notification is thrown. If payment cannot be fully made, container is registered
+// as an unpaid one, see [IsUnpaid].
+func SettleContainerPayment(cid interop.Hash256) bool {
+	if len(cid) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+	common.CheckAlphabetWitness()
+
+	var (
+		ctx                   = storage.GetContext()
+		netmapContractAddr    = getContractHash(ctx, netmapContractKey, "netmap")
+		containerContractAddr = getContractHash(ctx, containerContractKey, "container")
+
+		containerUserNeoFS = contract.Call(containerContractAddr, "owner", contract.ReadOnly, cid).([]byte)
+		containerOwner     = interop.Hash160(common.WalletToScriptHash(containerUserNeoFS))
+		rate               = contract.Call(netmapContractAddr, "config", contract.ReadOnly, balanceconst.BasicIncomeRateKey).(int)
+		currEpoch          = contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
+
+		transferredTotal int
+		paymentOK        = true
+	)
+
+	if rate == 0 {
+		return true
+	}
+
+	it := contract.Call(containerContractAddr, "iterateBillingStats", contract.ReadOnly, cid).(iterator.Iterator)
+	for iterator.Next(it) {
+		var (
+			r    = iterator.Value(it).(epochBillingStat)
+			size int
+		)
+
+		switch {
+		case r.LatestEpoch < currEpoch-1:
+			// no updates for more than 2 epochs, consider load be the same
+			size = r.LatestContainerSize
+		case r.LatestEpoch == currEpoch:
+			if r.PreviousEpoch == currEpoch-1 {
+				size = r.PreviousEpochAverageSize
+			} else {
+				size = r.PreviousContainerSize
+			}
+		case r.LatestEpoch == currEpoch-1:
+			size = r.LatestEpochAverageSize
+		default:
+			size = 0
+		}
+
+		if size == 0 {
+			continue
+		}
+
+		payment := rate * size / gigabyte
+		if payment == 0 {
+			payment = 1
+		}
+
+		paymentOK = token.transfer(ctx, containerOwner, r.Account, payment, true, nil)
+		if !paymentOK {
+			break
+		}
+
+		transferredTotal += payment
+	}
+
+	k := append([]byte{unpaidContainersPrefix}, cid...)
+	alreadyMarkedUnpaid := storage.Get(ctx, k) != nil
+	if paymentOK && alreadyMarkedUnpaid {
+		runtime.Notify("ChangePaymentStatus", cid, currEpoch, false)
+		storage.Delete(ctx, k)
+	} else if !paymentOK && !alreadyMarkedUnpaid {
+		runtime.Notify("ChangePaymentStatus", cid, currEpoch, true)
+		storage.Put(ctx, k, currEpoch)
+	}
+
+	if paymentOK {
+		runtime.Notify("Payment", containerOwner, cid, currEpoch, transferredTotal)
+	}
+
+	return paymentOK
+}
+
+// GetUnpaidContainerEpoch returns epoch from which container is considered
+// unpaid. Returns -1 if container is paid successfully.
+func GetUnpaidContainerEpoch(cid interop.Hash256) int {
+	if len(cid) != interop.Hash256Len {
+		panic("invalid container id")
+	}
+	raw := storage.Get(storage.GetReadOnlyContext(), append([]byte{unpaidContainersPrefix}, cid...))
+	if raw == nil {
+		return -1
+	}
+
+	return raw.(int)
+}
+
+// IterateUnpaid is like [Unpaid] but for every unpaid container. Iteration is
+// through key-value pair, where key is container ID, value is epoch from which
+// container is considered unpaid.
+func IterateUnpaid() iterator.Iterator {
+	return storage.Find(storage.GetReadOnlyContext(), []byte{unpaidContainersPrefix}, storage.RemovePrefix)
+}
+
 // Version returns the version of the contract.
 func Version() int {
 	return common.Version
@@ -395,4 +539,20 @@ func getAccount(ctx storage.Context, key interop.Hash160) Account {
 	}
 
 	return Account{}
+}
+
+func getContractHash(ctx storage.Context, storageKey byte, nnsKey string) interop.Hash160 {
+	contractH := storage.Get(ctx, storageKey)
+	if contractH == nil {
+		nnsAddr := common.InferNNSHash()
+		h := common.ResolveFSContractWithNNS(nnsAddr, nnsKey)
+		if len(h) != interop.Hash160Len {
+			panic("NNS contract does not know " + nnsKey + " address")
+		}
+		storage.Put(ctx, storageKey, h)
+
+		contractH = h
+	}
+
+	return contractH.(interop.Hash160)
 }

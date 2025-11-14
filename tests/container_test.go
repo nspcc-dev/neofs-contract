@@ -510,14 +510,12 @@ func TestContainerSizeReports(t *testing.T) {
 				res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 				require.NoError(t, err, "receiving container info")
 
-				ii := res.Top().Array()
-				size, err := ii[0].TryInteger()
-				require.NoError(t, err)
-				objs, err := ii[1].TryInteger()
+				var summ containerrpc.ContainerNodeReportSummary
+				err = summ.FromStackItem(res.Top().Item())
 				require.NoError(t, err)
 
-				require.Equal(t, tc.result.size, size.Int64(), "sizes are not equal")
-				require.Equal(t, tc.result.objs, objs.Int64(), "object numbers are not equal")
+				require.Equal(t, tc.result.size, summ.ContainerSize.Int64(), "sizes are not equal")
+				require.Equal(t, tc.result.objs, summ.NumberOfObjects.Int64(), "object numbers are not equal")
 			})
 		}
 	})
@@ -545,26 +543,21 @@ func TestContainerSizeReports(t *testing.T) {
 		// summaries for the whole container
 		res, err := c.TestInvoke(t, "getNodeReportSummary", anotherCnr.id[:])
 		require.NoError(t, err, "receiving estimations")
-		ii := res.Top().Array()
-		size, err := ii[0].TryInteger()
+		var summ containerrpc.ContainerNodeReportSummary
+		err = summ.FromStackItem(res.Pop().Item())
 		require.NoError(t, err)
-		objs, err := ii[1].TryInteger()
-		require.NoError(t, err)
-		require.Equal(t, int64(nodeSize1+nodeSize2), size.Int64(), "average sizes are not equal")
-		require.Equal(t, int64(nodeObjs1+nodeObjs2), objs.Int64(), "average object numbers are not equal")
+		require.Equal(t, int64(nodeSize1+nodeSize2), summ.ContainerSize.Int64(), "average sizes are not equal")
+		require.Equal(t, int64(nodeObjs1+nodeObjs2), summ.NumberOfObjects.Int64(), "average object numbers are not equal")
 
 		// separate value for node 1
 		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[0].pub)
 		require.NoError(t, err, "receiving estimations for node 1")
-		ii = res.Top().Array()
-		pk, err := ii[0].TryBytes()
-		require.NoError(t, err)
-		size, err = ii[1].TryInteger()
-		require.NoError(t, err)
-		objs, err = ii[2].TryInteger()
-		require.NoError(t, err)
-		reportNumber, err := ii[3].TryInteger()
-		require.NoError(t, err)
+		var r containerrpc.ContainerNodeReport
+		require.NoError(t, r.FromStackItem(res.Pop().Item()))
+		pk := r.PublicKey.Bytes()
+		size := r.ContainerSize
+		objs := r.NumberOfObjects
+		reportNumber := r.NumberOfReports
 
 		require.Equal(t, nodes[0].pub, pk)
 		require.Equal(t, int64(nodeSize1), size.Int64(), "node 1 sizes are not equal")
@@ -573,16 +566,12 @@ func TestContainerSizeReports(t *testing.T) {
 
 		// separate value for node 2
 		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[1].pub)
-		require.NoError(t, err, "receiving estimations for node 2")
-		ii = res.Top().Array()
-		pk, err = ii[0].TryBytes()
-		require.NoError(t, err)
-		size, err = ii[1].TryInteger()
-		require.NoError(t, err)
-		objs, err = ii[2].TryInteger()
-		require.NoError(t, err)
-		reportNumber, err = ii[3].TryInteger()
-		require.NoError(t, err)
+		require.NoError(t, err, "receiving estimations for node 1")
+		require.NoError(t, r.FromStackItem(res.Pop().Item()))
+		pk = r.PublicKey.Bytes()
+		size = r.ContainerSize
+		objs = r.NumberOfObjects
+		reportNumber = r.NumberOfReports
 
 		require.Equal(t, nodes[1].pub, pk)
 		require.Equal(t, int64(nodeSize2), size.Int64(), "node 2 sizes are not equal")
@@ -723,12 +712,22 @@ func TestContainerSizeReports(t *testing.T) {
 
 				reports := parseNodeReportsFromStackIterator(t, res)
 				require.Len(t, reports, 1)
-				require.EqualValues(t, numberOfReports, reports[0].NumberOfReports.Int64())
-				require.EqualValues(t, objsNumber, reports[0].NumberOfObjects.Int64())
-				require.EqualValues(t, latestReportedValue, reports[0].ContainerSize.Int64())
-				require.EqualValues(t, latestReportTime, reports[0].LastUpdateTime.Int64())
-				require.EqualValues(t, currentEpoch, reports[0].LastUpdateEpoch.Int64())
-				require.EqualValues(t, tc.expectedAverage, reports[0].EpochAverageSize.Int64())
+				report := reports[0]
+				require.EqualValues(t, numberOfReports, report.NumberOfReports.Int64())
+				require.EqualValues(t, objsNumber, report.NumberOfObjects.Int64())
+				require.EqualValues(t, latestReportedValue, report.ContainerSize.Int64())
+
+				res, err = c.TestInvoke(t, "iterateBillingStats", anotherCnr.id[:])
+				require.NoError(t, err)
+
+				billingStats := parseEpochBillingStatFromStackIterator(t, res)
+				require.Len(t, billingStats, 1)
+				stat := billingStats[0]
+
+				require.EqualValues(t, latestReportTime, stat.LastUpdateTime.Int64())
+				require.EqualValues(t, currentEpoch, stat.LatestEpoch.Int64())
+				require.EqualValues(t, latestReportedValue, stat.LatestContainerSize.Int64())
+				require.EqualValues(t, tc.expectedAverage, stat.LatestEpochAverageSize.Int64())
 			})
 		}
 	})
@@ -746,24 +745,13 @@ func TestContainerSizeReports(t *testing.T) {
 		res, err := c.TestInvoke(t, "iterateReports", anotherCnr.id[:])
 		require.NoError(t, err, "receiving reports iterator")
 
-		it := res.Pop().Value().(*storage.Iterator)
-		reporters := iteratorToArray(it)
-		require.Len(t, reporters, reportersNumber, "reporters number are not equal")
+		reports := parseNodeReportsFromStackIterator(t, res)
+		require.Len(t, reports, reportersNumber, "reporters number are not equal")
 		for i := range reportersNumber {
-			fields := reporters[i].Value().([]stackitem.Item)
-			pk, err := fields[0].TryBytes()
-			require.NoError(t, err)
-			size, err := fields[1].TryInteger()
-			require.NoError(t, err)
-			objs, err := fields[2].TryInteger()
-			require.NoError(t, err)
-			reportNumber, err := fields[3].TryInteger()
-			require.NoError(t, err)
-
-			require.Equal(t, nodes[i].pub, pk)
-			require.Equal(t, int64(i), size.Int64())
-			require.Equal(t, int64(i), objs.Int64())
-			require.Equal(t, int64(1), reportNumber.Int64())
+			require.Equal(t, nodes[i].pub, reports[i].PublicKey.Bytes())
+			require.Equal(t, int64(i), reports[i].ContainerSize.Int64())
+			require.Equal(t, int64(i), reports[i].NumberOfObjects.Int64())
+			require.Equal(t, int64(1), reports[i].NumberOfReports.Int64())
 		}
 	})
 
@@ -857,6 +845,19 @@ func parseNodeReportsFromStackIterator(t *testing.T, stack *vm.Stack) []containe
 	it := stack.Pop().Value().(*storage.Iterator)
 	for it.Next() {
 		var r containerrpc.ContainerNodeReport
+		require.NoError(t, r.FromStackItem(it.Value()))
+		res = append(res, r)
+	}
+
+	return res
+}
+
+func parseEpochBillingStatFromStackIterator(t *testing.T, stack *vm.Stack) []containerrpc.ContainerEpochBillingStat {
+	var res []containerrpc.ContainerEpochBillingStat
+
+	it := stack.Pop().Value().(*storage.Iterator)
+	for it.Next() {
+		var r containerrpc.ContainerEpochBillingStat
 		require.NoError(t, r.FromStackItem(it.Value()))
 		res = append(res, r)
 	}
