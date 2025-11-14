@@ -312,6 +312,10 @@ func (t Token) balanceOf(ctx storage.Context, holder interop.Hash160) int {
 }
 
 func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount int, innerRing bool, details []byte) bool {
+	if amount < 0 {
+		panic("negative amount")
+	}
+
 	amountFrom, ok := t.canTransfer(ctx, from, to, amount, innerRing)
 	if !ok {
 		return false

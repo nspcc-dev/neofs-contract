@@ -56,6 +56,8 @@ func TestBalanceLifecycle(t *testing.T) {
 		require.Equal(t, expected, bal)
 	}
 
+	c.InvokeFail(t, "negative amount", "mint", acc1.ScriptHash(), -100500, []byte("extra"))
+
 	c.Invoke(t, stackitem.Null{}, "mint", acc1.ScriptHash(), 100500, []byte("extra"))
 	checkBalance(acc1.ScriptHash(), 100500)
 	checkTotalSupply(100500)
@@ -64,6 +66,10 @@ func TestBalanceLifecycle(t *testing.T) {
 	c.Invoke(t, false, "transfer", acc1.ScriptHash(), acc2.ScriptHash(), 500, nil)
 
 	c1 := c.WithSigners(acc1)
+
+	// Negative amount, an exception instead of return value as per NEP-17.
+	c1.InvokeFail(t, "negative amount", "transfer", acc1.ScriptHash(), acc2.ScriptHash(), -500, nil)
+
 	c1.Invoke(t, true, "transfer", acc1.ScriptHash(), acc2.ScriptHash(), 500, nil)
 	checkBalance(acc2.ScriptHash(), 500)
 	checkBalance(acc1.ScriptHash(), 100000)
