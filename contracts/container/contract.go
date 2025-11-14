@@ -187,6 +187,12 @@ func _deploy(data any, isUpdate bool) {
 			}
 		}
 
+		if version < 27_000 {
+			for it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly); iterator.Next(it); {
+				storage.Delete(ctx, iterator.Value(it).([]byte))
+			}
+		}
+
 		return
 	}
 
@@ -1543,7 +1549,6 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	storage.Delete(ctx, containerQuotaKey(id))
 	storage.Delete(ctx, summaryKey)
 
-	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
 	storage.Delete(ctx, append([]byte{infoPrefix}, id...))
 	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
