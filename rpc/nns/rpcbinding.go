@@ -19,6 +19,9 @@ import (
 	"unicode/utf8"
 )
 
+// NEP22Contract is an alias for nep22.Contract.
+type NEP22Contract nep22.Contract
+
 // NnsNameState is a contract-specific nns.NameState type used by its methods.
 type NnsNameState struct {
 	Owner      util.Uint160
@@ -71,7 +74,7 @@ type ContractReader struct {
 type Contract struct {
 	ContractReader
 	nep11.BaseWriter
-	nep22.Contract
+	NEP22Contract
 	actor Actor
 	hash  util.Uint160
 }
@@ -84,7 +87,7 @@ func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
 	var nep11ndt = nep11.NewNonDivisible(actor, hash)
-	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, *nep22.NewContract(actor, hash), actor, hash}
+	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
 // GetAllRecords invokes `getAllRecords` method of contract.

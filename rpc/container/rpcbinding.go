@@ -19,6 +19,9 @@ import (
 	"math/big"
 )
 
+// NEP22Contract is an alias for nep22.Contract.
+type NEP22Contract nep22.Contract
+
 // ContainerContainer is a contract-specific container.Container type used by its methods.
 type ContainerContainer struct {
 	Value []byte
@@ -159,7 +162,7 @@ type ContractReader struct {
 // Contract implements all contract methods.
 type Contract struct {
 	ContractReader
-	nep22.Contract
+	NEP22Contract
 	actor Actor
 	hash  util.Uint160
 }
@@ -171,7 +174,7 @@ func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
 
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
-	return &Contract{ContractReader{actor, hash}, *nep22.NewContract(actor, hash), actor, hash}
+	return &Contract{ContractReader{actor, hash}, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
 // Alias invokes `alias` method of contract.

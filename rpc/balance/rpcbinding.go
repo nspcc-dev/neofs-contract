@@ -18,6 +18,9 @@ import (
 	"unicode/utf8"
 )
 
+// NEP22Contract is an alias for nep22.Contract.
+type NEP22Contract nep22.Contract
+
 // BalanceAccount is a contract-specific balance.Account type used by its methods.
 type BalanceAccount struct {
 	Balance *big.Int
@@ -94,7 +97,7 @@ type ContractReader struct {
 type Contract struct {
 	ContractReader
 	nep17.TokenWriter
-	nep22.Contract
+	NEP22Contract
 	actor Actor
 	hash  util.Uint160
 }
@@ -107,7 +110,7 @@ func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
 	var nep17t = nep17.New(actor, hash)
-	return &Contract{ContractReader{nep17t.TokenReader, actor, hash}, nep17t.TokenWriter, *nep22.NewContract(actor, hash), actor, hash}
+	return &Contract{ContractReader{nep17t.TokenReader, actor, hash}, nep17t.TokenWriter, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
 // Version invokes `version` method of contract.

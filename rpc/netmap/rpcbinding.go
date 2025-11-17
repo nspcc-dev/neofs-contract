@@ -20,6 +20,9 @@ import (
 	"unicode/utf8"
 )
 
+// NEP22Contract is an alias for nep22.Contract.
+type NEP22Contract nep22.Contract
+
 // CommonIRNode is a contract-specific common.IRNode type used by its methods.
 type CommonIRNode struct {
 	PublicKey *keys.PublicKey
@@ -118,7 +121,7 @@ type ContractReader struct {
 // Contract implements all contract methods.
 type Contract struct {
 	ContractReader
-	nep22.Contract
+	NEP22Contract
 	actor Actor
 	hash  util.Uint160
 }
@@ -130,7 +133,7 @@ func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
 
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
-	return &Contract{ContractReader{actor, hash}, *nep22.NewContract(actor, hash), actor, hash}
+	return &Contract{ContractReader{actor, hash}, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
 // CleanupThreshold invokes `cleanupThreshold` method of contract.
