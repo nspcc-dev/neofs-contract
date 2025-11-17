@@ -6,16 +6,37 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
-- Basic income payments are done inside `balance` contract (#493) 
 
 ### Updated
-- NeoGo dependency to 0.113.0 (#521)
 
 ### Removed
 
 ### Fixed
+
+## [0.25.0] - 2025-11-17
+
+### Added
+- Epoch average container size calculation (#527, #531)
+- Basic payment handling in balance contract (#531)
+
+### Changed
+- Initial GAS distributed to alphabet members during deploy is raised from 300 to 10000 (#529)
+- Basic income payments are done inside `balance` contract (#493)
+- Container contract no longer processes new epochs (#532)
+- Balance contract doesn't print into log on successful transfer now (#531)
+
+### Updated
+- NeoGo dependency to 0.114.0 (#521, #540)
+
+### Removed
+- Deprecated estimation APIs from container contract (#532)
+
+### Fixed
 - Waiting for one more block in deployment code (#530)
+- Missing balance contract subscription to new epoch events (#535)
+- Incorrect transaction signers on upgrade (#535)
+- Missing check for negative amount in balance contract (#537)
+- balance.TransferX doesn't panic now (#531)
 
 ## [0.24.0] - 2025-10-06
 
@@ -595,7 +616,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...master
+[0.25.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.21.0...v0.22.0
