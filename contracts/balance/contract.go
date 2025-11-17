@@ -88,10 +88,6 @@ func _deploy(data any, isUpdate bool) {
 
 		common.CheckVersion(version)
 
-		if version < 20_000 {
-			switchToAccPrefixes(ctx)
-		}
-
 		if version < 25_000 {
 			storeNetmapAndContainer(ctx)
 
@@ -104,24 +100,6 @@ func _deploy(data any, isUpdate bool) {
 	common.SubscribeForNewEpoch()
 
 	runtime.Log("balance contract initialized")
-}
-
-// switchToAccPrefixes moves account data to a specific prefix to avoid any
-// collisions with other things stored in the contract.
-//
-// nolint:unused
-func switchToAccPrefixes(ctx storage.Context) {
-	it := storage.Find(ctx, []byte{}, storage.None)
-	for iterator.Next(it) {
-		item := iterator.Value(it).(storage.KeyValue)
-
-		if len(item.Key) != interop.Hash160Len {
-			continue
-		}
-
-		storage.Put(ctx, append([]byte{accPrefix}, item.Key...), item.Value)
-		storage.Delete(ctx, item.Key)
-	}
 }
 
 // Update method updates contract source code and manifest. It can be invoked
