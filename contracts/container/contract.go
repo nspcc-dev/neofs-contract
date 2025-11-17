@@ -13,9 +13,32 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	cst "github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
+	iproto "github.com/nspcc-dev/neofs-contract/internal/proto"
 )
 
 type (
+	// APIVersion represents NeoFS API protocol version.
+	APIVersion struct {
+		Major uint32
+		Minor uint32
+	}
+
+	// Attribute represents container attribute.
+	Attribute struct {
+		Key   string
+		Value string
+	}
+
+	// Info represents information about container.
+	Info struct {
+		Version       APIVersion
+		Owner         interop.Hash160
+		Nonce         []byte // 16 byte UUID
+		BasicACL      uint32
+		Attributes    []Attribute
+		StoragePolicy []byte
+	}
+
 	StorageNode struct {
 		Info []byte
 	}
@@ -103,6 +126,7 @@ const (
 	userQuotaKeyPrefix         = 'b'
 	userLoadKeyPrefix          = 'e'
 	billingInfoKeyPrefix       = 'f'
+	infoPrefix                 = 0
 
 	// default SOA record field values.
 	defaultRefresh = 3600                 // 1 hour
@@ -339,7 +363,7 @@ func requireMapValue(m map[string]any, key string) any {
 // meta-information be handled and notified using the chain. If name and
 // zone are non-empty strings, it behaves the same as [PutNamed]; empty
 // strings make a regular [Put] call.
-// Deprecated: use [Create] instead.
+// Deprecated: use [CreateV2] instead.
 func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
 	if metaOnChain {
 		ctx := storage.GetContext()
@@ -357,21 +381,21 @@ func PutMeta(container []byte, signature interop.Signature, publicKey interop.Pu
 // PublicKey contains the public key of the signer.
 // Token is optional and should be a stable marshaled SessionToken structure from
 // API.
-// Deprecated: use [Create] instead.
+// Deprecated: use [CreateV2] instead.
 func Put(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
 	PutNamed(container, signature, publicKey, token, "", "")
 }
 
 // PutNamedOverloaded is the same as [Put] (and exposed as put from the contract via
 // overload), but allows named container creation via NNS contract.
-// Deprecated: use [Create] instead.
+// Deprecated: use [CreateV2] instead.
 func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string) {
 	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
 // PutNamed is similar to put but also sets a TXT record in nns contract.
 // Note that zone must exist.
-// DEPRECATED: use [Create] instead.
+// DEPRECATED: use [CreateV2] instead.
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
@@ -478,17 +502,62 @@ func PutNamed(container []byte, signature interop.Signature,
 // users' requests. IR verifies requests and approves them via multi-signature.
 // Once creation is approved, container is persisted and becomes accessible.
 // Credentials are disposable and do not persist in the chain.
+//
+// Deprecated: use [CreateV2] with instead.
 func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zone string, metaOnChain bool) {
-	owner := ownerFromBinaryContainer(cnr)
+	CreateV2(fromBytes(cnr), invocScript, verifScript, sessionToken)
+}
+
+// CreateV2 creates container with given info in the contract. Created
+// containers are content-addressed: they may be accessed by SHA-256 checksum of
+// their data. On success, CreateV2 throws 'Created' notification event.
+//
+// Created containers are disposable: if they are deleted, they cannot be
+// created again. CreateV2 throws [cst.ErrorDeleted] exception on recreation
+// attempts.
+//
+// If '__NEOFS__NAME' and '__NEOFS__ZONE' attributes are set, they are used to
+// register 'name.zone' domain for given container. Domain zone is optional: it
+// defaults to the 6th contract deployment parameter which itself defaults to
+// 'container'.
+//
+// If '__NEOFS__METAINFO_CONSISTENCY' attribute is set, meta information about
+// objects from this container can be collected for it.
+//
+// The operation is paid. Container owner pays per-container fee (global chain
+// configuration) to each committee member. If domain registration is requested,
+// additional alias fee (also a configuration) is added to each payment.
+//
+// CreateV2 must have chain's committee multi-signature witness. Invocation
+// script, verification script and session token parameters are owner
+// credentials. They are transmitted in notary transactions carrying original
+// users' requests. IR verifies requests and approves them via multi-signature.
+// Once creation is approved, container is persisted and becomes accessible.
+// Credentials are disposable and do not persist in the chain.
+func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.Hash256 {
 	alphabet := common.AlphabetNodes()
 	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
 		panic(common.ErrAlphabetWitnessFailed)
 	}
 
 	ctx := storage.GetContext()
-	id := crypto.Sha256(cnr)
+	cnrBytes := toBytes(cnr)
+	id := crypto.Sha256(cnrBytes)
 	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, id...)) != nil {
 		panic(cst.ErrorDeleted)
+	}
+
+	var name, zone string
+	var metaOnChain bool
+	for i := range cnr.Attributes {
+		switch cnr.Attributes[i].Key {
+		case "__NEOFS__NAME":
+			name = cnr.Attributes[i].Value
+		case "__NEOFS__ZONE":
+			zone = cnr.Attributes[i].Value
+		case "__NEOFS__METAINFO_CONSISTENCY":
+			metaOnChain = true
+		}
 	}
 
 	if name != "" {
@@ -516,29 +585,70 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 		fee += contract.Call(netmapContract, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
 	}
 	if fee > 0 {
-		ownerAcc := common.WalletToScriptHash(owner)
 		balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
-		ownerBalance := contract.Call(balanceContract, "balanceOf", contract.ReadOnly, ownerAcc).(int)
+		ownerBalance := contract.Call(balanceContract, "balanceOf", contract.ReadOnly, cnr.Owner).(int)
 		if ownerBalance < fee*len(alphabet) {
 			panic("insufficient balance to create container")
 		}
 
 		transferDetails := common.ContainerFeeTransferDetails(id)
 		for i := range alphabet {
-			if !contract.Call(balanceContract, "transferX", contract.All,
-				ownerAcc, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails).(bool) {
-				panic("insufficient balance to create container")
-			}
+			contract.Call(balanceContract, "transferX", contract.All,
+				cnr.Owner, contract.CreateStandardAccount(alphabet[i]), fee, transferDetails)
 		}
 	}
 
-	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, owner...), id...), id)
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnr)
+	ownerAddr := scriptHashToAddress(cnr.Owner)
+
+	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
+	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnrBytes)
 	if metaOnChain {
 		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
 	}
 
-	runtime.Notify("Created", id, owner)
+	runtime.Notify("Created", id, ownerAddr)
+
+	return id
+}
+
+// AddStructs makes and saves structures for up to 10 existing containers.
+// Returns true if not all stored containers have been structurized. Recall
+// continues the process. Returning false means all containers have been
+// processed.
+//
+// AddStructs requires Alphabet witness.
+func AddStructs() bool {
+	common.CheckAlphabetWitness()
+
+	ctx := storage.GetContext()
+	var done int
+	const doneLimit = 10
+	var structKey []byte
+
+	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.RemovePrefix)
+	for iterator.Next(it) {
+		protobufKV := iterator.Value(it).(storage.KeyValue)
+		if structKey == nil {
+			structKey = append([]byte{infoPrefix}, protobufKV.Key...)
+		} else {
+			copy(structKey[1:], protobufKV.Key)
+		}
+
+		if storage.Get(ctx, structKey) != nil {
+			continue
+		}
+
+		storage.Put(ctx, structKey, std.Serialize(fromBytes(protobufKV.Value)))
+
+		if done == doneLimit-1 {
+			return iterator.Next(it)
+		}
+
+		done++
+	}
+
+	return false
 }
 
 // checkNiceNameAvailable checks if the nice name is available for the container.
@@ -600,7 +710,7 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 // container does not exist. On success, Remove throws 'Removed' notification
 // event.
 //
-// See [Create] for details.
+// See [CreateV2] for details.
 func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
@@ -645,12 +755,26 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 	contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, recordtype.TXT)
 }
 
+// GetInfo reads container by ID. If the container is missing, GetInfo throws
+// [cst.NotFoundError] exception.
+func GetInfo(id interop.Hash256) Info {
+	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{infoPrefix}, id...))
+	if val == nil {
+		if val = storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...)); val != nil {
+			return fromBytes(val.([]byte))
+		}
+		panic(cst.NotFoundError)
+	}
+	return std.Deserialize(val.([]byte)).(Info)
+}
+
 // Get method returns a structure that contains a stable marshaled Container structure,
 // the signature, the public key of the container creator and a stable marshaled SessionToken
 // structure if it was provided.
 //
 // If the container doesn't exist, it panics with NotFoundError.
-// Deprecated: use [GetContainerData] instead.
+//
+// Deprecated: use [GetInfo] instead.
 func Get(containerID []byte) Container {
 	ctx := storage.GetReadOnlyContext()
 	cnt := getContainer(ctx, containerID)
@@ -664,6 +788,8 @@ func Get(containerID []byte) Container {
 //
 // If the container is missing, GetContainerData throws [cst.NotFoundError]
 // exception.
+//
+// Deprecated: use [GetInfo] instead.
 func GetContainerData(id []byte) []byte {
 	cnr := storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...))
 	if cnr == nil {
@@ -994,7 +1120,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 // [cst.NotFoundError] exception. On success, PutEACL throws 'EACLChanged'
 // notification event.
 //
-// See [Create] for details.
+// See [CreateV2] for details.
 func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
@@ -1437,6 +1563,8 @@ func addContainer(ctx storage.Context, id, owner, container []byte) {
 
 	idKey := append([]byte{containerKeyPrefix}, id...)
 	storage.Put(ctx, idKey, container)
+
+	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(fromBytes(container)))
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
@@ -1472,6 +1600,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	storage.Delete(ctx, summaryKey)
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
+	storage.Delete(ctx, append([]byte{infoPrefix}, id...))
 	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
 	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
@@ -1552,4 +1681,352 @@ func userTotalStorageKey(user []byte) []byte {
 	key := append([]byte{userLoadKeyPrefix}, user...)
 
 	return key
+}
+
+func scriptHashToAddress(h interop.Hash160) []byte {
+	addr := make([]byte, common.NeoFSUserAccountLength)
+	addr[0] = byte(runtime.GetAddressVersion())
+	copy(addr[1:], h)
+
+	sh := crypto.Sha256(addr[:1+interop.Hash160Len])
+
+	copy(addr[1+interop.Hash160Len:], crypto.Sha256(sh))
+
+	return addr
+}
+
+const (
+	fieldAPIVersion = 1
+	fieldOwner      = 2
+	fieldNonce      = 3
+	fieldBasicACL   = 4
+	fieldAttribute  = 5
+	fieldPolicy     = 6
+
+	fieldAPIVersionMajor = 1
+	fieldAPIVersionMinor = 2
+
+	fieldOwnerVal = 1
+
+	fieldAttributeKey   = 1
+	fieldAttributeValue = 2
+
+	nonceLen = 16
+)
+
+func toBytes(cnr Info) []byte {
+	ownerAddr := scriptHashToAddress(cnr.Owner)
+
+	versionLen := iproto.SizeTag(fieldAPIVersionMajor) + iproto.SizeVarint(uint64(cnr.Version.Major)) +
+		iproto.SizeTag(fieldAPIVersionMinor) + iproto.SizeVarint(uint64(cnr.Version.Minor))
+
+	ownerLen := iproto.SizeTag(fieldOwnerVal) + iproto.SizeLEN(len(ownerAddr))
+
+	attributeKeyTagLen := iproto.SizeTag(fieldAttributeKey)
+	attributeValTagLen := iproto.SizeTag(fieldAttributeValue)
+
+	fullLen := iproto.SizeTag(fieldAPIVersion) + iproto.SizeLEN(versionLen) +
+		iproto.SizeTag(fieldOwner) + iproto.SizeLEN(ownerLen) +
+		iproto.SizeTag(fieldNonce) + iproto.SizeLEN(len(cnr.Nonce)) +
+		iproto.SizeTag(fieldBasicACL) + iproto.SizeVarint(uint64(cnr.BasicACL)) +
+		len(cnr.Attributes)*iproto.SizeTag(fieldAttribute) +
+		iproto.SizeTag(fieldPolicy) + iproto.SizeLEN(len(cnr.StoragePolicy))
+
+	attrLens := make([]int, len(cnr.Attributes))
+	for i := range cnr.Attributes {
+		attrLens[i] = attributeKeyTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Key)) +
+			attributeValTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Value))
+		fullLen += iproto.SizeLEN(attrLens[i])
+	}
+
+	b := make([]byte, fullLen)
+
+	// version
+	off := iproto.PutUvarint(b, 0, iproto.EncodeTag(fieldAPIVersion, iproto.FieldTypeLEN))
+	off += iproto.PutUvarint(b, off, uint64(versionLen))
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMajor, iproto.FieldTypeVARINT))
+	off += iproto.PutUvarint(b, off, uint64(cnr.Version.Major))
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMinor, iproto.FieldTypeVARINT))
+	off += iproto.PutUvarint(b, off, uint64(cnr.Version.Minor))
+
+	// owner
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldOwner, iproto.FieldTypeLEN))
+	off += iproto.PutUvarint(b, off, uint64(ownerLen))
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldOwnerVal, iproto.FieldTypeLEN))
+	off += iproto.PutUvarint(b, off, uint64(len(ownerAddr)))
+	off += copy(b[off:], ownerAddr)
+
+	// nonce
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldNonce, iproto.FieldTypeLEN))
+	off += iproto.PutUvarint(b, off, uint64(len(cnr.Nonce)))
+	off += copy(b[off:], cnr.Nonce[:])
+
+	// basic ACL
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldBasicACL, iproto.FieldTypeVARINT))
+	off += iproto.PutUvarint(b, off, uint64(cnr.BasicACL))
+
+	// attributes
+	for i := range cnr.Attributes {
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttribute, iproto.FieldTypeLEN))
+		off += iproto.PutUvarint(b, off, uint64(attrLens[i]))
+		// key
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeKey, iproto.FieldTypeLEN))
+		off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Key)))
+		off += copy(b[off:], []byte(cnr.Attributes[i].Key))
+		// value
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeValue, iproto.FieldTypeLEN))
+		off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Value)))
+		off += copy(b[off:], []byte(cnr.Attributes[i].Value))
+	}
+
+	// policy
+	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldPolicy, iproto.FieldTypeLEN))
+	off += iproto.PutUvarint(b, off, uint64(len(cnr.StoragePolicy)))
+	copy(b[off:], cnr.StoragePolicy)
+
+	return b
+}
+
+func fromBytes(b []byte) Info {
+	var res Info
+	var e string
+	var fieldNum, fieldTyp, off, read, nestedLen int
+
+	for off < len(b) {
+		fieldNum, fieldTyp, read, e = iproto.ReadTag(b[off:])
+		if e != "" {
+			panic("read next field tag: " + e)
+		}
+
+		switch fieldNum {
+		case fieldAPIVersion:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN)
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				panic("read 'version' field len: " + e)
+			}
+
+			off += read
+
+			if res.Version, e = apiVersionFromBytes(b[off : off+nestedLen]); e != "" {
+				panic("decode 'version' field: " + e)
+			}
+
+			off += nestedLen
+		case fieldOwner:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN)
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				panic("read 'owner_id' field len: " + e)
+			}
+
+			off += read
+
+			if res.Owner, e = userIDFromBytes(b[off : off+nestedLen]); e != "" {
+				panic("decode 'owner_id' field: " + e)
+			}
+
+			off += nestedLen
+		case fieldNonce:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN)
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				panic("read 'nonce' field len: " + e)
+			}
+			if nestedLen != nonceLen {
+				panic("wrong 'nonce' field len: expected " + std.Itoa10(common.NeoFSUserAccountLength) + ", got " + std.Itoa10(nestedLen))
+			}
+
+			off += read
+
+			res.Nonce = b[off : off+nestedLen]
+
+			off += nestedLen
+		case fieldBasicACL:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeVARINT)
+
+			off += read
+
+			if res.BasicACL, read, e = iproto.ReadUint32(b[off:]); e != "" {
+				panic("read 'basic_acl' field: " + e)
+			}
+			off += read
+		case fieldAttribute:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN)
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				panic("read 'attribute' field len: " + e)
+			}
+
+			off += read
+
+			var attr Attribute
+			if attr, e = attributeFromBytes(b[off : off+nestedLen]); e != "" {
+				panic("read 'attribute' field: " + e)
+			}
+
+			res.Attributes = append(res.Attributes, attr)
+
+			off += nestedLen
+		case fieldPolicy:
+			iproto.AssertFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN)
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				panic("read 'placement_policy' field len: " + e)
+			}
+
+			off += read
+
+			res.StoragePolicy = b[off : off+nestedLen]
+
+			off += nestedLen
+		default:
+			panic("unsupported container field #" + std.Itoa10(fieldNum))
+		}
+	}
+
+	return res
+}
+
+func apiVersionFromBytes(b []byte) (APIVersion, string) {
+	var res APIVersion
+	var e string
+	var fieldNum, fieldTyp, off, read int
+
+	for off < len(b) {
+		fieldNum, fieldTyp, read, e = iproto.ReadTag(b[off:])
+		if e != "" {
+			return APIVersion{}, "read next field tag: " + e
+		}
+
+		switch fieldNum {
+		case fieldAPIVersionMajor:
+			if e = iproto.CheckFieldType(fieldNum, fieldTyp, iproto.FieldTypeVARINT); e != "" {
+				return APIVersion{}, e
+			}
+
+			off += read
+
+			if res.Major, read, e = iproto.ReadUint32(b[off:]); e != "" {
+				return APIVersion{}, "read 'major' field: " + e
+			}
+			off += read
+		case fieldAPIVersionMinor:
+			if e = iproto.CheckFieldType(fieldNum, fieldTyp, iproto.FieldTypeVARINT); e != "" {
+				return APIVersion{}, e
+			}
+
+			off += read
+
+			if res.Minor, read, e = iproto.ReadUint32(b[off:]); e != "" {
+				return APIVersion{}, "read 'minor' field: " + e
+			}
+			off += read
+		default:
+			return APIVersion{}, "unsupported field #" + std.Itoa10(fieldNum)
+		}
+	}
+
+	return res, ""
+}
+
+func userIDFromBytes(b []byte) ([]byte, string) {
+	var res []byte
+	var e string
+	var fieldNum, fieldTyp, off, read, nestedLen int
+
+	for off < len(b) {
+		fieldNum, fieldTyp, read, e = iproto.ReadTag(b[off:])
+		if e != "" {
+			return nil, "read next field tag: " + e
+		}
+
+		switch fieldNum {
+		case fieldOwnerVal:
+			if e = iproto.CheckFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN); e != "" {
+				return nil, e
+			}
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				return nil, "read 'value' field len: " + e
+			}
+			if nestedLen != common.NeoFSUserAccountLength {
+				return nil, "wrong 'value' field len: expected " + std.Itoa10(common.NeoFSUserAccountLength) + ", got " + std.Itoa10(nestedLen)
+			}
+
+			off += read
+
+			res = b[off+1 : off+1+interop.Hash160Len]
+
+			off += nestedLen
+		default:
+			return nil, "unsupported field #" + std.Itoa10(fieldNum)
+		}
+	}
+
+	return res, ""
+}
+
+func attributeFromBytes(b []byte) (Attribute, string) {
+	var res Attribute
+	var e string
+	var fieldNum, fieldTyp, off, read, nestedLen int
+
+	for off < len(b) {
+		fieldNum, fieldTyp, read, e = iproto.ReadTag(b[off:])
+		if e != "" {
+			return Attribute{}, "read next field tag: " + e
+		}
+
+		switch fieldNum {
+		case fieldAttributeKey:
+			if e = iproto.CheckFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN); e != "" {
+				return Attribute{}, e
+			}
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				return Attribute{}, "read 'key' field len: " + e
+			}
+
+			off += read
+
+			res.Key = string(b[off : off+nestedLen])
+
+			off += nestedLen
+		case fieldAttributeValue:
+			if e = iproto.CheckFieldType(fieldNum, fieldTyp, iproto.FieldTypeLEN); e != "" {
+				return Attribute{}, e
+			}
+
+			off += read
+
+			if nestedLen, read, e = iproto.ReadSizeLEN(b[off:]); e != "" {
+				return Attribute{}, "read 'value' field len: " + e
+			}
+
+			off += read
+
+			res.Value = string(b[off : off+nestedLen])
+
+			off += nestedLen
+		default:
+			return Attribute{}, "unsupported field #" + std.Itoa10(fieldNum)
+		}
+	}
+
+	return res, ""
 }
