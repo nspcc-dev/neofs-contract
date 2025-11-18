@@ -10,9 +10,16 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+
+### Fixed
+
+## [0.25.1] - 2025-11-19
+
+### Removed
 - Pre-0.20.0 migration code (#541)
 
 ### Fixed
+- Incompatible RPC bindings for contracts with NEP standards support (#542)
 
 ## [0.25.0] - 2025-11-17
 
@@ -617,7 +624,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...master
+[0.25.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.22.0...v0.23.0
