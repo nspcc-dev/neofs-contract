@@ -10,6 +10,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- Pre-0.20.0 migration code (#541)
 
 ### Fixed
 
