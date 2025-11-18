@@ -19,7 +19,7 @@ import (
 )
 
 // NEP22Contract is an alias for nep22.Contract.
-type NEP22Contract nep22.Contract
+type NEP22Contract = nep22.Contract
 
 // BalanceAccount is a contract-specific balance.Account type used by its methods.
 type BalanceAccount struct {

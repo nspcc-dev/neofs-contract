@@ -19,7 +19,7 @@ import (
 )
 
 // NEP22Contract is an alias for nep22.Contract.
-type NEP22Contract nep22.Contract
+type NEP22Contract = nep22.Contract
 
 // CommonBallot is a contract-specific common.Ballot type used by its methods.
 type CommonBallot struct {

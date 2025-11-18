@@ -7,7 +7,7 @@ export GOBIN ?= $(shell pwd)/bin
 export CGO_ENABLED=0
 NEOGO ?= $(GOBIN)/cli
 VERSION ?= $(shell git describe --tags --dirty --match "v*" --always --abbrev=8 2>/dev/null || cat VERSION 2>/dev/null || echo "develop")
-NEOGOORIGMOD = github.com/nspcc-dev/neo-go@v0.114.0
+NEOGOORIGMOD = github.com/nspcc-dev/neo-go@8b0692e3aeb1288b2e1aa50eb1530b66b6f7c3a1
 NEOGOMOD = $(shell go list -f '{{.Path}}' -m $(NEOGOORIGMOD))
 NEOGOVER = $(shell go list -f '{{.Version}}' -m $(NEOGOORIGMOD) | tr -d v)
 
