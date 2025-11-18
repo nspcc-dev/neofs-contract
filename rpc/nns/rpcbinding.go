@@ -114,6 +114,11 @@ func (c *ContractReader) GetRecords(name string, typ *big.Int) ([]string, error)
 	return unwrap.ArrayOfUTF8Strings(c.invoker.Call(c.hash, "getRecords", name, typ))
 }
 
+// HasTXTRecord invokes `hasTXTRecord` method of contract.
+func (c *ContractReader) HasTXTRecord(name string, data string) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "hasTXTRecord", name, data))
+}
+
 // IsAvailable invokes `isAvailable` method of contract.
 func (c *ContractReader) IsAvailable(name string) (bool, error) {
 	return unwrap.Bool(c.invoker.Call(c.hash, "isAvailable", name))
