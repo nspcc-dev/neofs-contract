@@ -21,7 +21,7 @@ import (
 )
 
 // NEP22Contract is an alias for nep22.Contract.
-type NEP22Contract nep22.Contract
+type NEP22Contract = nep22.Contract
 
 // CommonIRNode is a contract-specific common.IRNode type used by its methods.
 type CommonIRNode struct {

@@ -20,7 +20,7 @@ import (
 )
 
 // NEP22Contract is an alias for nep22.Contract.
-type NEP22Contract nep22.Contract
+type NEP22Contract = nep22.Contract
 
 // ContainerContainer is a contract-specific container.Container type used by its methods.
 type ContainerContainer struct {

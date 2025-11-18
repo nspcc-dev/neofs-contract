@@ -20,7 +20,7 @@ import (
 )
 
 // NEP22Contract is an alias for nep22.Contract.
-type NEP22Contract nep22.Contract
+type NEP22Contract = nep22.Contract
 
 // NnsNameState is a contract-specific nns.NameState type used by its methods.
 type NnsNameState struct {
