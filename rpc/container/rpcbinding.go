@@ -11,6 +11,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep11"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep22"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
@@ -156,17 +157,14 @@ type UserQuotaSetEvent struct {
 
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
-	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
-	CallAndExpandIterator(contract util.Uint160, method string, maxItems int, params ...any) (*result.Invoke, error)
-	TerminateSession(sessionID uuid.UUID) error
-	TraverseIterator(sessionID uuid.UUID, iterator *result.Iterator, num int) ([]stackitem.Item, error)
+	nep11.Invoker
 }
 
 // Actor is used by Contract to call state-changing methods.
 type Actor interface {
 	Invoker
 
-	nep22.Actor
+	nep11.Actor
 
 	MakeCall(contract util.Uint160, method string, params ...any) (*transaction.Transaction, error)
 	MakeRun(script []byte) (*transaction.Transaction, error)
@@ -178,6 +176,7 @@ type Actor interface {
 
 // ContractReader implements safe contract methods.
 type ContractReader struct {
+	nep11.NonDivisibleReader
 	invoker Invoker
 	hash    util.Uint160
 }
@@ -185,6 +184,7 @@ type ContractReader struct {
 // Contract implements all contract methods.
 type Contract struct {
 	ContractReader
+	nep11.BaseWriter
 	NEP22Contract
 	actor Actor
 	hash  util.Uint160
@@ -192,12 +192,13 @@ type Contract struct {
 
 // NewReader creates an instance of ContractReader using provided contract hash and the given Invoker.
 func NewReader(invoker Invoker, hash util.Uint160) *ContractReader {
-	return &ContractReader{invoker, hash}
+	return &ContractReader{*nep11.NewNonDivisibleReader(invoker, hash), invoker, hash}
 }
 
 // New creates an instance of Contract using provided contract hash and the given Actor.
 func New(actor Actor, hash util.Uint160) *Contract {
-	return &Contract{ContractReader{actor, hash}, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
+	var nep11ndt = nep11.NewNonDivisible(actor, hash)
+	return &Contract{ContractReader{nep11ndt.NonDivisibleReader, actor, hash}, nep11ndt.BaseWriter, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
 // Alias invokes `alias` method of contract.

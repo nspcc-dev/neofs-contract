@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 	cst "github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
@@ -133,6 +134,8 @@ const (
 	defaultRetry   = 600                  // 10 min
 	defaultExpire  = 3600 * 24 * 365 * 10 // 10 years
 	defaultTTL     = 3600                 // 1 hour
+
+	nep11TransferAmount = 1 // non-divisible NFT
 )
 
 var (
@@ -478,6 +481,10 @@ func PutNamed(container []byte, signature interop.Signature,
 
 	runtime.Log("added new container")
 	runtime.Notify("PutSuccess", containerID, publicKey)
+
+	notifyNEP11Transfer(containerID, nil, from) // 'from' is owner here i.e. 'to' in terms of NEP-11
+
+	onNEP11Payment(containerID, nil, from, nil)
 }
 
 // Create saves container descriptor serialized according to the NeoFS API
@@ -613,6 +620,10 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	runtime.Notify("Created", id, ownerAddr)
 
+	notifyNEP11Transfer(id, nil, cnr.Owner)
+
+	onNEP11Payment(id, nil, cnr.Owner, nil)
+
 	return id
 }
 
@@ -709,6 +720,8 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
+
+	notifyNEP11Transfer(containerID, common.WalletToScriptHash(ownerID), nil)
 }
 
 // Remove removes all data for the referenced container. Remove is no-op if
@@ -741,6 +754,8 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	}
 
 	runtime.Notify("Removed", interop.Hash256(id), owner)
+
+	notifyNEP11Transfer(id, common.WalletToScriptHash(owner), nil)
 }
 
 func deleteNNSRecords(ctx storage.Context, domain string) {
@@ -806,13 +821,10 @@ func GetContainerData(id []byte) []byte {
 // Owner method returns a 25 byte Owner ID of the container.
 //
 // If the container doesn't exist, it panics with NotFoundError.
+//
+// Deprecated: use [OwnerOf] instead.
 func Owner(containerID []byte) []byte {
-	ctx := storage.GetReadOnlyContext()
-	owner := getOwnerByID(ctx, containerID)
-	if owner == nil {
-		panic(cst.NotFoundError)
-	}
-	return owner
+	return scriptHashToAddress(OwnerOf(containerID))
 }
 
 // Alias method returns a string with an alias of the container if it's set
@@ -829,18 +841,16 @@ func Alias(cid []byte) string {
 }
 
 // Count method returns the number of registered containers.
+//
+// Deprecated: use [TotalSupply] instead.
 func Count() int {
-	count := 0
-	ctx := storage.GetReadOnlyContext()
-	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly)
-	for iterator.Next(it) {
-		count++
-	}
-	return count
+	return TotalSupply()
 }
 
 // ContainersOf iterates over all container IDs owned by the specified owner.
 // If owner is nil, it iterates over all containers.
+//
+// It is recommended to use [TokensOf] for non-empty owner.
 func ContainersOf(owner []byte) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 	key := []byte{ownerKeyPrefix}
@@ -1561,6 +1571,174 @@ func UserQuota(user []byte) Quota {
 // Version returns the version of the contract.
 func Version() int {
 	return common.Version
+}
+
+// Symbol returns static 'FSCNTR'.
+//
+// Symbol implements NEP-11 method.
+func Symbol() string {
+	return "FSCNTR"
+}
+
+// Decimals returns static zero meaning containers are Non-divisible NFTs.
+//
+// Decimals implements NEP-11 method.
+func Decimals() int {
+	return 0
+}
+
+// TotalSupply returns total number of existing containers.
+//
+// TotalSupply implements NEP-11 method.
+func TotalSupply() int {
+	count := 0
+	ctx := storage.GetReadOnlyContext()
+	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly)
+	for iterator.Next(it) {
+		count++
+	}
+	return count
+}
+
+// BalanceOf returns number of containers owner by given account.
+//
+// BalanceOf implements NEP-11 method.
+func BalanceOf(owner interop.Hash160) int {
+	if len(owner) != interop.Hash160Len {
+		panic("invalid owner len " + std.Itoa10(len(owner)))
+	}
+
+	var count int
+
+	prefix := append([]byte{ownerKeyPrefix}, scriptHashToAddress(owner)...)
+	it := storage.Find(storage.GetReadOnlyContext(), prefix, storage.KeysOnly)
+	for iterator.Next(it) {
+		count++
+	}
+
+	return count
+}
+
+// TokensOf returns iterator over IDs of all containers owned by given account.
+//
+// TokensOf implements NEP-11 method.
+func TokensOf(owner interop.Hash160) iterator.Iterator {
+	if len(owner) != interop.Hash160Len {
+		panic("invalid owner len " + std.Itoa10(len(owner)))
+	}
+
+	prefix := append([]byte{ownerKeyPrefix}, scriptHashToAddress(owner)...)
+	return storage.Find(storage.GetReadOnlyContext(), prefix, storage.ValuesOnly)
+}
+
+// Transfer makes to an owner of the container identified by tokenID.
+//
+// If referenced container does not exist, Transfer throws [cst.NotFoundError]
+// exception. If the container has already been removed, Transfer throws
+// [cst.ErrorDeleted] exception.
+//
+// Transfer implements NEP-11 method.
+func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
+	if len(to) != interop.Hash160Len {
+		panic("invalid receiver len " + std.Itoa10(len(to)))
+	}
+
+	ctx := storage.GetContext()
+
+	binKey := append([]byte{containerKeyPrefix}, tokenID...)
+	binItem := storage.Get(ctx, binKey)
+	if binItem == nil {
+		if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+			panic(cst.ErrorDeleted)
+		}
+
+		panic(cst.NotFoundError)
+	}
+	bin := binItem.([]byte)
+
+	key := append([]byte{infoPrefix}, tokenID...)
+
+	var cnr Info
+	if item := storage.Get(ctx, key); item == nil {
+		cnr = fromBytes(bin)
+	} else {
+		cnr = std.Deserialize(item.([]byte)).(Info)
+	}
+
+	if !runtime.CheckWitness(cnr.Owner) || !runtime.CheckWitness(to) {
+		return false
+	}
+
+	from := cnr.Owner
+
+	if !util.Equals(from, to) {
+		// from ownerFromBinaryContainer()
+		off := 2 + int(bin[1]) + 4
+		toAddr := scriptHashToAddress(to)
+
+		cnr.Owner = to
+
+		storage.Put(ctx, key, std.Serialize(cnr))
+		storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
+		storage.Delete(ctx, append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
+
+		copy(bin[off:], toAddr)
+		storage.Put(ctx, binKey, bin)
+
+		if cnrSizeItem := storage.Get(ctx, append([]byte{reportsSummary}, tokenID...)); cnrSizeItem != nil {
+			if cnrSize := cnrSizeItem.(int); cnrSize > 0 {
+				usrSpaceKey := userTotalStorageKey(scriptHashToAddress(from))
+				if usrSpaceItem := storage.Get(ctx, usrSpaceKey); usrSpaceItem != nil {
+					if was := usrSpaceItem.(int); was > cnrSize {
+						storage.Put(ctx, usrSpaceKey, was-cnrSize)
+					} else {
+						storage.Put(ctx, usrSpaceKey, 0)
+					}
+				}
+
+				usrSpaceKey = userTotalStorageKey(scriptHashToAddress(to))
+				if usrSpaceItem := storage.Get(ctx, usrSpaceKey); usrSpaceItem != nil {
+					storage.Put(ctx, usrSpaceKey, usrSpaceItem.(int)+cnrSize)
+				}
+			}
+		}
+	}
+
+	notifyNEP11Transfer(tokenID, from, to)
+
+	onNEP11Payment(tokenID, from, to, data)
+
+	return true
+}
+
+// OwnerOf returns owner of the container identified by tokenID.
+//
+// If referenced container does not exist, OwnerOf throws [cst.NotFoundError]
+// exception. If the container has already been removed, OwnerOf throws
+// [cst.ErrorDeleted] exception.
+//
+// OwnerOf implements NEP-11 method.
+func OwnerOf(tokenID []byte) interop.Hash160 {
+	ctx := storage.GetReadOnlyContext()
+	owner := getOwnerByID(ctx, tokenID)
+	if owner == nil {
+		if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+			panic(cst.ErrorDeleted)
+		}
+
+		panic(cst.NotFoundError)
+	}
+	return owner[1 : 1+interop.Hash160Len]
+}
+
+func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {
+	runtime.Notify("Transfer", from, to, nep11TransferAmount, tokenID)
+}
+
+func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {
+	if management.IsContract(to) {
+		contract.Call(to, "onNEP11Payment", contract.All, from, nep11TransferAmount, tokenID, data)
+	}
 }
 
 func addContainer(ctx storage.Context, id, owner, container []byte) {
