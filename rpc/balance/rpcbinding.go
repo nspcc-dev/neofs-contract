@@ -6,6 +6,7 @@ package balance
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/nep17"
@@ -70,6 +71,9 @@ type ChangePaymentStatusEvent struct {
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	nep17.Invoker
+	CallAndExpandIterator(contract util.Uint160, method string, maxItems int, params ...any) (*result.Invoke, error)
+	TerminateSession(sessionID uuid.UUID) error
+	TraverseIterator(sessionID uuid.UUID, iterator *result.Iterator, num int) ([]stackitem.Item, error)
 }
 
 // Actor is used by Contract to call state-changing methods.
@@ -113,6 +117,25 @@ func New(actor Actor, hash util.Uint160) *Contract {
 	return &Contract{ContractReader{nep17t.TokenReader, actor, hash}, nep17t.TokenWriter, NEP22Contract(*nep22.NewContract(actor, hash)), actor, hash}
 }
 
+// GetUnpaidContainerEpoch invokes `getUnpaidContainerEpoch` method of contract.
+func (c *ContractReader) GetUnpaidContainerEpoch(cid util.Uint256) (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "getUnpaidContainerEpoch", cid))
+}
+
+// IterateUnpaid invokes `iterateUnpaid` method of contract.
+func (c *ContractReader) IterateUnpaid() (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "iterateUnpaid"))
+}
+
+// IterateUnpaidExpanded is similar to IterateUnpaid (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) IterateUnpaidExpanded(_numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "iterateUnpaid", _numOfIteratorItems))
+}
+
 // Version invokes `version` method of contract.
 func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))
@@ -138,50 +161,6 @@ func (c *Contract) BurnTransaction(from util.Uint160, amount *big.Int, txDetails
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) BurnUnsigned(from util.Uint160, amount *big.Int, txDetails []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "burn", nil, from, amount, txDetails)
-}
-
-// GetUnpaidContainerEpoch creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) GetUnpaidContainerEpoch(cid util.Uint256) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "getUnpaidContainerEpoch", cid)
-}
-
-// GetUnpaidContainerEpochTransaction creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) GetUnpaidContainerEpochTransaction(cid util.Uint256) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "getUnpaidContainerEpoch", cid)
-}
-
-// GetUnpaidContainerEpochUnsigned creates a transaction invoking `getUnpaidContainerEpoch` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) GetUnpaidContainerEpochUnsigned(cid util.Uint256) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "getUnpaidContainerEpoch", nil, cid)
-}
-
-// IterateUnpaid creates a transaction invoking `iterateUnpaid` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) IterateUnpaid() (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "iterateUnpaid")
-}
-
-// IterateUnpaidTransaction creates a transaction invoking `iterateUnpaid` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) IterateUnpaidTransaction() (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "iterateUnpaid")
-}
-
-// IterateUnpaidUnsigned creates a transaction invoking `iterateUnpaid` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) IterateUnpaidUnsigned() (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "iterateUnpaid", nil)
 }
 
 // Lock creates a transaction invoking `lock` method of the contract.
