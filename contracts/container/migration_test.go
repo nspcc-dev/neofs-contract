@@ -9,9 +9,13 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
 	"github.com/nspcc-dev/neofs-contract/tests/migration"
+	"github.com/nspcc-dev/neofs-sdk-go/container"
+	protocontainer "github.com/nspcc-dev/neofs-sdk-go/proto/container"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const name = "container"
@@ -120,4 +124,117 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.True(t, ok)
 		require.ElementsMatch(t, vPrev, vNew, "containers of '%s' owner should remain", base58.Encode([]byte(k)))
 	}
+
+	// assert structuring of containers
+	assertStructuring(t, c, prevCnrStorageItems)
+}
+
+func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][]byte) {
+	structsPrefix := []byte{0x00}
+
+	for i := 1; ; i++ {
+		// inlined stuff of c.Invoke()
+		tx := c.PrepareInvoke(t, "addStructs")
+		c.AddNewBlock(t, tx)
+
+		txRes := c.CheckHalt(t, tx.Hash())
+		require.Len(t, txRes.Stack, 1)
+
+		rem, err := txRes.Stack[0].TryBool()
+		require.NoError(t, err)
+
+		if !rem {
+			break
+		}
+
+		count := 0
+		c.SeekStorage(structsPrefix, func(_, _ []byte) bool { count++; return true })
+		require.EqualValues(t, count, 10*i)
+	}
+
+	mStructs := make(map[string][]stackitem.Item)
+	c.SeekStorage(structsPrefix, func(k, v []byte) bool {
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+
+		arr, ok := item.Value().([]stackitem.Item)
+		require.True(t, ok)
+
+		mStructs[string(k)] = arr
+
+		return true
+	})
+
+	require.Equal(t, len(mStructs), len(binCnrs))
+	for id, cnrBin := range binCnrs {
+		exp := containerBinaryToStruct(t, cnrBin)
+		assertEqualItemArray(t, exp, mStructs[id])
+	}
+
+	for id, expFields := range mStructs {
+		item := c.Call(t, "getInfo", id)
+
+		arr, ok := item.Value().([]stackitem.Item)
+		require.True(t, ok)
+
+		assertEqualItemArray(t, expFields, arr)
+	}
+}
+
+func containerBinaryToStruct(t *testing.T, b []byte) []stackitem.Item {
+	// we decode into protocontainer.Container, not to container.Container for the following reasons:
+	// 1. container.Container loses already deprecated subnet ID in decode-encode cycle
+	// 2. nonce is not exposed from container.Container
+	var msg protocontainer.Container
+	require.NoError(t, proto.Unmarshal(b, &msg))
+
+	var cnr container.Container
+	require.NoError(t, cnr.FromProtoMessage(&msg))
+
+	ownerAddr := msg.OwnerId.GetValue()
+	require.Len(t, ownerAddr, common.NeoFSUserAccountLength)
+
+	var attrs []stackitem.Item
+	for _, a := range msg.Attributes {
+		attrs = append(attrs, stackitem.NewStruct([]stackitem.Item{
+			stackitem.Make(a.GetKey()), stackitem.Make(a.GetValue()),
+		}))
+	}
+
+	policyBin := make([]byte, msg.PlacementPolicy.MarshaledSize())
+	msg.PlacementPolicy.MarshalStable(policyBin)
+
+	return []stackitem.Item{
+		stackitem.NewStruct([]stackitem.Item{
+			stackitem.Make(msg.Version.GetMajor()),
+			stackitem.Make(msg.Version.GetMinor()),
+		}),
+		stackitem.Make(ownerAddr[1:][:20]),
+		stackitem.Make(msg.Nonce),
+		stackitem.Make(msg.BasicAcl),
+		stackitem.NewArray(attrs),
+		stackitem.NewByteArray(policyBin),
+	}
+}
+
+func assertEqualItemArray(t *testing.T, exp, got []stackitem.Item) {
+	for i := range exp {
+		if expArr, err := exp[i].Convert(stackitem.ArrayT); err == nil {
+			gotArr, err := got[i].Convert(stackitem.ArrayT)
+			require.NoError(t, err)
+
+			assertEqualItemArray(t, stackItemToArray(expArr), stackItemToArray(gotArr))
+
+			continue
+		}
+
+		require.Equal(t, exp[i].Value(), got[i].Value(), i)
+	}
+}
+
+func stackItemToArray(item stackitem.Item) []stackitem.Item {
+	if _, ok := item.(stackitem.Null); !ok {
+		return item.Value().([]stackitem.Item)
+	}
+	return nil
 }
