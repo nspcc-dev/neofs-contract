@@ -308,7 +308,7 @@ type epochBillingStat struct {
 // witnessed by the actual Alphabet multi-signature. Produces `ChangePaymentStatus`
 // notification on any payment status changes. If payment is successful, `Payment`
 // notification is thrown. If payment cannot be fully made, container is registered
-// as an unpaid one, see [IsUnpaid].
+// as an unpaid one, see [GetUnpaidContainerEpoch].
 func SettleContainerPayment(cid interop.Hash256) bool {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
@@ -404,9 +404,9 @@ func GetUnpaidContainerEpoch(cid interop.Hash256) int {
 	return raw.(int)
 }
 
-// IterateUnpaid is like [Unpaid] but for every unpaid container. Iteration is
-// through key-value pair, where key is container ID, value is epoch from which
-// container is considered unpaid.
+// IterateUnpaid is like [GetUnpaidContainerEpoch] but for every unpaid
+// container. Iteration is through key-value pair, where key is container ID,
+// value is epoch from which container is considered unpaid.
 func IterateUnpaid() iterator.Iterator {
 	return storage.Find(storage.GetReadOnlyContext(), []byte{unpaidContainersPrefix}, storage.RemovePrefix)
 }
