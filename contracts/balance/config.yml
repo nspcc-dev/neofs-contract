@@ -1,6 +1,6 @@
 name: "NeoFS Balance"
 supportedstandards: ["NEP-17", "NEP-22"]
-safemethods: ["balanceOf", "decimals", "symbol", "totalSupply", "version"]
+safemethods: ["balanceOf", "decimals", "symbol", "totalSupply", "version", "getUnpaidContainerEpoch", "iterateUnpaid"]
 permissions:
   - methods: ["update", "subscribeForNewEpoch"]
 events:
