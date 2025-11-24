@@ -857,6 +857,84 @@ func newCommitteeNotaryActorWithCustomCommitteeSigner(
 	return _newCustomCommitteeNotaryActor(b, localAcc, committee, localAcc, fCommitteeSigner)
 }
 
+// newNotaryUpdaterActor creates notary actor with proxy payer and committee
+// multi signature. If allowedContractsToCall is non-empty, actor has also
+// alphabet (2/3 + 1) multisignature with [transaction.Rules] scope that is
+// allowed to be called only by deployedContract in allowedContractsToCall.
+func newNotaryUpdaterActor(b Blockchain, localAcc *wallet.Account, committee keys.PublicKeys,
+	proxyContract util.Uint160, deployedContract util.Uint160, allowedContractsToCall []util.Uint160) (*notary.Actor, error) {
+	committeeMultiSigAcc := wallet.NewAccountFromPrivateKey(localAcc.PrivateKey())
+	var (
+		committeeHonestCount = smartcontract.GetMajorityHonestNodeCount(len(committee))
+		alphabetHonestCount  = smartcontract.GetDefaultHonestNodeCount(len(committee))
+	)
+
+	err := committeeMultiSigAcc.ConvertMultisig(committeeHonestCount, committee)
+	if err != nil {
+		return nil, fmt.Errorf("compose committee multi-signature account: %w", err)
+	}
+
+	signers := make([]actor.SignerAccount, 2, 3)
+	// payer
+	signers[0].Account = notary.FakeContractAccount(proxyContract)
+	signers[0].Signer.Account = proxyContract
+	signers[0].Signer.Scopes = transaction.None
+	// committee (1/2 + 1)
+	signers[1].Account = committeeMultiSigAcc
+	signers[1].Signer.Account = committeeMultiSigAcc.ScriptHash()
+	signers[1].Signer.Scopes = transaction.CalledByEntry
+	if len(allowedContractsToCall) > 0 {
+		// alphabet (2/3 + 1)
+
+		var (
+			scriptHashConditions      transaction.ConditionOr
+			calledByContractCondition = transaction.ConditionCalledByContract(deployedContract)
+		)
+		for _, cnr := range allowedContractsToCall {
+			condScriptHash := transaction.ConditionScriptHash(cnr)
+			scriptHashConditions = append(scriptHashConditions, &condScriptHash)
+		}
+		rules := []transaction.WitnessRule{
+			{
+				Action:    transaction.WitnessAllow,
+				Condition: transaction.ConditionCalledByEntry{},
+			},
+			{
+				Action: transaction.WitnessAllow,
+				Condition: &transaction.ConditionAnd{
+					&calledByContractCondition,
+					&scriptHashConditions,
+				},
+			},
+		}
+
+		// it is prohibited to have a signer twice in a transaction's signer
+		// list, and at the same time, depending on the committee list's
+		// length, default and majority honest counts may be the same
+		if committeeHonestCount == alphabetHonestCount {
+			signers[1].Signer.Scopes = transaction.Rules
+			signers[1].Signer.Rules = rules
+		} else {
+			alphabetMultiSigAcc := wallet.NewAccountFromPrivateKey(localAcc.PrivateKey())
+			err = alphabetMultiSigAcc.ConvertMultisig(alphabetHonestCount, committee)
+			if err != nil {
+				return nil, fmt.Errorf("compose alphabet multi-signature account: %w", err)
+			}
+
+			signers = append(signers, actor.SignerAccount{
+				Account: alphabetMultiSigAcc,
+				Signer: transaction.Signer{
+					Account: alphabetMultiSigAcc.ScriptHash(),
+					Scopes:  transaction.Rules,
+					Rules:   rules,
+				},
+			})
+		}
+	}
+
+	return notary.NewActor(b, signers, localAcc)
+}
+
 // returns notary.Actor that builds and sends Notary service requests witnessed
 // by the specified committee members to the provided Blockchain. Local account
 // should be one of the committee members. Given Proxy contract pays for main
