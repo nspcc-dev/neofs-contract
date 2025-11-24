@@ -224,40 +224,9 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 		return util.Uint160{}, fmt.Errorf("encode local manifest of the contract into JSON: %w", err)
 	}
 
-	var proxyCommitteeActor *notary.Actor
-
-	initProxyCommitteeActor := func(proxyContract, deployedContract util.Uint160) error {
-		var err error
-
-		if len(prm.validatorsDeployAllowedContracts) != 0 {
-			var (
-				scriptHashConditions      transaction.ConditionOr
-				calledByContractCondition = transaction.ConditionCalledByContract(deployedContract)
-			)
-			for _, cnr := range prm.validatorsDeployAllowedContracts {
-				condScriptHash := transaction.ConditionScriptHash(cnr)
-				scriptHashConditions = append(scriptHashConditions, &condScriptHash)
-			}
-
-			proxyCommitteeActor, err = _newCustomCommitteeNotaryActor(prm.blockchain, prm.localAcc, prm.committee, notary.FakeContractAccount(proxyContract), func(signer *transaction.Signer) {
-				signer.Scopes = transaction.Rules
-				signer.Rules = []transaction.WitnessRule{
-					{
-						Action:    transaction.WitnessAllow,
-						Condition: transaction.ConditionCalledByEntry{},
-					},
-					{
-						Action: transaction.WitnessAllow,
-						Condition: &transaction.ConditionAnd{
-							&calledByContractCondition,
-							&scriptHashConditions,
-						},
-					},
-				}
-			})
-		} else {
-			proxyCommitteeActor, err = newProxyCommitteeNotaryActor(prm.blockchain, prm.localAcc, prm.committee, proxyContract)
-		}
+	var contractUpdaterActor *notary.Actor
+	initContractUpdaterActor := func(proxyContract, deployedContract util.Uint160) error {
+		contractUpdaterActor, err = newNotaryUpdaterActor(prm.blockchain, prm.localAcc, prm.committee, proxyContract, deployedContract, prm.validatorsDeployAllowedContracts)
 		if err != nil {
 			return fmt.Errorf("create Notary service client sending transactions to be signed by the committee and paid by Proxy contract: %w", err)
 		}
@@ -488,18 +457,18 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 				return onChainState.Hash, nil
 			}
 		} else {
-			if proxyCommitteeActor == nil {
+			if contractUpdaterActor == nil {
 				if prm.isProxy {
-					err = initProxyCommitteeActor(onChainState.Hash, onChainState.Hash)
+					err = initContractUpdaterActor(onChainState.Hash, onChainState.Hash)
 				} else {
-					err = initProxyCommitteeActor(prm.proxyContract, onChainState.Hash)
+					err = initContractUpdaterActor(prm.proxyContract, onChainState.Hash)
 				}
 				if err != nil {
 					return util.Uint160{}, err
 				}
 			}
 
-			tx, err := proxyCommitteeActor.MakeTunedCall(onChainState.Hash, methodUpdate, nil, updateTxModifier,
+			tx, err := contractUpdaterActor.MakeTunedCall(onChainState.Hash, methodUpdate, nil, updateTxModifier,
 				bLocalNEF, jLocalManifest, nil)
 			if err != nil {
 				if isErrContractAlreadyUpdated(err) {
@@ -521,7 +490,7 @@ func syncNeoFSContract(ctx context.Context, prm syncNeoFSContractPrm) (util.Uint
 
 			l.Info("sending new Notary request updating the contract...")
 
-			mainTxID, fallbackTxID, vub, err := proxyCommitteeActor.Notarize(tx, nil)
+			mainTxID, fallbackTxID, vub, err := contractUpdaterActor.Notarize(tx, nil)
 			if err != nil {
 				if errors.Is(err, neorpc.ErrInsufficientFunds) {
 					l.Info("insufficient Notary balance to update the contract, will try again later")

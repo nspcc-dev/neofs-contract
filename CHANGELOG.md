@@ -14,6 +14,7 @@ Changelog for NeoFS Contract
 ### Removed
 
 ### Fixed
+- Container and Balance contracts update routines (#552)
 
 ## [0.25.1] - 2025-11-19
 
