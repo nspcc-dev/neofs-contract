@@ -850,7 +850,8 @@ func Count() int {
 // ContainersOf iterates over all container IDs owned by the specified owner.
 // If owner is nil, it iterates over all containers.
 //
-// It is recommended to use [TokensOf] for non-empty owner.
+// Deprecated: use [TokensOf] for non-empty and [Tokens] for empty owner
+// correspondingly.
 func ContainersOf(owner []byte) iterator.Iterator {
 	ctx := storage.GetReadOnlyContext()
 	key := []byte{ownerKeyPrefix}
@@ -1729,6 +1730,65 @@ func OwnerOf(tokenID []byte) interop.Hash160 {
 		panic(cst.NotFoundError)
 	}
 	return owner[1 : 1+interop.Hash160Len]
+}
+
+// Tokens returns iterator over IDs of all existing containers.
+//
+// Tokens implements optional NEP-11 method.
+func Tokens() iterator.Iterator {
+	return storage.Find(storage.GetReadOnlyContext(), []byte{containerKeyPrefix}, storage.KeysOnly|storage.RemovePrefix)
+}
+
+// Properties returns properties of referenced container. The properties are
+// 'name' and all KV attributes.
+//
+// The 'name' property is set to 'Name' attribute value if exists. In this case,
+// 'Name' attribute itself is not included. Otherwise, if 'Name' attribute is
+// missing, 'name' is set to Base58-encoded tokenID. Note that container 'name'
+// attribute is always overlapped if any.
+//
+// If referenced container does not exist, OwnerOf throws [cst.NotFoundError]
+// exception. If the container has already been removed, OwnerOf throws
+// [cst.ErrorDeleted] exception.
+//
+// Properties implements optional NEP-11 method.
+func Properties(tokenID []byte) map[string]any {
+	ctx := storage.GetReadOnlyContext()
+
+	var cnr Info
+	if item := storage.Get(ctx, append([]byte{infoPrefix}, tokenID...)); item == nil {
+		binItem := storage.Get(ctx, append([]byte{containerKeyPrefix}, tokenID...))
+		if binItem == nil {
+			if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+				panic(cst.ErrorDeleted)
+			}
+
+			panic(cst.NotFoundError)
+		}
+
+		cnr = fromBytes(binItem.([]byte))
+	} else {
+		cnr = std.Deserialize(item.([]byte)).(Info)
+	}
+
+	props := make(map[string]any, 1+len(cnr.Attributes))
+
+	var name string
+	for i := range cnr.Attributes {
+		if cnr.Attributes[i].Key == "Name" {
+			name = cnr.Attributes[i].Value
+		} else {
+			props[cnr.Attributes[i].Key] = cnr.Attributes[i].Value
+		}
+	}
+
+	if name == "" {
+		name = std.Base58Encode(tokenID)
+	}
+
+	props["name"] = name
+
+	return props
 }
 
 func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {

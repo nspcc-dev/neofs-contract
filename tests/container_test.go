@@ -36,6 +36,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/container"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	containertest "github.com/nspcc-dev/neofs-sdk-go/container/test"
+	netmaptest "github.com/nspcc-dev/neofs-sdk-go/netmap/test"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
@@ -2737,6 +2738,156 @@ func TestContainerOwnerOf(t *testing.T) {
 	cnrInv.Invoke(t, stackitem.Null{}, "remove", id1[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	cnrInv.InvokeFail(t, containerconst.ErrorDeleted, "ownerOf", id1[:])
+}
+
+func TestContainerTokens(t *testing.T) {
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	bc, committee := chain.NewSingle(t)
+	exec := neotest.NewExecutor(t, bc, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
+	deployProxyContract(t, exec)
+	exec.DeployContract(t, cnrContract, nil)
+
+	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+
+	assert := func(t *testing.T, ids []cid.ID) {
+		s, err := cnrInv.TestInvoke(t, "tokens")
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		it, ok := s.Pop().Value().(*storage.Iterator)
+		require.True(t, ok)
+
+		var actual [][]byte
+		for it.Next() {
+			id, err := it.Value().TryBytes()
+			require.NoError(t, err)
+
+			actual = append(actual, id)
+		}
+
+		var expected [][]byte
+		for i := range ids {
+			expected = append(expected, ids[i][:])
+		}
+
+		require.ElementsMatch(t, expected, actual)
+	}
+
+	assert(t, []cid.ID{})
+
+	create := func(t *testing.T, cnr container.Container, id cid.ID) {
+		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	}
+
+	var ids []cid.ID
+	for range 5 {
+		cnr := containertest.Container()
+		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+
+		create(t, cnr, id)
+
+		ids = append(ids, id)
+	}
+
+	assert(t, ids)
+
+	cnrInv.Invoke(t, stackitem.Null{}, "remove", ids[0][:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+	assert(t, ids[1:])
+}
+
+func TestContainerProperties(t *testing.T) {
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	bc, committee := chain.NewSingle(t)
+	exec := neotest.NewExecutor(t, bc, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
+	deployProxyContract(t, exec)
+	exec.DeployContract(t, cnrContract, nil)
+
+	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+
+	assert := func(t *testing.T, id cid.ID, expected map[string]any) {
+		s, err := cnrInv.TestInvoke(t, "properties", id[:])
+		require.NoError(t, err)
+		require.Equal(t, 1, s.Len())
+
+		m, ok := s.Pop().Item().(*stackitem.Map)
+		require.True(t, ok)
+
+		actual := make(map[string]any)
+		for _, el := range m.Value().([]stackitem.MapElement) {
+			kb, err := el.Key.TryBytes()
+			require.NoError(t, err)
+
+			actual[string(kb)] = el.Value.Value()
+		}
+
+		require.Len(t, actual, len(expected))
+
+		for k, expVal := range expected {
+			gotVal, ok := actual[k]
+			require.True(t, ok, k)
+			require.EqualValues(t, expVal, gotVal, k)
+		}
+	}
+
+	owner := usertest.ID()
+
+	var cnr container.Container
+	cnr.Init()
+	cnr.SetOwner(owner)
+	cnr.SetBasicACL(containertest.BasicACL())
+	cnr.SetPlacementPolicy(netmaptest.PlacementPolicy())
+	cnr.SetAttribute("k1", "v1")
+	cnr.SetAttribute("k2", "v2")
+	cnr.SetAttribute("name", "any")
+
+	id := cid.NewFromMarshalledContainer(cnr.Marshal())
+
+	cnrInv.InvokeFail(t, containerconst.NotFoundError, "properties", id[:])
+
+	create := func(t *testing.T, cnr container.Container, id cid.ID) {
+		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	}
+
+	create(t, cnr, id)
+
+	assert(t, id, map[string]any{
+		"name": id.String(),
+		"k1":   "v1",
+		"k2":   "v2",
+	})
+
+	cnr.SetName("my-container")
+
+	id = cid.NewFromMarshalledContainer(cnr.Marshal())
+
+	create(t, cnr, id)
+
+	assert(t, id, map[string]any{
+		"name": "my-container",
+		"k1":   "v1",
+		"k2":   "v2",
+	})
+
+	cnrInv.Invoke(t, stackitem.Null{}, "remove", id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+	cnrInv.InvokeFail(t, containerconst.ErrorDeleted, "properties", id[:])
 }
 
 func containerToStructFields(cnr container.Container) []stackitem.Item {
