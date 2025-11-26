@@ -53,6 +53,7 @@ func getSupply(c *rpcclient.Client, h util.Uint160, height uint32) int64 {
 	n17 := nep17.NewReader(inv, h)
 	s, err := n17.TotalSupply()
 	if err != nil {
+		fmt.Printf("WARN: cannot get historic supply for %d height: %s\n", height, err)
 		return 0
 	}
 	return s.Int64()
