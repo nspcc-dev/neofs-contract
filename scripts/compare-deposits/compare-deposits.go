@@ -200,6 +200,9 @@ func cliMain() error {
 					toB, _ := itms[1].TryBytes()
 					if len(toB) == 20 {
 						to, _ = util.Uint160DecodeBytesBE(toB)
+					} else {
+						// burn transaction decreasing balance
+						continue
 					}
 					amount, _ := itms[2].TryInteger()
 					data, _ := itms[3].TryBytes()
