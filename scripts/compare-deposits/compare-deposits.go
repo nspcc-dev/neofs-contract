@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
@@ -64,7 +65,7 @@ func cliMain() error {
 
 	args := flag.Args()
 	if len(args) < 3 {
-		return errors.New("usage: program <RPC_MAINNET> <NEOFS_CONTRACT> <RPC_FSCHAIN>")
+		return errors.New("usage: program <RPC_MAINNET> <NEOFS_CONTRACT> <RPC_FSCHAIN> [<STARTING_BLOCK_FSCHAIN>]")
 	}
 
 	rpcMainAddress := args[0]
@@ -84,6 +85,27 @@ func cliMain() error {
 		return err
 	}
 
+	var (
+		startBlock uint64
+		startTime  uint64
+	)
+	if len(args) == 4 {
+		startBlock, err = strconv.ParseUint(args[3], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid start FS chain block (%s): %w", args[3], err)
+		}
+
+		b, err := cFS.GetBlockByIndex(uint32(startBlock))
+		if err != nil {
+			return fmt.Errorf("fetching starting block: %w", err)
+		}
+
+		startTime = b.Timestamp
+		startDate := time.Unix(int64(startTime/1000), 0)
+
+		fmt.Printf("Starting inspection from %d FS chain block (%s block time)\n", startBlock, startDate)
+	}
+
 	now := uint64(time.Now().Unix()) * 1000 // Milliseconds.
 
 	var (
@@ -91,9 +113,8 @@ func cliMain() error {
 		mints    []mint
 	)
 	for i := 0; ; i++ {
-		var from uint64
 		var limit = 100
-		trans, err := cMain.GetNEP17Transfers(fsCont, &from, &now, &limit, &i)
+		trans, err := cMain.GetNEP17Transfers(fsCont, &startTime, &now, &limit, &i)
 		if err != nil {
 			return fmt.Errorf("can't get transfers: %w", err)
 		}
@@ -137,8 +158,8 @@ func cliMain() error {
 		actualSupply = getSupply(cFS, balanceHash, maxH)
 		knownBlocks  = make(map[uint32]int64)
 
-		currHeight uint32 = 1
-		currSupply        = getSupply(cFS, balanceHash, currHeight)
+		currHeight = uint32(startBlock) + 1
+		currSupply = getSupply(cFS, balanceHash, currHeight)
 	)
 
 	fmt.Printf("FS supply at %d height: %s\n", maxH, fixedn.ToString(big.NewInt(actualSupply), 12))
