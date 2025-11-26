@@ -134,41 +134,32 @@ func cliMain() error {
 	maxH-- // blockCount to height
 
 	var (
-		maxSupply   = getSupply(cFS, balanceHash, maxH)
-		nextSupply  int64
-		knownBlocks = make(map[uint32]int64)
+		actualSupply = getSupply(cFS, balanceHash, maxH)
+		knownBlocks  = make(map[uint32]int64)
+
+		currHeight uint32 = 1
+		currSupply        = getSupply(cFS, balanceHash, currHeight)
 	)
 
-	fmt.Println("FS supply:", fixedn.ToString(big.NewInt(maxSupply), 12))
-	for nextSupply < maxSupply {
-		var (
-			minBlock  uint32
-			maxBlock  = maxH
-			tmpSupply int64
-		)
-		for h, s := range knownBlocks {
-			if s < nextSupply && minBlock < h {
-				minBlock = h
+	fmt.Printf("FS supply at %d height: %s\n", maxH, fixedn.ToString(big.NewInt(actualSupply), 12))
+	for currHeight < maxH {
+		searchedSegment := int(maxH - currHeight)
+		n := sort.Search(searchedSegment, func(i int) bool {
+			var h = currHeight + uint32(i)
+			s, ok := knownBlocks[h]
+			if !ok {
+				s = getSupply(cFS, balanceHash, h)
+				knownBlocks[h] = s
 			}
-			if s > nextSupply && maxBlock > h {
-				maxBlock = h
-			}
-		}
-		n := sort.Search(int(maxBlock-minBlock), func(i int) bool {
-			var h = minBlock + uint32(i)
-			s := getSupply(cFS, balanceHash, h)
-			knownBlocks[h] = s
-			return s > nextSupply
+			return currSupply != s
 		})
-		for _, s := range knownBlocks {
-			if s > nextSupply && (s < tmpSupply || tmpSupply == 0) {
-				tmpSupply = s
-			}
+		if n == searchedSegment {
+			break
 		}
-		nextSupply = tmpSupply
-		n = int(minBlock) + n
-		fmt.Println("FS block", n, "supply", fixedn.ToString(big.NewInt(nextSupply), 12))
-		b, err := cFS.GetBlockByIndex(uint32(n))
+		currHeight += uint32(n)
+		currSupply = knownBlocks[currHeight]
+		fmt.Println("FS block", currHeight-1, "supply", fixedn.ToString(big.NewInt(currSupply), 12))
+		b, err := cFS.GetBlockByIndex(currHeight - 1)
 		if err != nil {
 			return err
 		}
