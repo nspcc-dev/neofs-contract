@@ -43,12 +43,6 @@ type NetmapConfigRecord struct {
 	Value []byte
 }
 
-// NetmapNode is a contract-specific netmap.Node type used by its methods.
-type NetmapNode struct {
-	BLOB  []byte
-	State *big.Int
-}
-
 // NetmapNode2 is a contract-specific netmap.Node2 type used by its methods.
 type NetmapNode2 struct {
 	Addresses  []string
@@ -269,98 +263,6 @@ func (c *ContractReader) ListNodes2Expanded(epoch *big.Int, _numOfIteratorItems 
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "listNodes", _numOfIteratorItems, epoch))
 }
 
-// Netmap invokes `netmap` method of contract.
-func (c *ContractReader) Netmap() ([]*NetmapNode, error) {
-	return func(item stackitem.Item, err error) ([]*NetmapNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*NetmapNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*NetmapNode, len(arr))
-			for i := range res {
-				res[i], err = itemToNetmapNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "netmap")))
-}
-
-// NetmapCandidates invokes `netmapCandidates` method of contract.
-func (c *ContractReader) NetmapCandidates() ([]*NetmapNode, error) {
-	return func(item stackitem.Item, err error) ([]*NetmapNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*NetmapNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*NetmapNode, len(arr))
-			for i := range res {
-				res[i], err = itemToNetmapNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "netmapCandidates")))
-}
-
-// Snapshot invokes `snapshot` method of contract.
-func (c *ContractReader) Snapshot(diff *big.Int) ([]*NetmapNode, error) {
-	return func(item stackitem.Item, err error) ([]*NetmapNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*NetmapNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*NetmapNode, len(arr))
-			for i := range res {
-				res[i], err = itemToNetmapNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "snapshot", diff)))
-}
-
-// SnapshotByEpoch invokes `snapshotByEpoch` method of contract.
-func (c *ContractReader) SnapshotByEpoch(epoch *big.Int) ([]*NetmapNode, error) {
-	return func(item stackitem.Item, err error) ([]*NetmapNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*NetmapNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*NetmapNode, len(arr))
-			for i := range res {
-				res[i], err = itemToNetmapNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "snapshotByEpoch", epoch)))
-}
-
 // UnusedCandidate invokes `unusedCandidate` method of contract.
 func (c *ContractReader) UnusedCandidate() (*NetmapCandidate, error) {
 	return itemToNetmapCandidate(unwrap.Item(c.invoker.Call(c.hash, "unusedCandidate")))
@@ -391,50 +293,6 @@ func (c *Contract) AddNodeTransaction(n *NetmapNode2) (*transaction.Transaction,
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) AddNodeUnsigned(n *NetmapNode2) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "addNode", nil, n)
-}
-
-// AddPeer creates a transaction invoking `addPeer` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) AddPeer(nodeInfo []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "addPeer", nodeInfo)
-}
-
-// AddPeerTransaction creates a transaction invoking `addPeer` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) AddPeerTransaction(nodeInfo []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "addPeer", nodeInfo)
-}
-
-// AddPeerUnsigned creates a transaction invoking `addPeer` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) AddPeerUnsigned(nodeInfo []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "addPeer", nil, nodeInfo)
-}
-
-// AddPeerIR creates a transaction invoking `addPeerIR` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) AddPeerIR(nodeInfo []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "addPeerIR", nodeInfo)
-}
-
-// AddPeerIRTransaction creates a transaction invoking `addPeerIR` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) AddPeerIRTransaction(nodeInfo []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "addPeerIR", nodeInfo)
-}
-
-// AddPeerIRUnsigned creates a transaction invoking `addPeerIR` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) AddPeerIRUnsigned(nodeInfo []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "addPeerIR", nil, nodeInfo)
 }
 
 // DeleteNode creates a transaction invoking `deleteNode` method of the contract.
@@ -633,28 +491,6 @@ func (c *Contract) UpdateStateTransaction(state *big.Int, publicKey *keys.Public
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) UpdateStateUnsigned(state *big.Int, publicKey *keys.PublicKey) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "updateState", nil, state, publicKey)
-}
-
-// UpdateStateIR creates a transaction invoking `updateStateIR` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) UpdateStateIR(state *big.Int, publicKey *keys.PublicKey) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "updateStateIR", state, publicKey)
-}
-
-// UpdateStateIRTransaction creates a transaction invoking `updateStateIR` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) UpdateStateIRTransaction(state *big.Int, publicKey *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "updateStateIR", state, publicKey)
-}
-
-// UpdateStateIRUnsigned creates a transaction invoking `updateStateIR` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) UpdateStateIRUnsigned(state *big.Int, publicKey *keys.PublicKey) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "updateStateIR", nil, state, publicKey)
 }
 
 // itemToCommonIRNode converts stack item into *CommonIRNode.
@@ -1150,113 +986,6 @@ func (res *NetmapConfigRecord) ToSCParameter() (smartcontract.Parameter, error) 
 	prm, err = smartcontract.NewParameterFromValue(res.Value)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
-	}
-	prms = append(prms, prm)
-
-	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
-}
-
-// itemToNetmapNode converts stack item into *NetmapNode.
-// NULL item is returned as nil pointer without error.
-func itemToNetmapNode(item stackitem.Item, err error) (*NetmapNode, error) {
-	if err != nil {
-		return nil, err
-	}
-	_, null := item.(stackitem.Null)
-	if null {
-		return nil, nil
-	}
-	var res = new(NetmapNode)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// Ensure *NetmapNode is a proper [stackitem.Convertible].
-var _ = stackitem.Convertible(&NetmapNode{})
-
-// Ensure *NetmapNode is a proper [smartcontract.Convertible].
-var _ = smartcontract.Convertible(&NetmapNode{})
-
-// FromStackItem retrieves fields of NetmapNode from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-// It implements [stackitem.Convertible] interface.
-func (res *NetmapNode) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	res.BLOB, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field BLOB: %w", err)
-	}
-
-	index++
-	res.State, err = arr[index].TryInteger()
-	if err != nil {
-		return fmt.Errorf("field State: %w", err)
-	}
-
-	return nil
-}
-
-// ToStackItem creates [stackitem.Item] representing NetmapNode.
-// It implements [stackitem.Convertible] interface.
-func (res *NetmapNode) ToStackItem() (stackitem.Item, error) {
-	if res == nil {
-		return stackitem.Null{}, nil
-	}
-
-	var (
-		err   error
-		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 2)
-	)
-	itm, err = stackitem.NewByteArray(res.BLOB), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field BLOB: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = (*stackitem.BigInteger)(res.State), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field State: %w", err)
-	}
-	items = append(items, itm)
-
-	return stackitem.NewStruct(items), nil
-}
-
-// ToSCParameter creates [smartcontract.Parameter] representing NetmapNode.
-// It implements [smartcontract.Convertible] interface so that NetmapNode
-// could be used with invokers.
-func (res *NetmapNode) ToSCParameter() (smartcontract.Parameter, error) {
-	if res == nil {
-		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
-	}
-
-	var (
-		err  error
-		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 2)
-	)
-	prm, err = smartcontract.NewParameterFromValue(res.BLOB)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field BLOB: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.State)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field State: %w", err)
 	}
 	prms = append(prms, prm)
 
