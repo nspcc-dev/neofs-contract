@@ -596,6 +596,46 @@ func TestNNSRoots(t *testing.T) {
 	require.ElementsMatch(t, tlds, res)
 }
 
+func TestNNSHasTXTRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), "user=036b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), "admin=AdminAddress123")
+	c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), "some other data")
+
+	t.Run("existing records", func(t *testing.T) {
+		c.Invoke(t, true, "hasTXTRecord", "testdomain.com", "user=036b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296")
+		c.Invoke(t, true, "hasTXTRecord", "testdomain.com", "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB")
+		c.Invoke(t, true, "hasTXTRecord", "testdomain.com", "admin=AdminAddress123")
+		c.Invoke(t, true, "hasTXTRecord", "testdomain.com", "some other data")
+	})
+
+	t.Run("non-existing record", func(t *testing.T) {
+		c.Invoke(t, false, "hasTXTRecord", "testdomain.com", "0311da91a0310289f70dd88b1c8352a715c8c4df4c789891c839df18da8e0bbe6a")
+	})
+
+	t.Run("no records", func(t *testing.T) {
+		c.Invoke(t, true, "register",
+			"empty.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, false, "hasTXTRecord", "empty.com", "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB")
+	})
+
+	t.Run("TLD", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasTXTRecord", "com", "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB")
+	})
+
+	t.Run("non-existent domain", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasTXTRecord", "nonexistent.com", "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB")
+	})
+}
+
 func TestNNSAddRecord(t *testing.T) {
 	c := newNNSInvoker(t, true)
 

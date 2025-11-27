@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/nspcc-dev/neofs-sdk-go/user"
 	"github.com/stretchr/testify/require"
 )
 
@@ -136,4 +137,73 @@ func TestBaseErrors(t *testing.T) {
 	res, err = r.ResolveFSContract("blah")
 	require.NoError(t, err)
 	require.Equal(t, h, res)
+}
+
+func TestHasAddressRecordExist(t *testing.T) {
+	ti := new(testInv)
+	r := NewReader(ti, util.Uint160{1, 2, 3})
+
+	addr := "NbrUYaZgyhSkNoRo9ugRyEMdUZxrhkNaWB"
+
+	t.Run("bad call", func(t *testing.T) {
+		ti.err = errors.New("bad")
+		_, err := r.HasAddressRecord("testdomain.com", addr)
+		require.Error(t, err)
+	})
+
+	t.Run("user exists", func(t *testing.T) {
+		ti.err = nil
+		ti.res = &result.Invoke{
+			State: "HALT",
+			Stack: []stackitem.Item{
+				stackitem.Make(true),
+			},
+		}
+
+		userId, err := user.DecodeString(addr)
+		require.NoError(t, err)
+
+		t.Run("plain address", func(t *testing.T) {
+			exists, err := r.HasAddressRecord("testdomain.com", userId.EncodeToString())
+			require.NoError(t, err)
+			require.True(t, exists)
+		})
+
+		t.Run("hex-encoded LE", func(t *testing.T) {
+			exists, err := r.HasAddressRecord("testdomain.com", userId.ScriptHash().StringLE())
+			require.NoError(t, err)
+			require.True(t, exists)
+		})
+
+		t.Run("hex-encoded BE", func(t *testing.T) {
+			exists, err := r.HasAddressRecord("testdomain.com", userId.ScriptHash().StringBE())
+			require.NoError(t, err)
+			require.True(t, exists)
+		})
+
+		t.Run("nep18 address", func(t *testing.T) {
+			exists, err := r.HasAddressRecord("testdomain.com", "address="+userId.EncodeToString())
+			require.NoError(t, err)
+			require.True(t, exists)
+		})
+	})
+
+	t.Run("user does not exist", func(t *testing.T) {
+		ti.err = nil
+		ti.res = &result.Invoke{
+			State: "HALT",
+			Stack: []stackitem.Item{
+				stackitem.Make(false),
+			},
+		}
+		exists, err := r.HasAddressRecord("testdomain.com", addr)
+		require.NoError(t, err)
+		require.False(t, exists)
+	})
+
+	t.Run("invalid user", func(t *testing.T) {
+		ti.err = nil
+		_, err := r.HasAddressRecord("testdomain.com", "invalidAddress")
+		require.EqualError(t, err, "record address is invalid")
+	})
 }

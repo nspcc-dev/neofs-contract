@@ -107,3 +107,14 @@ func (c *ContractReader) ResolveFSContract(name string) (util.Uint160, error) {
 	}
 	return AddressFromRecords(strs)
 }
+
+// HasAddressRecord checks if a specific address record exists in the domain's TXT records.
+// Address can be provided in any of the formats supported by [AddressFromRecord].
+// It uses [ContractReader.HasTXTRecord] under the hood.
+func (c *ContractReader) HasAddressRecord(name string, address string) (bool, error) {
+	h, err := AddressFromRecord(address)
+	if err == nil {
+		return c.HasTXTRecord(name, nep18Prefix+h.String())
+	}
+	return false, errors.New("record address is invalid")
+}

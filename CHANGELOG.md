@@ -6,6 +6,8 @@ Changelog for NeoFS Contract
 ### Added
 - Structured containers to Container contract storage (#534)
 - `addStructs`, `createV2` and `getInfo` methods to Container contract (#534)
+- `HasTXTRecord` contract method for NNS TXT record existence checks (#544)
+- `HasAddressRecord` RPC helper method for NNS address record existence checks (#544)
 
 ### Changed
 

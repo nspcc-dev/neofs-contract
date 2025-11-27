@@ -637,6 +637,28 @@ func GetAllRecords(name string) iterator.Iterator {
 	return getAllRecords(ctx, name, fragments)
 }
 
+// HasTXTRecord checks if a record of the TXT type exists
+// for the given domain. The name MUST NOT be a TLD.
+func HasTXTRecord(name string, data string) bool {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	records := getAllRecords(ctx, name, fragments)
+	targetLen := len(data)
+
+	for iterator.Next(records) {
+		r := iterator.Value(records).(RecordState)
+
+		if r.Type == recordtype.TXT && len(r.Data) == targetLen && util.Equals(r.Data, data) {
+			return true
+		}
+	}
+	return false
+}
+
 // updateBalance updates account's balance and account's tokens.
 func updateBalance(ctx storage.Context, tokenId []byte, acc interop.Hash160, diff int) {
 	balanceKey := append([]byte{prefixBalance}, acc...)
