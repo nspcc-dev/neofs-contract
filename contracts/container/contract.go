@@ -154,22 +154,6 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if version < 22_000 {
-			storage.Delete(ctx, "identityScriptHash") // neofsIDContractKey
-
-			it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.DeserializeValues|storage.PickField0) // Container.Value field
-			for iterator.Next(it) {
-				val := iterator.Value(it).(struct{ key, cnr []byte })
-				storage.Put(ctx, val.key, val.cnr)
-			}
-
-			it = storage.Find(ctx, eACLPrefix, storage.DeserializeValues|storage.PickField0) // ExtendedACL.Value field
-			for iterator.Next(it) {
-				val := iterator.Value(it).(struct{ key, cnr []byte })
-				storage.Put(ctx, val.key, val.cnr)
-			}
-		}
-
 		if version < 23_000 {
 			addrNNS := storage.Get(ctx, nnsContractKey).(interop.Hash160)
 			if len(addrNNS) != interop.Hash160Len {

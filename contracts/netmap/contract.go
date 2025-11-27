@@ -61,7 +61,6 @@ const (
 	DefaultSnapshotCount = 10
 	snapshotCountKey     = "snapshotCount"
 	snapshotEpoch        = "snapshotEpoch"
-	snapshotBlockKey     = "snapshotBlock"
 
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
@@ -89,13 +88,6 @@ func _deploy(data any, isUpdate bool) {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
-
-		if version < 22_000 {
-			curEpoch := storage.Get(ctx, snapshotEpoch).(int)
-			curEpochHeight := storage.Get(ctx, snapshotBlockKey).(int)
-			storage.Put(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...), std.Serialize(epochItem{height: curEpochHeight}))
-			storage.Delete(ctx, snapshotBlockKey)
-		}
 
 		if version < 24_000 {
 			// For whatever reason this was also stored here, not just in neofs contract.
