@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"iter"
 	"math/rand/v2"
+	"path/filepath"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
@@ -73,4 +74,13 @@ func stackItemToArray(item stackitem.Item) []stackitem.Item {
 		return item.Value().([]stackitem.Item)
 	}
 	return nil
+}
+
+func deployTestNEP11Receiver(t testing.TB, exec *neotest.Executor) util.Uint160 {
+	const dir = "../internal/testcontracts/nep11recv"
+	contract := neotest.CompileFile(t, exec.CommitteeHash, dir, filepath.Join(dir, "config.yml"))
+
+	exec.DeployContract(t, contract, nil)
+
+	return contract.Hash
 }

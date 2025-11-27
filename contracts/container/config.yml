@@ -1,12 +1,13 @@
 name: "NeoFS Container"
-supportedstandards: ["NEP-22"]
+supportedstandards: ["NEP-11", "NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
               "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser",
-              "getBillingStatByNode", "iterateBillingStats", "getInfo"]
+              "getBillingStatByNode", "iterateBillingStats", "getInfo",
+              "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties"]
 permissions:
   - methods: ["update", "addKey", "transferX", "register", "registerTLD", "addRecord", "deleteRecords",
-              "unsubscribeFromNewEpoch"]
+              "unsubscribeFromNewEpoch", "onNEP11Payment"]
 events:
   - name: PutSuccess
     parameters:
@@ -68,6 +69,16 @@ events:
         type: Integer
       - name: Hard
         type: Boolean
+  - name: Transfer
+    parameters:
+      - name: from
+        type: Hash160
+      - name: to
+        type: Hash160
+      - name: amount
+        type: Integer
+      - name: tokenId
+        type: ByteString
 overloads:
   putMeta: put
   putNamedOverloaded: put
