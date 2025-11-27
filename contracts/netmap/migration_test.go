@@ -29,8 +29,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// init test contract shell
 	c := migration.NewContract(t, d, "netmap", migration.ContractOptions{})
 
-	migration.SkipUnsupportedVersions(t, c)
-
 	// gather values which can't be fetched via contract API
 	vSnapshotCount := c.GetStorageItem([]byte("snapshotCount"))
 	require.NotNil(t, vSnapshotCount)

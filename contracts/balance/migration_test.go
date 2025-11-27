@@ -25,8 +25,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// init test contract shell
 	c := migration.NewContract(t, d, name, migration.ContractOptions{})
 
-	migration.SkipUnsupportedVersions(t, c)
-
 	// read previous values using contract API
 	readTotalSupply := func() int64 {
 		n, err := c.Call(t, "totalSupply").TryInteger()

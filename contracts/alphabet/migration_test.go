@@ -27,8 +27,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		SourceCodeDir: filepath.Join("..", name),
 	})
 
-	migration.SkipUnsupportedVersions(t, c)
-
 	// read previous values using contract API
 	readName := func() string {
 		b, err := c.Call(t, "name").TryBytes()
