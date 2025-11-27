@@ -106,6 +106,8 @@ const (
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
 
+	corsAttributeName = "CORS"
+
 	// nolint:unused
 	nnsDefaultTLD = "container"
 
@@ -771,9 +773,13 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 // GetInfo reads container by ID. If the container is missing, GetInfo throws
 // [cst.NotFoundError] exception.
 func GetInfo(id interop.Hash256) Info {
-	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{infoPrefix}, id...))
+	return getInfo(storage.GetReadOnlyContext(), id)
+}
+
+func getInfo(ctx storage.Context, id interop.Hash256) Info {
+	val := storage.Get(ctx, append([]byte{infoPrefix}, id...))
 	if val == nil {
-		if val = storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...)); val != nil {
+		if val = storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)); val != nil {
 			return fromBytes(val.([]byte))
 		}
 		panic(cst.NotFoundError)
@@ -2273,4 +2279,242 @@ func attributeFromBytes(b []byte) (Attribute, string) {
 	}
 
 	return res, ""
+}
+
+func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
+	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	vRaw := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AlphabetManagesAttributesKey)
+	if vRaw == nil || !vRaw.(bool) {
+		common.CheckOwnerWitness(userScriptHash)
+	} else {
+		common.CheckAlphabetWitness()
+	}
+}
+
+// SetAttribute sets container attribute. Not all container attributes can be changed
+// with SetAttribute. The supported list of attributes:
+// - CORS
+//
+// CORS attribute gets JSON encoded `[]CORSRule` as value.
+//
+// SetAttribute must have either owner or Alphabet witness.
+//
+// SessionToken is optional and should be a stable marshaled SessionToken structure from API.
+//
+// If container is missing, SetAttribute throws [cst.NotFoundError] exception.
+func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) {
+	if name == "" {
+		panic("name is empty")
+	}
+
+	if value == "" {
+		panic("value is empty")
+	}
+
+	var (
+		exists bool
+		ctx    = storage.GetContext()
+		info   = getInfo(ctx, cID)
+	)
+
+	checkAttributeSigner(ctx, info.Owner)
+
+	switch name {
+	case corsAttributeName:
+		validateCORSAttribute(value)
+	default:
+		panic("attribute is immutable")
+	}
+
+	for i, attr := range info.Attributes {
+		if attr.Key == name {
+			exists = true
+			info.Attributes[i].Value = value
+			break
+		}
+	}
+
+	if !exists {
+		info.Attributes = append(info.Attributes, Attribute{
+			Key:   name,
+			Value: value,
+		})
+	}
+
+	cnrBytes := toBytes(info)
+
+	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
+}
+
+func validateCORSAttribute(payload string) {
+	var (
+		list = std.JSONDeserialize([]byte(payload)).([]map[string]any)
+	)
+
+	for i, item := range list {
+		if err := validateCORSRule(item); err != "" {
+			panic("invalid rule #" + std.Itoa10(i) + ": " + err)
+		}
+	}
+}
+
+func validateCORSRule(rule map[string]any) string {
+	if len(rule) == 0 {
+		return "empty rule"
+	}
+
+	allowedMethods, ok := rule["AllowedMethods"]
+	if !ok {
+		return "AllowedMethods must be defined"
+	}
+	if err := validateCORSAllowedMethods(allowedMethods.([]any)); err != "" {
+		return err
+	}
+
+	allowedOrigins, ok := rule["AllowedOrigins"]
+	if !ok {
+		return "AllowedOrigins must be defined"
+	}
+	if err := validateCORSAllowedOrigins(allowedOrigins.([]any)); err != "" {
+		return err
+	}
+
+	allowedHeaders, ok := rule["AllowedHeaders"]
+	if !ok {
+		return "AllowedHeaders must be defined"
+	}
+	if err := validateCORSAllowedHeaders(allowedHeaders.([]any)); err != "" {
+		return err
+	}
+
+	exposeHeaders, ok := rule["ExposeHeaders"]
+	if !ok {
+		return "ExposeHeaders must be defined"
+	}
+	if err := validateCORSExposeHeaders(exposeHeaders.([]any)); err != "" {
+		return err
+	}
+
+	if maxAgeSeconds := rule["MaxAgeSeconds"].(int64); maxAgeSeconds < 0 {
+		return "MaxAgeSeconds must be >= 0"
+	}
+
+	return ""
+}
+
+func validateCORSAllowedMethods(items []any) string {
+	if len(items) == 0 {
+		return "AllowedMethods is empty"
+	}
+
+	for i, method := range items {
+		switch method {
+		case "GET", "PUT", "POST", "DELETE", "HEAD":
+			continue
+		case "":
+			return "empty method #" + std.Itoa10(i)
+		default:
+			return "invalid method " + method.(string)
+		}
+	}
+
+	return ""
+}
+
+func validateCORSAllowedOrigins(items []any) string {
+	if len(items) == 0 {
+		return "AllowedOrigins is empty"
+	}
+
+	for i, origin := range items {
+		o := origin.(string)
+		if o == "" {
+			return "empty origin #" + std.Itoa10(i)
+		}
+
+		chunks := std.StringSplit(o, `*`)
+		if len(chunks) > 2 {
+			return "invalid origin #" + std.Itoa10(i) + ": must contain no more than one *"
+		}
+	}
+
+	return ""
+}
+
+func validateCORSAllowedHeaders(items []any) string {
+	if len(items) == 0 {
+		return "AllowedHeaders is empty"
+	}
+
+	for i, header := range items {
+		h := header.(string)
+		if h == "" {
+			return "empty allowed header #" + std.Itoa10(i)
+		}
+
+		chunks := std.StringSplit(h, `*`)
+		if len(chunks) > 2 {
+			return "invalid allow header #" + std.Itoa10(i) + ": must contain no more than one *"
+		}
+	}
+
+	return ""
+}
+
+func validateCORSExposeHeaders(items []any) string {
+	for i, header := range items {
+		h := header.(string)
+		if h == "" {
+			return "empty expose header " + std.Itoa10(i)
+		}
+	}
+
+	return ""
+}
+
+// RemoveAttribute removes container attribute. Not all container attributes can be removed
+// with RemoveAttribute. The supported list of attributes:
+// - CORS
+//
+// RemoveAttribute must have either owner or Alphabet witness.
+//
+// If container is missing, RemoveAttribute throws [cst.NotFoundError] exception.
+func RemoveAttribute(cID interop.Hash256, name string) {
+	if name == "" {
+		panic("name is empty")
+	}
+
+	var (
+		index = -1
+		ctx   = storage.GetContext()
+		info  = getInfo(ctx, cID)
+	)
+
+	if !runtime.CheckWitness(info.Owner) && !runtime.CheckWitness(common.AlphabetAddress()) {
+		panic("alphabet and owner witness check failed")
+	}
+
+	switch name {
+	case corsAttributeName:
+	default:
+		panic("attribute is immutable")
+	}
+
+	for i, attr := range info.Attributes {
+		if attr.Key == name {
+			index = i
+			break
+		}
+	}
+
+	if index == -1 {
+		return
+	}
+
+	util.Remove(info.Attributes, index)
+	cnrBytes := toBytes(info)
+
+	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 }

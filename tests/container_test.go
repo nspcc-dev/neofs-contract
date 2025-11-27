@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -51,6 +52,15 @@ const (
 	containerAliasFee = 0_0050_0000
 	epochDuration     = 100 // in seconds
 )
+
+// CORSRule describes one rule for the container’s CORS attribute. It is the same as in contract.
+type CORSRule struct {
+	AllowedMethods []string
+	AllowedOrigins []string
+	AllowedHeaders []string
+	ExposeHeaders  []string
+	MaxAgeSeconds  int64
+}
 
 func deployContainerContract(t *testing.T, e *neotest.Executor, addrNetmap, addrBalance, addrNNS *util.Uint160) util.Uint160 {
 	args := make([]any, 6)
@@ -2923,4 +2933,441 @@ func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr co
 	require.NoError(t, err)
 	require.IsType(t, []stackitem.Item(nil), invRes.Value())
 	assertEqualItemArray(t, containerToStructFields(cnr), invRes.Value().([]stackitem.Item))
+}
+
+func TestSetAttribute(t *testing.T) {
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 200_0000_0000)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr := user.NewFromScriptHash(ownerAcc)
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerAddr)
+
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	inv := exec.NewInvoker(containerContract.Hash, owner)
+
+	t.Run("invalid container id", func(t *testing.T) {
+		var rules []CORSRule
+
+		pl, err := json.Marshal(rules)
+		require.NoError(t, err)
+
+		inv.InvokeFail(t, "container does not exist", "setAttribute", []byte{1, 2, 3}, "CORS", pl, "")
+	})
+
+	t.Run("create container", func(t *testing.T) {
+		anyValidInvocScript := randomBytes(10)
+		anyValidVerifScript := randomBytes(10)
+		anyValidSessionToken := randomBytes(10)
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("update not whitelisted", func(t *testing.T) {
+		inv.InvokeFail(t, "attribute is immutable", "setAttribute", cID[:], "my-attribute-123", "attribute-value", "")
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		inv.InvokeFail(t, "name is empty", "setAttribute", cID[:], "", "attribute-value", "")
+	})
+
+	t.Run("empty value", func(t *testing.T) {
+		inv.InvokeFail(t, "value is empty", "setAttribute", cID[:], "my-attribute-123", "", "")
+	})
+
+	t.Run("store and remove CORS", func(t *testing.T) {
+		var rules = []CORSRule{
+			{
+				AllowedMethods: []string{"GET"},
+				AllowedOrigins: []string{"*"},
+				AllowedHeaders: []string{"*"},
+				ExposeHeaders:  []string{},
+			},
+		}
+
+		pl, err := json.Marshal(rules)
+		require.NoError(t, err)
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+		cnr.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr)
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
+		assertGetInfo(t, inv, cID, cnr2)
+	})
+}
+
+func TestRemoveAttribute(t *testing.T) {
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 200_0000_0000)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr := user.NewFromScriptHash(ownerAcc)
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerAddr)
+
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	inv := exec.NewInvoker(containerContract.Hash, owner)
+
+	t.Run("invalid container id", func(t *testing.T) {
+		inv.InvokeFail(t, "container does not exist", "removeAttribute", []byte{1, 2, 3}, "CORS")
+	})
+
+	t.Run("create container", func(t *testing.T) {
+		anyValidInvocScript := randomBytes(10)
+		anyValidVerifScript := randomBytes(10)
+		anyValidSessionToken := randomBytes(10)
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("invalid name", func(t *testing.T) {
+		inv.InvokeFail(t, "name is empty", "removeAttribute", cID[:], "")
+	})
+
+	t.Run("attribute is immutable", func(t *testing.T) {
+		inv.InvokeFail(t, "attribute is immutable", "removeAttribute", cID[:], "random-name")
+	})
+
+	t.Run("store and remove CORS", func(t *testing.T) {
+		var rules = []CORSRule{
+			{
+				AllowedMethods: []string{"GET"},
+				AllowedOrigins: []string{"*"},
+				AllowedHeaders: []string{"*"},
+				ExposeHeaders:  []string{},
+			},
+		}
+
+		pl, err := json.Marshal(rules)
+		require.NoError(t, err)
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+		cnr.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr)
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
+		assertGetInfo(t, inv, cID, cnr2)
+	})
+}
+
+func TestSetCORSAttribute(t *testing.T) {
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 200_0000_0000)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr := user.NewFromScriptHash(ownerAcc)
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerAddr)
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	inv := exec.NewInvoker(containerContract.Hash, owner)
+
+	t.Run("create container", func(t *testing.T) {
+		anyValidInvocScript := randomBytes(10)
+		anyValidVerifScript := randomBytes(10)
+		anyValidSessionToken := randomBytes(10)
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("allowedMethods", func(t *testing.T) {
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			inv.InvokeFail(t, "invalid rule #0: empty rule", "setAttribute", cID[:], "CORS", `[{}]`, "")
+		})
+
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			inv.InvokeFail(t, "AllowedMethods must be defined", "setAttribute", cID[:], "CORS", `[{"field":[]}]`, "")
+		})
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			inv.InvokeFail(t, "AllowedOrigins must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"]}]`, "")
+		})
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			inv.InvokeFail(t, "AllowedHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]`, "")
+		})
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			inv.InvokeFail(t, "ExposeHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"],"AllowedHeaders":["*"]}]`, "")
+		})
+
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "AllowedMethods is empty", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("invalid allowed method", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"METHOD"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: invalid method METHOD", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("empty allowed method", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET", ""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: empty method #1", "setAttribute", cID[:], "CORS", pl, "")
+		})
+	})
+
+	t.Run("allowedOrigins", func(t *testing.T) {
+		t.Run("empty origins list", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "AllowedOrigins is empty", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("empty origins", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: empty origin", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("to many *", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"**"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: invalid origin #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl, "")
+		})
+	})
+
+	t.Run("allowedHeaders", func(t *testing.T) {
+		t.Run("empty headers list", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "AllowedHeaders is empty", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("empty header", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl, "")
+		})
+
+		t.Run("to many *", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"**"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: invalid allow header #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl, "")
+		})
+	})
+
+	t.Run("exposeHeaders", func(t *testing.T) {
+		t.Run("empty header", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl, "")
+		})
+	})
+
+	t.Run("maxAgeSeconds", func(t *testing.T) {
+		t.Run("negative", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+					MaxAgeSeconds:  -21,
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "MaxAgeSeconds must be >= 0", "setAttribute", cID[:], "CORS", pl, "")
+		})
+	})
+
+	t.Run("check valid CORS", func(t *testing.T) {
+		t.Run("store CORS", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, cID, cnr)
+		})
+
+		t.Run("update CORS", func(t *testing.T) {
+			var rules = []CORSRule{
+				{
+					AllowedMethods: []string{"GET", "POST"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, cID, cnr)
+		})
+
+		t.Run("clean CORS", func(t *testing.T) {
+			var rules []CORSRule
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, cID, cnr)
+		})
+	})
 }
