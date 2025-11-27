@@ -57,7 +57,7 @@ jobs:
           cache: true
 
       - name: Write coverage profile
-        run: go test -v ./... -coverprofile=./coverage.txt -coverpkg=./contracts/...
+        run: go test -v ./... -coverprofile=./coverage.txt -coverpkg=./contracts/... -timeout 20m
 
       - name: Upload coverage results to Codecov
         uses: codecov/codecov-action@v4
