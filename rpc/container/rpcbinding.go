@@ -667,6 +667,28 @@ func (c *Contract) RemoveUnsigned(id []byte, invocScript []byte, verifScript []b
 	return c.actor.MakeUnsignedCall(c.hash, "remove", nil, id, invocScript, verifScript, sessionToken)
 }
 
+// SetCORSAttribute creates a transaction invoking `setCORSAttribute` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetCORSAttribute(cID util.Uint256, payload []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setCORSAttribute", cID, payload)
+}
+
+// SetCORSAttributeTransaction creates a transaction invoking `setCORSAttribute` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetCORSAttributeTransaction(cID util.Uint256, payload []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setCORSAttribute", cID, payload)
+}
+
+// SetCORSAttributeUnsigned creates a transaction invoking `setCORSAttribute` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetCORSAttributeUnsigned(cID util.Uint256, payload []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setCORSAttribute", nil, cID, payload)
+}
+
 // SetEACL creates a transaction invoking `setEACL` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.

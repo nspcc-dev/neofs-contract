@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -30,6 +31,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
 	"github.com/nspcc-dev/neofs-contract/common"
+	containercontract "github.com/nspcc-dev/neofs-contract/contracts/container"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	containerrpc "github.com/nspcc-dev/neofs-contract/rpc/container"
@@ -2923,4 +2925,275 @@ func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr co
 	require.NoError(t, err)
 	require.IsType(t, []stackitem.Item(nil), invRes.Value())
 	assertEqualItemArray(t, containerToStructFields(cnr), invRes.Value().([]stackitem.Item))
+}
+
+func TestSetCORSAttribute(t *testing.T) {
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+	inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+
+	cnr := containertest.Container()
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+
+	t.Run("invalid container id", func(t *testing.T) {
+		var rules []containercontract.CORSRule
+
+		pl, err := json.Marshal(rules)
+		require.NoError(t, err)
+
+		inv.InvokeFail(t, "invalid container id: length: 3", "setCORSAttribute", []byte{1, 2, 3}, pl)
+	})
+
+	t.Run("allowedMethods", func(t *testing.T) {
+		t.Run("empty allowed methods list", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "allowedMethods is empty", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("invalid allowed method", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"METHOD"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid method. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("empty allowed method", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "invalid method. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+	})
+
+	t.Run("allowedOrigins", func(t *testing.T) {
+		t.Run("empty origins list", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "allowedOrigins is empty", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("empty origins", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "empty origin. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("to many *", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"**"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "Must contain only one *. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+	})
+
+	t.Run("allowedHeaders", func(t *testing.T) {
+		t.Run("empty headers list", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "allowedHeaders is empty", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("empty header", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "empty header. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+
+		t.Run("to many *", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"**"},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "Must contain only one *. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+	})
+
+	t.Run("exposeHeaders", func(t *testing.T) {
+		t.Run("empty header", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{""},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "empty header. Rule:0", "setCORSAttribute", cID[:], pl)
+		})
+	})
+
+	t.Run("maxAgeSeconds", func(t *testing.T) {
+		t.Run("negative", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+					MaxAgeSeconds:  -21,
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.InvokeFail(t, "max age seconds must be positive", "setCORSAttribute", cID[:], pl)
+		})
+	})
+
+	t.Run("check valid CORS", func(t *testing.T) {
+		owner := exec.NewAccount(t, 0)
+		ownerAcc := owner.ScriptHash()
+		ownerAddr := user.NewFromScriptHash(ownerAcc)
+		cnr = containertest.Container()
+		cnr.SetOwner(ownerAddr)
+		cnrBytes = cnr.Marshal()
+		id := cid.NewFromMarshalledContainer(cnrBytes)
+		anyValidInvocScript := randomBytes(10)
+		anyValidVerifScript := randomBytes(10)
+		anyValidSessionToken := randomBytes(10)
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		inv = exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, id, cnr)
+
+		t.Run("store CORS", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setCORSAttribute", id[:], pl)
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, id, cnr)
+		})
+
+		t.Run("update CORS", func(t *testing.T) {
+			var rules = []containercontract.CORSRule{
+				{
+					AllowedMethods: []string{"GET", "POST"},
+					AllowedOrigins: []string{"*"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{},
+				},
+			}
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setCORSAttribute", id[:], pl)
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, id, cnr)
+		})
+
+		t.Run("clean CORS", func(t *testing.T) {
+			var rules []containercontract.CORSRule
+
+			pl, err := json.Marshal(rules)
+			require.NoError(t, err)
+
+			inv.Invoke(t, nil, "setCORSAttribute", id[:], pl)
+
+			cnr.SetAttribute("CORS", string(pl))
+
+			assertGetInfo(t, inv, id, cnr)
+		})
+	})
 }

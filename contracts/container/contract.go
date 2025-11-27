@@ -96,6 +96,15 @@ type (
 		SoftLimit int
 		HardLimit int
 	}
+
+	// CORSRule describes one rule for the container’s CORS attribute.
+	CORSRule struct {
+		AllowedMethods []string `json:"allowedMethods"`
+		AllowedOrigins []string `json:"allowedOrigins"`
+		AllowedHeaders []string `json:"allowedHeaders"`
+		ExposeHeaders  []string `json:"exposeHeaders"`
+		MaxAgeSeconds  int64    `json:"maxAgeSeconds"`
+	}
 )
 
 const (
@@ -105,6 +114,8 @@ const (
 	nnsContractKey     = "nnsScriptHash"
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
+
+	corsAttributeName = "CORS"
 
 	// nolint:unused
 	nnsDefaultTLD = "container"
@@ -2258,4 +2269,128 @@ func attributeFromBytes(b []byte) (Attribute, string) {
 	}
 
 	return res, ""
+}
+
+// SetCORSAttribute sets container CORS attribute.
+// Pass an empty list to empty the attribute.
+func SetCORSAttribute(cID interop.Hash256, payload []byte) {
+	if len(cID) != interop.Hash256Len {
+		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
+	}
+
+	var (
+		obj  = std.JSONDeserialize(payload)
+		list = obj.([]any)
+	)
+
+	for i, item := range list {
+		validateCORSRule(i, item.(map[string]any))
+	}
+
+	var (
+		info   = GetInfo(cID)
+		exists bool
+	)
+
+	for i, attr := range info.Attributes {
+		if attr.Key == corsAttributeName {
+			exists = true
+			info.Attributes[i].Value = string(payload)
+			break
+		}
+	}
+
+	if !exists {
+		info.Attributes = append(info.Attributes, Attribute{
+			Key:   corsAttributeName,
+			Value: string(payload),
+		})
+	}
+
+	storage.Put(storage.GetContext(), append([]byte{infoPrefix}, cID...), std.Serialize(info))
+}
+
+func validateCORSRule(index int, rule map[string]any) {
+	if rule == nil {
+		return
+	}
+
+	validateCORSAllowedMethods(index, rule["allowedMethods"].([]any))
+	validateCORSAllowedOrigins(index, rule["allowedOrigins"].([]any))
+	validateCORSAllowedHeaders(index, rule["allowedHeaders"].([]any))
+	validateCORSExposeHeaders(index, rule["exposeHeaders"].([]any))
+
+	if maxAgeSeconds := rule["maxAgeSeconds"].(int64); maxAgeSeconds < 0 {
+		panic("max age seconds must be positive")
+	}
+}
+
+func validateCORSAllowedMethods(index int, items []any) {
+	if len(items) == 0 {
+		panic("allowedMethods is empty")
+	}
+
+	for _, method := range items {
+		switch method {
+		case "GET":
+			continue
+		case "PUT":
+			continue
+		case "POST":
+			continue
+		case "DELETE":
+			continue
+		case "HEAD":
+			continue
+		case "":
+			fallthrough
+		default:
+			panic("invalid method. Rule:" + std.Itoa10(index))
+		}
+	}
+}
+
+func validateCORSAllowedOrigins(index int, items []any) {
+	if len(items) == 0 {
+		panic("allowedOrigins is empty")
+	}
+
+	for _, origin := range items {
+		o := origin.(string)
+		if o == "" {
+			panic("empty origin. Rule:" + std.Itoa10(index))
+		}
+
+		chunks := std.StringSplit(o, `*`)
+		if len(chunks) > 2 {
+			panic("Must contain only one *. Rule:" + std.Itoa10(index))
+		}
+	}
+}
+
+func validateCORSAllowedHeaders(index int, items []any) {
+	if len(items) == 0 {
+		panic("allowedHeaders is empty")
+	}
+
+	for _, header := range items {
+		h := header.(string)
+		if h == "" {
+			panic("empty header. Rule:" + std.Itoa10(index))
+		}
+
+		chunks := std.StringSplit(h, `*`)
+		if len(chunks) > 2 {
+			panic("Must contain only one *. Rule:" + std.Itoa10(index))
+		}
+	}
+}
+
+func validateCORSExposeHeaders(index int, items []any) {
+	for _, header := range items {
+		h := header.(string)
+		if h == "" {
+			panic("empty header. Rule:" + std.Itoa10(index))
+		}
+	}
 }
