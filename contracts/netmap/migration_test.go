@@ -107,7 +107,9 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return len(sa) > 0 &&
 			// IR fee is dropped in 0.24.0.
 			(bytes.Equal(sa[0].Value().([]byte), []byte("InnerRingCandidateFee")) ||
-				// NodeV2 flag is gone with 0.26.0.
+				// NodeV2/Maintenance/Audit flags are gone with 0.26.0.
+				bytes.Equal(sa[0].Value().([]byte), []byte("AuditFee")) ||
+				bytes.Equal(sa[0].Value().([]byte), []byte("MaintenanceModeAllowed")) ||
 				bytes.Equal(sa[0].Value().([]byte), []byte("UseNodeV2")))
 	})
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")

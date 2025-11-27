@@ -105,12 +105,16 @@ func _deploy(data any, isUpdate bool) {
 
 		if version < 26_000 {
 			const (
+				obsoleteAuditFeeKey          = "AuditFee"
 				obsoleteCandidatePrefix      = "candidate"
+				obsoleteMaintenanceKey       = "MaintenanceModeAllowed"
 				obsoleteNodeV2Key            = "UseNodeV2"
 				obsoleteSnapshotKeyPrefix    = "snapshot_"
 				obsoleteSnapshotCurrentIDKey = "snapshotCurrent"
 			)
 			storage.Delete(ctx, append(configPrefix, []byte(obsoleteNodeV2Key)...))
+			storage.Delete(ctx, append(configPrefix, []byte(obsoleteAuditFeeKey)...))
+			storage.Delete(ctx, append(configPrefix, []byte(obsoleteMaintenanceKey)...))
 
 			it := storage.Find(ctx, obsoleteSnapshotKeyPrefix, storage.KeysOnly)
 			for iterator.Next(it) {
