@@ -11,6 +11,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -256,20 +257,20 @@ func TestNNSGetAllRecords(t *testing.T) {
 	iter := s.Pop().Value().(*storage.Iterator)
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.A)),
-		stackitem.Make("1.2.3.4"), stackitem.Make(new(big.Int)),
+		stackitem.Make("1.2.3.4"), stackitem.Make("testdomain.com"),
+		stackitem.Make(int64(recordtype.A)), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.SOA)),
-		stackitem.NewBuffer([]byte(expSOA)), stackitem.Make(new(big.Int)),
+		stackitem.NewBuffer([]byte(expSOA)), stackitem.Make("testdomain.com"),
+		stackitem.Make(int64(recordtype.SOA)), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
 	require.True(t, iter.Next())
 	require.Equal(t, stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make("testdomain.com"), stackitem.Make(int64(recordtype.TXT)),
-		stackitem.Make("first TXT record"), stackitem.Make(new(big.Int)),
+		stackitem.Make("first TXT record"), stackitem.Make("testdomain.com"),
+		stackitem.Make(int64(recordtype.TXT)), stackitem.Make(new(big.Int)),
 	}), iter.Value())
 
 	require.False(t, iter.Next())
@@ -650,4 +651,238 @@ func TestNNSAddRecord(t *testing.T) {
 			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
 		}
 	}
+}
+
+func TestNNSAddrRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	numAddresses := 2025
+	addresses := make([]string, numAddresses)
+	addrMap := make(map[util.Uint160]int)
+
+	for i := range numAddresses {
+		addresses[i] = "addr_" + strconv.Itoa(i)
+		c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.Addr), addresses[i])
+		addrMap[hash.RipeMD160([]byte(addresses[i]))] = 0
+	}
+
+	t.Run("check all addresses exist", func(t *testing.T) {
+		for i := range numAddresses {
+			c.Invoke(t, true, "hasAddrRecord", "testdomain.com", addresses[i])
+		}
+	})
+
+	t.Run("getRecordsIterator", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "getRecordsIterator", "testdomain.com", int64(recordtype.Addr))
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+		count := 0
+
+		for iter.Next() {
+			resHash := util.Uint160(iter.Value().Value().([]byte))
+			require.Equal(t, 20, len(resHash), "hash should be 20 bytes")
+			if _, ok := addrMap[resHash]; !ok {
+				t.Fatalf("unexpected address hash: %x", resHash)
+			}
+			addrMap[resHash] += 1
+			count++
+		}
+
+		for _, occurrences := range addrMap {
+			require.Equal(t, 1, occurrences)
+		}
+
+		require.Equal(t, numAddresses, count)
+	})
+
+	t.Run("resolveIterator", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "resolveIterator", "testdomain.com", int64(recordtype.Addr))
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+
+		for iter.Next() {
+			resHash := util.Uint160(iter.Value().Value().([]byte))
+			if _, ok := addrMap[resHash]; !ok {
+				t.Fatalf("unexpected address in resolve result: %s", resHash)
+			}
+		}
+	})
+
+	t.Run("with cnname redirection", func(t *testing.T) {
+		c.Invoke(t, true, "register",
+			"source.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, true, "register",
+			"target.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+		c.Invoke(t, stackitem.Null{}, "addRecord", "source.com", int64(recordtype.CNAME), "target.com")
+
+		c.Invoke(t, stackitem.Null{}, "addRecord", "target.com", int64(recordtype.Addr), addresses[0])
+
+		t.Run("check addr record on target", func(t *testing.T) {
+			c.Invoke(t, true, "hasAddrRecord", "target.com", addresses[0])
+		})
+
+		t.Run("CNAME doesn't redirect for HasAddrRecord", func(t *testing.T) {
+			c.Invoke(t, false, "hasAddrRecord", "source.com", addresses[0])
+		})
+	})
+
+	t.Run("check non-existing addr record", func(t *testing.T) {
+		c.Invoke(t, false, "hasAddrRecord", "testdomain.com", "NXV7ZhHiyM1aHXwpVsRZC6BwNFP2jghXAq")
+	})
+
+	t.Run("duplicate addr record should fail", func(t *testing.T) {
+		c.InvokeFail(t, "record already exists", "addRecord", "testdomain.com", int64(recordtype.Addr), addresses[0])
+	})
+
+	t.Run("empty addr should fail", func(t *testing.T) {
+		c.InvokeFail(t, "invalid record data", "addRecord", "testdomain.com", int64(recordtype.Addr), "")
+	})
+
+	t.Run("setRecord should fail for Addr type", func(t *testing.T) {
+		c.InvokeFail(t, "unsupported for Addr type", "setRecord", "testdomain.com", int64(recordtype.Addr), byte(0), "someaddr")
+	})
+
+	t.Run("TLD should fail", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasAddrRecord", "com", addresses[0])
+	})
+
+	t.Run("non-existent domain should fail", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasAddrRecord", "nonexistent.com", addresses[0])
+	})
+
+	t.Run("delete all addr records", func(t *testing.T) {
+		c.Invoke(t, stackitem.Null{}, "deleteRecords", "testdomain.com", int64(recordtype.Addr))
+		for i := range numAddresses {
+			c.Invoke(t, false, "hasAddrRecord", "testdomain.com", addresses[i])
+		}
+	})
+}
+
+func TestNNSGetRecordsIterator(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"itertest.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	num := 10
+	res := make([]stackitem.Item, num)
+	for i := range num {
+		value := "value_" + strconv.Itoa(i)
+		c.Invoke(t, stackitem.Null{}, "addRecord", "itertest.com", int64(recordtype.TXT), value)
+		res[i] = stackitem.Make(value)
+	}
+
+	t.Run("GetRecordsIterator for TXT", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "getRecordsIterator", "itertest.com", int64(recordtype.TXT))
+		require.NoError(t, err)
+
+		i := 0
+		iter := s.Pop().Value().(*storage.Iterator)
+		for iter.Next() {
+			item := iter.Value()
+			require.Equal(t, res[i], item)
+			i++
+		}
+	})
+
+	t.Run("GetRecords still works for backward compatibility", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "getRecords", "itertest.com", int64(recordtype.TXT))
+		require.NoError(t, err)
+
+		arr := s.Pop().Value().([]stackitem.Item)
+		require.Equal(t, num, len(arr))
+		require.Equal(t, res, arr)
+	})
+}
+
+func TestNNSResolveIterator(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"resolve.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	ipMap := map[string]struct{}{"1.2.3.4": {}, "5.6.7.8": {}}
+	for ip := range ipMap {
+		c.Invoke(t, stackitem.Null{}, "addRecord", "resolve.com", int64(recordtype.A), ip)
+	}
+
+	t.Run("ResolveIterator for A records", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "resolveIterator", "resolve.com", int64(recordtype.A))
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+		count := 0
+
+		for iter.Next() {
+			item := iter.Value().Value().([]uint8)
+			if _, ok := ipMap[string(item)]; !ok {
+				t.Fatalf("unexpected IP address: %s", item)
+			}
+			count++
+		}
+		require.Equal(t, 2, count)
+	})
+
+	t.Run("Resolve still works for backward compatibility", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "resolve", "resolve.com", int64(recordtype.A))
+		require.NoError(t, err)
+		arr := s.Pop().Value().([]stackitem.Item)
+		require.Equal(t, 2, len(arr))
+
+		for _, item := range arr {
+			ip := item.Value().([]uint8)
+			if _, ok := ipMap[string(ip)]; !ok {
+				t.Fatalf("unexpected IP address: %s", ip)
+			}
+		}
+	})
+
+	t.Run("TLD should fail", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "resolveIterator", "com", int64(recordtype.A))
+	})
+
+	t.Run("CNAME redirection with ResolveIterator", func(t *testing.T) {
+		c.Invoke(t, true, "register",
+			"cname-source.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, true, "register",
+			"cname-target.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+		c.Invoke(t, stackitem.Null{}, "addRecord", "cname-source.com", int64(recordtype.CNAME), "cname-target.com")
+
+		for ip := range ipMap {
+			c.Invoke(t, stackitem.Null{}, "addRecord", "cname-target.com", int64(recordtype.A), ip)
+		}
+
+		s, err := c.TestInvoke(t, "resolveIterator", "cname-source.com", int64(recordtype.A))
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+		count := 0
+
+		for iter.Next() {
+			item := iter.Value().Value().([]uint8)
+			if _, ok := ipMap[string(item)]; !ok {
+				t.Fatalf("unexpected IP address after CNAME resolution: %s", item)
+			}
+			count++
+		}
+
+		require.Equal(t, 2, count)
+	})
 }

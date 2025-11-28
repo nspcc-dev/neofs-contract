@@ -78,9 +78,9 @@ const (
 
 // RecordState is a type that registered entities are saved to.
 type RecordState struct {
+	Data string
 	Name string
 	Type recordtype.Type
-	Data string
 	ID   byte
 }
 
@@ -503,6 +503,9 @@ func SetAdmin(name string, admin interop.Hash160) {
 // SetRecord updates existing domain record with the specified type and ID.
 // The name MUST NOT be a TLD.
 func SetRecord(name string, typ recordtype.Type, id byte, data string) {
+	if typ == recordtype.Addr {
+		panic("unsupported for Addr type")
+	}
 	ctx := storage.GetContext()
 	tokenID := checkRecord(ctx, name, typ, data)
 	recordKey := getIdRecordKey(tokenID, name, typ, id)
@@ -528,6 +531,8 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 		ok = len(data) <= maxTXTRecordLength
 	case recordtype.AAAA:
 		ok = checkIPv6(data)
+	case recordtype.Addr:
+		ok = len(data) > 0
 	default:
 		panic("unsupported record type")
 	}
@@ -550,6 +555,17 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 func AddRecord(name string, typ recordtype.Type, data string) {
 	ctx := storage.GetContext()
 	tokenID := checkRecord(ctx, name, typ, data)
+
+	if typ == recordtype.Addr {
+		key := getAddrRecordKey(tokenID, name, data)
+		if storage.Get(ctx, key) != nil {
+			panic("record already exists")
+		}
+		storage.Put(ctx, key, []byte{})
+		updateSoaSerial(ctx, tokenID)
+		return
+	}
+
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
 	var id byte
 	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
@@ -587,6 +603,22 @@ func GetRecords(name string, typ recordtype.Type) []string {
 	return getRecordsByType(ctx, tokenID, name, typ)
 }
 
+// GetRecordsIterator returns an iterator over domain records of the specified type.
+// This method should be used when the number of records can exceed context limits.
+// The name MUST NOT be a TLD.
+func GetRecordsIterator(name string, typ recordtype.Type) iterator.Iterator {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+
+	return getRecordsByTypeIterator(ctx, tokenID, name, typ)
+}
+
 // DeleteRecords removes domain records with the specified type. The name MUST
 // NOT be a TLD.
 func DeleteRecords(name string, typ recordtype.Type) {
@@ -621,8 +653,26 @@ func Resolve(name string, typ recordtype.Type) []string {
 		panic("token not found")
 	}
 
+	if typ == recordtype.Addr {
+		panic("use ResolveIterator for Addr type")
+	}
+
 	ctx := storage.GetReadOnlyContext()
 	return resolve(ctx, []string{}, name, typ, 2)
+}
+
+// ResolveIterator resolves given name and returns an iterator over records
+// of the specified type (not more than three redirects are allowed).
+// This method should be used when the number of records can exceed context limit.
+// The name MUST NOT be a TLD.
+func ResolveIterator(name string, typ recordtype.Type) iterator.Iterator {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	return resolveIterator(ctx, name, typ, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
@@ -655,6 +705,28 @@ func HasTXTRecord(name string, data string) bool {
 		if r.Type == recordtype.TXT && len(r.Data) == targetLen && util.Equals(r.Data, data) {
 			return true
 		}
+	}
+	return false
+}
+
+// HasAddrRecord checks if a record of the Addr type exists
+// for the given domain and address. The name MUST NOT be a TLD.
+// Addr records are stored as Ripemd160 hashes in keys (20 bytes constant)
+// with blank values for efficient O(1) existence checks of large address sets.
+func HasAddrRecord(name string, address string) bool {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+
+	key := getAddrRecordKey(tokenID, name, address)
+	v := storage.Get(ctx, key)
+	if v != nil {
+		return true
 	}
 	return false
 }
@@ -772,6 +844,23 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ reco
 		}
 	}
 	return result
+}
+
+// getRecordsByTypeIterator returns an iterator over domain records of the specified type.
+func getRecordsByTypeIterator(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type) iterator.Iterator {
+	recordsKey := getRecordsKeyByType(tokenId, name, typ)
+	if typ == recordtype.Addr {
+		return storage.Find(ctx, recordsKey, storage.KeysOnly|storage.RemovePrefix)
+	}
+	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues|storage.PickField0)
+}
+
+// getAddrRecordKey returns the storage key for an Addr record.
+// Address is hashed with Ripemd160 to ensure constant 20-byte key length.
+func getAddrRecordKey(tokenId []byte, name string, address string) []byte {
+	recordKey := getRecordsKeyByType(tokenId, name, recordtype.Addr)
+	addressHash := getTokenKey([]byte(address))
+	return append(recordKey, addressHash...)
 }
 
 // storeRecord puts record to storage and performs no additional checks.
@@ -1080,6 +1169,39 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 	}
 
 	return resolve(ctx, res, cname, typ, redirect-1)
+}
+
+// resolveIterator resolves the provided name using record with the specified type
+// and returns an iterator over the results. This handles CNAME redirection and
+// follows up to the specified number of redirects.
+func resolveIterator(ctx storage.Context, name string, typ recordtype.Type, redirect int) iterator.Iterator {
+	if redirect < 0 {
+		panic("invalid redirect")
+	}
+	if len(name) == 0 {
+		panic("invalid name")
+	}
+	if name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, nil)
+
+	// If we're not explicitly resolving CNAME and still can redirect,
+	// try to find CNAME directly using its prefix.
+	if typ != recordtype.CNAME && redirect > 0 {
+		cnameKey := getRecordsKeyByType(tokenID, name, recordtype.CNAME)
+		cnameIter := storage.Find(ctx, cnameKey, storage.ValuesOnly|storage.DeserializeValues)
+		if iterator.Next(cnameIter) {
+			r := iterator.Value(cnameIter).(RecordState)
+			if r.Data != "" {
+				return resolveIterator(ctx, r.Data, typ, redirect-1)
+			}
+		}
+	}
+
+	return getRecordsByTypeIterator(ctx, tokenID, name, typ)
 }
 
 // getAllRecords returns iterator over the set of records corresponded with the

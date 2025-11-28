@@ -20,3 +20,10 @@ const (
 	// AAAA represents IPv6 address record type.
 	AAAA Type = 28
 )
+
+// Custom record types for NeoFS
+const (
+	// Addr represents address record type (stored in key, not value).
+	// Used for efficient existence checks of large address sets.
+	Addr Type = 100
+)

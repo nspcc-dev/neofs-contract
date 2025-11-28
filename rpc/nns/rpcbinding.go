@@ -192,6 +192,66 @@ func (c *Contract) DeleteRecordsUnsigned(name string, typ *big.Int) (*transactio
 	return c.actor.MakeUnsignedCall(c.hash, "deleteRecords", nil, name, typ)
 }
 
+// GetRecordsIterator creates a transaction invoking `getRecordsIterator` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) GetRecordsIterator(name string, typ *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "getRecordsIterator", name, typ)
+}
+
+// GetRecordsIteratorTransaction creates a transaction invoking `getRecordsIterator` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) GetRecordsIteratorTransaction(name string, typ *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "getRecordsIterator", name, typ)
+}
+
+// GetRecordsIteratorUnsigned creates a transaction invoking `getRecordsIterator` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) GetRecordsIteratorUnsigned(name string, typ *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "getRecordsIterator", nil, name, typ)
+}
+
+func (c *Contract) scriptForHasAddrRecord(name string, address string) ([]byte, error) {
+	return smartcontract.CreateCallWithAssertScript(c.hash, "hasAddrRecord", name, address)
+}
+
+// HasAddrRecord creates a transaction invoking `hasAddrRecord` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) HasAddrRecord(name string, address string) (util.Uint256, uint32, error) {
+	script, err := c.scriptForHasAddrRecord(name, address)
+	if err != nil {
+		return util.Uint256{}, 0, err
+	}
+	return c.actor.SendRun(script)
+}
+
+// HasAddrRecordTransaction creates a transaction invoking `hasAddrRecord` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) HasAddrRecordTransaction(name string, address string) (*transaction.Transaction, error) {
+	script, err := c.scriptForHasAddrRecord(name, address)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeRun(script)
+}
+
+// HasAddrRecordUnsigned creates a transaction invoking `hasAddrRecord` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) HasAddrRecordUnsigned(name string, address string) (*transaction.Transaction, error) {
+	script, err := c.scriptForHasAddrRecord(name, address)
+	if err != nil {
+		return nil, err
+	}
+	return c.actor.MakeUnsignedRun(script, nil)
+}
+
 func (c *Contract) scriptForRegister(name string, owner util.Uint160, email string, refresh *big.Int, retry *big.Int, expire *big.Int, ttl *big.Int) ([]byte, error) {
 	return smartcontract.CreateCallWithAssertScript(c.hash, "register", name, owner, email, refresh, retry, expire, ttl)
 }
@@ -294,6 +354,28 @@ func (c *Contract) Renew2Transaction(name string) (*transaction.Transaction, err
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) Renew2Unsigned(name string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "renew", nil, name)
+}
+
+// ResolveIterator creates a transaction invoking `resolveIterator` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) ResolveIterator(name string, typ *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "resolveIterator", name, typ)
+}
+
+// ResolveIteratorTransaction creates a transaction invoking `resolveIterator` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) ResolveIteratorTransaction(name string, typ *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "resolveIterator", name, typ)
+}
+
+// ResolveIteratorUnsigned creates a transaction invoking `resolveIterator` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) ResolveIteratorUnsigned(name string, typ *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "resolveIterator", nil, name, typ)
 }
 
 // SetAdmin creates a transaction invoking `setAdmin` method of the contract.
