@@ -7,6 +7,7 @@ Changelog for NeoFS Contract
 - Structured containers to Container contract storage (#534)
 - `addStructs`, `createV2` and `getInfo` methods to Container contract (#534)
 - NEP-11 support by Container contract (#498)
+- New NNS record type `Neo` (#544)
 
 ### Changed
 

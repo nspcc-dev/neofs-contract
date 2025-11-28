@@ -11,6 +11,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -610,4 +611,149 @@ func TestNNSAddRecord(t *testing.T) {
 			c.Invoke(t, stackitem.Null{}, "addRecord", "testdomain.com", int64(recordtype.TXT), strconv.Itoa(i))
 		}
 	}
+}
+
+func TestNNSNeoRecord(t *testing.T) {
+	c := newNNSInvoker(t, true)
+
+	refresh, retry, expire, ttl := int64(101), int64(102), int64(103), int64(104)
+	c.Invoke(t, true, "register",
+		"testdomain.com", c.CommitteeHash,
+		"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+	numAddresses := 2025
+	addrMap := make(map[util.Uint160]int)
+	var firstAddr util.Uint160
+
+	for i := range numAddresses {
+		tmpAddr := hash.RipeMD160([]byte("addr_" + strconv.Itoa(i)))
+		if i == 0 {
+			firstAddr = tmpAddr
+		}
+		c.Invoke(t, stackitem.Null{}, "addNeoRecord", "testdomain.com", tmpAddr)
+		addrMap[tmpAddr] = 0
+	}
+
+	t.Run("addRecord fail", func(t *testing.T) {
+		c.InvokeFail(t, "use AddNeoRecord for Neo type", "addRecord", "testdomain.com", int64(recordtype.Neo), firstAddr)
+	})
+
+	t.Run("check all addresses exist", func(t *testing.T) {
+		for addr := range addrMap {
+			c.Invoke(t, true, "hasNeoRecord", "testdomain.com", addr)
+		}
+	})
+
+	t.Run("getNeoRecordsIterator", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "getNeoRecordsIterator", "testdomain.com")
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+		count := 0
+
+		for iter.Next() {
+			resHash := util.Uint160(iter.Value().Value().([]byte))
+			require.Equal(t, 20, len(resHash), "hash should be 20 bytes")
+			if _, ok := addrMap[resHash]; !ok {
+				t.Fatalf("unexpected address hash: %x", resHash)
+			}
+			addrMap[resHash] += 1
+			count++
+		}
+
+		for _, occurrences := range addrMap {
+			require.Equal(t, 1, occurrences)
+		}
+
+		require.Equal(t, numAddresses, count)
+	})
+
+	t.Run("resolveNeoIterator", func(t *testing.T) {
+		s, err := c.TestInvoke(t, "resolveNeoIterator", "testdomain.com")
+		require.NoError(t, err)
+
+		iter := s.Pop().Value().(*storage.Iterator)
+
+		for iter.Next() {
+			resHash := util.Uint160(iter.Value().Value().([]byte))
+			if _, ok := addrMap[resHash]; !ok {
+				t.Fatalf("unexpected address in resolve result: %s", resHash)
+			}
+		}
+	})
+
+	t.Run("with cnname redirection", func(t *testing.T) {
+		c.Invoke(t, true, "register",
+			"source.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+		c.Invoke(t, true, "register",
+			"target.com", c.CommitteeHash,
+			"myemail@nspcc.ru", refresh, retry, expire, ttl)
+
+		c.Invoke(t, stackitem.Null{}, "addRecord", "source.com", int64(recordtype.CNAME), "target.com")
+
+		c.Invoke(t, stackitem.Null{}, "addNeoRecord", "target.com", firstAddr)
+
+		t.Run("check neo record on target", func(t *testing.T) {
+			c.Invoke(t, true, "hasNeoRecord", "target.com", firstAddr)
+		})
+
+		t.Run("CNAME doesn't redirect for HasNeoRecord", func(t *testing.T) {
+			c.Invoke(t, false, "hasNeoRecord", "source.com", firstAddr)
+		})
+	})
+
+	t.Run("check non-existing neo record", func(t *testing.T) {
+		addr, err := address.StringToUint160("NXV7ZhHiyM1aHXwpVsRZC6BwNFP2jghXAq")
+		require.NoError(t, err)
+		c.Invoke(t, false, "hasNeoRecord", "testdomain.com", addr)
+	})
+
+	t.Run("invalid record data", func(t *testing.T) {
+		c.InvokeFail(t, "invalid record data", "addNeoRecord", "testdomain.com", "")
+		c.InvokeFail(t, "invalid record data", "addNeoRecord", "testdomain.com", "123")
+	})
+
+	t.Run("setRecord should fail for Neo type", func(t *testing.T) {
+		c.InvokeFail(t, "unsupported for Neo type", "setRecord", "testdomain.com", int64(recordtype.Neo), byte(0), "someaddr")
+	})
+
+	t.Run("TLD should fail", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasNeoRecord", "com", firstAddr)
+	})
+
+	t.Run("non-existent domain should fail", func(t *testing.T) {
+		c.InvokeFail(t, "token not found", "hasNeoRecord", "nonexistent.com", firstAddr)
+	})
+
+	t.Run("resolve fail", func(t *testing.T) {
+		c.InvokeFail(t, "use ResolveNeoIterator for Neo type", "resolve", "testdomain.com", int64(recordtype.Neo))
+	})
+
+	t.Run("getRecords fail", func(t *testing.T) {
+		c.InvokeFail(t, "use GetNeoRecordsIterator for Neo type", "getRecords", "testdomain.com", int64(recordtype.Neo))
+	})
+
+	t.Run("delete single neo record", func(t *testing.T) {
+		t.Run("invalid address", func(t *testing.T) {
+			c.InvokeFail(t, "invalid address format", "deleteNeoRecord", "testdomain.com", "")
+		})
+
+		c.Invoke(t, true, "hasNeoRecord", "testdomain.com", firstAddr)
+		c.Invoke(t, stackitem.Null{}, "deleteNeoRecord", "testdomain.com", firstAddr)
+		c.Invoke(t, false, "hasNeoRecord", "testdomain.com", firstAddr)
+		for addr := range addrMap {
+			if addr == firstAddr {
+				continue
+			}
+			c.Invoke(t, true, "hasNeoRecord", "testdomain.com", addr)
+		}
+	})
+
+	t.Run("delete all neo records", func(t *testing.T) {
+		c.Invoke(t, stackitem.Null{}, "deleteRecords", "testdomain.com", int64(recordtype.Neo))
+		for addr := range numAddresses {
+			c.Invoke(t, false, "hasNeoRecord", "testdomain.com", addr)
+		}
+	})
 }

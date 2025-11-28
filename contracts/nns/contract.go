@@ -503,6 +503,9 @@ func SetAdmin(name string, admin interop.Hash160) {
 // SetRecord updates existing domain record with the specified type and ID.
 // The name MUST NOT be a TLD.
 func SetRecord(name string, typ recordtype.Type, id byte, data string) {
+	if typ == recordtype.Neo {
+		panic("unsupported for Neo type")
+	}
 	ctx := storage.GetContext()
 	tokenID := checkRecord(ctx, name, typ, data)
 	recordKey := getIdRecordKey(tokenID, name, typ, id)
@@ -528,6 +531,8 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 		ok = len(data) <= maxTXTRecordLength
 	case recordtype.AAAA:
 		ok = checkIPv6(data)
+	case recordtype.Neo:
+		ok = len(data) == interop.Hash160Len
 	default:
 		panic("unsupported record type")
 	}
@@ -548,6 +553,9 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 // AddRecord appends domain record to the list of domain records with the specified type
 // if it doesn't exist yet. The name MUST NOT be a TLD.
 func AddRecord(name string, typ recordtype.Type, data string) {
+	if typ == recordtype.Neo {
+		panic("use AddNeoRecord for Neo type")
+	}
 	ctx := storage.GetContext()
 	tokenID := checkRecord(ctx, name, typ, data)
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
@@ -573,9 +581,37 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 	updateSoaSerial(ctx, tokenID)
 }
 
+// AddNeoRecord adds domain record of the Neo type for the specified address in
+// 20-byte hash format. The name MUST NOT be a TLD.
+func AddNeoRecord(name string, address interop.Hash160) {
+	ctx := storage.GetContext()
+	tokenID := checkRecord(ctx, name, recordtype.Neo, string(address))
+	key := getNeoRecordKey(tokenID, name, address)
+
+	storage.Put(ctx, key, []byte{})
+	updateSoaSerial(ctx, tokenID)
+}
+
 // GetRecords returns domain record of the specified type if it exists or an empty
 // string if not. The name MUST NOT be a TLD.
 func GetRecords(name string, typ recordtype.Type) []string {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+	if typ == recordtype.Neo {
+		panic("use GetNeoRecordsIterator for Neo type")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+	return getRecordsByType(ctx, tokenID, name, typ)
+}
+
+// GetNeoRecordsIterator returns an iterator over domain records of the Neo type.
+// Elements are 20-byte address hashes. The name MUST NOT be a TLD.
+func GetNeoRecordsIterator(name string) iterator.Iterator {
 	fragments := std.StringSplit(name, ".")
 	if len(fragments) == 1 {
 		panic("token not found")
@@ -584,7 +620,8 @@ func GetRecords(name string, typ recordtype.Type) []string {
 	ctx := storage.GetReadOnlyContext()
 	tokenID := []byte(tokenIDFromName(ctx, name))
 	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
-	return getRecordsByType(ctx, tokenID, name, typ)
+
+	return getNeoRecordsIterator(ctx, tokenID, name)
 }
 
 // DeleteRecords removes domain records with the specified type. The name MUST
@@ -613,6 +650,27 @@ func DeleteRecords(name string, typ recordtype.Type) {
 	updateSoaSerial(ctx, tokenID)
 }
 
+// DeleteNeoRecord removes domain record of the Neo type for the specified address in
+// 20-byte hash format. The name MUST NOT be a TLD.
+func DeleteNeoRecord(name string, address interop.Hash160) {
+	if len(address) != interop.Hash160Len {
+		panic("invalid address format")
+	}
+	ctx := storage.GetContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
+
+	fragments := std.StringSplit(string(tokenID), ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns.checkAdmin()
+	key := getNeoRecordKey(tokenID, name, address)
+	storage.Delete(ctx, key)
+	updateSoaSerial(ctx, tokenID)
+}
+
 // Resolve resolves given name (not more than three redirects are allowed).
 // The name MUST NOT be a TLD.
 func Resolve(name string, typ recordtype.Type) []string {
@@ -621,8 +679,25 @@ func Resolve(name string, typ recordtype.Type) []string {
 		panic("token not found")
 	}
 
+	if typ == recordtype.Neo {
+		panic("use ResolveNeoIterator for Neo type")
+	}
+
 	ctx := storage.GetReadOnlyContext()
 	return resolve(ctx, []string{}, name, typ, 2)
+}
+
+// ResolveNeoIterator resolves given name and returns an iterator over records
+// of the Neo type (not more than three redirects are allowed).
+// Elements are 20-byte address hashes. The name MUST NOT be a TLD.
+func ResolveNeoIterator(name string) iterator.Iterator {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	return resolveNeoIterator(ctx, name, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
@@ -635,6 +710,22 @@ func GetAllRecords(name string) iterator.Iterator {
 
 	ctx := storage.GetReadOnlyContext()
 	return getAllRecords(ctx, name, fragments)
+}
+
+// HasNeoRecord checks if a record of the Neo type exists
+// for the given domain and address in 20-byte hash format. The name MUST NOT be a TLD.
+func HasNeoRecord(name string, address interop.Hash160) bool {
+	fragments := std.StringSplit(name, ".")
+	if len(fragments) == 1 {
+		panic("token not found")
+	}
+
+	ctx := storage.GetReadOnlyContext()
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+
+	key := getNeoRecordKey(tokenID, name, address)
+	return storage.Get(ctx, key) != nil
 }
 
 // updateBalance updates account's balance and account's tokens.
@@ -750,6 +841,18 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ reco
 		}
 	}
 	return result
+}
+
+// getNeoRecordsIterator returns an iterator over domain records of the Neo type.
+func getNeoRecordsIterator(ctx storage.Context, tokenId []byte, name string) iterator.Iterator {
+	recordsKey := getRecordsKeyByType(tokenId, name, recordtype.Neo)
+	return storage.Find(ctx, recordsKey, storage.KeysOnly|storage.RemovePrefix)
+}
+
+// getNeoRecordKey returns the storage key for a Neo record.
+func getNeoRecordKey(tokenId []byte, name string, address interop.Hash160) []byte {
+	recordKey := getRecordsKeyByType(tokenId, name, recordtype.Neo)
+	return append(recordKey, address...)
 }
 
 // storeRecord puts record to storage and performs no additional checks.
@@ -1058,6 +1161,38 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 	}
 
 	return resolve(ctx, res, cname, typ, redirect-1)
+}
+
+// resolveNeoIterator resolves the provided name using record with the Neo type
+// and returns an iterator over the results in 20-byte address hash format.
+// This handles CNAME redirection and follows up to the specified number of redirects.
+func resolveNeoIterator(ctx storage.Context, name string, redirect int) iterator.Iterator {
+	if redirect < 0 {
+		panic("invalid redirect")
+	}
+	if len(name) == 0 {
+		panic("invalid name")
+	}
+	if name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+
+	tokenID := []byte(tokenIDFromName(ctx, name))
+	_ = getFragmentedNameState(ctx, tokenID, nil)
+
+	// If we still can redirect, try to find CNAME directly using its prefix.
+	if redirect > 0 {
+		cnameKey := getRecordsKeyByType(tokenID, name, recordtype.CNAME)
+		cnameIter := storage.Find(ctx, cnameKey, storage.ValuesOnly|storage.DeserializeValues)
+		if iterator.Next(cnameIter) {
+			r := iterator.Value(cnameIter).(RecordState)
+			if r.Data != "" {
+				return resolveNeoIterator(ctx, r.Data, redirect-1)
+			}
+		}
+	}
+
+	return getNeoRecordsIterator(ctx, tokenID, name)
 }
 
 // getAllRecords returns iterator over the set of records corresponded with the
