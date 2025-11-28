@@ -513,6 +513,28 @@ func (c *Contract) DeleteUnsigned(containerID []byte, signature []byte, token []
 	return c.actor.MakeUnsignedCall(c.hash, "delete", nil, containerID, signature, token)
 }
 
+// Lock creates a transaction invoking `lock` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Lock(id util.Uint256, until *big.Int) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "lock", id, until)
+}
+
+// LockTransaction creates a transaction invoking `lock` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) LockTransaction(id util.Uint256, until *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "lock", id, until)
+}
+
+// LockUnsigned creates a transaction invoking `lock` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) LockUnsigned(id util.Uint256, until *big.Int) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "lock", nil, id, until)
+}
+
 // Put creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.

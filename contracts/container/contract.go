@@ -15,6 +15,7 @@ import (
 	cst "github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	iproto "github.com/nspcc-dev/neofs-contract/internal/proto"
+	istd "github.com/nspcc-dev/neofs-contract/internal/std"
 )
 
 type (
@@ -136,6 +137,11 @@ const (
 	defaultTTL     = 3600                 // 1 hour
 
 	nep11TransferAmount = 1 // non-divisible NFT
+)
+
+// Attributes.
+const (
+	attributeLock = "__NEOFS__LOCK_UNTIL"
 )
 
 var (
@@ -390,9 +396,17 @@ func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
+	cnr := fromBytes(container)
+
+	for i := range cnr.Attributes {
+		if cnr.Attributes[i].Key == attributeLock {
+			parseLockAttribute(cnr.Attributes[i].Value)
+			break
+		}
+	}
+
 	ctx := storage.GetContext()
 
-	ownerID := ownerFromBinaryContainer(container)
 	containerID := crypto.Sha256(container)
 	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
 		panic(cst.ErrorDeleted)
@@ -413,11 +427,10 @@ func PutNamed(container []byte, signature interop.Signature,
 	}
 
 	alphabet := common.AlphabetNodes()
-	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
-	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
+	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, cnr.Owner).(int)
 	if name != "" {
 		aliasFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
 		containerFee += aliasFee
@@ -436,7 +449,7 @@ func PutNamed(container []byte, signature interop.Signature,
 
 		if !contract.Call(balanceContractAddr, "transferX",
 			contract.All,
-			from,
+			cnr.Owner,
 			to,
 			containerFee,
 			details,
@@ -445,7 +458,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		}
 	}
 
-	addContainer(ctx, containerID, ownerID, container)
+	addContainer(ctx, containerID, container, cnr)
 
 	if name != "" {
 		if needRegister {
@@ -466,9 +479,9 @@ func PutNamed(container []byte, signature interop.Signature,
 	runtime.Log("added new container")
 	runtime.Notify("PutSuccess", containerID, publicKey)
 
-	notifyNEP11Transfer(containerID, nil, from) // 'from' is owner here i.e. 'to' in terms of NEP-11
+	notifyNEP11Transfer(containerID, nil, cnr.Owner)
 
-	onNEP11Payment(containerID, nil, from, nil)
+	onNEP11Payment(containerID, nil, cnr.Owner, nil)
 }
 
 // Create saves container descriptor serialized according to the NeoFS API
@@ -552,6 +565,8 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 			zone = cnr.Attributes[i].Value
 		case "__NEOFS__METAINFO_CONSISTENCY":
 			metaOnChain = true
+		case attributeLock:
+			parseLockAttribute(cnr.Attributes[i].Value)
 		}
 	}
 
@@ -688,12 +703,14 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 
-	ownerID := getOwnerByID(ctx, containerID)
-	if ownerID == nil {
+	cnr, ok := getInfo(ctx, containerID)
+	if !ok {
 		return
 	}
 
 	common.CheckAlphabetWitness()
+
+	checkLock(cnr)
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
 	domain := storage.Get(ctx, key).(string)
@@ -701,6 +718,9 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		storage.Delete(ctx, key)
 		deleteNNSRecords(ctx, domain)
 	}
+
+	ownerID := scriptHashToAddress(cnr.Owner)
+
 	removeContainer(ctx, containerID, ownerID)
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
@@ -721,13 +741,15 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	}
 
 	ctx := storage.GetContext()
-	cnrItemKey := append([]byte{containerKeyPrefix}, id...)
-	cnrItem := storage.Get(ctx, cnrItemKey)
-	if cnrItem == nil {
+
+	cnr, ok := getInfo(ctx, id)
+	if !ok {
 		return
 	}
 
-	owner := ownerFromBinaryContainer(cnrItem.([]byte))
+	checkLock(cnr)
+
+	owner := scriptHashToAddress(cnr.Owner)
 
 	removeContainer(ctx, id, owner)
 
@@ -762,14 +784,23 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 // GetInfo reads container by ID. If the container is missing, GetInfo throws
 // [cst.NotFoundError] exception.
 func GetInfo(id interop.Hash256) Info {
-	val := storage.Get(storage.GetReadOnlyContext(), append([]byte{infoPrefix}, id...))
-	if val == nil {
-		if val = storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...)); val != nil {
-			return fromBytes(val.([]byte))
-		}
+	cnr, ok := getInfo(storage.GetReadOnlyContext(), id)
+	if !ok {
 		panic(cst.NotFoundError)
 	}
-	return std.Deserialize(val.([]byte)).(Info)
+
+	return cnr
+}
+
+func getInfo(ctx storage.Context, id interop.Hash256) (Info, bool) {
+	val := storage.Get(ctx, append([]byte{infoPrefix}, id...))
+	if val == nil {
+		if val = storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)); val != nil {
+			return fromBytes(val.([]byte)), true
+		}
+		return Info{}, false
+	}
+	return std.Deserialize(val.([]byte)).(Info), true
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
@@ -1775,6 +1806,46 @@ func Properties(tokenID []byte) map[string]any {
 	return props
 }
 
+// TODO: docs.
+func Lock(id interop.Hash256, until int) {
+	if until <= 0 {
+		panic("non-positive until " + std.Itoa10(until))
+	}
+
+	ctx := storage.GetContext()
+
+	cnr, ok := getInfo(ctx, id)
+	if !ok {
+		panic(cst.NotFoundError)
+	}
+
+	if !runtime.CheckWitness(cnr.Owner) {
+		panic("missing owner witness")
+	}
+
+	if now := runtime.GetTime() / 1000; now > until {
+		panic("until has already passed " + std.Itoa10(now) + " > " + std.Itoa10(until))
+	}
+
+	was := false
+	for i := range cnr.Attributes {
+		if cnr.Attributes[i].Key == attributeLock {
+			cnr.Attributes[i].Value = std.Itoa10(until)
+			was = true
+			break
+		}
+	}
+	if !was {
+		cnr.Attributes = append(cnr.Attributes, Attribute{
+			Key:   attributeLock,
+			Value: std.Itoa10(until),
+		})
+	}
+
+	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
+	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), toBytes(cnr))
+}
+
 func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {
 	runtime.Notify("Transfer", from, to, nep11TransferAmount, tokenID)
 }
@@ -1785,15 +1856,15 @@ func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {
 	}
 }
 
-func addContainer(ctx storage.Context, id, owner, container []byte) {
-	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
+func addContainer(ctx storage.Context, id, container []byte, cnr Info) {
+	containerListKey := append([]byte{ownerKeyPrefix}, scriptHashToAddress(cnr.Owner)...)
 	containerListKey = append(containerListKey, id...)
 	storage.Put(ctx, containerListKey, id)
 
 	idKey := append([]byte{containerKeyPrefix}, id...)
 	storage.Put(ctx, idKey, container)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(fromBytes(container)))
+	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
@@ -1922,6 +1993,27 @@ func scriptHashToAddress(h interop.Hash160) []byte {
 	copy(addr[1+interop.Hash160Len:], crypto.Sha256(sh))
 
 	return addr
+}
+
+func checkLock(cnr Info) {
+	for i := range cnr.Attributes {
+		if cnr.Attributes[i].Key == attributeLock {
+			until := parseLockAttribute(cnr.Attributes[i].Value)
+
+			if now := runtime.GetTime() / 1000; now <= until {
+				panic(cst.ErrorLocked + " until " + cnr.Attributes[i].Value + ", now " + std.Itoa10(now))
+			}
+		}
+	}
+}
+
+func parseLockAttribute(s string) int {
+	v, e := istd.Atoi(s)
+	if e {
+		panic("invalid lock attribute " + s)
+	}
+
+	return v
 }
 
 const (
