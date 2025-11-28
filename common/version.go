@@ -11,7 +11,7 @@ const (
 	// These should be used in a group (so prevMinor can be equal to minor if there are
 	// any migration routines).
 	prevMajor = 0
-	prevMinor = 20
+	prevMinor = 22
 	prevPatch = 0
 
 	Version = major*1_000_000 + minor*1_000 + patch

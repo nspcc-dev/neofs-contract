@@ -47,8 +47,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		},
 	})
 
-	migration.SkipUnsupportedVersions(t, c)
-
 	// read previous values using contract API
 	readAllContainers := func() []stackitem.Item {
 		iter, ok := c.Call(t, "containersOf", nil).Value().(*storage.Iterator)

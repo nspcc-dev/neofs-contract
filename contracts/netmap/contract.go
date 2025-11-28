@@ -15,19 +15,8 @@ import (
 	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 )
 
-// Node groups data related to NeoFS storage nodes registered in the NeoFS
-// network. The information is stored in the current contract.
-type Node struct {
-	// Information about the node encoded according to the NeoFS binary
-	// protocol.
-	BLOB []byte
-
-	// Current node state.
-	State nodestate.Type
-}
-
-// Node2 is a more modern version of [Node] stored in the contract. It exposes
-// all of the node structure to contract.
+// Node2 stores data related to a single NeoFS storage node. It follows
+// the model defined in NeoFS API specification.
 type Node2 struct {
 	// Addresses are to be used to connect to the node.
 	Addresses []string
@@ -71,10 +60,7 @@ const (
 	// Must be less than 255.
 	DefaultSnapshotCount = 10
 	snapshotCountKey     = "snapshotCount"
-	snapshotKeyPrefix    = "snapshot_"
-	snapshotCurrentIDKey = "snapshotCurrent"
 	snapshotEpoch        = "snapshotEpoch"
-	snapshotBlockKey     = "snapshotBlock"
 
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
@@ -87,18 +73,10 @@ const (
 	cleanupThresholdKey     = "t"
 
 	epochIndexKey = 'i'
-
-	// nodeKeyOffset is an offset in a serialized node info representation (V2 format)
-	// marking the start of the node's public key.
-	nodeKeyOffset = 2
-	// nodeKeyEndOffset is an offset in a serialized node info representation (V2 format)
-	// marking the end of the node's public key.
-	nodeKeyEndOffset = nodeKeyOffset + interop.PublicKeyCompressedLen
 )
 
 var (
-	configPrefix    = []byte("config")
-	candidatePrefix = []byte("candidate")
+	configPrefix = []byte("config")
 )
 
 // _deploy function sets up initial list of inner ring public keys.
@@ -111,23 +89,37 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if version < 21_000 {
-			storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
-			setConfig(ctx, "UseNodeV2", []byte{0})
-		}
-
-		if version < 22_000 {
-			curEpoch := storage.Get(ctx, snapshotEpoch).(int)
-			curEpochHeight := storage.Get(ctx, snapshotBlockKey).(int)
-			storage.Put(ctx, append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...), std.Serialize(epochItem{height: curEpochHeight}))
-			storage.Delete(ctx, snapshotBlockKey)
-		}
-
 		if version < 24_000 {
 			// For whatever reason this was also stored here, not just in neofs contract.
 			const candidateFeeConfigKey = "InnerRingCandidateFee"
 			storage.Delete(ctx, append(configPrefix, []byte(candidateFeeConfigKey)...))
 		}
+
+		if version < 26_000 {
+			const (
+				obsoleteAuditFeeKey          = "AuditFee"
+				obsoleteCandidatePrefix      = "candidate"
+				obsoleteMaintenanceKey       = "MaintenanceModeAllowed"
+				obsoleteNodeV2Key            = "UseNodeV2"
+				obsoleteSnapshotKeyPrefix    = "snapshot_"
+				obsoleteSnapshotCurrentIDKey = "snapshotCurrent"
+			)
+			storage.Delete(ctx, append(configPrefix, []byte(obsoleteNodeV2Key)...))
+			storage.Delete(ctx, append(configPrefix, []byte(obsoleteAuditFeeKey)...))
+			storage.Delete(ctx, append(configPrefix, []byte(obsoleteMaintenanceKey)...))
+
+			it := storage.Find(ctx, obsoleteSnapshotKeyPrefix, storage.KeysOnly)
+			for iterator.Next(it) {
+				storage.Delete(ctx, iterator.Value(it))
+			}
+			it = storage.Find(ctx, obsoleteCandidatePrefix, storage.KeysOnly)
+			for iterator.Next(it) {
+				storage.Delete(ctx, iterator.Value(it))
+			}
+
+			storage.Delete(ctx, obsoleteSnapshotCurrentIDKey)
+		}
+
 		return
 	}
 
@@ -156,13 +148,6 @@ func _deploy(data any, isUpdate bool) {
 	storage.Put(ctx, snapshotCountKey, DefaultSnapshotCount)
 	storage.Put(ctx, snapshotEpoch, 0)
 	storage.Put(ctx, []byte(cleanupThresholdKey), defaultCleanupThreshold)
-	setConfig(ctx, "UseNodeV2", []byte{1})
-
-	prefix := []byte(snapshotKeyPrefix)
-	for i := range DefaultSnapshotCount {
-		common.SetSerialized(ctx, append(prefix, byte(i)), []Node{})
-	}
-	storage.Put(ctx, snapshotCurrentIDKey, 0)
 
 	runtime.Log("netmap contract initialized")
 }
@@ -195,51 +180,6 @@ func InnerRingList() []common.IRNode {
 		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
 	}
 	return nodes
-}
-
-// AddPeerIR is called by the NeoFS Alphabet instead of AddPeer when signature
-// of the network candidate is inaccessible. For example, when information about
-// the candidate proposed via AddPeer needs to be supplemented. In such cases, a
-// new transaction will be required and therefore the candidate's signature is
-// not verified by AddPeerIR. Besides this, the behavior is similar.
-//
-// Deprecated: currently unused, to be removed in future.
-func AddPeerIR(nodeInfo []byte) {
-	ctx := storage.GetContext()
-
-	common.CheckAlphabetWitness()
-
-	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
-
-	addToNetmap(ctx, publicKey, Node{
-		BLOB:  nodeInfo,
-		State: nodestate.Online,
-	})
-}
-
-// AddPeer proposes a node for consideration as a candidate for the next-epoch
-// network map. Information about the node is accepted in NeoFS API binary
-// format. Call transaction MUST be signed by the public key sewn into the
-// parameter (compressed 33-byte array starting from 3rd byte), i.e. by
-// candidate itself. If the signature is correct, the Notary service will submit
-// a request for signature by the NeoFS Alphabet. After collecting a sufficient
-// number of signatures, the node will be added to the list of candidates for
-// the next-epoch network map ('AddPeerSuccess' notification is thrown after
-// that).
-//
-// Deprecated: migrate to [AddNode].
-func AddPeer(nodeInfo []byte) {
-	ctx := storage.GetContext()
-
-	publicKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
-
-	common.CheckWitness(publicKey)
-	common.CheckAlphabetWitness()
-
-	addToNetmap(ctx, publicKey, Node{
-		BLOB:  nodeInfo,
-		State: nodestate.Online,
-	})
 }
 
 // AddNode adds a new node into the candidate list for the next epoch. Node
@@ -331,20 +271,6 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 	updateCandidateState(ctx, publicKey, state)
 }
 
-// UpdateStateIR is called by the NeoFS Alphabet instead of UpdateState when
-// signature of the network candidate is inaccessible. In such cases, a new
-// transaction will be required and therefore the candidate's signature is not
-// verified by UpdateStateIR. Besides this, the behavior is similar.
-//
-// Deprecated: migrate to [UpdateState] and [DeleteNode].
-func UpdateStateIR(state nodestate.Type, publicKey interop.PublicKey) {
-	ctx := storage.GetContext()
-
-	common.CheckAlphabetWitness()
-
-	updateCandidateState(ctx, publicKey, state)
-}
-
 // NewEpoch method changes the epoch number up to the provided epochNum argument. It can
 // be invoked only by Alphabet nodes. If provided epoch number is less than the
 // current epoch number or equals it, the method throws panic.
@@ -364,23 +290,13 @@ func NewEpoch(epochNum int) {
 		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
 
-	dataOnlineState := filterNetmap(ctx)
-
 	runtime.Log("process new epoch")
 
 	// todo: check if provided epoch number is bigger than current
 	storage.Put(ctx, snapshotEpoch, epochNum)
 	fillNetmap(ctx, epochNum)
 
-	var (
-		snapCount = getSnapshotCount(ctx)
-		id        = storage.Get(ctx, snapshotCurrentIDKey).(int)
-	)
-	id = (id + 1) % snapCount
-	storage.Put(ctx, snapshotCurrentIDKey, id)
-
-	// put netmap into actual snapshot
-	common.SetSerialized(ctx, snapshotKeyPrefix+string([]byte{byte(id)}), dataOnlineState)
+	var snapCount = getSnapshotCount(ctx)
 
 	if epochNum > snapCount {
 		dropNetmap(ctx, epochNum-snapCount)
@@ -431,35 +347,9 @@ func LastEpochTime() int {
 	return std.Deserialize(val.([]byte)).(epochItem).time
 }
 
-// Netmap returns set of information about the storage nodes representing a network
-// map in the current epoch.
-//
-// Current state of each node is represented in the State field. It MAY differ
-// with the state encoded into BLOB field, in this case binary encoded state
-// MUST NOT be processed.
-//
-// Deprecated: migrate to [ListNodes].
-func Netmap() []Node {
-	ctx := storage.GetReadOnlyContext()
-	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	return getSnapshot(ctx, snapshotKeyPrefix+string([]byte{byte(id)}))
-}
-
-// NetmapCandidates returns set of information about the storage nodes
-// representing candidates for the network map in the coming epoch.
-//
-// Current state of each node is represented in the State field. It MAY differ
-// with the state encoded into BLOB field, in this case binary encoded state
-// MUST NOT be processed.
-//
-// Deprecated: migrate to [ListCandidates].
-func NetmapCandidates() []Node {
-	ctx := storage.GetReadOnlyContext()
-	return getNetmapNodes(ctx)
-}
-
-// ListNodes provides an iterator to walk over current node set. It is similar
-// to [Netmap] method, iterator values are [Node2] structures.
+// ListNodes provides an iterator to walk over current (as in corresponding
+// to the current epoch network map) node set. Iterator values are [Node2]
+// structures.
 func ListNodes() iterator.Iterator {
 	return ListNodesEpoch(Epoch())
 }
@@ -498,59 +388,8 @@ func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
 	}
 
 	ctx := storage.GetReadOnlyContext()
-
-	// v2 check is rather trivial.
-	key2 := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
-	v := storage.Get(ctx, key2)
-	if v != nil {
-		return true
-	}
-
-	// v1 is more involved.
-	count := getSnapshotCount(ctx)
-	diff := Epoch() - epoch
-	if count <= diff {
-		return false
-	}
-
-	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	needID := (id - diff + count) % count
-	snapshot := getSnapshot(ctx, snapshotKeyPrefix+string([]byte{byte(needID)}))
-
-	for i := range snapshot {
-		nodeInfo := snapshot[i].BLOB
-		nodeKey := nodeInfo[nodeKeyOffset:nodeKeyEndOffset]
-
-		if key.Equals(nodeKey) {
-			return true
-		}
-	}
-	return false
-}
-
-// Snapshot returns set of information about the storage nodes representing a network
-// map in (current-diff)-th epoch.
-//
-// Diff MUST NOT be negative. Diff MUST be less than maximum number of network
-// map snapshots stored in the contract. The limit is a contract setting,
-// DefaultSnapshotCount by default. See UpdateSnapshotCount for details.
-//
-// Current state of each node is represented in the State field. It MAY differ
-// with the state encoded into BLOB field, in this case binary encoded state
-// MUST NOT be processed.
-//
-// Deprecated: migrate to [ListNodesEpoch].
-func Snapshot(diff int) []Node {
-	ctx := storage.GetReadOnlyContext()
-	count := getSnapshotCount(ctx)
-	if diff < 0 || count <= diff {
-		panic("incorrect diff")
-	}
-
-	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	needID := (id - diff + count) % count
-	key := snapshotKeyPrefix + string([]byte{byte(needID)})
-	return getSnapshot(ctx, key)
+	dbkey := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
+	return storage.Get(ctx, dbkey) != nil
 }
 
 func getSnapshotCount(ctx storage.Context) int {
@@ -576,85 +415,10 @@ func UpdateSnapshotCount(count int) {
 	}
 	storage.Put(ctx, snapshotCountKey, count)
 
-	id := storage.Get(ctx, snapshotCurrentIDKey).(int)
-	var delStart, delFinish int
-	if oldCount < count {
-		// Increase history size.
-		//
-		// Old state (N = count, K = oldCount, E = current index, C = current epoch)
-		// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1   | ... | N-1
-		// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1 |
-		//
-		// New state:
-		// KEY INDEX: 0   | 1     | ... | E | E+1 | ... | K-1 | ... | N-1
-		// EPOCH    : C-E | C-E+1 | ... | C | nil | ... | .   | ... | C-E-1
-		//
-		// So we need to move tail snapshots N-K keys forward,
-		// i.e. from E+1 .. K to N-K+E+1 .. N
-		diff := count - oldCount
-		lower := diff + id + 1
-		for k := count - 1; k >= lower; k-- {
-			moveSnapshot(ctx, k-diff, k)
-		}
-		delStart, delFinish = id+1, id+1+diff
-		delFinish = min(oldCount, delFinish)
-	} else {
-		// Decrease history size.
-		//
-		// Old state (N = oldCount, K = count)
-		// KEY INDEX: 0   | 1     | ... K1 ... | E | E+1   | ... K2-1 ... | N-1
-		// EPOCH    : C-E | C-E+1 | ... .. ... | C | C-N+1 | ... ...  ... | C-E-1
-		var step, start int
-		if id < count {
-			// K2 case, move snapshots from E+1+N-K .. N-1 range to E+1 .. K-1
-			// New state:
-			// KEY INDEX: 0   | 1     | ... | E | E+1   | ... | K-1
-			// EPOCH    : C-E | C-E+1 | ... | C | C-K+1 | ... | C-E-1
-			step = oldCount - count
-			start = id + 1
-		} else {
-			// New state:
-			// KEY INDEX: 0     | 1     | ... | K-1
-			// EPOCH    : C-K+1 | C-K+2 | ... | C
-			// K1 case, move snapshots from E-K+1 .. E range to 0 .. K-1
-			// AND replace current id with K-1
-			step = id - count + 1
-			storage.Put(ctx, snapshotCurrentIDKey, count-1)
-		}
-		for k := start; k < count; k++ {
-			moveSnapshot(ctx, k+step, k)
-		}
-		delStart, delFinish = count, oldCount
-	}
-	for k := delStart; k < delFinish; k++ {
-		key := snapshotKeyPrefix + string([]byte{byte(k)})
-		storage.Delete(ctx, key)
-	}
 	var curEpoch = Epoch()
 	for k := curEpoch - oldCount + 1; k < curEpoch-count; k++ {
 		dropNetmap(ctx, k)
 	}
-}
-
-func moveSnapshot(ctx storage.Context, from, to int) {
-	keyFrom := snapshotKeyPrefix + string([]byte{byte(from)})
-	keyTo := snapshotKeyPrefix + string([]byte{byte(to)})
-	data := storage.Get(ctx, keyFrom)
-	storage.Put(ctx, keyTo, data)
-}
-
-// SnapshotByEpoch returns set of information about the storage nodes representing
-// a network map in the given epoch.
-//
-// Behaves like Snapshot: it is called after difference with the current epoch is
-// calculated.
-//
-// Deprecated: migrate to [ListNodesEpoch].
-func SnapshotByEpoch(epoch int) []Node {
-	ctx := storage.GetReadOnlyContext()
-	currentEpoch := storage.Get(ctx, snapshotEpoch).(int)
-
-	return Snapshot(currentEpoch - epoch)
 }
 
 // Config returns configuration value of NeoFS configuration. If key does
@@ -809,62 +573,21 @@ func GetEpochTime(epoch int) int {
 	return std.Deserialize(val.([]byte)).(epochItem).time
 }
 
-// serializes and stores the given Node by its public key in the contract storage,
-// and throws AddPeerSuccess notification after this.
-//
-// Public key MUST match the one encoded in BLOB field.
-func addToNetmap(ctx storage.Context, publicKey []byte, node Node) {
-	storageKey := append(candidatePrefix, publicKey...)
-	storage.Put(ctx, storageKey, std.Serialize(node))
-
-	runtime.Notify("AddPeerSuccess", interop.PublicKey(publicKey))
-}
-
 func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
-	storageKey := append(candidatePrefix, key...)
-	storage.Delete(ctx, storageKey)
-	storageKey = append([]byte(node2CandidatePrefix), key...)
+	storageKey := append([]byte(node2CandidatePrefix), key...)
 	storage.Delete(ctx, storageKey)
 }
 
 func updateNetmapState(ctx storage.Context, key interop.PublicKey, state nodestate.Type) {
-	var present bool
-
-	storageKey := append(candidatePrefix, key...)
+	storageKey := append([]byte(node2CandidatePrefix), key...)
 	raw := storage.Get(ctx, storageKey).([]byte)
-	if raw != nil {
-		present = true
-		node := std.Deserialize(raw).(Node)
-		node.State = state
-		storage.Put(ctx, storageKey, std.Serialize(node))
-	}
-	storageKey = append([]byte(node2CandidatePrefix), key...)
-	raw = storage.Get(ctx, storageKey).([]byte)
-	if raw != nil {
-		present = true
-		cand := std.Deserialize(raw).(Candidate)
-		cand.State = state
-		cand.LastActiveEpoch = Epoch()
-		storage.Put(ctx, storageKey, std.Serialize(cand))
-	}
-	if !present {
+	if raw == nil {
 		panic("peer is missing")
 	}
-}
-
-func filterNetmap(ctx storage.Context) []Node {
-	var (
-		netmap = getNetmapNodes(ctx)
-		result = []Node{}
-	)
-
-	for _, item := range netmap {
-		if item.State != nodestate.Offline {
-			result = append(result, item)
-		}
-	}
-
-	return result
+	cand := std.Deserialize(raw).(Candidate)
+	cand.State = state
+	cand.LastActiveEpoch = Epoch()
+	storage.Put(ctx, storageKey, std.Serialize(cand))
 }
 
 func fillNetmap(ctx storage.Context, epoch int) {
@@ -898,27 +621,6 @@ func dropNetmap(ctx storage.Context, epoch int) {
 	for iterator.Next(it) {
 		storage.Delete(ctx, iterator.Value(it).([]byte))
 	}
-}
-
-func getNetmapNodes(ctx storage.Context) []Node {
-	result := []Node{}
-
-	it := storage.Find(ctx, candidatePrefix, storage.ValuesOnly|storage.DeserializeValues)
-	for iterator.Next(it) {
-		node := iterator.Value(it).(Node)
-		result = append(result, node)
-	}
-
-	return result
-}
-
-func getSnapshot(ctx storage.Context, key string) []Node {
-	data := storage.Get(ctx, key)
-	if data != nil {
-		return std.Deserialize(data.([]byte)).([]Node)
-	}
-
-	return []Node{}
 }
 
 func getConfig(ctx storage.Context, key any) any {

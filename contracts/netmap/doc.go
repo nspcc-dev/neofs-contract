@@ -63,12 +63,6 @@ Key-value storage format:
    state info of block which "ticked" the epoch which is encoded as 4-byte BE integer
  - 'snapshotCount' -> int
    number of stored network maps including current one
- - 'snapshot_<ID>' -> std.Serialize([]Node)
-   network map by snapshot ID (where Node is a type)
- - 'snapshotCurrent' -> int
-   ID of the snapshot representing current network map
- - 'candidate<public_key>' -> std.Serialize(Node)
-   information about the particular network map candidate (where Node is a type)
  - 'containerScriptHash' -> 20-byte script hash
    Container contract reference
  - 'balanceScriptHash' -> 20-byte script hash

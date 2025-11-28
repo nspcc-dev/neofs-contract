@@ -8,7 +8,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
-	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,22 +30,4 @@ type nopCloseStore struct {
 
 func (x nopCloseStore) Close() error {
 	return nil
-}
-
-// SkipUnsupportedVersions calls get current version of the Contract using
-// 'version' method and checks can the Contract be updated similar to
-// common.CheckVersion. If not, SkipUnsupportedVersions skips corresponding
-// test.
-func SkipUnsupportedVersions(tb testing.TB, c *Contract, updPrms ...any) {
-	n, err := c.Call(tb, "version").TryInteger()
-	require.NoError(tb, err, "version response must be integer-convertible")
-
-	prevVersion := n.Int64()
-	if prevVersion < common.PrevVersion {
-		c.CheckUpdateFail(tb, common.ErrVersionMismatch, updPrms...)
-		tb.Skipf("skip contract update due to unsupported version %v < %v", prevVersion, common.PrevVersion)
-	} else if prevVersion >= common.Version {
-		c.CheckUpdateFail(tb, common.ErrAlreadyUpdated, updPrms...)
-		tb.Skipf("skip already do update %v >= %v", prevVersion, common.Version)
-	}
 }

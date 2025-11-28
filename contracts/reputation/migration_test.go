@@ -40,8 +40,6 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		},
 	})
 
-	migration.SkipUnsupportedVersions(t, c)
-
 	// read previous values using contract API
 	readEpochsToTrustValues := func() map[uint64][]stackitem.Item {
 		m := make(map[uint64][]stackitem.Item, len(epochs))
