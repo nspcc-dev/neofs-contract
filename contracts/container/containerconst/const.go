@@ -26,4 +26,7 @@ const (
 
 	// ErrorInvalidPublicKey is returned on an attempt to work with an incorrect public key.
 	ErrorInvalidPublicKey = "invalid public key"
+
+	// ErrorLocked is returned with active container lock.
+	ErrorLocked = "container is locked"
 )
