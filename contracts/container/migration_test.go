@@ -129,6 +129,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][]byte) {
 	structsPrefix := []byte{0x00}
+	mTransfers := make(map[string][]byte) // tokenID -> to
 
 	for i := 1; ; i++ {
 		// inlined stuff of c.Invoke()
@@ -141,6 +142,28 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 		rem, err := txRes.Stack[0].TryBool()
 		require.NoError(t, err)
 
+		require.NotEmpty(t, txRes.Events)
+		for _, ev := range txRes.Events {
+			require.Equal(t, "Transfer", ev.Name)
+
+			arr := ev.Item.Value().([]stackitem.Item)
+			require.Len(t, arr, 4)
+
+			id, err := arr[3].TryBytes()
+			require.NoError(t, err)
+			require.Len(t, id, 32)
+
+			require.Equal(t, arr[2], stackitem.Make(1))
+
+			require.Equal(t, arr[0], stackitem.Null{})
+
+			to, err := arr[1].TryBytes()
+			require.NoError(t, err)
+			require.Len(t, to, 20)
+
+			mTransfers[string(id)] = to
+		}
+
 		if !rem {
 			break
 		}
@@ -148,6 +171,7 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 		count := 0
 		c.SeekStorage(structsPrefix, func(_, _ []byte) bool { count++; return true })
 		require.EqualValues(t, count, 10*i)
+		require.Len(t, txRes.Events, 10)
 	}
 
 	mStructs := make(map[string][]stackitem.Item)
@@ -164,9 +188,14 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 	})
 
 	require.Equal(t, len(mStructs), len(binCnrs))
+	require.Equal(t, len(mTransfers), len(binCnrs))
 	for id, cnrBin := range binCnrs {
 		exp := containerBinaryToStruct(t, cnrBin)
 		assertEqualItemArray(t, exp, mStructs[id])
+
+		to, ok := mTransfers[id]
+		require.True(t, ok)
+		require.Equal(t, exp[1].Value(), to)
 	}
 
 	for id, expFields := range mStructs {
