@@ -617,6 +617,9 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 // processed.
 //
 // AddStructs requires Alphabet witness.
+//
+// AddStructs throws NEP-11 'Transfer' event representing token mint for each
+// handled container.
 func AddStructs() bool {
 	common.CheckAlphabetWitness()
 
@@ -638,7 +641,13 @@ func AddStructs() bool {
 			continue
 		}
 
-		storage.Put(ctx, structKey, std.Serialize(fromBytes(protobufKV.Value)))
+		cnr := fromBytes(protobufKV.Value)
+
+		storage.Put(ctx, structKey, std.Serialize(cnr))
+
+		notifyNEP11Transfer(protobufKV.Key, nil, cnr.Owner)
+
+		onNEP11PaymentSafe(protobufKV.Key, nil, cnr.Owner, nil)
 
 		if done == doneLimit-1 {
 			return iterator.Next(it)
@@ -1777,6 +1786,12 @@ func Properties(tokenID []byte) map[string]any {
 
 func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {
 	runtime.Notify("Transfer", from, to, nep11TransferAmount, tokenID)
+}
+
+func onNEP11PaymentSafe(tokenID []byte, from, to interop.Hash160, data any) {
+	// recover potential panic, i.e. contract exception
+	defer func() { recover() }()
+	onNEP11Payment(tokenID, from, to, data)
 }
 
 func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {
