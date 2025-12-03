@@ -1796,7 +1796,7 @@ func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {
 
 func onNEP11PaymentSafe(tokenID []byte, from, to interop.Hash160, data any) {
 	// recover potential panic, i.e. contract exception
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	onNEP11Payment(tokenID, from, to, data)
 }
 
