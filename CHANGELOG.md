@@ -8,6 +8,7 @@ Changelog for NeoFS Contract
 - `addStructs`, `createV2` and `getInfo` methods to Container contract (#534)
 - NEP-11 support by Container contract (#498)
 - New NNS record type `Neo` (#544)
+- Support for `__NEOFS__LOCK_UNTIL` container attribute (#558)
 
 ### Changed
 
