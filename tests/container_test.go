@@ -1804,6 +1804,40 @@ func TestContainerRemove(t *testing.T) {
 	t.Run("broken container in storage", func(t *testing.T) {
 		t.Skip("TODO https://github.com/nspcc-dev/neo-go/issues/2926")
 	})
+	t.Run("lock", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, nil)
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		inv := exec.CommitteeInvoker(containerContract.Hash)
+
+		cnr := containertest.Container()
+
+		curBlockTime := exec.TopBlock(t).Timestamp
+		expMs := curBlockTime + 1000
+		exp := expMs / 1000
+
+		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", strconv.FormatUint(exp, 10))
+		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+
+		inv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+		inv.InvokeFail(t, containerconst.ErrorLocked+" until "+strconv.FormatUint(exp*1000, 10)+", now "+strconv.Itoa(int(curBlockTime+2)),
+			"remove", id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+		blk := exec.NewUnsignedBlock(t)
+		blk.Timestamp = expMs
+		require.NoError(t, exec.Chain.AddBlock(exec.SignBlock(blk)))
+
+		inv.Invoke(t, nil, "remove", id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
 
 	const createFee = 1000
 	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
@@ -2103,6 +2137,35 @@ func TestContainerCreateV2(t *testing.T) {
 		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
+	t.Run("invalid attributes", func(t *testing.T) {
+		t.Run("lock", func(t *testing.T) {
+			assert := func(t *testing.T, val string, exc string) {
+				cnr := cnr
+				cnr.SetAttribute("__NEOFS__LOCK_UNTIL", val)
+
+				inv.InvokeFail(t, exc, "createV2",
+					stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			}
+
+			t.Run("non-int", func(t *testing.T) {
+				for _, val := range []string{} {
+					assert(t, val, "at instruction 1 (SYSCALL): invalid format") // StdLib atoi exception
+				}
+			})
+
+			t.Run("non-positive", func(t *testing.T) {
+				assert(t, "-42", "invalid __NEOFS__LOCK_UNTIL attribute: non-positive value -42")
+				assert(t, "0", "invalid __NEOFS__LOCK_UNTIL attribute: non-positive value 0")
+			})
+
+			t.Run("already passed", func(t *testing.T) {
+				curBlockTime := exec.TopBlock(t).Timestamp
+				curBlockTimeSec := strconv.FormatUint(curBlockTime/1000, 10)
+				assert(t, curBlockTimeSec, "lock expiration time "+curBlockTimeSec+"000 is not later than current "+strconv.FormatUint(curBlockTime+1, 10))
+			})
+		})
 	})
 
 	t.Run("no deposit", func(t *testing.T) {
@@ -2936,6 +2999,10 @@ func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr co
 }
 
 func TestSetAttribute(t *testing.T) {
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
 	blockChain, committee := chain.NewSingle(t)
 	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
 	exec := neotest.NewExecutor(t, blockChain, committee, committee)
@@ -2947,6 +3014,8 @@ func TestSetAttribute(t *testing.T) {
 	deployProxyContract(t, exec)
 
 	exec.DeployContract(t, containerContract, nil)
+
+	committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
 
 	owner := exec.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
@@ -2968,13 +3037,8 @@ func TestSetAttribute(t *testing.T) {
 	})
 
 	t.Run("create container", func(t *testing.T) {
-		anyValidInvocScript := randomBytes(10)
-		anyValidVerifScript := randomBytes(10)
-		anyValidSessionToken := randomBytes(10)
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
-
-		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
 
 		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
@@ -3011,11 +3075,62 @@ func TestSetAttribute(t *testing.T) {
 		cnr.CopyTo(&cnr2)
 
 		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
-		cnr.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr)
+		cnr2.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr2)
 
 		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("lock", func(t *testing.T) {
+		cp := cnr
+		cnr.CopyTo(&cp)
+		cnr := cp
+
+		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+		committeeInvoker.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), nil, nil, anyValidSessionToken)
+
+		assertFail := func(t *testing.T, val string, exc string) {
+			inv.InvokeFail(t, exc, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", val, anyValidSessionToken)
+		}
+
+		t.Run("non-int", func(t *testing.T) {
+			for _, val := range []string{} {
+				assertFail(t, val, "at instruction 1 (SYSCALL): invalid format") // StdLib atoi exception
+			}
+		})
+
+		t.Run("non-positive", func(t *testing.T) {
+			assertFail(t, "-42", "invalid __NEOFS__LOCK_UNTIL attribute: non-positive value -42")
+			assertFail(t, "0", "invalid __NEOFS__LOCK_UNTIL attribute: non-positive value 0")
+		})
+
+		t.Run("already passed", func(t *testing.T) {
+			curBlockTime := exec.TopBlock(t).Timestamp
+			curBlockTimeSec := strconv.FormatUint(curBlockTime/1000, 10)
+			assertFail(t, curBlockTimeSec, "lock expiration time "+curBlockTimeSec+"000 is not later than current "+strconv.FormatUint(curBlockTime+1, 10))
+		})
+
+		curBlockTime := exec.TopBlock(t).Timestamp
+		expMs := curBlockTime + 2000
+		exp := expMs / 1000
+		expStr := strconv.Itoa(int(exp))
+
+		inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr, anyValidSessionToken)
+
+		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
+		assertGetInfo(t, inv, cID, cnr)
+
+		t.Run("change", func(t *testing.T) {
+			newVal := strconv.Itoa(int(exp - 1))
+			assertFail(t, newVal, "lock expiration time "+newVal+" is not later than already set "+expStr)
+
+			newVal = strconv.Itoa(int(exp + 1))
+			inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal, anyValidSessionToken)
+
+			cnr.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
+			assertGetInfo(t, inv, cID, cnr)
+		})
 	})
 }
 
@@ -3082,15 +3197,37 @@ func TestRemoveAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
-
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
-		cnr.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr)
+		cnr2.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr2)
 
 		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("lock", func(t *testing.T) {
+		curBlockTime := exec.TopBlock(t).Timestamp
+		expMs := curBlockTime + 1000
+		exp := expMs / 1000
+		expStr := strconv.Itoa(int(exp))
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr, nil)
+
+		t.Run("not yet passed", func(t *testing.T) {
+			inv.InvokeFail(t, "lock expiration time "+strconv.Itoa(int(exp*1000))+" has not passed yet, now "+strconv.Itoa(int(curBlockTime+2)),
+				"removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+		})
+
+		blk := exec.NewUnsignedBlock(t)
+		blk.Timestamp = expMs
+		require.NoError(t, exec.Chain.AddBlock(exec.SignBlock(blk)))
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+
+		assertGetInfo(t, inv, cID, cnr)
 	})
 }
 
