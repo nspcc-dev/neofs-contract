@@ -104,6 +104,20 @@ func (c *ContractReader) GetAllRecordsExpanded(name string, _numOfIteratorItems 
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "getAllRecords", _numOfIteratorItems, name))
 }
 
+// GetNeoRecordsIterator invokes `getNeoRecordsIterator` method of contract.
+func (c *ContractReader) GetNeoRecordsIterator(name string) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "getNeoRecordsIterator", name))
+}
+
+// GetNeoRecordsIteratorExpanded is similar to GetNeoRecordsIterator (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) GetNeoRecordsIteratorExpanded(name string, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "getNeoRecordsIterator", _numOfIteratorItems, name))
+}
+
 // GetPrice invokes `getPrice` method of contract.
 func (c *ContractReader) GetPrice() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getPrice"))
@@ -114,6 +128,11 @@ func (c *ContractReader) GetRecords(name string, typ *big.Int) ([]string, error)
 	return unwrap.ArrayOfUTF8Strings(c.invoker.Call(c.hash, "getRecords", name, typ))
 }
 
+// HasNeoRecord invokes `hasNeoRecord` method of contract.
+func (c *ContractReader) HasNeoRecord(name string, address util.Uint160) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "hasNeoRecord", name, address))
+}
+
 // IsAvailable invokes `isAvailable` method of contract.
 func (c *ContractReader) IsAvailable(name string) (bool, error) {
 	return unwrap.Bool(c.invoker.Call(c.hash, "isAvailable", name))
@@ -122,6 +141,20 @@ func (c *ContractReader) IsAvailable(name string) (bool, error) {
 // Resolve invokes `resolve` method of contract.
 func (c *ContractReader) Resolve(name string, typ *big.Int) ([]string, error) {
 	return unwrap.ArrayOfUTF8Strings(c.invoker.Call(c.hash, "resolve", name, typ))
+}
+
+// ResolveNeoIterator invokes `resolveNeoIterator` method of contract.
+func (c *ContractReader) ResolveNeoIterator(name string) (uuid.UUID, result.Iterator, error) {
+	return unwrap.SessionIterator(c.invoker.Call(c.hash, "resolveNeoIterator", name))
+}
+
+// ResolveNeoIteratorExpanded is similar to ResolveNeoIterator (uses the same contract
+// method), but can be useful if the server used doesn't support sessions and
+// doesn't expand iterators. It creates a script that will get the specified
+// number of result items from the iterator right in the VM and return them to
+// you. It's only limited by VM stack and GAS available for RPC invocations.
+func (c *ContractReader) ResolveNeoIteratorExpanded(name string, _numOfIteratorItems int) ([]stackitem.Item, error) {
+	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "resolveNeoIterator", _numOfIteratorItems, name))
 }
 
 // Roots invokes `roots` method of contract.
@@ -141,6 +174,28 @@ func (c *ContractReader) RootsExpanded(_numOfIteratorItems int) ([]stackitem.Ite
 // Version invokes `version` method of contract.
 func (c *ContractReader) Version() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "version"))
+}
+
+// AddNeoRecord creates a transaction invoking `addNeoRecord` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) AddNeoRecord(name string, address util.Uint160) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "addNeoRecord", name, address)
+}
+
+// AddNeoRecordTransaction creates a transaction invoking `addNeoRecord` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) AddNeoRecordTransaction(name string, address util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "addNeoRecord", name, address)
+}
+
+// AddNeoRecordUnsigned creates a transaction invoking `addNeoRecord` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) AddNeoRecordUnsigned(name string, address util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "addNeoRecord", nil, name, address)
 }
 
 // AddRecord creates a transaction invoking `addRecord` method of the contract.
@@ -163,6 +218,28 @@ func (c *Contract) AddRecordTransaction(name string, typ *big.Int, data string) 
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) AddRecordUnsigned(name string, typ *big.Int, data string) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "addRecord", nil, name, typ, data)
+}
+
+// DeleteNeoRecord creates a transaction invoking `deleteNeoRecord` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) DeleteNeoRecord(name string, address util.Uint160) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "deleteNeoRecord", name, address)
+}
+
+// DeleteNeoRecordTransaction creates a transaction invoking `deleteNeoRecord` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) DeleteNeoRecordTransaction(name string, address util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "deleteNeoRecord", name, address)
+}
+
+// DeleteNeoRecordUnsigned creates a transaction invoking `deleteNeoRecord` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) DeleteNeoRecordUnsigned(name string, address util.Uint160) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "deleteNeoRecord", nil, name, address)
 }
 
 // DeleteRecords creates a transaction invoking `deleteRecords` method of the contract.
