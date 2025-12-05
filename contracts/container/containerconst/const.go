@@ -26,4 +26,8 @@ const (
 
 	// ErrorInvalidPublicKey is returned on an attempt to work with an incorrect public key.
 	ErrorInvalidPublicKey = "invalid public key"
+
+	// AlphabetManagesAttributesKey is a key in netmap config which defines if
+	// Alphabet is allowed to manage container attributes instead of users.
+	AlphabetManagesAttributesKey = "AlphabetManagesAttributes"
 )
