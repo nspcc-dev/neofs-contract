@@ -405,7 +405,9 @@ func PutNamed(container []byte, signature interop.Signature,
 	for i := range cnr.Attributes {
 		switch cnr.Attributes[i].Key {
 		case lockAttributeName:
-			std.Atoi10(cnr.Attributes[i].Value)
+			if std.Atoi10(cnr.Attributes[i].Value) <= 0 {
+				panic("invalid " + lockAttributeName + " attribute: negative value " + cnr.Attributes[i].Value)
+			}
 		}
 	}
 
@@ -542,7 +544,7 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 //
 // Following requirements apply to attributes:
 //
-//	__NEOFS__LOCK_UNTIL: must be base-10 integer
+//	__NEOFS__LOCK_UNTIL: must be positive Unix Timestamp
 func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.Hash256 {
 	alphabet := common.AlphabetNodes()
 	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
@@ -567,7 +569,9 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 		case "__NEOFS__METAINFO_CONSISTENCY":
 			metaOnChain = true
 		case lockAttributeName:
-			std.Atoi10(cnr.Attributes[i].Value)
+			if std.Atoi10(cnr.Attributes[i].Value) <= 0 {
+				panic("invalid " + lockAttributeName + " attribute: negative value " + cnr.Attributes[i].Value)
+			}
 		}
 	}
 
@@ -731,13 +735,11 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		deleteNNSRecords(ctx, domain)
 	}
 
-	ownerID := scriptHashToAddress(cnr.Owner)
-
-	removeContainer(ctx, containerID, ownerID)
+	removeContainer(ctx, containerID, scriptHashToAddress(cnr.Owner))
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
 
-	notifyNEP11Transfer(containerID, common.WalletToScriptHash(ownerID), nil)
+	notifyNEP11Transfer(containerID, cnr.Owner, nil)
 }
 
 // Remove removes all data for the referenced container. Remove is no-op if
@@ -779,7 +781,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 
 	runtime.Notify("Removed", interop.Hash256(id), owner)
 
-	notifyNEP11Transfer(id, common.WalletToScriptHash(owner), nil)
+	notifyNEP11Transfer(id, cnr.Owner, nil)
 }
 
 func deleteNNSRecords(ctx storage.Context, domain string) {
@@ -2345,8 +2347,16 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 // SetAttribute sets container attribute. Not all container attributes can be changed
 // with SetAttribute. The supported list of attributes:
 //
-//	CORS (must be JSON following schema described in NeoFS API)
-//	__NEOFS__LOCK_UNTIL (must be base-10 integer)
+//	CORS
+//	__NEOFS__LOCK_UNTIL
+//
+// CORS attribute gets JSON encoded `[]CORSRule` as value.
+//
+// If name is '__NEOFS__LOCK_UNTIL', value must be positive Unix Timestamp. On
+// success, referenced container becomes locked for removal until this time. If
+// the container was already locked, new expiration time must be later than the
+// previous one. Otherwise, SetAttribute throws exception including both
+// timestamps.
 //
 // SetAttribute must have either owner or Alphabet witness.
 //
@@ -2363,31 +2373,47 @@ func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) 
 	}
 
 	var (
-		exists bool
-		ctx    = storage.GetContext()
-		info   = getInfo(ctx, cID)
+		ctx  = storage.GetContext()
+		info = getInfo(ctx, cID)
 	)
 
 	checkAttributeSigner(ctx, info.Owner)
+
+	idx := -1
 
 	switch name {
 	case corsAttributeName:
 		validateCORSAttribute(value)
 	case lockAttributeName:
-		std.Atoi10(value)
+		to := std.Atoi10(value)
+		if to <= 0 {
+			panic("negative value " + value)
+		}
+
+		for idx = 0; idx < len(info.Attributes); idx++ {
+			if info.Attributes[idx].Key == name {
+				from := std.Atoi10(info.Attributes[idx].Value)
+				if to <= from {
+					panic("lock expiration value " + value + " is not bigger than current " + info.Attributes[idx].Value)
+				}
+				break
+			}
+		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	for i, attr := range info.Attributes {
-		if attr.Key == name {
-			exists = true
-			info.Attributes[i].Value = value
-			break
+	if idx < 0 { // was not done in switch
+		for idx = 0; idx < len(info.Attributes); idx++ {
+			if info.Attributes[idx].Key == name {
+				break
+			}
 		}
 	}
 
-	if !exists {
+	if idx < len(info.Attributes) {
+		info.Attributes[idx].Value = value
+	} else {
 		info.Attributes = append(info.Attributes, Attribute{
 			Key:   name,
 			Value: value,
@@ -2532,6 +2558,10 @@ func validateCORSExposeHeaders(items []any) string {
 //	CORS
 //	__NEOFS__LOCK_UNTIL
 //
+// If name is '__NEOFS__LOCK_UNTIL', previous time of lock expiration must have
+// already passed if any. Otherwise, RemoveAttribute throws exception including
+// both current and lock values in Unix Timestamp format.
+//
 // RemoveAttribute must have either owner or Alphabet witness.
 //
 // If container is missing, RemoveAttribute throws [cst.NotFoundError] exception.
@@ -2551,19 +2581,31 @@ func RemoveAttribute(cID interop.Hash256, name string) {
 	}
 
 	switch name {
-	case corsAttributeName, lockAttributeName:
+	case corsAttributeName:
+	case lockAttributeName:
+		for index = 0; index < len(info.Attributes); index++ {
+			if info.Attributes[index].Key == name {
+				from := std.Atoi10(info.Attributes[index].Value)
+				now := runtime.GetTime() / 1000
+				if from <= now {
+					panic("lock is not expired yet: until " + info.Attributes[index].Value + ", now " + std.Itoa10(now))
+				}
+				break
+			}
+		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	for i, attr := range info.Attributes {
-		if attr.Key == name {
-			index = i
-			break
+	if index < 0 {
+		for index = 0; index < len(info.Attributes); index++ {
+			if info.Attributes[index].Key == name {
+				break
+			}
 		}
 	}
 
-	if index == -1 {
+	if index == len(info.Attributes) {
 		return
 	}
 
