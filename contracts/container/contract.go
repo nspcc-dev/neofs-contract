@@ -107,6 +107,7 @@ const (
 	nnsHasAliasKey     = "nnsHasAlias"
 
 	corsAttributeName = "CORS"
+	lockAttributeName = "__NEOFS__LOCK_UNTIL"
 
 	// nolint:unused
 	nnsDefaultTLD = "container"
@@ -394,10 +395,20 @@ func PutNamed(container []byte, signature interop.Signature,
 	name, zone string) {
 	ctx := storage.GetContext()
 
-	ownerID := ownerFromBinaryContainer(container)
 	containerID := crypto.Sha256(container)
 	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
 		panic(cst.ErrorDeleted)
+	}
+
+	cnr := fromBytes(container)
+
+	for i := range cnr.Attributes {
+		switch cnr.Attributes[i].Key {
+		case lockAttributeName:
+			if std.Atoi10(cnr.Attributes[i].Value) <= 0 {
+				panic("invalid " + lockAttributeName + " attribute: negative value " + cnr.Attributes[i].Value)
+			}
+		}
 	}
 
 	var (
@@ -415,11 +426,10 @@ func PutNamed(container []byte, signature interop.Signature,
 	}
 
 	alphabet := common.AlphabetNodes()
-	from := common.WalletToScriptHash(ownerID)
 	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
 	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
-	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, from).(int)
+	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, cnr.Owner).(int)
 	if name != "" {
 		aliasFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
 		containerFee += aliasFee
@@ -438,7 +448,7 @@ func PutNamed(container []byte, signature interop.Signature,
 
 		if !contract.Call(balanceContractAddr, "transferX",
 			contract.All,
-			from,
+			cnr.Owner,
 			to,
 			containerFee,
 			details,
@@ -447,7 +457,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		}
 	}
 
-	addContainer(ctx, containerID, ownerID, container)
+	addContainer(ctx, containerID, scriptHashToAddress(cnr.Owner), container, cnr)
 
 	if name != "" {
 		if needRegister {
@@ -468,9 +478,9 @@ func PutNamed(container []byte, signature interop.Signature,
 	runtime.Log("added new container")
 	runtime.Notify("PutSuccess", containerID, publicKey)
 
-	notifyNEP11Transfer(containerID, nil, from) // 'from' is owner here i.e. 'to' in terms of NEP-11
+	notifyNEP11Transfer(containerID, nil, cnr.Owner)
 
-	onNEP11Payment(containerID, nil, from, nil)
+	onNEP11Payment(containerID, nil, cnr.Owner, nil)
 }
 
 // Create saves container descriptor serialized according to the NeoFS API
@@ -531,6 +541,10 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 // users' requests. IR verifies requests and approves them via multi-signature.
 // Once creation is approved, container is persisted and becomes accessible.
 // Credentials are disposable and do not persist in the chain.
+//
+// Following requirements apply to attributes:
+//
+//	__NEOFS__LOCK_UNTIL: must be positive Unix Timestamp
 func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.Hash256 {
 	alphabet := common.AlphabetNodes()
 	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
@@ -554,6 +568,10 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 			zone = cnr.Attributes[i].Value
 		case "__NEOFS__METAINFO_CONSISTENCY":
 			metaOnChain = true
+		case lockAttributeName:
+			if std.Atoi10(cnr.Attributes[i].Value) <= 0 {
+				panic("invalid " + lockAttributeName + " attribute: negative value " + cnr.Attributes[i].Value)
+			}
 		}
 	}
 
@@ -699,12 +717,16 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	ctx := storage.GetContext()
 
-	ownerID := getOwnerByID(ctx, containerID)
-	if ownerID == nil {
+	cnr, ok := tryGetInfo(ctx, containerID)
+	if !ok {
 		return
 	}
 
 	common.CheckAlphabetWitness()
+
+	if e := checkLock(cnr); e != "" {
+		panic(e)
+	}
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
 	domain := storage.Get(ctx, key).(string)
@@ -712,16 +734,21 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 		storage.Delete(ctx, key)
 		deleteNNSRecords(ctx, domain)
 	}
-	removeContainer(ctx, containerID, ownerID)
+
+	removeContainer(ctx, containerID, scriptHashToAddress(cnr.Owner))
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
 
-	notifyNEP11Transfer(containerID, common.WalletToScriptHash(ownerID), nil)
+	notifyNEP11Transfer(containerID, cnr.Owner, nil)
 }
 
 // Remove removes all data for the referenced container. Remove is no-op if
 // container does not exist. On success, Remove throws 'Removed' notification
 // event.
+//
+// If the container has '__NEOFS__LOCK_UNTIL' attribute with timestamp that has
+// not passed yet, Remove throws exception containing [cst.ErrorLocked]. The
+// exception includes both current and lock timestamps in Unix Timestamp format.
 //
 // See [CreateV2] for details.
 func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
@@ -732,13 +759,17 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	}
 
 	ctx := storage.GetContext()
-	cnrItemKey := append([]byte{containerKeyPrefix}, id...)
-	cnrItem := storage.Get(ctx, cnrItemKey)
-	if cnrItem == nil {
+
+	cnr, ok := tryGetInfo(ctx, id)
+	if !ok {
 		return
 	}
 
-	owner := ownerFromBinaryContainer(cnrItem.([]byte))
+	if e := checkLock(cnr); e != "" {
+		panic(e)
+	}
+
+	owner := scriptHashToAddress(cnr.Owner)
 
 	removeContainer(ctx, id, owner)
 
@@ -750,7 +781,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 
 	runtime.Notify("Removed", interop.Hash256(id), owner)
 
-	notifyNEP11Transfer(id, common.WalletToScriptHash(owner), nil)
+	notifyNEP11Transfer(id, cnr.Owner, nil)
 }
 
 func deleteNNSRecords(ctx storage.Context, domain string) {
@@ -776,15 +807,23 @@ func GetInfo(id interop.Hash256) Info {
 	return getInfo(storage.GetReadOnlyContext(), id)
 }
 
-func getInfo(ctx storage.Context, id interop.Hash256) Info {
+func tryGetInfo(ctx storage.Context, id interop.Hash256) (Info, bool) {
 	val := storage.Get(ctx, append([]byte{infoPrefix}, id...))
 	if val == nil {
 		if val = storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)); val != nil {
-			return fromBytes(val.([]byte))
+			return fromBytes(val.([]byte)), true
 		}
+		return Info{}, false
+	}
+	return std.Deserialize(val.([]byte)).(Info), true
+}
+
+func getInfo(ctx storage.Context, id interop.Hash256) Info {
+	res, ok := tryGetInfo(ctx, id)
+	if !ok {
 		panic(cst.NotFoundError)
 	}
-	return std.Deserialize(val.([]byte)).(Info)
+	return res
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
@@ -1806,7 +1845,7 @@ func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {
 	}
 }
 
-func addContainer(ctx storage.Context, id, owner, container []byte) {
+func addContainer(ctx storage.Context, id, owner, container []byte, info Info) {
 	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
 	containerListKey = append(containerListKey, id...)
 	storage.Put(ctx, containerListKey, id)
@@ -1814,7 +1853,7 @@ func addContainer(ctx storage.Context, id, owner, container []byte) {
 	idKey := append([]byte{containerKeyPrefix}, id...)
 	storage.Put(ctx, idKey, container)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(fromBytes(container)))
+	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(info))
 }
 
 func removeContainer(ctx storage.Context, id []byte, owner []byte) {
@@ -1943,6 +1982,20 @@ func scriptHashToAddress(h interop.Hash160) []byte {
 	copy(addr[1+interop.Hash160Len:], crypto.Sha256(sh))
 
 	return addr
+}
+
+func checkLock(cnr Info) string {
+	for i := range cnr.Attributes {
+		if cnr.Attributes[i].Key == lockAttributeName {
+			until := std.Atoi10(cnr.Attributes[i].Value)
+
+			if now := runtime.GetTime() / 1000; now <= until {
+				return cst.ErrorLocked + " until " + cnr.Attributes[i].Value + ", now " + std.Itoa10(now)
+			}
+		}
+	}
+
+	return ""
 }
 
 const (
@@ -2293,9 +2346,17 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 
 // SetAttribute sets container attribute. Not all container attributes can be changed
 // with SetAttribute. The supported list of attributes:
-// - CORS
+//
+//	CORS
+//	__NEOFS__LOCK_UNTIL
 //
 // CORS attribute gets JSON encoded `[]CORSRule` as value.
+//
+// If name is '__NEOFS__LOCK_UNTIL', value must be positive Unix Timestamp. On
+// success, referenced container becomes locked for removal until this time. If
+// the container was already locked, new expiration time must be later than the
+// previous one. Otherwise, SetAttribute throws exception including both
+// timestamps.
 //
 // SetAttribute must have either owner or Alphabet witness.
 //
@@ -2312,29 +2373,47 @@ func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) 
 	}
 
 	var (
-		exists bool
-		ctx    = storage.GetContext()
-		info   = getInfo(ctx, cID)
+		ctx  = storage.GetContext()
+		info = getInfo(ctx, cID)
 	)
 
 	checkAttributeSigner(ctx, info.Owner)
 
+	idx := -1
+
 	switch name {
 	case corsAttributeName:
 		validateCORSAttribute(value)
+	case lockAttributeName:
+		to := std.Atoi10(value)
+		if to <= 0 {
+			panic("negative value " + value)
+		}
+
+		for idx = 0; idx < len(info.Attributes); idx++ {
+			if info.Attributes[idx].Key == name {
+				from := std.Atoi10(info.Attributes[idx].Value)
+				if to <= from {
+					panic("lock expiration value " + value + " is not bigger than current " + info.Attributes[idx].Value)
+				}
+				break
+			}
+		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	for i, attr := range info.Attributes {
-		if attr.Key == name {
-			exists = true
-			info.Attributes[i].Value = value
-			break
+	if idx < 0 { // was not done in switch
+		for idx = 0; idx < len(info.Attributes); idx++ {
+			if info.Attributes[idx].Key == name {
+				break
+			}
 		}
 	}
 
-	if !exists {
+	if idx < len(info.Attributes) {
+		info.Attributes[idx].Value = value
+	} else {
 		info.Attributes = append(info.Attributes, Attribute{
 			Key:   name,
 			Value: value,
@@ -2475,7 +2554,13 @@ func validateCORSExposeHeaders(items []any) string {
 
 // RemoveAttribute removes container attribute. Not all container attributes can be removed
 // with RemoveAttribute. The supported list of attributes:
-// - CORS
+//
+//	CORS
+//	__NEOFS__LOCK_UNTIL
+//
+// If name is '__NEOFS__LOCK_UNTIL', previous time of lock expiration must have
+// already passed if any. Otherwise, RemoveAttribute throws exception including
+// both current and lock values in Unix Timestamp format.
 //
 // RemoveAttribute must have either owner or Alphabet witness.
 //
@@ -2497,18 +2582,30 @@ func RemoveAttribute(cID interop.Hash256, name string) {
 
 	switch name {
 	case corsAttributeName:
+	case lockAttributeName:
+		for index = 0; index < len(info.Attributes); index++ {
+			if info.Attributes[index].Key == name {
+				from := std.Atoi10(info.Attributes[index].Value)
+				now := runtime.GetTime() / 1000
+				if from <= now {
+					panic("lock is not expired yet: until " + info.Attributes[index].Value + ", now " + std.Itoa10(now))
+				}
+				break
+			}
+		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	for i, attr := range info.Attributes {
-		if attr.Key == name {
-			index = i
-			break
+	if index < 0 {
+		for index = 0; index < len(info.Attributes); index++ {
+			if info.Attributes[index].Key == name {
+				break
+			}
 		}
 	}
 
-	if index == -1 {
+	if index == len(info.Attributes) {
 		return
 	}
 

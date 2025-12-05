@@ -1804,6 +1804,29 @@ func TestContainerRemove(t *testing.T) {
 	t.Run("broken container in storage", func(t *testing.T) {
 		t.Skip("TODO https://github.com/nspcc-dev/neo-go/issues/2926")
 	})
+	t.Run("lock", func(t *testing.T) {
+		blockChain, signer := chain.NewSingleWithOptions(t, nil)
+		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+
+		deployDefaultNNS(t, exec)
+		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+		deployProxyContract(t, exec)
+
+		exec.DeployContract(t, containerContract, nil)
+
+		inv := exec.CommitteeInvoker(containerContract.Hash)
+
+		cnr := containertest.Container()
+
+		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", "9223372036854775807")
+		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+
+		inv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+		inv.InvokeFail(t, containerconst.ErrorLocked, "remove", id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
 
 	const createFee = 1000
 	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
@@ -2103,6 +2126,30 @@ func TestContainerCreateV2(t *testing.T) {
 		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
+	t.Run("format violation", func(t *testing.T) {
+		t.Run("invalid attributes", func(t *testing.T) {
+			for _, tc := range []struct {
+				attr      string
+				exception string
+				values    []string
+			}{
+				{attr: "__NEOFS__LOCK_UNTIL", exception: "at instruction 1 (SYSCALL): invalid format", values: []string{"foo", "1.2", "1 2"}},
+			} {
+				t.Run(tc.attr, func(t *testing.T) {
+					for _, val := range tc.values {
+						cnr := cnr
+						cnr.SetAttribute(tc.attr, val)
+
+						inv.InvokeFail(t, tc.exception, "createV2",
+							stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+					}
+				})
+			}
+			t.Run("lock", func(t *testing.T) {
+			})
+		})
 	})
 
 	t.Run("no deposit", func(t *testing.T) {
@@ -3011,11 +3058,32 @@ func TestSetAttribute(t *testing.T) {
 		cnr.CopyTo(&cnr2)
 
 		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
-		cnr.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr)
+		cnr2.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr2)
 
 		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("lock", func(t *testing.T) {
+		for _, val := range []string{"foo", "1.2", "1 2"} {
+			t.Run("invalid", func(t *testing.T) {
+				inv.InvokeFail(t, "at instruction 1 (SYSCALL): invalid format", "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", val, "")
+			})
+		}
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		for _, val := range []string{"-42", "0", "42"} {
+			inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", val, "")
+
+			cnr2.SetAttribute("__NEOFS__LOCK_UNTIL", val)
+			assertGetInfo(t, inv, cID, cnr2)
+		}
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+		assertGetInfo(t, inv, cID, cnr)
 	})
 }
 
@@ -3082,15 +3150,27 @@ func TestRemoveAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
-
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
-		cnr.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr)
+		cnr2.SetAttribute("CORS", string(pl))
+		assertGetInfo(t, inv, cID, cnr2)
 
 		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("lock", func(t *testing.T) {
+		inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", "42", nil)
+
+		// var cnr2 container.Container
+		// cnr.CopyTo(&cnr2)
+		// cnr2.SetAttribute("__NEOFS__LOCK_UNTIL", "42")
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+
+		assertGetInfo(t, inv, cID, cnr)
 	})
 }
 

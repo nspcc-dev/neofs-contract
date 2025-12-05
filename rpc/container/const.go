@@ -12,4 +12,7 @@ const (
 
 	// NotFoundError is returned if container is missing.
 	NotFoundError = containerconst.NotFoundError
+
+	// ErrorLocked is returned on locked container.
+	ErrorLocked = containerconst.ErrorLocked
 )
