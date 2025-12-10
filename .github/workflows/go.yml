@@ -22,12 +22,12 @@ jobs:
     strategy:
       matrix:
         go: [ '1.24', '1.25' ]
-        os: [ubuntu-latest, windows-2022, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
           # Only latest Go version for Windows and MacOS.
-          - os: windows-2022
+          - os: windows-latest
             go: '1.24'
-          - os: macos-14
+          - os: macos-latest
             go: '1.24'
       fail-fast: false
     steps:
