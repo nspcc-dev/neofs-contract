@@ -106,9 +106,11 @@ const (
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
 
-	corsAttributeName   = "CORS"
-	lockAttributeName   = "__NEOFS__LOCK_UNTIL"
-	s3TagsAttributeName = "S3_TAGS"
+	corsAttributeName            = "CORS"
+	lockAttributeName            = "__NEOFS__LOCK_UNTIL"
+	s3TagsAttributeName          = "S3_TAGS"
+	s3SettingsAttributeName      = "S3_SETTINGS"
+	s3NotificationsAttributeName = "S3_NOTIFICATIONS"
 
 	// nolint:unused
 	nnsDefaultTLD = "container"
@@ -2366,6 +2368,8 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 //   - CORS
 //   - NEOFS__LOCK_UNTIL
 //   - S3_TAGS
+//   - S3_SETTINGS
+//   - S3_NOTIFICATIONS
 //
 // CORS attribute gets JSON encoded `[]CORSRule` as value.
 //
@@ -2376,6 +2380,12 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 // If the name is 'S3_TAGS', the value must be a valid JSON map, where the key is the tag name and
 // the value is the tag value. It is an S3 gate-specific attribute.
 // For instance: {"my-tag":"my-value"}.
+//
+// If the name is 'S3_SETTINGS', the value is not validated by the contract. It is an S3 gate-specific attribute.
+// The structure of it is controlled by the gate itself.
+//
+// If the name is 'S3_NOTIFICATIONS', the value is not validated by the contract. It is an S3 gate-specific attribute.
+// The structure of it is controlled by the gate itself.
 //
 // SetAttribute must have either owner or Alphabet witness.
 //
@@ -2427,6 +2437,8 @@ func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) 
 				panic("tag " + k + " value is empty")
 			}
 		}
+	case s3SettingsAttributeName:
+	case s3NotificationsAttributeName:
 	default:
 		panic("attribute is immutable")
 	}
@@ -2585,6 +2597,8 @@ func validateCORSExposeHeaders(items []any) string {
 //   - CORS
 //   - __NEOFS__LOCK_UNTIL
 //   - S3_TAGS
+//   - S3_SETTINGS
+//   - S3_NOTIFICATIONS
 //
 // If name is '__NEOFS__LOCK_UNTIL', current time must be later than the
 // currently set one if any.
@@ -2610,6 +2624,8 @@ func RemoveAttribute(cID interop.Hash256, name string) {
 	switch name {
 	case corsAttributeName:
 	case s3TagsAttributeName:
+	case s3SettingsAttributeName:
+	case s3NotificationsAttributeName:
 	case lockAttributeName:
 		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
 			if info.Attributes[index].Key == name {

@@ -3591,3 +3591,69 @@ func TestSetS3TAGSAttribute(t *testing.T) {
 		inv.InvokeFail(t, "tag k3 value is empty", "setAttribute", cID[:], "S3_TAGS", pl, "")
 	})
 }
+
+func TestSetS3Attributes(t *testing.T) {
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 200_0000_0000)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr := user.NewFromScriptHash(ownerAcc)
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerAddr)
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	inv := exec.NewInvoker(containerContract.Hash, owner)
+
+	t.Run("create container", func(t *testing.T) {
+		anyValidInvocScript := randomBytes(10)
+		anyValidVerifScript := randomBytes(10)
+		anyValidSessionToken := randomBytes(10)
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("store and remove S3_SETTINGS", func(t *testing.T) {
+		pl := "{}"
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_SETTINGS", pl, "")
+		cnr2.SetAttribute("S3_SETTINGS", pl)
+		assertGetInfo(t, inv, cID, cnr2)
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_SETTINGS")
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("store and remove S3_NOTIFICATIONS", func(t *testing.T) {
+		pl := "some value"
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_NOTIFICATIONS", pl, "")
+		cnr2.SetAttribute("S3_NOTIFICATIONS", pl)
+		assertGetInfo(t, inv, cID, cnr2)
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_NOTIFICATIONS")
+		assertGetInfo(t, inv, cID, cnr)
+	})
+}
