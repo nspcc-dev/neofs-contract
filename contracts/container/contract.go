@@ -106,8 +106,9 @@ const (
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
 
-	corsAttributeName = "CORS"
-	lockAttributeName = "__NEOFS__LOCK_UNTIL"
+	corsAttributeName   = "CORS"
+	lockAttributeName   = "__NEOFS__LOCK_UNTIL"
+	s3TagsAttributeName = "S3_TAGS"
 
 	// nolint:unused
 	nnsDefaultTLD = "container"
@@ -2364,12 +2365,17 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 // with SetAttribute. The supported list of attributes:
 //   - CORS
 //   - NEOFS__LOCK_UNTIL
+//   - S3_TAGS
 //
 // CORS attribute gets JSON encoded `[]CORSRule` as value.
 //
 // If name is '__NEOFS__LOCK_UNTIL', value must a valid Unix Timestamp later the
 // current and already set (if any) ones. On success, referenced container
 // becomes locked for removal until specified time.
+//
+// If the name is 'S3_TAGS', the value must be a valid JSON map, where the key is the tag name and
+// the value is the tag value. It is an S3 gate-specific attribute.
+// For instance: {"my-tag":"my-value"}.
 //
 // SetAttribute must have either owner or Alphabet witness.
 //
@@ -2409,6 +2415,16 @@ func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) 
 					panic("lock expiration time " + value + " is not later than already set " + info.Attributes[idx].Value)
 				}
 				break
+			}
+		}
+	case s3TagsAttributeName:
+		tags := std.JSONDeserialize([]byte(value)).(map[string]any)
+		for k, v := range tags {
+			if k == "" {
+				panic("tag key is empty")
+			}
+			if v.(string) == "" {
+				panic("tag " + k + " value is empty")
 			}
 		}
 	default:
@@ -2568,6 +2584,7 @@ func validateCORSExposeHeaders(items []any) string {
 // with RemoveAttribute. The supported list of attributes:
 //   - CORS
 //   - __NEOFS__LOCK_UNTIL
+//   - S3_TAGS
 //
 // If name is '__NEOFS__LOCK_UNTIL', current time must be later than the
 // currently set one if any.
@@ -2592,6 +2609,7 @@ func RemoveAttribute(cID interop.Hash256, name string) {
 
 	switch name {
 	case corsAttributeName:
+	case s3TagsAttributeName:
 	case lockAttributeName:
 		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
 			if info.Attributes[index].Key == name {
