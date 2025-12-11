@@ -9,6 +9,7 @@ Changelog for NeoFS Contract
 - NEP-11 support by Container contract (#498)
 - New NNS record type `Neo` (#544)
 - Support for `__NEOFS__LOCK_UNTIL` container attribute (#558)
+- Support for `S3_TAGS` container attribute (#562)
 
 ### Changed
 

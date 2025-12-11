@@ -3592,3 +3592,88 @@ func TestSetCORSAttribute(t *testing.T) {
 		})
 	})
 }
+
+func TestSetS3TAGSAttribute(t *testing.T) {
+	const anyValidUntil = math.MaxUint32
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	blockChain, committee := chain.NewSingle(t)
+	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
+	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+
+	deployDefaultNNS(t, exec)
+	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
+	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
+	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
+	deployProxyContract(t, exec)
+
+	exec.DeployContract(t, containerContract, nil)
+
+	owner := exec.NewAccount(t, 200_0000_0000)
+	ownerAcc := owner.ScriptHash()
+	ownerAddr := user.NewFromScriptHash(ownerAcc)
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerAddr)
+	cnrBytes := cnr.Marshal()
+	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("create container", func(t *testing.T) {
+		const anyValidDomainName = ""
+		const anyValidDomainZone = ""
+
+		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
+
+		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
+
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("store and remove S3_TAGS", func(t *testing.T) {
+		var tags = map[string]string{
+			"key": "value",
+		}
+
+		pl, err := json.Marshal(tags)
+		require.NoError(t, err)
+
+		var cnr2 container.Container
+		cnr.CopyTo(&cnr2)
+
+		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		cnr2.SetAttribute("S3_TAGS", string(pl))
+		assertGetInfo(t, inv, cID, cnr2)
+
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_TAGS", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		assertGetInfo(t, inv, cID, cnr)
+	})
+
+	t.Run("key is empty", func(t *testing.T) {
+		var tags = map[string]string{
+			"k1": "value1",
+			"":   "value2",
+			"k3": "value3",
+		}
+
+		pl, err := json.Marshal(tags)
+		require.NoError(t, err)
+
+		inv.InvokeFail(t, "tag key is empty", "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
+	t.Run("value is empty", func(t *testing.T) {
+		var tags = map[string]string{
+			"k1": "value1",
+			"k2": "value2",
+			"k3": "",
+		}
+
+		pl, err := json.Marshal(tags)
+		require.NoError(t, err)
+
+		inv.InvokeFail(t, "tag k3 value is empty", "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+}
