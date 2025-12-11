@@ -2340,16 +2340,6 @@ func attributeFromBytes(b []byte) (Attribute, string) {
 	return res, ""
 }
 
-func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	vRaw := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AlphabetManagesAttributesKey)
-	if vRaw == nil || !vRaw.(bool) {
-		common.CheckOwnerWitness(userScriptHash)
-	} else {
-		common.CheckAlphabetWitness()
-	}
-}
-
 // SetAttribute sets container attribute. Not all container attributes can be changed
 // with SetAttribute. The supported list of attributes:
 //   - CORS
@@ -2361,12 +2351,19 @@ func checkAttributeSigner(ctx storage.Context, userScriptHash []byte) {
 // current and already set (if any) ones. On success, referenced container
 // becomes locked for removal until specified time.
 //
-// SetAttribute must have either owner or Alphabet witness.
+// The validUntil must be Unix Timestamp which has not yet pass.
 //
-// SessionToken is optional and should be a stable marshaled SessionToken structure from API.
+// SetAttribute must have Alphabet witness. Invocation and verification scripts
+// must authenticate either container owner or session subject if any. If
+// session token is set, it must be issued by the container owner and have at
+// least one context with referenced container and `SETATTRIBUTE` verb. The
+// sessionToken parameter must be encoded according to NeoFS API binary
+// protocol.
 //
 // If container is missing, SetAttribute throws [cst.NotFoundError] exception.
-func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) {
+func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invocScript, verifScript, sessionToken []byte) {
+	common.CheckAlphabetWitness()
+
 	if name == "" {
 		panic("name is empty")
 	}
@@ -2375,12 +2372,14 @@ func SetAttribute(cID interop.Hash256, name, value string, sessionToken []byte) 
 		panic("value is empty")
 	}
 
+	if now := runtime.GetTime(); now > validUntil*1000 {
+		panic("request is valid until " + std.Itoa10(validUntil) + "000, now " + std.Itoa10(now))
+	}
+
 	var (
 		ctx  = storage.GetContext()
 		info = getInfo(ctx, cID)
 	)
-
-	checkAttributeSigner(ctx, info.Owner)
 
 	idx := -1
 
@@ -2562,12 +2561,25 @@ func validateCORSExposeHeaders(items []any) string {
 // If name is '__NEOFS__LOCK_UNTIL', current time must be later than the
 // currently set one if any.
 //
-// RemoveAttribute must have either owner or Alphabet witness.
+// The validUntil must be Unix Timestamp which has not yet pass.
+//
+// RemoveAttribute must have Alphabet witness. Invocation and verification
+// scripts must authenticate either container owner or session subject if any.
+// If session token is set, it must be issued by the container owner and have at
+// least one context with referenced container and `REMOVEATTRIBUTE` verb. The
+// sessionToken parameter must be encoded according to NeoFS API binary
+// protocol.
 //
 // If container is missing, RemoveAttribute throws [cst.NotFoundError] exception.
-func RemoveAttribute(cID interop.Hash256, name string) {
+func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScript, verifScript, sessionToken []byte) {
+	common.CheckAlphabetWitness()
+
 	if name == "" {
 		panic("name is empty")
+	}
+
+	if now := runtime.GetTime(); now > validUntil*1000 {
+		panic("request is valid until " + std.Itoa10(validUntil) + "000, now " + std.Itoa10(now))
 	}
 
 	var (
@@ -2575,10 +2587,6 @@ func RemoveAttribute(cID interop.Hash256, name string) {
 		ctx   = storage.GetContext()
 		info  = getInfo(ctx, cID)
 	)
-
-	if !runtime.CheckWitness(info.Owner) && !runtime.CheckWitness(common.AlphabetAddress()) {
-		panic("alphabet and owner witness check failed")
-	}
 
 	switch name {
 	case corsAttributeName:
