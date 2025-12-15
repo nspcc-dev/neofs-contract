@@ -2519,7 +2519,7 @@ func validateCORSRule(rule map[string]any) string {
 		return err
 	}
 
-	if maxAgeSeconds := rule["MaxAgeSeconds"].(int64); maxAgeSeconds < 0 {
+	if maxAgeSeconds, ok := rule["MaxAgeSeconds"]; ok && maxAgeSeconds.(int64) < 0 {
 		return "MaxAgeSeconds must be >= 0"
 	}
 
