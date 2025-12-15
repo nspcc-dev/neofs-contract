@@ -2566,10 +2566,6 @@ func validateCORSAllowedOrigins(items []any) string {
 }
 
 func validateCORSAllowedHeaders(items []any) string {
-	if len(items) == 0 {
-		return "AllowedHeaders is empty"
-	}
-
 	for i, header := range items {
 		h := header.(string)
 		if h == "" {

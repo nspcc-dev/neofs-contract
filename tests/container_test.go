@@ -3447,19 +3447,18 @@ func TestSetCORSAttribute(t *testing.T) {
 	})
 
 	t.Run("allowedHeaders", func(t *testing.T) {
-		t.Run("empty headers list", func(t *testing.T) {
+		t.Run("empty headers list ok", func(t *testing.T) {
 			var rules = []CORSRule{
 				{
 					AllowedMethods: []string{"GET"},
 					AllowedOrigins: []string{"*"},
-					AllowedHeaders: []string{},
 				},
 			}
 
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedHeaders is empty", "setAttribute", cID[:], "CORS", pl,
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
 				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
