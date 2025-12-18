@@ -10,7 +10,6 @@ const (
 	EigenTrustAlphaConfig         = "EigenTrustAlpha"
 	WithdrawFeeConfig             = "WithdrawFee"
 	HomomorphicHashingDisabledKey = "HomomorphicHashingDisabled"
-	MaintenanceModeAllowedConfig  = "MaintenanceModeAllowed"
 )
 
 // RawNetworkParameter is a NeoFS network parameter which is transmitted but
@@ -35,6 +34,5 @@ type NetworkConfiguration struct {
 	EigenTrustAlpha            float64
 	WithdrawalFee              uint64
 	HomomorphicHashingDisabled bool
-	MaintenanceModeAllowed     bool
 	Raw                        []RawNetworkParameter
 }

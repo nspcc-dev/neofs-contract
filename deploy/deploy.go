@@ -444,7 +444,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 		[]byte(EigenTrustAlphaConfig), encodeFloatConfig(prm.NetmapContract.Config.EigenTrustAlpha),
 		[]byte(WithdrawFeeConfig), encodeUintConfig(prm.NetmapContract.Config.WithdrawalFee),
 		[]byte(HomomorphicHashingDisabledKey), encodeBoolConfig(prm.NetmapContract.Config.HomomorphicHashingDisabled),
-		[]byte(MaintenanceModeAllowedConfig), encodeBoolConfig(prm.NetmapContract.Config.MaintenanceModeAllowed),
 	}
 
 	for i := range prm.NetmapContract.Config.Raw {
