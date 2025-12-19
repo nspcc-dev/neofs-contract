@@ -1085,11 +1085,7 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		storage.Put(ctx, summaryKey, std.Serialize(rSummary))
 
 		// user stat update
-
-		owner := getOwnerByID(ctx, cID)
-		totalUserKey := userTotalStorageKey(owner)
-		oldVal := storage.Get(ctx, totalUserKey).(int)
-		storage.Put(ctx, totalUserKey, oldVal+spaceDiff)
+		updateUserTakenSpace(ctx, getOwnerByID(ctx, cID), spaceDiff)
 	}
 
 	runtime.Notify("NodesUpdate", cID)
@@ -1340,14 +1336,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	storage.Put(ctx, reportKey, std.Serialize(report))
 	storage.Put(ctx, billingStatKey, std.Serialize(billingStat))
 
-	userSummaryKey := userTotalStorageKey(owner)
-	v := storage.Get(ctx, userSummaryKey)
-	if v == nil {
-		storage.Put(ctx, userSummaryKey, storageDiff)
-	} else {
-		oldSize := v.(int)
-		storage.Put(ctx, userSummaryKey, oldSize+storageDiff)
-	}
+	updateUserTakenSpace(ctx, owner, storageDiff)
 
 	storage.Put(ctx, summaryKey, std.Serialize(summary))
 	runtime.Log("saved container size report")
@@ -1356,13 +1345,34 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 // GetTakenSpaceByUser returns total load space in all containers user owns.
 // If user have no containers, it returns 0.
 func GetTakenSpaceByUser(user []byte) int {
-	ctx := storage.GetReadOnlyContext()
-	v := storage.Get(ctx, userTotalStorageKey(user))
+	return getTakenSpaceByKey(storage.GetReadOnlyContext(), userTotalStorageKey(user))
+}
+
+// getTakenSpaceByKey simplifies nil handling for user taken space value.
+func getTakenSpaceByKey(ctx storage.Context, key []byte) int {
+	v := storage.Get(ctx, key)
 	if v == nil {
 		return 0
 	}
 
 	return v.(int)
+}
+
+func updateUserTakenSpace(ctx storage.Context, owner []byte, diff int) {
+	if diff == 0 {
+		return
+	}
+	var (
+		usrSpaceKey = userTotalStorageKey(owner)
+		usrSpaceVal = getTakenSpaceByKey(ctx, usrSpaceKey)
+	)
+	usrSpaceVal += diff
+
+	if usrSpaceVal > 0 {
+		storage.Put(ctx, usrSpaceKey, usrSpaceVal)
+	} else {
+		storage.Delete(ctx, usrSpaceKey)
+	}
 }
 
 // GetNodeReportSummary method returns a sum of object count and occupied
@@ -1724,21 +1734,9 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		storage.Put(ctx, binKey, bin)
 
 		if cnrSizeItem := storage.Get(ctx, append([]byte{reportsSummary}, tokenID...)); cnrSizeItem != nil {
-			if cnrSize := cnrSizeItem.(int); cnrSize > 0 {
-				usrSpaceKey := userTotalStorageKey(scriptHashToAddress(from))
-				if usrSpaceItem := storage.Get(ctx, usrSpaceKey); usrSpaceItem != nil {
-					if was := usrSpaceItem.(int); was > cnrSize {
-						storage.Put(ctx, usrSpaceKey, was-cnrSize)
-					} else {
-						storage.Put(ctx, usrSpaceKey, 0)
-					}
-				}
-
-				usrSpaceKey = userTotalStorageKey(scriptHashToAddress(to))
-				if usrSpaceItem := storage.Get(ctx, usrSpaceKey); usrSpaceItem != nil {
-					storage.Put(ctx, usrSpaceKey, usrSpaceItem.(int)+cnrSize)
-				}
-			}
+			cnrSize := cnrSizeItem.(int)
+			updateUserTakenSpace(ctx, scriptHashToAddress(from), -cnrSize)
+			updateUserTakenSpace(ctx, scriptHashToAddress(to), cnrSize)
 		}
 	}
 
@@ -1862,15 +1860,7 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 	summaryRaw := storage.Get(ctx, summaryKey)
 	if summaryRaw != nil {
 		rSummary := std.Deserialize(summaryRaw.([]byte)).(NodeReportSummary)
-		diff := -rSummary.ContainerSize
-
-		totalUserKey := userTotalStorageKey(owner)
-		oldVal := storage.Get(ctx, totalUserKey).(int)
-		if oldVal <= 0 {
-			storage.Delete(ctx, totalUserKey)
-		} else {
-			storage.Put(ctx, totalUserKey, oldVal+diff)
-		}
+		updateUserTakenSpace(ctx, owner, -rSummary.ContainerSize)
 	}
 
 	// indexes clean up
