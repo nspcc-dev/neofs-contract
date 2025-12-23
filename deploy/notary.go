@@ -26,8 +26,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/notary"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/rolemgmt"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/scparser"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/opcode"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"go.uber.org/zap"
@@ -1238,7 +1238,7 @@ func listenCommitteeNotaryRequests(ctx context.Context, prm listenCommitteeNotar
 						acc = prm.validatorMultiSigAcc
 					default:
 						if len(mainTx.Scripts[i].VerificationScript) > 0 {
-							if bSenderKey, ok := vm.ParseSignatureContract(mainTx.Scripts[i].VerificationScript); ok {
+							if bSenderKey, ok := scparser.ParseSignatureContract(mainTx.Scripts[i].VerificationScript); ok {
 								senderKey, err := keys.NewPublicKeyFromBytes(bSenderKey, elliptic.P256())
 								if err != nil {
 									l.Info("failed to decode public key from simple signature contract verification script of main transaction from the received notary request, skip",
@@ -1247,7 +1247,7 @@ func listenCommitteeNotaryRequests(ctx context.Context, prm listenCommitteeNotar
 								}
 
 								acc = notary.FakeSimpleAccount(senderKey)
-							} else if m, bKeys, ok := vm.ParseMultiSigContract(mainTx.Scripts[i].VerificationScript); ok {
+							} else if m, bKeys, ok := scparser.ParseMultiSigContract(mainTx.Scripts[i].VerificationScript); ok {
 								pKeys := make(keys.PublicKeys, len(bKeys))
 								for j := range bKeys {
 									err := pKeys[j].DecodeBytes(bKeys[j])

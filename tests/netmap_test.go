@@ -11,8 +11,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/bigint"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/scparser"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
@@ -24,7 +24,7 @@ import (
 const netmapPath = "../contracts/netmap"
 
 func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util.Uint160 {
-	_, pubs, ok := vm.ParseMultiSigContract(e.Committee.Script())
+	_, pubs, ok := scparser.ParseMultiSigContract(e.Committee.Script())
 	require.True(t, ok)
 
 	args := make([]any, 5)
