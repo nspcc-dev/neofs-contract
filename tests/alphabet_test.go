@@ -6,8 +6,8 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract/scparser"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -98,7 +98,7 @@ func TestVote(t *testing.T) {
 			const method = "vote"
 
 			newAlphabet := c.NewAccount(t)
-			newAlphabetPub, ok := vm.ParseSignatureContract(newAlphabet.Script())
+			newAlphabetPub, ok := scparser.ParseSignatureContract(newAlphabet.Script())
 			require.True(t, ok)
 			cNewAlphabet := c.WithSigners(newAlphabet)
 
