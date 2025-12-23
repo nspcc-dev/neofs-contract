@@ -40,10 +40,10 @@ var (
 
 // _deploy sets up initial alphabet node keys.
 // nolint:unused
-func _deploy(data any, isUpdate bool) {
+func _deploy(data any, update bool) {
 	ctx := storage.GetContext()
 
-	if isUpdate {
+	if update {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
