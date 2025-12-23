@@ -2999,6 +2999,7 @@ func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr co
 }
 
 func TestSetAttribute(t *testing.T) {
+	const anyValidUntil = math.MaxUint32
 	anyValidInvocScript := randomBytes(10)
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
@@ -3025,7 +3026,13 @@ func TestSetAttribute(t *testing.T) {
 
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.NewInvoker(containerContract.Hash, owner)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("no alphabet witness", func(t *testing.T) {
+		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+		inv.InvokeFail(t, "alphabet witness check failed", "setAttribute",
+			cID[:], "any_attribute", "any_value", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
 
 	t.Run("invalid container id", func(t *testing.T) {
 		var rules []CORSRule
@@ -3033,7 +3040,8 @@ func TestSetAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
-		inv.InvokeFail(t, "container does not exist", "setAttribute", []byte{1, 2, 3}, "CORS", pl, "")
+		inv.InvokeFail(t, "container does not exist", "setAttribute", []byte{1, 2, 3}, "CORS", pl,
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("create container", func(t *testing.T) {
@@ -3046,16 +3054,28 @@ func TestSetAttribute(t *testing.T) {
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
+	t.Run("passed valid until", func(t *testing.T) {
+		curBlockTime := exec.TopBlock(t).Timestamp
+		validUntil := curBlockTime / 1000
+
+		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
+			"setAttribute", cID[:], "any_attribute", "any_value", curBlockTime/1000,
+			anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
 	t.Run("update not whitelisted", func(t *testing.T) {
-		inv.InvokeFail(t, "attribute is immutable", "setAttribute", cID[:], "my-attribute-123", "attribute-value", "")
+		inv.InvokeFail(t, "attribute is immutable", "setAttribute", cID[:], "my-attribute-123", "attribute-value",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		inv.InvokeFail(t, "name is empty", "setAttribute", cID[:], "", "attribute-value", "")
+		inv.InvokeFail(t, "name is empty", "setAttribute", cID[:], "", "attribute-value",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("empty value", func(t *testing.T) {
-		inv.InvokeFail(t, "value is empty", "setAttribute", cID[:], "my-attribute-123", "", "")
+		inv.InvokeFail(t, "value is empty", "setAttribute", cID[:], "my-attribute-123", "",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("store and remove CORS", func(t *testing.T) {
@@ -3074,11 +3094,13 @@ func TestSetAttribute(t *testing.T) {
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -3091,7 +3113,8 @@ func TestSetAttribute(t *testing.T) {
 		committeeInvoker.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), nil, nil, anyValidSessionToken)
 
 		assertFail := func(t *testing.T, val string, exc string) {
-			inv.InvokeFail(t, exc, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", val, anyValidSessionToken)
+			inv.InvokeFail(t, exc, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", val,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		}
 
 		t.Run("non-int", func(t *testing.T) {
@@ -3116,7 +3139,8 @@ func TestSetAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr, anyValidSessionToken)
+		inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr,
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
 		assertGetInfo(t, inv, cID, cnr)
@@ -3126,7 +3150,8 @@ func TestSetAttribute(t *testing.T) {
 			assertFail(t, newVal, "lock expiration time "+newVal+" is not later than already set "+expStr)
 
 			newVal = strconv.Itoa(int(exp + 1))
-			inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal, anyValidSessionToken)
+			inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 			cnr.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
 			assertGetInfo(t, inv, cID, cnr)
@@ -3135,6 +3160,11 @@ func TestSetAttribute(t *testing.T) {
 }
 
 func TestRemoveAttribute(t *testing.T) {
+	const anyValidUntil = math.MaxUint32
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
 	blockChain, committee := chain.NewSingle(t)
 	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
 	exec := neotest.NewExecutor(t, blockChain, committee, committee)
@@ -3155,16 +3185,20 @@ func TestRemoveAttribute(t *testing.T) {
 
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.NewInvoker(containerContract.Hash, owner)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
+
+	t.Run("no alphabet witness", func(t *testing.T) {
+		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+		inv.InvokeFail(t, "alphabet witness check failed", "removeAttribute",
+			cID[:], "any_attribute", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
 
 	t.Run("invalid container id", func(t *testing.T) {
-		inv.InvokeFail(t, "container does not exist", "removeAttribute", []byte{1, 2, 3}, "CORS")
+		inv.InvokeFail(t, "container does not exist", "removeAttribute", []byte{1, 2, 3}, "CORS",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("create container", func(t *testing.T) {
-		anyValidInvocScript := randomBytes(10)
-		anyValidVerifScript := randomBytes(10)
-		anyValidSessionToken := randomBytes(10)
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
@@ -3176,12 +3210,23 @@ func TestRemoveAttribute(t *testing.T) {
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
+	t.Run("passed valid until", func(t *testing.T) {
+		curBlockTime := exec.TopBlock(t).Timestamp
+		validUntil := curBlockTime / 1000
+
+		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
+			"removeAttribute", cID[:], "any_attribute", curBlockTime/1000,
+			anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	})
+
 	t.Run("invalid name", func(t *testing.T) {
-		inv.InvokeFail(t, "name is empty", "removeAttribute", cID[:], "")
+		inv.InvokeFail(t, "name is empty", "removeAttribute", cID[:], "",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("attribute is immutable", func(t *testing.T) {
-		inv.InvokeFail(t, "attribute is immutable", "removeAttribute", cID[:], "random-name")
+		inv.InvokeFail(t, "attribute is immutable", "removeAttribute", cID[:], "random-name",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
 	t.Run("store and remove CORS", func(t *testing.T) {
@@ -3197,14 +3242,16 @@ func TestRemoveAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS")
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -3214,24 +3261,32 @@ func TestRemoveAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr, nil)
+		inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr,
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 		t.Run("not yet passed", func(t *testing.T) {
 			inv.InvokeFail(t, "lock expiration time "+strconv.Itoa(int(exp*1000))+" has not passed yet, now "+strconv.Itoa(int(curBlockTime+2)),
-				"removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+				"removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		blk := exec.NewUnsignedBlock(t)
 		blk.Timestamp = expMs
 		require.NoError(t, exec.Chain.AddBlock(exec.SignBlock(blk)))
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL")
+		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
+			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 		assertGetInfo(t, inv, cID, cnr)
 	})
 }
 
 func TestSetCORSAttribute(t *testing.T) {
+	const anyValidUntil = math.MaxUint32
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
 	blockChain, committee := chain.NewSingle(t)
 	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
 	exec := neotest.NewExecutor(t, blockChain, committee, committee)
@@ -3251,12 +3306,9 @@ func TestSetCORSAttribute(t *testing.T) {
 	cnr.SetOwner(ownerAddr)
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.NewInvoker(containerContract.Hash, owner)
+	inv := exec.CommitteeInvoker(containerContract.Hash)
 
 	t.Run("create container", func(t *testing.T) {
-		anyValidInvocScript := randomBytes(10)
-		anyValidVerifScript := randomBytes(10)
-		anyValidSessionToken := randomBytes(10)
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
@@ -3270,20 +3322,25 @@ func TestSetCORSAttribute(t *testing.T) {
 
 	t.Run("allowedMethods", func(t *testing.T) {
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "invalid rule #0: empty rule", "setAttribute", cID[:], "CORS", `[{}]`, "")
+			inv.InvokeFail(t, "invalid rule #0: empty rule", "setAttribute", cID[:], "CORS", `[{}]`,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedMethods must be defined", "setAttribute", cID[:], "CORS", `[{"field":[]}]`, "")
+			inv.InvokeFail(t, "AllowedMethods must be defined", "setAttribute", cID[:], "CORS", `[{"field":[]}]`,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedOrigins must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"]}]`, "")
+			inv.InvokeFail(t, "AllowedOrigins must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"]}]`,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]`, "")
+			inv.InvokeFail(t, "AllowedHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]`,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "ExposeHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"],"AllowedHeaders":["*"]}]`, "")
+			inv.InvokeFail(t, "ExposeHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"],"AllowedHeaders":["*"]}]`,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("empty allowed methods list", func(t *testing.T) {
@@ -3296,7 +3353,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedMethods is empty", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "AllowedMethods is empty", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("invalid allowed method", func(t *testing.T) {
@@ -3309,7 +3367,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid method METHOD", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: invalid method METHOD", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("empty allowed method", func(t *testing.T) {
@@ -3322,7 +3381,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty method #1", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: empty method #1", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 	})
 
@@ -3338,7 +3398,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedOrigins is empty", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "AllowedOrigins is empty", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("empty origins", func(t *testing.T) {
@@ -3352,7 +3413,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty origin", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: empty origin", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("to many *", func(t *testing.T) {
@@ -3366,7 +3428,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid origin #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: invalid origin #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 	})
 
@@ -3383,7 +3446,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedHeaders is empty", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "AllowedHeaders is empty", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("empty header", func(t *testing.T) {
@@ -3398,7 +3462,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
 		t.Run("to many *", func(t *testing.T) {
@@ -3413,7 +3478,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid allow header #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: invalid allow header #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 	})
 
@@ -3430,7 +3496,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 	})
 
@@ -3449,7 +3516,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "MaxAgeSeconds must be >= 0", "setAttribute", cID[:], "CORS", pl, "")
+			inv.InvokeFail(t, "MaxAgeSeconds must be >= 0", "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 	})
 
@@ -3467,7 +3535,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 			cnr.SetAttribute("CORS", string(pl))
 
@@ -3487,7 +3556,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 			cnr.SetAttribute("CORS", string(pl))
 
@@ -3500,7 +3570,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl, "")
+			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 			cnr.SetAttribute("CORS", string(pl))
 
