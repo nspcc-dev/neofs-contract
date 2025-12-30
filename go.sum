@@ -128,8 +128,8 @@ github.com/nspcc-dev/go-ordered-json v0.0.0-20250911084817-6fb4472993d1 h1:U3wvY
 github.com/nspcc-dev/go-ordered-json v0.0.0-20250911084817-6fb4472993d1/go.mod h1:CHwf1nwquA6ecSfxmNF0YuemOPHAnRGoLuZUv/WPjeY=
 github.com/nspcc-dev/hrw/v2 v2.0.4 h1:o3Zh/2aF+IgGpvt414f46Ya20WG9u9vWxVd16ErFI8w=
 github.com/nspcc-dev/hrw/v2 v2.0.4/go.mod h1:dUjOx27zTTvoPmT5EG25vSSWL2tKS7ndAa2TPTiZwFo=
-github.com/nspcc-dev/neo-go v0.114.1-0.20251222145711-e174185e133e h1:mdGTZLXefDo3zIm42z+XFBbSK3cWU6rYxlyfq1Ir0B8=
-github.com/nspcc-dev/neo-go v0.114.1-0.20251222145711-e174185e133e/go.mod h1:2klaZUCv0Ut+6d4GAO3w9NbtS1bOAX0Sqc10CvWjhHI=
+github.com/nspcc-dev/neo-go v0.115.0 h1:4ISlhjqc4lFPqCsU//vpmUKJ8dcKLnPWLH95RxJ1QYo=
+github.com/nspcc-dev/neo-go v0.115.0/go.mod h1:2klaZUCv0Ut+6d4GAO3w9NbtS1bOAX0Sqc10CvWjhHI=
 github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20251217090505-857f951d81a9 h1:5+Ue5+i72uJVfHoq1+6mc6KlpriaqQaO96LtaDEsTfg=
 github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20251217090505-857f951d81a9/go.mod h1:X2spkE8hK/l08CYulOF19fpK5n3p2xO0L1GnJFIywQg=
 github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.16 h1:0zOMTcstqKn/j/frqOHign9rtaoIPdxhJF069LRlCJM=

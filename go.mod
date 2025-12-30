@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/google/uuid v1.6.0
 	github.com/mr-tron/base58 v1.2.0
-	github.com/nspcc-dev/neo-go v0.114.1-0.20251222145711-e174185e133e
+	github.com/nspcc-dev/neo-go v0.115.0
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20251217090505-857f951d81a9
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.16
 	github.com/stretchr/testify v1.11.1
