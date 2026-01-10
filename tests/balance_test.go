@@ -165,7 +165,7 @@ func TestPayments(t *testing.T) {
 			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
 			res := balI.GetTxExecResult(t, txH)
 			require.Len(t, res.Events, 1)
-			assertNotificationEvent(t, res.Events[0], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[0], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
@@ -188,7 +188,7 @@ func TestPayments(t *testing.T) {
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
 			require.Len(t, res.Events, 2*len(nodes)+1)
-			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
@@ -211,7 +211,7 @@ func TestPayments(t *testing.T) {
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
 			require.Len(t, res.Events, 2*len(nodes)+1)
-			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
@@ -230,7 +230,7 @@ func TestPayments(t *testing.T) {
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
 			require.Len(t, res.Events, 2*(len(nodes)-1)+1)
-			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 
@@ -264,12 +264,12 @@ func TestPayments(t *testing.T) {
 		res := balI.GetTxExecResult(t, txH)
 		// (Transfer, TransferX) pair for every transfer except the last one + marking unpaid
 		require.Len(t, res.Events, 2*(len(nodes)-1)+1)
-		assertNotificationEvent(t, res.Events[len(res.Events)-1], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch), true)
+		assertNotificationEvent(t, res.Events[len(res.Events)-1], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch-1), true)
 
 		stack, err := balI.TestInvoke(t, "getUnpaidContainerEpoch", cnt.id[:])
 		require.NoError(t, err)
 		require.Equal(t, 1, stack.Len())
-		require.Equal(t, currEpoch, stack.Pop().BigInt().Int64())
+		require.Equal(t, currEpoch-1, stack.Pop().BigInt().Int64())
 
 		stack, err = balI.TestInvoke(t, "iterateUnpaid")
 		require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestPayments(t *testing.T) {
 		require.Equal(t, cnt.id[:], cID)
 		unpaidEpochBig, err := kv[1].TryInteger()
 		require.NoError(t, err)
-		require.Equal(t, currEpoch, unpaidEpochBig.Int64())
+		require.Equal(t, currEpoch-1, unpaidEpochBig.Int64())
 
 		// make balance sufficient and pay one more time
 
@@ -294,8 +294,8 @@ func TestPayments(t *testing.T) {
 		res = balI.GetTxExecResult(t, txH)
 		// (Transfer, TransferX) pair for every transfer + marking paid and payment itself
 		require.Len(t, res.Events, 2*(len(nodes))+2)
-		assertNotificationEvent(t, res.Events[len(res.Events)-2], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch), false)
-		assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+		assertNotificationEvent(t, res.Events[len(res.Events)-2], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch-1), false)
+		assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 		stack, err = balI.TestInvoke(t, "getUnpaidContainerEpoch", cnt.id[:])
 		require.NoError(t, err)
