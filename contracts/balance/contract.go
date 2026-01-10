@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/balance/balanceconst"
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 )
 
 type (
@@ -303,6 +304,13 @@ type epochBillingStat struct {
 	PreviousEpochAverageSize int
 }
 
+// nodeReport is a (sufficient) part of github.com/nspcc-dev/neofs-contract/contracts/container.NodeReport
+// to prevent cross-contract imports that may fail due to internal `_deploy` calls.
+type nodeReport struct {
+	PublicKey interop.PublicKey
+	// Other fields are irrelevant and therefore omitted.
+}
+
 // SettleContainerPayment distributes storage payments from container's owner
 // account to storage nodes that serve container's objects. Transaction must be
 // witnessed by the actual Alphabet multi-signature. Produces `ChangePaymentStatus`
@@ -357,6 +365,16 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 		}
 
 		if size == 0 {
+			continue
+		}
+
+		var rep = contract.Call(containerContractAddr, "getReportByAccount", contract.ReadOnly, cid, r.Account).(nodeReport)
+		if len(rep.PublicKey) != interop.PublicKeyCompressedLen {
+			continue
+		}
+
+		var isOnline = contract.Call(netmapContractAddr, "isStorageNodeStatus", contract.ReadOnly, rep.PublicKey, currEpoch-1, nodestate.Online).(bool)
+		if !isOnline {
 			continue
 		}
 
