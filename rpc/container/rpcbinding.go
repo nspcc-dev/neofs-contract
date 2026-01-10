@@ -265,6 +265,11 @@ func (c *ContractReader) GetNodeReportSummary(cid util.Uint256) (*ContainerNodeR
 	return itemToContainerNodeReportSummary(unwrap.Item(c.invoker.Call(c.hash, "getNodeReportSummary", cid)))
 }
 
+// GetReportByAccount invokes `getReportByAccount` method of contract.
+func (c *ContractReader) GetReportByAccount(cid util.Uint256, acc util.Uint160) (*ContainerNodeReport, error) {
+	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByAccount", cid, acc)))
+}
+
 // GetReportByNode invokes `getReportByNode` method of contract.
 func (c *ContractReader) GetReportByNode(cid util.Uint256, pubKey *keys.PublicKey) (*ContainerNodeReport, error) {
 	return itemToContainerNodeReport(unwrap.Item(c.invoker.Call(c.hash, "getReportByNode", cid, pubKey)))
