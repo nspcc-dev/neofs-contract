@@ -238,6 +238,10 @@ func TestPayments(t *testing.T) {
 		})
 	})
 
+	t.Run("double payment", func(t *testing.T) {
+		balI.Invoke(t, stackitem.Make(false), "settleContainerPayment", cnt.id[:])
+	})
+
 	t.Run("mark unpaid", func(t *testing.T) {
 		const gbsInEveryNode = 5
 		var shouldPay = int64(gbsInEveryNode * len(nodes) * basicIncomeRate)

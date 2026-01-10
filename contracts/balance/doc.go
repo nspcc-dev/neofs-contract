@@ -99,6 +99,8 @@ Key-value storage format:
    Balance contract reference
  - 'd'<cid> -> int
    unpaid containers index, stores epoch when container was marked unpaid
+ - 'e'<cid> -> int
+   paid containers index, stores epoch when container was last paid for
 
 # Accounting
 Contract stores information about all NeoFS accounts.

@@ -46,6 +46,7 @@ const (
 	containerContractKey = 'c'
 
 	unpaidContainersPrefix = 'd'
+	paidContainersPrefix   = 'e'
 
 	gigabyte = 1 << 30
 )
@@ -342,6 +343,14 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 		return true
 	}
 
+	var (
+		paidKey       = append([]byte{paidContainersPrefix}, cid...)
+		oldPaymentRaw = storage.Get(ctx, paidKey)
+	)
+	if oldPaymentRaw != nil && oldPaymentRaw.(int) >= paymentEpoch {
+		return false // Already paid.
+	}
+
 	it := contract.Call(containerContractAddr, "iterateBillingStats", contract.ReadOnly, cid).(iterator.Iterator)
 	for iterator.Next(it) {
 		var (
@@ -403,6 +412,7 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 	}
 
 	if paymentOK {
+		storage.Put(ctx, paidKey, paymentEpoch)
 		runtime.Notify("Payment", containerOwner, cid, paymentEpoch, transferredTotal)
 	}
 
