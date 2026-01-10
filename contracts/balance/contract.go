@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/balance/balanceconst"
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 )
 
 type (
@@ -45,6 +46,7 @@ const (
 	containerContractKey = 'c'
 
 	unpaidContainersPrefix = 'd'
+	paidContainersPrefix   = 'e'
 
 	gigabyte = 1 << 30
 )
@@ -303,6 +305,13 @@ type epochBillingStat struct {
 	PreviousEpochAverageSize int
 }
 
+// nodeReport is a (sufficient) part of github.com/nspcc-dev/neofs-contract/contracts/container.NodeReport
+// to prevent cross-contract imports that may fail due to internal `_deploy` calls.
+type nodeReport struct {
+	PublicKey interop.PublicKey
+	// Other fields are irrelevant and therefore omitted.
+}
+
 // SettleContainerPayment distributes storage payments from container's owner
 // account to storage nodes that serve container's objects. Transaction must be
 // witnessed by the actual Alphabet multi-signature. Produces `ChangePaymentStatus`
@@ -324,13 +333,22 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 		containerOwner     = interop.Hash160(common.WalletToScriptHash(containerUserNeoFS))
 		rate               = contract.Call(netmapContractAddr, "config", contract.ReadOnly, balanceconst.BasicIncomeRateKey).(int)
 		currEpoch          = contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
+		paymentEpoch       = currEpoch - 1
 
 		transferredTotal int
 		paymentOK        = true
 	)
 
-	if rate == 0 {
+	if rate == 0 || paymentEpoch < 0 {
 		return true
+	}
+
+	var (
+		paidKey       = append([]byte{paidContainersPrefix}, cid...)
+		oldPaymentRaw = storage.Get(ctx, paidKey)
+	)
+	if oldPaymentRaw != nil && oldPaymentRaw.(int) >= paymentEpoch {
+		return false // Already paid.
 	}
 
 	it := contract.Call(containerContractAddr, "iterateBillingStats", contract.ReadOnly, cid).(iterator.Iterator)
@@ -341,22 +359,32 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 		)
 
 		switch {
-		case r.LatestEpoch < currEpoch-1:
+		case r.LatestEpoch < paymentEpoch:
 			// no updates for more than 2 epochs, consider load be the same
 			size = r.LatestContainerSize
 		case r.LatestEpoch == currEpoch:
-			if r.PreviousEpoch == currEpoch-1 {
+			if r.PreviousEpoch == paymentEpoch {
 				size = r.PreviousEpochAverageSize
 			} else {
 				size = r.PreviousContainerSize
 			}
-		case r.LatestEpoch == currEpoch-1:
+		case r.LatestEpoch == paymentEpoch:
 			size = r.LatestEpochAverageSize
 		default:
 			size = 0
 		}
 
 		if size == 0 {
+			continue
+		}
+
+		var rep = contract.Call(containerContractAddr, "getReportByAccount", contract.ReadOnly, cid, r.Account).(nodeReport)
+		if len(rep.PublicKey) != interop.PublicKeyCompressedLen {
+			continue
+		}
+
+		var isOnline = contract.Call(netmapContractAddr, "isStorageNodeStatus", contract.ReadOnly, rep.PublicKey, paymentEpoch, nodestate.Online).(bool)
+		if !isOnline {
 			continue
 		}
 
@@ -376,15 +404,16 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 	k := append([]byte{unpaidContainersPrefix}, cid...)
 	alreadyMarkedUnpaid := storage.Get(ctx, k) != nil
 	if paymentOK && alreadyMarkedUnpaid {
-		runtime.Notify("ChangePaymentStatus", cid, currEpoch, false)
+		runtime.Notify("ChangePaymentStatus", cid, paymentEpoch, false)
 		storage.Delete(ctx, k)
 	} else if !paymentOK && !alreadyMarkedUnpaid {
-		runtime.Notify("ChangePaymentStatus", cid, currEpoch, true)
-		storage.Put(ctx, k, currEpoch)
+		runtime.Notify("ChangePaymentStatus", cid, paymentEpoch, true)
+		storage.Put(ctx, k, paymentEpoch)
 	}
 
 	if paymentOK {
-		runtime.Notify("Payment", containerOwner, cid, currEpoch, transferredTotal)
+		storage.Put(ctx, paidKey, paymentEpoch)
+		runtime.Notify("Payment", containerOwner, cid, paymentEpoch, transferredTotal)
 	}
 
 	return paymentOK

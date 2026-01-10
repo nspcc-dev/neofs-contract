@@ -1408,12 +1408,35 @@ func GetReportByNode(cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
 
 	key := append([]byte{reportersPrefix}, cid...)
 	key = append(key, contract.CreateStandardAccount(pubKey)...)
+	return getReportByKey(ctx, key)
+}
+
+func getReportByKey(ctx storage.Context, key []byte) NodeReport {
 	reportRaw := storage.Get(ctx, key)
 	if reportRaw != nil {
 		return std.Deserialize(reportRaw.([]byte)).(NodeReport)
 	}
 
 	return NodeReport{}
+}
+
+// GetReportByAccount method returns the latest report, that node with
+// the given account reported for the specified container via [PutReport].
+//
+// If the container doesn't exist, it panics with [cst.NotFoundError]. If no
+// reports were claimed, it returns zero values.
+func GetReportByAccount(cid interop.Hash256, acc interop.Hash160) NodeReport {
+	ctx := storage.GetReadOnlyContext()
+	if getOwnerByID(ctx, cid) == nil {
+		panic(cst.NotFoundError)
+	}
+	if len(acc) != interop.Hash160Len {
+		panic("invalid account")
+	}
+
+	key := append([]byte{reportersPrefix}, cid...)
+	key = append(key, acc...)
+	return getReportByKey(ctx, key)
 }
 
 // IterateReports method returns iterator over nodes' reports

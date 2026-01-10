@@ -376,7 +376,7 @@ func ListCandidates() iterator.Iterator {
 // IsStorageNode allows to check for the given key presence in the current
 // network map.
 func IsStorageNode(key interop.PublicKey) bool {
-	return IsStorageNodeInEpoch(key, Epoch())
+	return getStorageNodeInEpoch(key, Epoch()) != nil
 }
 
 // IsStorageNodeInEpoch is the same as [IsStorageNode], but allows to do
@@ -386,10 +386,27 @@ func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
 	if epoch > Epoch() {
 		return false
 	}
+	return getStorageNodeInEpoch(key, epoch) != nil
+}
 
+func getStorageNodeInEpoch(key interop.PublicKey, epoch int) any {
 	ctx := storage.GetReadOnlyContext()
 	dbkey := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
-	return storage.Get(ctx, dbkey) != nil
+	return storage.Get(ctx, dbkey)
+}
+
+// IsStorageNodeStatus checks if the given status matches for the given
+// node in the specified epoch.
+func IsStorageNodeStatus(key interop.PublicKey, epoch int, status nodestate.Type) bool {
+	if epoch > Epoch() {
+		return false
+	}
+	var nodeRaw = getStorageNodeInEpoch(key, epoch)
+	if nodeRaw == nil {
+		return status == nodestate.Offline // Offline is missing node.
+	}
+	var n2 = std.Deserialize(nodeRaw.([]byte)).(Node2)
+	return n2.State == status
 }
 
 func getSnapshotCount(ctx storage.Context) int {

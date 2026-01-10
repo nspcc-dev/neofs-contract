@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"crypto/elliptic"
+	"fmt"
 	"math/big"
 	"path"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/balance/balanceconst"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
+	"github.com/nspcc-dev/neofs-contract/contracts/netmap/nodestate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,6 +68,22 @@ func TestPayments(t *testing.T) {
 		newStorageNode(t, cntI),
 		newStorageNode(t, cntI),
 	}
+	for i, n := range nodes {
+		var (
+			nodeSigners = append(netmapI.Signers, n.acc)
+			nodeInvoker = netmapI.WithSigners(nodeSigners...)
+		)
+
+		nodeInvoker.Invoke(t, stackitem.Null{}, "addNode", stackitem.NewStruct([]stackitem.Item{
+			stackitem.NewArray([]stackitem.Item{stackitem.Make(fmt.Sprintf("grpcs://192.0.2.%d:8090", i))}),
+			stackitem.NewMapWithValue([]stackitem.MapElement{
+				{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
+			}),
+			stackitem.NewByteArray(n.pub),
+			stackitem.Make(n.state),
+		}))
+	}
+	netmapI.Invoke(t, stackitem.Null{}, "setCleanupThreshold", 0) // Disable node cleanup, irrelevant for the test.
 	netmapI.Invoke(t, stackitem.Null{}, "newEpoch", currEpoch)
 
 	slices.SortFunc(nodes, func(a, b testNodeInfo) int {
@@ -147,7 +165,7 @@ func TestPayments(t *testing.T) {
 			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
 			res := balI.GetTxExecResult(t, txH)
 			require.Len(t, res.Events, 1)
-			assertNotificationEvent(t, res.Events[0], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[0], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
@@ -170,7 +188,7 @@ func TestPayments(t *testing.T) {
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
 			require.Len(t, res.Events, 2*len(nodes)+1)
-			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
@@ -183,7 +201,9 @@ func TestPayments(t *testing.T) {
 			fillTestValues(gbsInEveryNode, shouldPay)
 
 			currEpoch++
+			trueEpochTick()
 			currEpoch++
+			trueEpochTick()
 			currEpoch++
 			trueEpochTick()
 
@@ -191,10 +211,35 @@ func TestPayments(t *testing.T) {
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
 			require.Len(t, res.Events, 2*len(nodes)+1)
-			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 			require.Zero(t, balance(t, balI, owner))
 		})
+
+		t.Run("maintenance", func(t *testing.T) {
+			var (
+				gbsInEveryNode int64 = 1
+				nodeSigners          = append(netmapI.Signers, nodes[0].acc)
+				nodeInvoker          = netmapI.WithSigners(nodeSigners...)
+				shouldPay            = gbsInEveryNode * int64((len(nodes)-1)*basicIncomeRate)
+			)
+			nodeInvoker.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Maintenance), nodes[0].pub)
+			fillTestValues(gbsInEveryNode, shouldPay)
+
+			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
+			res := balI.GetTxExecResult(t, txH)
+			// (Transfer, TransferX) pair for every transfer + Payment itself
+			require.Len(t, res.Events, 2*(len(nodes)-1)+1)
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
+
+			require.Zero(t, balance(t, balI, owner))
+
+			nodeInvoker.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Online), nodes[0].pub)
+		})
+	})
+
+	t.Run("double payment", func(t *testing.T) {
+		balI.Invoke(t, stackitem.Make(false), "settleContainerPayment", cnt.id[:])
 	})
 
 	t.Run("mark unpaid", func(t *testing.T) {
@@ -215,6 +260,7 @@ func TestPayments(t *testing.T) {
 		}
 
 		currEpoch++
+		netmapI.Invoke(t, stackitem.Null{}, "newEpoch", currEpoch)
 		currEpoch++
 		netmapI.Invoke(t, stackitem.Null{}, "newEpoch", currEpoch)
 
@@ -222,12 +268,12 @@ func TestPayments(t *testing.T) {
 		res := balI.GetTxExecResult(t, txH)
 		// (Transfer, TransferX) pair for every transfer except the last one + marking unpaid
 		require.Len(t, res.Events, 2*(len(nodes)-1)+1)
-		assertNotificationEvent(t, res.Events[len(res.Events)-1], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch), true)
+		assertNotificationEvent(t, res.Events[len(res.Events)-1], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch-1), true)
 
 		stack, err := balI.TestInvoke(t, "getUnpaidContainerEpoch", cnt.id[:])
 		require.NoError(t, err)
 		require.Equal(t, 1, stack.Len())
-		require.Equal(t, currEpoch, stack.Pop().BigInt().Int64())
+		require.Equal(t, currEpoch-1, stack.Pop().BigInt().Int64())
 
 		stack, err = balI.TestInvoke(t, "iterateUnpaid")
 		require.NoError(t, err)
@@ -240,7 +286,7 @@ func TestPayments(t *testing.T) {
 		require.Equal(t, cnt.id[:], cID)
 		unpaidEpochBig, err := kv[1].TryInteger()
 		require.NoError(t, err)
-		require.Equal(t, currEpoch, unpaidEpochBig.Int64())
+		require.Equal(t, currEpoch-1, unpaidEpochBig.Int64())
 
 		// make balance sufficient and pay one more time
 
@@ -252,8 +298,8 @@ func TestPayments(t *testing.T) {
 		res = balI.GetTxExecResult(t, txH)
 		// (Transfer, TransferX) pair for every transfer + marking paid and payment itself
 		require.Len(t, res.Events, 2*(len(nodes))+2)
-		assertNotificationEvent(t, res.Events[len(res.Events)-2], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch), false)
-		assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch), big.NewInt(shouldPay))
+		assertNotificationEvent(t, res.Events[len(res.Events)-2], "ChangePaymentStatus", cnt.id[:], big.NewInt(currEpoch-1), false)
+		assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
 		stack, err = balI.TestInvoke(t, "getUnpaidContainerEpoch", cnt.id[:])
 		require.NoError(t, err)
