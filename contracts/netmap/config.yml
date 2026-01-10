@@ -1,6 +1,6 @@
 name: "NeoFS Netmap"
 supportedstandards: ["NEP-22"]
-safemethods: ["innerRingList", "epoch", "config", "listConfig", "version", "listNodes", "listCandidates", "cleanupThreshold", "unusedCandidate", "isStorageNode", "getEpochBlock", "getEpochTime", "lastEpochTime"]
+safemethods: ["innerRingList", "epoch", "config", "listConfig", "version", "listNodes", "listCandidates", "cleanupThreshold", "unusedCandidate", "isStorageNode", "getEpochBlock", "getEpochTime", "lastEpochTime", "isStorageNodeStatus"]
 permissions:
   - methods: ["update", "newEpoch"]
 events:

@@ -193,6 +193,11 @@ func (c *ContractReader) IsStorageNode2(key *keys.PublicKey, epoch *big.Int) (bo
 	return unwrap.Bool(c.invoker.Call(c.hash, "isStorageNode", key, epoch))
 }
 
+// IsStorageNodeStatus invokes `isStorageNodeStatus` method of contract.
+func (c *ContractReader) IsStorageNodeStatus(key *keys.PublicKey, epoch *big.Int, status *big.Int) (bool, error) {
+	return unwrap.Bool(c.invoker.Call(c.hash, "isStorageNodeStatus", key, epoch, status))
+}
+
 // LastEpochTime invokes `lastEpochTime` method of contract.
 func (c *ContractReader) LastEpochTime() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "lastEpochTime"))
