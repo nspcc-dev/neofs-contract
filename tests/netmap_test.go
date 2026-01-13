@@ -61,6 +61,7 @@ type testNodeInfo struct {
 	pub    []byte
 	raw    []byte
 	state  nodestate.Type
+	acc    neotest.Signer
 }
 
 func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
@@ -75,6 +76,7 @@ func dummyNodeInfo(acc neotest.Signer) testNodeInfo {
 		pub:    pub,
 		raw:    ni,
 		state:  nodestate.Online,
+		acc:    acc,
 	}
 }
 
@@ -269,6 +271,18 @@ func TestAddNode(t *testing.T) {
 
 	// New node is added to the netmap.
 	checkNodeList("listNodes")
+	var checkNodeStatus = func(key *keys.PublicKey, epoch int, status nodestate.Type) {
+		s, err := c.TestInvoke(t, "isStorageNode", pKey.Bytes(), epoch)
+		require.NoError(t, err)
+
+		res := status != nodestate.Offline
+		require.Equal(t, res, s.Top().Bool())
+
+		s, err = c.TestInvoke(t, "isStorageNodeStatus", pKey.Bytes(), epoch, int(status))
+		require.NoError(t, err)
+		require.True(t, s.Top().Bool())
+	}
+	checkNodeStatus(pKey, 1, nodestate.Online)
 
 	// Check epoch 0 contents, it still doesn't have any nodes.
 	checkZeroList("listNodes", 0)
@@ -293,8 +307,10 @@ func TestAddNode(t *testing.T) {
 
 	// Current map is empty.
 	checkZeroList("listNodes")
+	checkNodeStatus(pKey, 2, nodestate.Offline)
 	// But some historic data available.
 	checkNodeList("listNodes", 1)
+	checkNodeStatus(pKey, 1, nodestate.Online)
 
 	for i := range netmap.DefaultSnapshotCount - 1 {
 		_ = c.Invoke(t, stackitem.Null{}, "newEpoch", i+3)

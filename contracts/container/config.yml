@@ -4,7 +4,8 @@ safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replic
               "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser",
               "getBillingStatByNode", "iterateBillingStats", "getInfo",
-              "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties"]
+              "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties",
+              "getReportByAccount"]
 permissions:
   - methods: ["update", "addKey", "transferX", "register", "registerTLD", "addRecord", "deleteRecords",
               "unsubscribeFromNewEpoch", "onNEP11Payment"]

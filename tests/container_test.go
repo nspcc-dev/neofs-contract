@@ -589,34 +589,47 @@ func TestContainerSizeReports(t *testing.T) {
 		require.Equal(t, int64(nodeSize1+nodeSize2), summ.ContainerSize.Int64(), "average sizes are not equal")
 		require.Equal(t, int64(nodeObjs1+nodeObjs2), summ.NumberOfObjects.Int64(), "average object numbers are not equal")
 
-		// separate value for node 1
-		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[0].pub)
-		require.NoError(t, err, "receiving estimations for node 1")
-		var r containerrpc.ContainerNodeReport
-		require.NoError(t, r.FromStackItem(res.Pop().Item()))
-		pk := r.PublicKey.Bytes()
-		size := r.ContainerSize
-		objs := r.NumberOfObjects
-		reportNumber := r.NumberOfReports
+		for _, method := range []string{"getReportByNode", "getReportByAccount"} {
+			t.Run(method, func(t *testing.T) {
+				// separate value for node 1
+				if method == "getReportByNode" {
+					res, err = c.TestInvoke(t, method, anotherCnr.id[:], nodes[0].pub)
+				} else {
+					res, err = c.TestInvoke(t, method, anotherCnr.id[:], nodes[0].signer.ScriptHash())
+				}
 
-		require.Equal(t, nodes[0].pub, pk)
-		require.Equal(t, int64(nodeSize1), size.Int64(), "node 1 sizes are not equal")
-		require.Equal(t, int64(nodeObjs1), objs.Int64(), "node 1 object numbers are not equal")
-		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 1 report number")
+				require.NoError(t, err, "receiving estimations for node 1")
+				var r containerrpc.ContainerNodeReport
+				require.NoError(t, r.FromStackItem(res.Pop().Item()))
+				pk := r.PublicKey.Bytes()
+				size := r.ContainerSize
+				objs := r.NumberOfObjects
+				reportNumber := r.NumberOfReports
 
-		// separate value for node 2
-		res, err = c.TestInvoke(t, "getReportByNode", anotherCnr.id[:], nodes[1].pub)
-		require.NoError(t, err, "receiving estimations for node 1")
-		require.NoError(t, r.FromStackItem(res.Pop().Item()))
-		pk = r.PublicKey.Bytes()
-		size = r.ContainerSize
-		objs = r.NumberOfObjects
-		reportNumber = r.NumberOfReports
+				require.Equal(t, nodes[0].pub, pk)
+				require.Equal(t, int64(nodeSize1), size.Int64(), "node 1 sizes are not equal")
+				require.Equal(t, int64(nodeObjs1), objs.Int64(), "node 1 object numbers are not equal")
+				require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 1 report number")
 
-		require.Equal(t, nodes[1].pub, pk)
-		require.Equal(t, int64(nodeSize2), size.Int64(), "node 2 sizes are not equal")
-		require.Equal(t, int64(nodeObjs2), objs.Int64(), "node 2 object numbers are not equal")
-		require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 2 report number")
+				// separate value for node 2
+				if method == "getReportByNode" {
+					res, err = c.TestInvoke(t, method, anotherCnr.id[:], nodes[1].pub)
+				} else {
+					res, err = c.TestInvoke(t, method, anotherCnr.id[:], nodes[1].signer.ScriptHash())
+				}
+				require.NoError(t, err, "receiving estimations for node 1")
+				require.NoError(t, r.FromStackItem(res.Pop().Item()))
+				pk = r.PublicKey.Bytes()
+				size = r.ContainerSize
+				objs = r.NumberOfObjects
+				reportNumber = r.NumberOfReports
+
+				require.Equal(t, nodes[1].pub, pk)
+				require.Equal(t, int64(nodeSize2), size.Int64(), "node 2 sizes are not equal")
+				require.Equal(t, int64(nodeObjs2), objs.Int64(), "node 2 object numbers are not equal")
+				require.Equal(t, int64(1), reportNumber.Int64(), "unexpected node 2 report number")
+			})
+		}
 	})
 
 	t.Run("billing values", func(t *testing.T) {
