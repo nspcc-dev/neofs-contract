@@ -46,9 +46,24 @@ func getFSContent(c *rpcclient.Client) ([][]byte, []*netmap.NetmapNode, error) {
 		return nil, nil, fmt.Errorf("failed to resolve container contract: %w", err)
 	}
 	reader := container.NewReader(inv, containerH)
-	containers, err := reader.List([]byte{})
+	sess, iter, err := reader.ContainersOf([]byte{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+	defer inv.TerminateSession(sess)
+	var containers [][]byte
+	items, err := inv.TraverseIterator(sess, &iter, 0)
+	for ; err == nil && len(items) > 0; items, err = inv.TraverseIterator(sess, &iter, 0) {
+		for _, item := range items {
+			b, err := item.TryBytes()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get bytes for container: %w", err)
+			}
+			containers = append(containers, b)
+		}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to traverse containers: %w", err)
 	}
 
 	netmapH, err := nnsReader.ResolveFSContract(nns.NameNetmap)
