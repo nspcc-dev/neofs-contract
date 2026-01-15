@@ -1020,8 +1020,8 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		// any placement vector)
 		var stillInNetmap bool
 		newNodeKey := append([]byte{nextEpochNodesPrefix}, oldNode.k[1:]...)
-		// nolint:intrange // Not supported by NeoGo
-		for i := 0; i < len(replicas); i++ {
+
+		for i := range replicas {
 			newNodeKey[1+interop.Hash256Len] = uint8(i)
 			stillInNetmap = storage.Get(ctx, newNodeKey) != nil
 			if stillInNetmap {
@@ -1062,15 +1062,12 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		storage.Delete(ctx, oldReplicasNumber)
 	}
 
-	// nolint:staticcheck // https://github.com/nspcc-dev/neo-go/issues/3608
-	if replicas != nil {
-		for i, replica := range replicas {
-			if replica > maxNumOfREPs {
-				panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(replica)))
-			}
-
-			storage.Put(ctx, append(replicasPrefix, uint8(i)), replica)
+	for i, replica := range replicas {
+		if replica > maxNumOfREPs {
+			panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(replica)))
 		}
+
+		storage.Put(ctx, append(replicasPrefix, uint8(i)), replica)
 	}
 
 	// update reports stat after netmap change
@@ -2401,10 +2398,16 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 
 	var (
 		ctx  = storage.GetContext()
+		idx  = -1
 		info = getInfo(ctx, cID)
 	)
 
-	idx := -1
+	for i := range info.Attributes {
+		if info.Attributes[i].Key == name {
+			idx = i
+			break
+		}
+	}
 
 	switch name {
 	case corsAttributeName:
@@ -2415,27 +2418,14 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 			panic(exc)
 		}
 
-		for idx = 0; idx < len(info.Attributes); idx++ { //nolint:intrange
-			if info.Attributes[idx].Key == name {
-				if until <= std.Atoi10(info.Attributes[idx].Value) {
-					panic("lock expiration time " + value + " is not later than already set " + info.Attributes[idx].Value)
-				}
-				break
-			}
+		if idx >= 0 && until <= std.Atoi10(info.Attributes[idx].Value) {
+			panic("lock expiration time " + value + " is not later than already set " + info.Attributes[idx].Value)
 		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	if idx < 0 { // was not done in switch
-		for idx = 0; idx < len(info.Attributes); idx++ { //nolint:intrange
-			if info.Attributes[idx].Key == name {
-				break
-			}
-		}
-	}
-
-	if idx < len(info.Attributes) {
+	if idx >= 0 {
 		info.Attributes[idx].Value = value
 	} else {
 		info.Attributes = append(info.Attributes, Attribute{
@@ -2611,16 +2601,20 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 		info  = getInfo(ctx, cID)
 	)
 
+	for i := range info.Attributes {
+		if info.Attributes[i].Key == name {
+			index = i
+			break
+		}
+	}
+
 	switch name {
 	case corsAttributeName:
 	case lockAttributeName:
-		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
-			if info.Attributes[index].Key == name {
-				now := runtime.GetTime()
-				if std.Atoi10(info.Attributes[index].Value)*1000 > now {
-					panic("lock expiration time " + info.Attributes[index].Value + "000 has not passed yet, now " + std.Itoa10(now))
-				}
-				break
+		if index >= 0 {
+			now := runtime.GetTime()
+			if std.Atoi10(info.Attributes[index].Value)*1000 > now {
+				panic("lock expiration time " + info.Attributes[index].Value + "000 has not passed yet, now " + std.Itoa10(now))
 			}
 		}
 	default:
@@ -2628,14 +2622,6 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 	}
 
 	if index < 0 {
-		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
-			if info.Attributes[index].Key == name {
-				break
-			}
-		}
-	}
-
-	if index == len(info.Attributes) {
 		return
 	}
 
