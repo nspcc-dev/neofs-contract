@@ -2398,10 +2398,16 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 
 	var (
 		ctx  = storage.GetContext()
+		idx  = -1
 		info = getInfo(ctx, cID)
 	)
 
-	idx := -1
+	for i := range info.Attributes {
+		if info.Attributes[i].Key == name {
+			idx = i
+			break
+		}
+	}
 
 	switch name {
 	case corsAttributeName:
@@ -2412,27 +2418,14 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 			panic(exc)
 		}
 
-		for idx = 0; idx < len(info.Attributes); idx++ { //nolint:intrange
-			if info.Attributes[idx].Key == name {
-				if until <= std.Atoi10(info.Attributes[idx].Value) {
-					panic("lock expiration time " + value + " is not later than already set " + info.Attributes[idx].Value)
-				}
-				break
-			}
+		if idx >= 0 && until <= std.Atoi10(info.Attributes[idx].Value) {
+			panic("lock expiration time " + value + " is not later than already set " + info.Attributes[idx].Value)
 		}
 	default:
 		panic("attribute is immutable")
 	}
 
-	if idx < 0 { // was not done in switch
-		for idx = 0; idx < len(info.Attributes); idx++ { //nolint:intrange
-			if info.Attributes[idx].Key == name {
-				break
-			}
-		}
-	}
-
-	if idx < len(info.Attributes) {
+	if idx >= 0 {
 		info.Attributes[idx].Value = value
 	} else {
 		info.Attributes = append(info.Attributes, Attribute{
@@ -2608,16 +2601,20 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 		info  = getInfo(ctx, cID)
 	)
 
+	for i := range info.Attributes {
+		if info.Attributes[i].Key == name {
+			index = i
+			break
+		}
+	}
+
 	switch name {
 	case corsAttributeName:
 	case lockAttributeName:
-		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
-			if info.Attributes[index].Key == name {
-				now := runtime.GetTime()
-				if std.Atoi10(info.Attributes[index].Value)*1000 > now {
-					panic("lock expiration time " + info.Attributes[index].Value + "000 has not passed yet, now " + std.Itoa10(now))
-				}
-				break
+		if index >= 0 {
+			now := runtime.GetTime()
+			if std.Atoi10(info.Attributes[index].Value)*1000 > now {
+				panic("lock expiration time " + info.Attributes[index].Value + "000 has not passed yet, now " + std.Itoa10(now))
 			}
 		}
 	default:
@@ -2625,14 +2622,6 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 	}
 
 	if index < 0 {
-		for index = 0; index < len(info.Attributes); index++ { //nolint:intrange
-			if info.Attributes[index].Key == name {
-				break
-			}
-		}
-	}
-
-	if index == len(info.Attributes) {
 		return
 	}
 
