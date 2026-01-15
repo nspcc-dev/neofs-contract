@@ -1020,8 +1020,8 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		// any placement vector)
 		var stillInNetmap bool
 		newNodeKey := append([]byte{nextEpochNodesPrefix}, oldNode.k[1:]...)
-		// nolint:intrange // Not supported by NeoGo
-		for i := 0; i < len(replicas); i++ {
+
+		for i := range replicas {
 			newNodeKey[1+interop.Hash256Len] = uint8(i)
 			stillInNetmap = storage.Get(ctx, newNodeKey) != nil
 			if stillInNetmap {
