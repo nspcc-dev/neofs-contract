@@ -6,7 +6,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
@@ -33,7 +35,7 @@ func initClient(addr string, name string) (*rpcclient.Client, uint32, error) {
 	return c, h, nil
 }
 
-func getFSContent(c *rpcclient.Client) ([][]byte, []*netmap.NetmapNode, error) {
+func getFSContent(c *rpcclient.Client) ([][]byte, []netmap.NetmapNode2, error) {
 	nnsState, err := c.GetContractStateByID(nns.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get NNS state: %w", err)
@@ -46,9 +48,24 @@ func getFSContent(c *rpcclient.Client) ([][]byte, []*netmap.NetmapNode, error) {
 		return nil, nil, fmt.Errorf("failed to resolve container contract: %w", err)
 	}
 	reader := container.NewReader(inv, containerH)
-	containers, err := reader.List([]byte{})
+	sess, iter, err := reader.ContainersOf([]byte{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+	defer inv.TerminateSession(sess)
+	var containers [][]byte
+	items, err := inv.TraverseIterator(sess, &iter, 0)
+	for ; err == nil && len(items) > 0; items, err = inv.TraverseIterator(sess, &iter, 0) {
+		for _, item := range items {
+			b, err := item.TryBytes()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get bytes for container: %w", err)
+			}
+			containers = append(containers, b)
+		}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to traverse containers: %w", err)
 	}
 
 	netmapH, err := nnsReader.ResolveFSContract(nns.NameNetmap)
@@ -56,11 +73,26 @@ func getFSContent(c *rpcclient.Client) ([][]byte, []*netmap.NetmapNode, error) {
 		return nil, nil, fmt.Errorf("failed to resolve netmap contract: %w", err)
 	}
 	netmapReader := netmap.NewReader(inv, netmapH)
-	netmap, err := netmapReader.Netmap()
+	sess, iter, err = netmapReader.ListNodes()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve netmap: %w", err)
 	}
-	return containers, netmap, nil
+	var nm []netmap.NetmapNode2
+	items, err = inv.TraverseIterator(sess, &iter, 0)
+	for ; err == nil && len(items) > 0; items, err = inv.TraverseIterator(sess, &iter, 0) {
+		for _, item := range items {
+			var n netmap.NetmapNode2
+			err := n.FromStackItem(item)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to convert a node: %w", err)
+			}
+			nm = append(nm, n)
+		}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to traverse nodes: %w", err)
+	}
+	return containers, nm, nil
 }
 
 func cliMain() error {
@@ -134,7 +166,9 @@ func cliMain() error {
 	} else {
 		fmt.Printf("number of netmap entries checked: %d\n", len(netmapA))
 		for i := range netmapA {
-			if netmapA[i].State.Cmp(netmapB[i].State) != 0 || !bytes.Equal(netmapA[i].BLOB, netmapB[i].BLOB) {
+			if netmapA[i].State.Cmp(netmapB[i].State) != 0 || netmapA[i].Key.Cmp(netmapB[i].Key) != 0 ||
+				!maps.Equal(netmapA[i].Attributes, netmapB[i].Attributes) ||
+				!slices.Equal(netmapA[i].Addresses, netmapB[i].Addresses) {
 				netmapDiff++
 				dumpContentDiff("netmap entry", i, firstNodeAddress, secondNodeAddress, netmapA[i], netmapB[i])
 			}
