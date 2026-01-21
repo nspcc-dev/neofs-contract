@@ -91,7 +91,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	newCandidates := readCandidates()
 	newConfigs := readConfigs()
 
-	require.Equal(t, uint64(25*1000+1), newVersion)
+	require.Equal(t, uint64(26*1000), newVersion)
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
 	require.Equal(t, prevCurrentEpoch, newCurrentEpoch, "current epoch should remain")
 	require.Equal(t, prevCurrentEpochBlock, newCurrentEpochBlock, "current epoch block should remain (method)")
