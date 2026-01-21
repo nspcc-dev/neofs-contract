@@ -2468,6 +2468,8 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 
 	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
 	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
+
+	runtime.Notify("AttributeChanged", cID, name)
 }
 
 func validateCORSAttribute(payload string) {
@@ -2662,4 +2664,6 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 
 	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
 	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
+
+	runtime.Notify("AttributeChanged", cID, name)
 }
