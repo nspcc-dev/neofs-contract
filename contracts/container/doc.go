@@ -80,6 +80,15 @@ _all_ containers he owns.
 		type: Integer
 	  - name: Hard
 		type: Boolean
+
+AttributeChanged notification. Produced on successful setAttribute or
+removeAttribute invocations when mentioned attribute is affected.
+
+	AttributeChanged
+	  - name: containerID
+	    type: Hash256
+	  - name: attribute
+	    type: String # Name of attribute
 */
 package container
 

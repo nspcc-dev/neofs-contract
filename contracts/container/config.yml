@@ -10,6 +10,12 @@ permissions:
   - methods: ["update", "addKey", "transferX", "register", "registerTLD", "addRecord", "deleteRecords",
               "unsubscribeFromNewEpoch", "onNEP11Payment"]
 events:
+  - name: AttributeChanged
+    parameters:
+      - name: containerID
+        type: Hash256
+      - name: attribute
+        type: String
   - name: PutSuccess
     parameters:
       - name: containerID

@@ -95,6 +95,12 @@ type ContainerQuota struct {
 	HardLimit *big.Int
 }
 
+// AttributeChangedEvent represents "AttributeChanged" event emitted by the contract.
+type AttributeChangedEvent struct {
+	ContainerID util.Uint256
+	Attribute   string
+}
+
 // PutSuccessEvent represents "PutSuccess" event emitted by the contract.
 type PutSuccessEvent struct {
 	ContainerID util.Uint256
@@ -2224,6 +2230,83 @@ func (res *ContainerQuota) ToSCParameter() (smartcontract.Parameter, error) {
 	prms = append(prms, prm)
 
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
+// AttributeChangedEventsFromApplicationLog retrieves a set of all emitted events
+// with "AttributeChanged" name from the provided [result.ApplicationLog].
+func AttributeChangedEventsFromApplicationLog(log *result.ApplicationLog) ([]*AttributeChangedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*AttributeChangedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "AttributeChanged" {
+				continue
+			}
+			event := new(AttributeChangedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize AttributeChangedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to AttributeChangedEvent or
+// returns an error if it's not possible to do to so.
+func (e *AttributeChangedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.ContainerID, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field ContainerID: %w", err)
+	}
+
+	index++
+	e.Attribute, err = func(item stackitem.Item) (string, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return "", err
+		}
+		if !utf8.Valid(b) {
+			return "", errors.New("not a UTF-8 string")
+		}
+		return string(b), nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Attribute: %w", err)
+	}
+
+	return nil
 }
 
 // PutSuccessEventsFromApplicationLog retrieves a set of all emitted events

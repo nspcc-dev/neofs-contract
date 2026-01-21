@@ -3107,13 +3107,20 @@ func TestSetAttribute(t *testing.T) {
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res := inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
+
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
 		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res = inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -3152,8 +3159,11 @@ func TestSetAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr,
+		txHash := inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res := inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
 
 		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
 		assertGetInfo(t, inv, cID, cnr)
@@ -3163,8 +3173,11 @@ func TestSetAttribute(t *testing.T) {
 			assertFail(t, newVal, "lock expiration time "+newVal+" is not later than already set "+expStr)
 
 			newVal = strconv.Itoa(int(exp + 1))
-			inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal,
+			txHash = inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal,
 				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			res = inv.GetTxExecResult(t, txHash)
+			require.Len(t, res.Events, 1)
+			assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
 
 			cnr.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
 			assertGetInfo(t, inv, cID, cnr)
@@ -3255,16 +3268,22 @@ func TestRemoveAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
+		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res := inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
 
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
+		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res = inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -3274,8 +3293,11 @@ func TestRemoveAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr,
+		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res := inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
 
 		t.Run("not yet passed", func(t *testing.T) {
 			inv.InvokeFail(t, "lock expiration time "+strconv.Itoa(int(exp*1000))+" has not passed yet, now "+strconv.Itoa(int(curBlockTime+2)),
@@ -3287,8 +3309,11 @@ func TestRemoveAttribute(t *testing.T) {
 		blk.Timestamp = expMs
 		require.NoError(t, exec.Chain.AddBlock(exec.SignBlock(blk)))
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
+		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		res = inv.GetTxExecResult(t, txHash)
+		require.Len(t, res.Events, 1)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
 
 		assertGetInfo(t, inv, cID, cnr)
 	})
