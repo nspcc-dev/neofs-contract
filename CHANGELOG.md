@@ -4,14 +4,6 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
-- Structured containers to Container contract storage (#534)
-- `addStructs`, `createV2` and `getInfo` methods to Container contract (#534)
-- NEP-11 support by Container contract (#498)
-- New NNS record type `Neo` (#544)
-- Support for `__NEOFS__LOCK_UNTIL` container attribute (#558)
-- Support for `S3_TAGS` container attribute (#562)
-- Support for `S3_SETTINGS` and `S3_NOTIFICATIONS` container attributes (#562)
-- `getEpochBlockByTime` method to Netmap contract (#577)
 
 ### Changed
 
@@ -20,7 +12,39 @@ Changelog for NeoFS Contract
 ### Removed
 
 ### Fixed
+
+## [0.26.0] - 2026-01-23
+
+### Added
+- Structured containers to Container contract storage (#534)
+- `addStructs`, `createV2` and `getInfo` methods to Container contract (#534)
+- Starting block parameter to compare-deposits (#554)
+- NEP-11 support by Container contract (#498, #560)
+- New NNS record type `Neo` (#544)
+- CORS attribute management for containers (#555, #562, #576)
+- Support for `__NEOFS__LOCK_UNTIL` container attribute (#558, #564, #576)
+- NEP-29 and NEP-27 support (#568)
+- Support for `S3_TAGS`, `S3_SETTINGS` and `S3_NOTIFICATIONS` container attribute (#562)
+- `getEpochBlockByTime` method to Netmap contract (#577)
+
+### Changed
+- netmap contract drops obsolete configurations on upgrade to 0.26.0 (#556)
+
+### Updated
+- NeoGo dependency to 0.116.0 (#569, #570, #577)
+
+### Removed
+- Pre-0.22.0 migration code (#556)
+- Obsolete "MaintenanceModeAllowed" netmap configuration parameter (#566)
+
+### Fixed
+- Balance contract safe method marks (#551)
 - Container and Balance contracts update routines (#552)
+- compare-deposits supply decrease and token burn handling (#554)
+- Failure to update user taken space (#567)
+- Payments to nodes in maintenance mode (#571)
+- Double payments per epoch (#571)
+- compare-fscontent not working with Node2 netmap (#572)
 
 ## [0.25.1] - 2025-11-19
 
@@ -633,7 +657,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.0...master
+[0.26.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.23.0...v0.24.0
