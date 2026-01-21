@@ -155,6 +155,11 @@ func (c *ContractReader) GetEpochBlock(epoch *big.Int) (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochBlock", epoch))
 }
 
+// GetEpochBlockByTime invokes `getEpochBlockByTime` method of contract.
+func (c *ContractReader) GetEpochBlockByTime(ts *big.Int) (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochBlockByTime", ts))
+}
+
 // GetEpochTime invokes `getEpochTime` method of contract.
 func (c *ContractReader) GetEpochTime(epoch *big.Int) (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochTime", epoch))

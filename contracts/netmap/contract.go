@@ -590,6 +590,33 @@ func GetEpochTime(epoch int) int {
 	return std.Deserialize(val.([]byte)).(epochItem).time
 }
 
+// GetEpochBlockByTime returns the block index when the latest epoch that
+// started not later than the provided block time came. Returns 0 if the time
+// precedes any known epoch.
+func GetEpochBlockByTime(ts int) int {
+	minEpoch := 0
+	maxEpoch := Epoch()
+
+	var res int
+	lo, hi := minEpoch, maxEpoch
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		t := GetEpochTime(mid)
+		if t == 0 {
+			lo = mid + 1
+			continue
+		}
+		if t > ts {
+			hi = mid - 1
+			continue
+		}
+		res = GetEpochBlock(mid)
+		lo = mid + 1
+	}
+
+	return res
+}
+
 func removeFromNetmap(ctx storage.Context, key interop.PublicKey) {
 	storageKey := append([]byte(node2CandidatePrefix), key...)
 	storage.Delete(ctx, storageKey)

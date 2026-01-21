@@ -11,6 +11,7 @@ Changelog for NeoFS Contract
 - Support for `__NEOFS__LOCK_UNTIL` container attribute (#558)
 - Support for `S3_TAGS` container attribute (#562)
 - Support for `S3_SETTINGS` and `S3_NOTIFICATIONS` container attributes (#562)
+- `getEpochBlockByTime` method to Netmap contract (#577)
 
 ### Changed
 
