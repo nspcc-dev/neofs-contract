@@ -533,3 +533,45 @@ func TestLastEpochTime(t *testing.T) {
 
 	assert(secondEpochBlock.Timestamp)
 }
+
+func TestGetEpochBlockByTime(t *testing.T) {
+	netmapContract := newNetmapInvoker(t)
+
+	assertBlock := func(ts uint64, exp uint32) {
+		stk, err := netmapContract.TestInvoke(t, "getEpochBlockByTime", ts)
+		require.NoError(t, err)
+
+		items := stk.ToArray()
+		require.Len(t, items, 1)
+
+		i, err := items[0].TryInteger()
+		require.NoError(t, err)
+		require.True(t, i.IsInt64())
+		require.EqualValues(t, exp, i.Int64())
+	}
+
+	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, 0)
+
+	const firstEpoch = 123
+	firstEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch)
+
+	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, firstEpochBlock.Index)
+
+	for range 3 {
+		netmapContract.AddNewBlock(t)
+	}
+
+	secondEpochBlock := netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight())
+	assertBlock(secondEpochBlock.Timestamp, firstEpochBlock.Index)
+
+	netmapContract.Invoke(t, stackitem.Null{}, "newEpoch", firstEpoch+5)
+
+	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, secondEpochBlock.Index)
+
+	for range 2 {
+		netmapContract.AddNewBlock(t)
+	}
+
+	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, secondEpochBlock.Index)
+}
