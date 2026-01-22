@@ -3,7 +3,7 @@ module github.com/nspcc-dev/neo-go/scripts/compare-deposits
 go 1.24.0
 
 require (
-	github.com/nspcc-dev/neo-go v0.115.0
+	github.com/nspcc-dev/neo-go v0.116.0
 	github.com/nspcc-dev/neofs-contract v0.25.1
 )
 
