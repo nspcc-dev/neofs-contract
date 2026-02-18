@@ -184,6 +184,26 @@ func _deploy(data any, isUpdate bool) {
 			common.UnsubscribeFromNewEpoch()
 		}
 
+		if version < 26_001 {
+			ctx := storage.GetContext()
+
+			it := storage.Find(ctx, []byte{billingInfoKeyPrefix}, storage.None)
+			for iterator.Next(it) {
+				kv := iterator.Value(it).(storage.KeyValue)
+				acc := kv.Key[1+interop.Hash256Len:] // key is 'f'<cID><account>
+				if len(acc) != interop.Hash160Len {
+					// should never happen but still no need to migrate broken values
+					continue
+				}
+
+				billing := std.Deserialize(kv.Value).(EpochBillingStat)
+				if len(billing.Account) != interop.Hash160Len {
+					billing.Account = acc
+					storage.Put(ctx, kv.Key, std.Serialize(billing))
+				}
+			}
+		}
+
 		return
 	}
 
@@ -1276,6 +1296,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	if billingStatRaw != nil {
 		billingStat = std.Deserialize(billingStatRaw.([]byte)).(EpochBillingStat)
 	}
+	billingStat.Account = nodeAcc
 
 	if reportRaw == nil {
 		storageDiff = sizeBytes
@@ -1290,7 +1311,6 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			LastUpdateEpoch: currEpoch,
 		}
 		billingStat = EpochBillingStat{
-			Account:                nodeAcc,
 			LatestEpochAverageSize: sizeBytes,
 			LatestContainerSize:    sizeBytes,
 			LatestEpoch:            currEpoch,
