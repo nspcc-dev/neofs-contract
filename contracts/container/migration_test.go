@@ -8,6 +8,7 @@ import (
 
 	"github.com/mr-tron/base58"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
+	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/tests/dump"
@@ -123,13 +124,49 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		require.ElementsMatch(t, vPrev, vNew, "containers of '%s' owner should remain", base58.Encode([]byte(k)))
 	}
 
-	// assert structuring of containers
+	// assert structuring of containers (< 0.26.0 migration)
 	assertStructuring(t, c, prevCnrStorageItems)
+
+	// assert billing info's Account field is filled (< 0.26.1 migration)
+	assertBillingMigration(t, c)
+}
+
+func assertBillingMigration(t *testing.T, c *migration.Contract) {
+	c.SeekStorage([]byte{'f'}, func(k, v []byte) bool {
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+
+		fields := item.Value().([]stackitem.Item)
+		accField := fields[0]
+
+		acc, err := accField.TryBytes()
+		require.NoError(t, err) // it would be Null before migration there
+
+		require.Len(t, acc, interop.Hash160Len)
+
+		return true
+	})
 }
 
 func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][]byte) {
 	structsPrefix := []byte{0x00}
 	mTransfers := make(map[string][]byte) // tokenID -> to
+
+	mStructs := make(map[string][]stackitem.Item)
+	c.SeekStorage(structsPrefix, func(k, v []byte) bool {
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+
+		arr, ok := item.Value().([]stackitem.Item)
+		require.True(t, ok)
+
+		mStructs[string(k)] = arr
+
+		return true
+	})
+	if len(mStructs) == len(binCnrs) {
+		return
+	}
 
 	for i := 1; ; i++ {
 		// inlined stuff of c.Invoke()
@@ -173,19 +210,6 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 		require.EqualValues(t, count, 10*i)
 		require.Len(t, txRes.Events, 10)
 	}
-
-	mStructs := make(map[string][]stackitem.Item)
-	c.SeekStorage(structsPrefix, func(k, v []byte) bool {
-		item, err := stackitem.Deserialize(v)
-		require.NoError(t, err)
-
-		arr, ok := item.Value().([]stackitem.Item)
-		require.True(t, ok)
-
-		mStructs[string(k)] = arr
-
-		return true
-	})
 
 	require.Equal(t, len(mStructs), len(binCnrs))
 	require.Equal(t, len(mTransfers), len(binCnrs))

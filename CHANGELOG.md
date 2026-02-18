@@ -13,6 +13,11 @@ Changelog for NeoFS Contract
 
 ### Fixed
 
+## [0.26.1] - 2026-02-18
+
+### Fixed
+- Billing for networks with 0.25.0 -> 0.26.0 migrated contracts (#582)
+
 ## [0.26.0] - 2026-01-23
 
 ### Added
@@ -657,7 +662,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.1...master
+[0.26.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.24.0...v0.25.0
