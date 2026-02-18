@@ -131,6 +131,22 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 	structsPrefix := []byte{0x00}
 	mTransfers := make(map[string][]byte) // tokenID -> to
 
+	mStructs := make(map[string][]stackitem.Item)
+	c.SeekStorage(structsPrefix, func(k, v []byte) bool {
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+
+		arr, ok := item.Value().([]stackitem.Item)
+		require.True(t, ok)
+
+		mStructs[string(k)] = arr
+
+		return true
+	})
+	if len(mStructs) == len(binCnrs) {
+		return
+	}
+
 	for i := 1; ; i++ {
 		// inlined stuff of c.Invoke()
 		tx := c.PrepareInvoke(t, "addStructs")
@@ -173,19 +189,6 @@ func assertStructuring(t *testing.T, c *migration.Contract, binCnrs map[string][
 		require.EqualValues(t, count, 10*i)
 		require.Len(t, txRes.Events, 10)
 	}
-
-	mStructs := make(map[string][]stackitem.Item)
-	c.SeekStorage(structsPrefix, func(k, v []byte) bool {
-		item, err := stackitem.Deserialize(v)
-		require.NoError(t, err)
-
-		arr, ok := item.Value().([]stackitem.Item)
-		require.True(t, ok)
-
-		mStructs[string(k)] = arr
-
-		return true
-	})
 
 	require.Equal(t, len(mStructs), len(binCnrs))
 	require.Equal(t, len(mTransfers), len(binCnrs))
