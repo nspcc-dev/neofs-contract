@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Go 1.25+ is required now (#585)
 
 ### Updated
 
