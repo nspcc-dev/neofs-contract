@@ -11,6 +11,7 @@ Changelog for NeoFS Contract
 ### Updated
 - NeoGo dependency to 0.117.0 (#585)
 - NeoFS SDK dependency to RC17 (#585)
+- go.uber.org/zap dependency to v1.27.1 (#585)
 
 ### Removed
 
