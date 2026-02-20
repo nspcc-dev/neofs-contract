@@ -1,10 +1,10 @@
 module github.com/nspcc-dev/neo-go/scripts/compare-deposits
 
-go 1.24.0
+go 1.25.0
 
 require (
-	github.com/nspcc-dev/neo-go v0.116.0
-	github.com/nspcc-dev/neofs-contract v0.25.1
+	github.com/nspcc-dev/neo-go v0.117.0
+	github.com/nspcc-dev/neofs-contract v0.26.1
 )
 
 require (
@@ -37,9 +37,9 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250922171735-9219d122eba9 // indirect
 	google.golang.org/grpc v1.75.1 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect

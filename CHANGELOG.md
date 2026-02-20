@@ -6,8 +6,13 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Go 1.25+ is required now (#585)
 
 ### Updated
+- NeoGo dependency to 0.117.0 (#585)
+- NeoFS SDK dependency to RC17 (#585)
+- go.uber.org/zap dependency to v1.27.1 (#585)
+- google.golang.org/protobuf dependency to v1.36.11 (#585)
 
 ### Removed
 
