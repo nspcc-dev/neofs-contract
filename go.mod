@@ -10,7 +10,7 @@ require (
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.1
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
