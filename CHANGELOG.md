@@ -9,6 +9,7 @@ Changelog for NeoFS Contract
 - Go 1.25+ is required now (#585)
 
 ### Updated
+- NeoGo dependency to 0.117.0 (#585)
 
 ### Removed
 

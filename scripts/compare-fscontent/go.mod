@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/nspcc-dev/neo-go v0.116.0
+	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neofs-contract v0.25.1
 	github.com/pmezard/go-difflib v1.0.0
 )
