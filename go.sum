@@ -132,8 +132,8 @@ github.com/nspcc-dev/neo-go v0.117.0 h1:ayNHrEG3e9AlpZE+3OvCn8sZiWdeo1ZPtoNEcjd8
 github.com/nspcc-dev/neo-go v0.117.0/go.mod h1:RDOBkZ+EGtr/NRFItY1oLx7zEIKKqFZKjKupEnMj6q8=
 github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20260121113504-979d1f4aada1 h1:k2PZRCJ82ZSNa398+U6lty6Z0NZOurL72wnEn6ulgos=
 github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20260121113504-979d1f4aada1/go.mod h1:X2spkE8hK/l08CYulOF19fpK5n3p2xO0L1GnJFIywQg=
-github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.16 h1:0zOMTcstqKn/j/frqOHign9rtaoIPdxhJF069LRlCJM=
-github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.16/go.mod h1:u3XqGGbGQiPBAonFBJ6Dm9KbbDTvcGjEiRhndppzgHw=
+github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17 h1:MahpltbItODvLsGIUsDuW9fz1MXmAi0c8dZNsK8Azqc=
+github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17/go.mod h1:y2vNz9DVTqBkR7ctYb6taLnabWTtG7xtCHlGofEpKOM=
 github.com/nspcc-dev/rfc6979 v0.2.4 h1:NBgsdCjhLpEPJZqmC9rciMZDcSY297po2smeaRjw57k=
 github.com/nspcc-dev/rfc6979 v0.2.4/go.mod h1:86ylDw6Kss+P6v4QAJqo1Sp3mC0/Zr9G97xSjQ9TuFg=
 github.com/nspcc-dev/tzhash v1.8.3 h1:EWJMOL/ppdqNBvkKjHECljusopcsNu4i4kH8KctTv10=

@@ -10,6 +10,7 @@ Changelog for NeoFS Contract
 
 ### Updated
 - NeoGo dependency to 0.117.0 (#585)
+- NeoFS SDK dependency to RC17 (#585)
 
 ### Removed
 

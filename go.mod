@@ -7,7 +7,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0
 	github.com/nspcc-dev/neo-go v0.117.0
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20260121113504-979d1f4aada1
-	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.16
+	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.17
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
 	google.golang.org/protobuf v1.36.9
