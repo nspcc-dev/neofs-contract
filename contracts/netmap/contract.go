@@ -292,7 +292,6 @@ func NewEpoch(epochNum int) {
 
 	runtime.Log("process new epoch")
 
-	// todo: check if provided epoch number is bigger than current
 	storage.Put(ctx, snapshotEpoch, epochNum)
 	fillNetmap(ctx, epochNum)
 
