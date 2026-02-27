@@ -129,8 +129,8 @@ func TestNNSRegister(t *testing.T) {
 
 	b := c.TopBlock(t)
 	expected := stackitem.NewArray([]stackitem.Item{stackitem.NewBuffer(
-		[]byte(fmt.Sprintf("testdomain.com myemail@nspcc.ru %d %d %d %d %d",
-			b.Timestamp, refresh, retry, expire, ttl)))})
+		fmt.Appendf(nil, "testdomain.com myemail@nspcc.ru %d %d %d %d %d",
+			b.Timestamp, refresh, retry, expire, ttl))})
 	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.SOA))
 
 	cAcc := c.WithSigners(acc)
@@ -231,8 +231,8 @@ func TestNNSUpdateSOA(t *testing.T) {
 
 	b := c.TopBlock(t)
 	expected := stackitem.NewArray([]stackitem.Item{stackitem.NewBuffer(
-		[]byte(fmt.Sprintf("testdomain.com newemail@nspcc.ru %d %d %d %d %d",
-			b.Timestamp, refresh, retry, expire, ttl)))})
+		fmt.Appendf(nil, "testdomain.com newemail@nspcc.ru %d %d %d %d %d",
+			b.Timestamp, refresh, retry, expire, ttl))})
 	c.Invoke(t, expected, "getRecords", "testdomain.com", int64(recordtype.SOA))
 }
 
