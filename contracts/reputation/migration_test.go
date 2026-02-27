@@ -2,6 +2,7 @@ package reputation_test
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/io"
@@ -30,10 +31,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		StorageDumpHandler: func(key, value []byte) {
 			if bytes.HasPrefix(key, []byte{'c'}) {
 				epoch := io.NewBinReaderFromBuf(key[1:]).ReadVarUint()
-				for i := range epochs {
-					if epochs[i] == epoch {
-						return
-					}
+				if slices.Contains(epochs, epoch) {
+					return
 				}
 				epochs = append(epochs, epoch)
 			}

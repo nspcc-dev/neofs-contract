@@ -17,7 +17,7 @@ PKG_VERSION ?= $(shell echo $(VERSION) | sed "s/^v//" | \
 			sed -E "s/(.*)-(g[a-fA-F0-9]{6,8})(.*)/\1\3~\2/" | \
 			sed "s/-/~/")-${OS_RELEASE}
 
-.PHONY: all build clean test neo-go
+.PHONY: all build clean test neo-go modernize
 .PHONY: alphabet mainnet morph nns fschain
 .PHONY: debpackage debclean
 build: neo-go all
@@ -86,3 +86,7 @@ fmt:
 # Lint Go code
 lint: .golangci.yml
 	golangci-lint run
+
+# Prettify code
+modernize:
+	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
