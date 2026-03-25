@@ -443,7 +443,6 @@ func Deploy(ctx context.Context, prm Prm) error {
 		[]byte(EigenTrustIterationsConfig), encodeUintConfig(prm.NetmapContract.Config.EigenTrustIterations),
 		[]byte(EigenTrustAlphaConfig), encodeFloatConfig(prm.NetmapContract.Config.EigenTrustAlpha),
 		[]byte(WithdrawFeeConfig), encodeUintConfig(prm.NetmapContract.Config.WithdrawalFee),
-		[]byte(HomomorphicHashingDisabledKey), encodeBoolConfig(prm.NetmapContract.Config.HomomorphicHashingDisabled),
 	}
 
 	for i := range prm.NetmapContract.Config.Raw {
@@ -607,10 +606,6 @@ func encodeUintConfig(v uint64) []byte {
 
 func encodeFloatConfig(v float64) []byte {
 	return []byte(strconv.FormatFloat(v, 'f', -1, 64))
-}
-
-func encodeBoolConfig(v bool) []byte {
-	return stackitem.NewBool(v).Bytes()
 }
 
 // returns actor.TransactionCheckerModifier which checks that invocation
