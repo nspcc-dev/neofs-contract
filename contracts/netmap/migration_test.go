@@ -108,7 +108,10 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 				// NodeV2/Maintenance/Audit flags are gone with 0.26.0.
 				bytes.Equal(sa[0].Value().([]byte), []byte("AuditFee")) ||
 				bytes.Equal(sa[0].Value().([]byte), []byte("MaintenanceModeAllowed")) ||
-				bytes.Equal(sa[0].Value().([]byte), []byte("UseNodeV2")))
+				bytes.Equal(sa[0].Value().([]byte), []byte("UseNodeV2")) ||
+				// Homomorphic hashing was deprecated in API 2.23 and must be
+				// removed starting from 0.27.0 contracts
+				bytes.Equal(sa[0].Value().([]byte), []byte("HomomorphicHashingDisabled")))
 	})
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.Equal(t, prevNodes, newNodes)
