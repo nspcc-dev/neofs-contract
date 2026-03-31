@@ -120,6 +120,13 @@ func _deploy(data any, isUpdate bool) {
 			storage.Delete(ctx, obsoleteSnapshotCurrentIDKey)
 		}
 
+		if version < 27_000 {
+			// homomorphic hashing was deprecated starting from API 2.23, see
+			// * https://github.com/nspcc-dev/neofs-api/pull/385
+			// * https://github.com/nspcc-dev/neofs-node/issues/3847
+			storage.Delete(ctx, append(configPrefix, []byte("HomomorphicHashingDisabled")...))
+		}
+
 		return
 	}
 

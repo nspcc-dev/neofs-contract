@@ -1,15 +1,14 @@
 package deploy
 
 const (
-	MaxObjectSizeConfig           = "MaxObjectSize"
-	BasicIncomeRateConfig         = "BasicIncomeRate"
-	EpochDurationConfig           = "EpochDuration"
-	ContainerFeeConfig            = "ContainerFee"
-	ContainerAliasFeeConfig       = "ContainerAliasFee"
-	EigenTrustIterationsConfig    = "EigenTrustIterations"
-	EigenTrustAlphaConfig         = "EigenTrustAlpha"
-	WithdrawFeeConfig             = "WithdrawFee"
-	HomomorphicHashingDisabledKey = "HomomorphicHashingDisabled"
+	MaxObjectSizeConfig        = "MaxObjectSize"
+	BasicIncomeRateConfig      = "BasicIncomeRate"
+	EpochDurationConfig        = "EpochDuration"
+	ContainerFeeConfig         = "ContainerFee"
+	ContainerAliasFeeConfig    = "ContainerAliasFee"
+	EigenTrustIterationsConfig = "EigenTrustIterations"
+	EigenTrustAlphaConfig      = "EigenTrustAlpha"
+	WithdrawFeeConfig          = "WithdrawFee"
 )
 
 // RawNetworkParameter is a NeoFS network parameter which is transmitted but
@@ -25,14 +24,13 @@ type RawNetworkParameter struct {
 // NetworkConfiguration represents NeoFS network configuration stored
 // in FS chain.
 type NetworkConfiguration struct {
-	MaxObjectSize              uint64
-	StoragePrice               uint64
-	EpochDuration              uint64
-	ContainerFee               uint64
-	ContainerAliasFee          uint64
-	EigenTrustIterations       uint64
-	EigenTrustAlpha            float64
-	WithdrawalFee              uint64
-	HomomorphicHashingDisabled bool
-	Raw                        []RawNetworkParameter
+	MaxObjectSize        uint64
+	StoragePrice         uint64
+	EpochDuration        uint64
+	ContainerFee         uint64
+	ContainerAliasFee    uint64
+	EigenTrustIterations uint64
+	EigenTrustAlpha      float64
+	WithdrawalFee        uint64
+	Raw                  []RawNetworkParameter
 }
