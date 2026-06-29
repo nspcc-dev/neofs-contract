@@ -66,35 +66,12 @@ func init() {
 }
 
 // nolint:unused
-func storeNetmapAndContainer(ctx storage.Context) {
-	nnsAddr := common.InferNNSHash()
-	netmapAddr := common.ResolveFSContractWithNNS(nnsAddr, "netmap")
-	if len(netmapAddr) != interop.Hash160Len {
-		panic("NNS contract does not know Netmap address")
-	}
-	storage.Put(ctx, netmapContractKey, netmapAddr)
-
-	containerAddr := common.ResolveFSContractWithNNS(nnsAddr, "container")
-	if len(containerAddr) != interop.Hash160Len {
-		panic("NNS contract does not know Container address")
-	}
-	storage.Put(ctx, containerContractKey, containerAddr)
-}
-
-// nolint:unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
-
-		if version < 25_000 {
-			storeNetmapAndContainer(ctx)
-
-			common.SubscribeForNewEpoch()
-		}
 
 		return
 	}

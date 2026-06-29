@@ -121,7 +121,6 @@ const (
 	reportsSummary             = 's'
 	maxNumberOfReportsPerEpoch = 3
 	reportersPrefix            = 'i'
-	estimateKeyPrefix          = "cnr"
 	containersWithMetaPrefix   = 'm'
 	containerKeyPrefix         = 'x'
 	ownerKeyPrefix             = 'o'
@@ -159,30 +158,6 @@ func _deploy(data any, isUpdate bool) {
 	if isUpdate {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
-
-		if version < 23_000 {
-			addrNNS := storage.Get(ctx, nnsContractKey).(interop.Hash160)
-			if len(addrNNS) != interop.Hash160Len {
-				panic("do not know NNS address")
-			}
-			addrProxy := common.ResolveFSContractWithNNS(addrNNS, "proxy")
-			if len(addrProxy) != interop.Hash160Len {
-				panic("NNS does not know Proxy address")
-			}
-			storage.Put(ctx, proxyContractKey, addrProxy)
-		}
-
-		if version < 24_000 {
-			it := storage.Find(ctx, []byte(estimateKeyPrefix), storage.KeysOnly)
-			for iterator.Next(it) {
-				k := iterator.Value(it).([]byte)
-				storage.Delete(ctx, k)
-			}
-		}
-
-		if version < 25_000 {
-			common.UnsubscribeFromNewEpoch()
-		}
 
 		if version < 26_001 {
 			ctx := storage.GetContext()

@@ -48,18 +48,6 @@ func _deploy(data any, update bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if version < 24_000 {
-			const candidatesKey = "candidates"
-
-			it := storage.Find(ctx, candidatesKey, storage.KeysOnly)
-			for iterator.Next(it) {
-				storage.Delete(ctx, iterator.Value(it))
-			}
-
-			const candidateFeeConfigKey = "InnerRingCandidateFee"
-			storage.Delete(ctx, append(configPrefix, []byte(candidateFeeConfigKey)...))
-		}
-
 		return
 	}
 
