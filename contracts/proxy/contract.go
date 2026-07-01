@@ -33,18 +33,6 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if version < 23_000 {
-			addrNNS := common.InferNNSHash()
-			if len(addrNNS) != interop.Hash160Len {
-				panic("do not know NNS hash")
-			}
-			addrContainer := common.ResolveFSContractWithNNS(addrNNS, "container")
-			if len(addrContainer) != interop.Hash160Len {
-				panic("NNS does not know Container address")
-			}
-			storage.Put(ctx, containerContractKey, addrContainer)
-		}
-
 		return
 	}
 

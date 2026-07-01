@@ -89,12 +89,6 @@ func _deploy(data any, isUpdate bool) {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
-		if version < 24_000 {
-			// For whatever reason this was also stored here, not just in neofs contract.
-			const candidateFeeConfigKey = "InnerRingCandidateFee"
-			storage.Delete(ctx, append(configPrefix, []byte(candidateFeeConfigKey)...))
-		}
-
 		if version < 26_000 {
 			const (
 				obsoleteAuditFeeKey          = "AuditFee"
