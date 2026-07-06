@@ -68,7 +68,7 @@ const submitObjectPutMethod = "submitObjectPut"
 // Container contract's `SubmitObjectPut` is an exception, Alphabet signature
 // is not required, contract's `VerifyPlacementSignatures` is called instead.
 func Verify() bool {
-	if common.ContainsAlphabetWitness() {
+	if common.ContainsAlphabetWitness() || containsAlphabetSigner() {
 		return true
 	}
 
@@ -175,6 +175,27 @@ func Verify() bool {
 	}
 
 	return contract.Call(cnrH, "verifyPlacementSignatures", contract.ReadOnly, cID, metaData, vectors).(bool)
+}
+
+func containsAlphabetSigner() bool {
+	signers := runtime.CurrentSigners()
+	if len(signers) == 0 {
+		return false
+	}
+	if len(signers) == 1 && signers[0].Account.Equals(runtime.GetExecutingScriptHash()) {
+		return false
+	}
+
+	alphabetAddress := common.AlphabetAddress()
+	committeeAddress := common.CommitteeAddress()
+
+	for _, signer := range signers {
+		if signer.Account.Equals(alphabetAddress) || signer.Account.Equals(committeeAddress) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func parseSignaturesVector(i int, script []byte) ([]interop.Signature, int) {

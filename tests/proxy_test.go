@@ -4,9 +4,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
+	"github.com/stretchr/testify/require"
 )
 
 const proxyPath = "../contracts/proxy"
@@ -37,4 +39,25 @@ func TestProxyVerify(t *testing.T) {
 	contract := newProxyInvoker(t)
 	contract.Invoke(t, stackitem.NewBool(true), method)
 	contract.WithSigners(contract.NewAccount(t)).InvokeFail(t, "invalid op in signatures 0c2", method)
+}
+
+func TestProxyVerifyWithNoneScopeAlphabetSigner(t *testing.T) {
+	c, _, _ := newProxySponsorInvoker(t)
+
+	tx := c.PrepareInvokeNoSign(t, "count")
+	tx.Signers = []transaction.Signer{
+		{Account: c.Signers[0].ScriptHash(), Scopes: transaction.Global},
+		{Account: c.Signers[1].ScriptHash(), Scopes: transaction.Global},
+		{Account: c.Committee.ScriptHash(), Scopes: transaction.None},
+	}
+
+	signers := []neotest.Signer{c.Signers[0], c.Signers[1], c.Committee}
+	neotest.AddNetworkFee(t, c.Chain, tx, signers...)
+	c.AddSystemFee(tx, -1)
+	for i := range signers {
+		require.NoError(t, signers[i].SignTx(c.Executor.Chain.GetConfig().Magic, tx))
+	}
+
+	c.AddNewBlock(t, tx)
+	c.CheckHalt(t, tx.Hash(), stackitem.Make(0))
 }
