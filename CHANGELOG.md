@@ -15,6 +15,7 @@ Changelog for NeoFS Contract
 - google.golang.org/protobuf dependency to v1.36.11 (#585)
 
 ### Removed
+- Deprecated InnerRingList method from netmap contract (#598)
 
 ### Fixed
 
