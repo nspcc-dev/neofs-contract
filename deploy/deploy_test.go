@@ -148,6 +148,13 @@ func TestContractAutodeploy(t *testing.T) {
 			ProtocolConfiguration: config.ProtocolConfiguration{
 				Magic:           netmode.UnitTestNet,
 				MaxTimePerBlock: 20 * time.Second,
+				Hardforks: map[string]uint32{
+					config.HFAspidochelone.String(): 0,
+					config.HFBasilisk.String():      0,
+					config.HFCockatrice.String():    0,
+					config.HFDomovoi.String():       0,
+					config.HFEchidna.String():       0,
+				},
 				Genesis: config.Genesis{
 					MaxTraceableBlocks:          1000,
 					MaxValidUntilBlockIncrement: 1000 / 2,

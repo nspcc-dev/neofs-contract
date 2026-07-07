@@ -120,9 +120,11 @@ func TestVote(t *testing.T) {
 			// transfer some GAS to the new alphabet node
 			gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Committee.ScriptHash(), newAlphabet.ScriptHash(), res.Top().BigInt().Int64()/2, nil)
 
-			newInvoker := neoInvoker.WithSigners(newAlphabet)
+			// set registration price to minimum so the new alphabet node can afford it
+			neoInvoker.Invoke(t, stackitem.Null{}, "setRegisterPrice", int64(1))
 
-			newInvoker.Invoke(t, stackitem.NewBool(true), "registerCandidate", newAlphabetPub)
+			// register new alphabet node as candidate via NEP-27: transfer GAS to NEO contract
+			gasInvoker.WithSigners(newAlphabet).Invoke(t, stackitem.NewBool(true), "transfer", newAlphabet.ScriptHash(), neoSH, int64(1), newAlphabetPub)
 			c.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
 
 			// wait one block util
