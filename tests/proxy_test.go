@@ -36,5 +36,5 @@ func TestProxyVerify(t *testing.T) {
 	const method = "verify"
 	contract := newProxyInvoker(t)
 	contract.Invoke(t, stackitem.NewBool(true), method)
-	contract.WithSigners(contract.NewAccount(t)).InvokeFail(t, "invalid op in signatures 0c2", method)
+	contract.WithSigners(contract.NewAccount(t)).Invoke(t, stackitem.NewBool(false), method)
 }

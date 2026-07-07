@@ -16,6 +16,7 @@ Changelog for NeoFS Contract
 
 ### Removed
 - Deprecated InnerRingList method from netmap contract (#598)
+- SubmitObjectPut method from container contract with associated proxy contract logic (#601)
 
 ### Fixed
 
