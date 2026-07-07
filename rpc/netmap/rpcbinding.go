@@ -23,11 +23,6 @@ import (
 // NEP22Contract is an alias for nep22.Contract.
 type NEP22Contract = nep22.Contract
 
-// CommonIRNode is a contract-specific common.IRNode type used by its methods.
-type CommonIRNode struct {
-	PublicKey *keys.PublicKey
-}
-
 // NetmapCandidate is a contract-specific netmap.Candidate type used by its methods.
 type NetmapCandidate struct {
 	Addresses       []string
@@ -163,29 +158,6 @@ func (c *ContractReader) GetEpochBlockByTime(ts *big.Int) (*big.Int, error) {
 // GetEpochTime invokes `getEpochTime` method of contract.
 func (c *ContractReader) GetEpochTime(epoch *big.Int) (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getEpochTime", epoch))
-}
-
-// InnerRingList invokes `innerRingList` method of contract.
-func (c *ContractReader) InnerRingList() ([]*CommonIRNode, error) {
-	return func(item stackitem.Item, err error) ([]*CommonIRNode, error) {
-		if err != nil {
-			return nil, err
-		}
-		return func(item stackitem.Item) ([]*CommonIRNode, error) {
-			arr, ok := item.Value().([]stackitem.Item)
-			if !ok {
-				return nil, errors.New("not an array")
-			}
-			res := make([]*CommonIRNode, len(arr))
-			for i := range res {
-				res[i], err = itemToCommonIRNode(arr[i], nil)
-				if err != nil {
-					return nil, fmt.Errorf("item %d: %w", i, err)
-				}
-			}
-			return res, nil
-		}(item)
-	}(unwrap.Item(c.invoker.Call(c.hash, "innerRingList")))
 }
 
 // IsStorageNode invokes `isStorageNode` method of contract.
@@ -501,105 +473,6 @@ func (c *Contract) UpdateStateTransaction(state *big.Int, publicKey *keys.Public
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) UpdateStateUnsigned(state *big.Int, publicKey *keys.PublicKey) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "updateState", nil, state, publicKey)
-}
-
-// itemToCommonIRNode converts stack item into *CommonIRNode.
-// NULL item is returned as nil pointer without error.
-func itemToCommonIRNode(item stackitem.Item, err error) (*CommonIRNode, error) {
-	if err != nil {
-		return nil, err
-	}
-	_, null := item.(stackitem.Null)
-	if null {
-		return nil, nil
-	}
-	var res = new(CommonIRNode)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// Ensure *CommonIRNode is a proper [stackitem.Convertible].
-var _ = stackitem.Convertible(&CommonIRNode{})
-
-// Ensure *CommonIRNode is a proper [smartcontract.Convertible].
-var _ = smartcontract.Convertible(&CommonIRNode{})
-
-// FromStackItem retrieves fields of CommonIRNode from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-// It implements [stackitem.Convertible] interface.
-func (res *CommonIRNode) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 1 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	res.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field PublicKey: %w", err)
-	}
-
-	return nil
-}
-
-// ToStackItem creates [stackitem.Item] representing CommonIRNode.
-// It implements [stackitem.Convertible] interface.
-func (res *CommonIRNode) ToStackItem() (stackitem.Item, error) {
-	if res == nil {
-		return stackitem.Null{}, nil
-	}
-
-	var (
-		err   error
-		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 1)
-	)
-	itm, err = stackitem.NewByteArray(res.PublicKey.Bytes()), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field PublicKey: %w", err)
-	}
-	items = append(items, itm)
-
-	return stackitem.NewStruct(items), nil
-}
-
-// ToSCParameter creates [smartcontract.Parameter] representing CommonIRNode.
-// It implements [smartcontract.Convertible] interface so that CommonIRNode
-// could be used with invokers.
-func (res *CommonIRNode) ToSCParameter() (smartcontract.Parameter, error) {
-	if res == nil {
-		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
-	}
-
-	var (
-		err  error
-		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 1)
-	)
-	prm, err = smartcontract.NewParameterFromValue(res.PublicKey)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field PublicKey: %w", err)
-	}
-	prms = append(prms, prm)
-
-	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
 // itemToNetmapCandidate converts stack item into *NetmapCandidate.

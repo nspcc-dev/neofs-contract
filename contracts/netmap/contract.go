@@ -165,24 +165,6 @@ func Update(nefFile, manifest []byte, data any) {
 	runtime.Log("netmap contract updated")
 }
 
-// InnerRingList method returns a slice of structures that contains the public key of
-// an Inner Ring node. It should be used in notary disabled environment only.
-//
-// If notary is enabled, look to NeoFSAlphabet role in native RoleManagement
-// contract of FS chain.
-//
-// Deprecated: since non-notary settings are no longer supported, refer only to
-// the RoleManagement contract only. The method will be removed in one of the
-// future releases.
-func InnerRingList() []common.IRNode {
-	pubs := common.InnerRingNodes()
-	nodes := []common.IRNode{}
-	for i := range pubs {
-		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
-	}
-	return nodes
-}
-
 // AddNode adds a new node into the candidate list for the next epoch. Node
 // must have [nodestate.Online] state to be considered and the request must be
 // signed by both the node and Alphabet. AddNode event is emitted upon success.
