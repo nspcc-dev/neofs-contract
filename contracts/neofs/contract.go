@@ -3,6 +3,7 @@ package neofs
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
@@ -41,8 +42,6 @@ var (
 // _deploy sets up initial alphabet node keys.
 // nolint:unused
 func _deploy(data any, update bool) {
-	ctx := storage.GetContext()
-
 	if update {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
@@ -73,14 +72,14 @@ func _deploy(data any, update bool) {
 	}
 
 	// initialize all storage slices
-	common.SetSerialized(ctx, alphabetKey, args.keys)
+	common.SetSerialized([]byte(alphabetKey), args.keys)
 
-	storage.Put(ctx, processingContractKey, args.addrProc)
+	storage.LocalPut([]byte(processingContractKey), args.addrProc)
 
 	// initialize the way to collect signatures
-	storage.Put(ctx, notaryDisabledKey, args.notaryDisabled)
+	storage.LocalPut([]byte(notaryDisabledKey), convert.ToBytes(args.notaryDisabled))
 	if args.notaryDisabled {
-		common.InitVote(ctx)
+		common.InitVote()
 		runtime.Log("neofs contract notary disabled")
 	}
 
@@ -93,7 +92,7 @@ func _deploy(data any, update bool) {
 		key := args.config[i*2]
 		val := args.config[i*2+1]
 
-		setConfig(ctx, key, val)
+		setConfig(key, val)
 	}
 
 	runtime.Log("neofs: contract initialized")
@@ -114,8 +113,7 @@ func Update(nefFile, manifest []byte, data any) {
 // AlphabetList returns an array of alphabet node keys. It is used in notary-disabled
 // FS chain environment.
 func AlphabetList() []common.IRNode {
-	ctx := storage.GetReadOnlyContext()
-	pubs := getAlphabetNodes(ctx)
+	pubs := getAlphabetNodes()
 	nodes := []common.IRNode{}
 	for i := range pubs {
 		nodes = append(nodes, common.IRNode{PublicKey: pubs[i]})
@@ -126,8 +124,7 @@ func AlphabetList() []common.IRNode {
 // AlphabetAddress returns 2\3n+1 multisignature address of alphabet nodes.
 // It is used in notary-disabled FS chain environment.
 func AlphabetAddress() interop.Hash160 {
-	ctx := storage.GetReadOnlyContext()
-	return multiaddress(getAlphabetNodes(ctx))
+	return multiaddress(getAlphabetNodes())
 }
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
@@ -185,14 +182,13 @@ func Withdraw(user interop.Hash160, amount int) {
 		panic("out of max amount limit")
 	}
 
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
 
 	// transfer fee to proxy contract to pay cheque invocation
-	fee := getConfig(ctx, withdrawFeeConfigKey).(int)
+	fee := Config([]byte(withdrawFeeConfigKey)).(int)
 
 	if notaryDisabled {
-		alphabet := getAlphabetNodes(ctx)
+		alphabet := getAlphabetNodes()
 		for _, node := range alphabet {
 			processingAddr := contract.CreateStandardAccount(node)
 
@@ -202,7 +198,7 @@ func Withdraw(user interop.Hash160, amount int) {
 			}
 		}
 	} else {
-		processingAddr := storage.Get(ctx, processingContractKey).(interop.Hash160)
+		processingAddr := storage.LocalGet([]byte(processingContractKey)).(interop.Hash160)
 
 		transferred := gas.Transfer(user, processingAddr, fee, []byte{})
 		if !transferred {
@@ -223,8 +219,7 @@ func Withdraw(user interop.Hash160, amount int) {
 //
 // This method produces Cheque notification to burn assets in FS chain.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
 
 	var ( // for invocation collection without notary
 		alphabet []interop.PublicKey
@@ -232,7 +227,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	)
 
 	if notaryDisabled {
-		alphabet = getAlphabetNodes(ctx)
+		alphabet = getAlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -246,12 +241,12 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 
-		n := common.Vote(ctx, id, nodeKey)
+		n := common.Vote(id, nodeKey)
 		if n < threshold {
 			return
 		}
 
-		common.RemoveVotes(ctx, id)
+		common.RemoveVotes(id)
 	}
 
 	transferred := gas.Transfer(from, user, amount, nil)
@@ -269,8 +264,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 // This method is used in notary-disabled FS chain environment. In this case,
 // the actual alphabet list should be stored in the NeoFS contract.
 func AlphabetUpdate(id []byte, args []interop.PublicKey) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
 
 	if len(args) == 0 {
 		panic("bad arguments")
@@ -282,7 +276,7 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	)
 
 	if notaryDisabled {
-		alphabet = getAlphabetNodes(ctx)
+		alphabet = getAlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(nodeKey) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -304,15 +298,15 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 
-		n := common.Vote(ctx, id, nodeKey)
+		n := common.Vote(id, nodeKey)
 		if n < threshold {
 			return
 		}
 
-		common.RemoveVotes(ctx, id)
+		common.RemoveVotes(id)
 	}
 
-	common.SetSerialized(ctx, alphabetKey, newAlphabet)
+	common.SetSerialized([]byte(alphabetKey), newAlphabet)
 
 	runtime.Notify("AlphabetUpdate", id, newAlphabet)
 	runtime.Log("alphabet list has been updated")
@@ -321,15 +315,13 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 // Config returns configuration value of NeoFS configuration. If the key does
 // not exist, returns nil.
 func Config(key []byte) any {
-	ctx := storage.GetReadOnlyContext()
-	return getConfig(ctx, key)
+	return storage.LocalGet(append(configPrefix, key...))
 }
 
 // SetConfig key-value pair as a NeoFS runtime configuration value. It can be invoked
 // only by Alphabet nodes.
 func SetConfig(id, key, val []byte) {
-	ctx := storage.GetContext()
-	notaryDisabled := storage.Get(ctx, notaryDisabledKey).(bool)
+	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
 
 	var ( // for invocation collection without notary
 		alphabet []interop.PublicKey
@@ -337,7 +329,7 @@ func SetConfig(id, key, val []byte) {
 	)
 
 	if notaryDisabled {
-		alphabet = getAlphabetNodes(ctx)
+		alphabet = getAlphabetNodes()
 		nodeKey = common.InnerRingInvoker(alphabet)
 		if len(key) == 0 {
 			panic("this method must be invoked by alphabet")
@@ -349,15 +341,15 @@ func SetConfig(id, key, val []byte) {
 	if notaryDisabled {
 		threshold := len(alphabet)*2/3 + 1
 
-		n := common.Vote(ctx, id, nodeKey)
+		n := common.Vote(id, nodeKey)
 		if n < threshold {
 			return
 		}
 
-		common.RemoveVotes(ctx, id)
+		common.RemoveVotes(id)
 	}
 
-	setConfig(ctx, key, val)
+	setConfig(key, val)
 
 	runtime.Notify("SetConfig", id, key, val)
 	runtime.Log("configuration has been updated")
@@ -366,11 +358,9 @@ func SetConfig(id, key, val []byte) {
 // ListConfig returns an array of structures that contain a key and a value of all
 // NeoFS configuration records. Key and value are both byte arrays.
 func ListConfig() []Record {
-	ctx := storage.GetReadOnlyContext()
-
 	var config []Record
 
-	it := storage.Find(ctx, configPrefix, storage.None)
+	it := storage.LocalFind(configPrefix, storage.None)
 	for iterator.Next(it) {
 		pair := iterator.Value(it).(storage.KeyValue)
 
@@ -388,8 +378,8 @@ func Version() int {
 }
 
 // getAlphabetNodes returns a deserialized slice of nodes from storage.
-func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
-	data := storage.Get(ctx, alphabetKey)
+func getAlphabetNodes() []interop.PublicKey {
+	data := storage.LocalGet([]byte(alphabetKey))
 	if data != nil {
 		return std.Deserialize(data.([]byte)).([]interop.PublicKey)
 	}
@@ -397,20 +387,11 @@ func getAlphabetNodes(ctx storage.Context) []interop.PublicKey {
 	return []interop.PublicKey{}
 }
 
-// getConfig returns the installed neofs configuration value or nil if it is not set.
-func getConfig(ctx storage.Context, key any) any {
-	postfix := key.([]byte)
-	storageKey := append(configPrefix, postfix...)
-
-	return storage.Get(ctx, storageKey)
-}
-
 // setConfig sets a neofs configuration value in the contract storage.
-func setConfig(ctx storage.Context, key, val any) {
-	postfix := key.([]byte)
-	storageKey := append(configPrefix, postfix...)
+func setConfig(key, val []byte) {
+	storageKey := append(configPrefix, key...)
 
-	storage.Put(ctx, storageKey, val)
+	storage.LocalPut(storageKey, val)
 }
 
 // multiaddress returns a multisignature address from the list of IRNode structures

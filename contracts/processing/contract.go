@@ -38,13 +38,11 @@ func _deploy(data any, isUpdate bool) {
 		addrNeoFS interop.Hash160
 	})
 
-	ctx := storage.GetContext()
-
 	if len(args.addrNeoFS) != interop.Hash160Len {
 		panic("incorrect length of contract script hash")
 	}
 
-	storage.Put(ctx, neofsContractKey, args.addrNeoFS)
+	storage.LocalPut([]byte(neofsContractKey), args.addrNeoFS)
 
 	runtime.Log("processing contract initialized")
 }
@@ -68,8 +66,7 @@ func Update(nefFile, manifest []byte, data any) {
 // Verify method returns true if transaction contains valid multisignature of
 // Alphabet nodes of the Inner Ring.
 func Verify() bool {
-	ctx := storage.GetContext()
-	neofsContractAddr := storage.Get(ctx, neofsContractKey).(interop.Hash160)
+	neofsContractAddr := storage.LocalGet([]byte(neofsContractKey)).(interop.Hash160)
 	multiaddr := contract.Call(neofsContractAddr, multiaddrMethod, contract.ReadOnly).(interop.Hash160)
 
 	return runtime.CheckWitness(multiaddr)
