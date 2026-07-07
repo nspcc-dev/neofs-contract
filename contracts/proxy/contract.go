@@ -10,10 +10,6 @@ import (
 	"github.com/nspcc-dev/neofs-contract/common"
 )
 
-const (
-	containerContractKey = "c"
-)
-
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS contract.
 func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 	caller := runtime.GetCallingScriptHash()
@@ -24,25 +20,20 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 
 // nolint:unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
 	args := data.([]any)
 
 	if isUpdate {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
+		if version < 27_000 {
+			const containerContractKey = "c"
+
+			storage.Delete(storage.GetContext(), []byte(containerContractKey))
+		}
+
 		return
 	}
-
-	addrNNS := common.InferNNSHash()
-	if len(addrNNS) != interop.Hash160Len {
-		panic("do not know NNS hash")
-	}
-	addrContainer := common.ResolveFSContractWithNNS(addrNNS, "container")
-	if len(addrContainer) != interop.Hash160Len {
-		panic("NNS does not know Container address")
-	}
-	storage.Put(ctx, containerContractKey, addrContainer)
 
 	runtime.Log("proxy contract initialized")
 }
@@ -61,7 +52,19 @@ func Update(nefFile, manifest []byte, data any) {
 
 // Verify checks for alphabet or committee signature for a transaction.
 func Verify() bool {
-	return common.ContainsAlphabetWitness()
+	var (
+		signers          = runtime.CurrentSigners()
+		alphabetAddress  = common.AlphabetAddress()
+		committeeAddress = common.CommitteeAddress()
+	)
+
+	for _, signer := range signers {
+		if signer.Account.Equals(alphabetAddress) || signer.Account.Equals(committeeAddress) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Version returns the version of the contract.

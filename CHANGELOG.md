@@ -7,6 +7,7 @@ Changelog for NeoFS Contract
 
 ### Changed
 - Go 1.25+ is required now (#585)
+- Proxy contract can be used for payments with None alphabet/committee signer scope (#579)
 
 ### Updated
 - NeoGo dependency to 0.117.0 (#585)
