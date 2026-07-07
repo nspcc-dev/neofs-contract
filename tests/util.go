@@ -4,7 +4,6 @@ import (
 	"crypto/elliptic"
 	"testing"
 
-	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
 	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
@@ -27,15 +26,7 @@ func iteratorToArray(iter *storage.Iterator) []stackitem.Item {
 }
 
 func newExecutor(t *testing.T) *neotest.Executor {
-	bc, acc := chain.NewSingleWithCustomConfig(t, func(c *config.Blockchain) {
-		c.Hardforks = map[string]uint32{
-			config.HFAspidochelone.String(): 0,
-			config.HFBasilisk.String():      0,
-			config.HFCockatrice.String():    0,
-			config.HFDomovoi.String():       0,
-			config.HFEchidna.String():       0,
-		}
-	})
+	bc, acc := chain.NewSingle(t)
 	return neotest.NewExecutor(t, bc, acc, acc)
 }
 
