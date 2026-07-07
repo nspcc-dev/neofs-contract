@@ -2,7 +2,6 @@ package common
 
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
@@ -93,24 +92,6 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 	SetSerialized(ctx, voteKey, candidates)
 }
 
-// TryPurgeVotes removes storage item by 'ballots' key if it doesn't contain any
-// in-progress vote. Otherwise, TryPurgeVotes returns false.
-func TryPurgeVotes(ctx storage.Context) bool {
-	var (
-		candidates  = getBallots(ctx)
-		blockHeight = ledger.CurrentIndex()
-	)
-	for _, cnd := range candidates {
-		if blockHeight-cnd.Height <= blockDiff {
-			return false
-		}
-	}
-
-	storage.Delete(ctx, voteKey)
-
-	return true
-}
-
 // getBallots returns a deserialized slice of vote ballots.
 func getBallots(ctx storage.Context) []Ballot {
 	data := storage.Get(ctx, voteKey)
@@ -125,15 +106,4 @@ func getBallots(ctx storage.Context) []Ballot {
 // which is necessary with new util.Equals interop behaviour, see neo-go#1176.
 func bytesEqual(a []byte, b []byte) bool {
 	return util.Equals(string(a), string(b))
-}
-
-// InvokeID returns hashed value of prefix and args concatenation. Iy is used to
-// identify different ballots.
-func InvokeID(args []any, prefix []byte) []byte {
-	for i := range args {
-		arg := args[i].([]byte)
-		prefix = append(prefix, arg...)
-	}
-
-	return crypto.Sha256(prefix)
 }
