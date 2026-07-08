@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/actor"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/gas"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/neo"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/notary"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/rolemgmt"
@@ -221,7 +222,7 @@ mainLoop:
 			prm.logger.Info("NeoFS Alphabet member is not yet a candidate to validators, going to register",
 				zap.Stringer("member", alphabet[i]))
 
-			scriptBuilder.InvokeWithAssert(neo.Hash, "registerCandidate", alphabet[i].Bytes())
+			scriptBuilder.InvokeWithAssert(gas.Hash, "transfer", alphabet[i].GetScriptHash(), neo.Hash, minPrice, alphabet[i].Bytes())
 		}
 
 		if originalPrice > minPrice {
@@ -252,7 +253,7 @@ mainLoop:
 				Signer: transaction.Signer{
 					Account:          alphabet[i].GetScriptHash(),
 					Scopes:           transaction.CustomContracts,
-					AllowedContracts: []util.Uint160{neo.Hash},
+					AllowedContracts: []util.Uint160{gas.Hash, neo.Hash},
 				},
 				Account: acc,
 			})
