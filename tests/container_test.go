@@ -15,13 +15,11 @@ import (
 	"testing"
 
 	"github.com/mr-tron/base58"
-	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
-	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
@@ -1404,151 +1402,6 @@ func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
 	require.Equal(t, v, res)
 }
 
-func TestPutMeta(t *testing.T) {
-	cSingleWithProxy, cCommitee, cBal := newProxySponsorInvoker(t)
-	const (
-		numOfVectors  = 5
-		nodesInVector = 5
-	)
-
-	var sigs []any
-	for range numOfVectors {
-		vector := make([]any, 0, nodesInVector)
-		for range nodesInVector {
-			vector = append(vector, make([]byte, interop.SignatureLen))
-		}
-		sigs = append(sigs, vector)
-	}
-
-	t.Run("meta disabled", func(t *testing.T) {
-		acc := cCommitee.NewAccount(t)
-		cnt := dummyContainer(acc)
-		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-
-		metaInfo, err := stackitem.Serialize(stackitem.NewMapWithValue(
-			[]stackitem.MapElement{{Key: stackitem.Make("cid"), Value: stackitem.Make(cnt.id[:])}}))
-		require.NoError(t, err)
-
-		cCommitee.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", false)
-		cSingleWithProxy.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut", metaInfo, sigs)
-
-		expected := stackitem.NewStruct([]stackitem.Item{
-			stackitem.NewBuffer(cnt.value),
-			stackitem.NewBuffer([]byte{}),
-			stackitem.NewBuffer([]byte{}),
-			stackitem.NewBuffer([]byte{}),
-		})
-		cCommitee.Invoke(t, expected, "get", cnt.id[:])
-	})
-
-	t.Run("meta enabled", func(t *testing.T) {
-		acc := cCommitee.NewAccount(t)
-		cnt := dummyContainer(acc)
-		oid := randomBytes(sha256.Size)
-		balanceMint(t, cBal, acc, containerFee*1, []byte{})
-		cCommitee.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token, "", "", true)
-
-		t.Run("correct meta data", func(t *testing.T) {
-			meta := testMeta(cnt.id[:], oid)
-			rawMeta, err := stackitem.Serialize(meta)
-			require.NoError(t, err)
-
-			hash := cSingleWithProxy.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, sigs)
-			res := cSingleWithProxy.GetTxExecResult(t, hash)
-			require.Len(t, res.Events, 1)
-			require.Equal(t, "ObjectPut", res.Events[0].Name)
-			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
-			require.Len(t, notificationArgs, 3)
-			require.Equal(t, cnt.id[:], notificationArgs[0].Value().([]byte))
-			require.Equal(t, oid, notificationArgs[1].Value().([]byte))
-
-			metaValuesExp := meta.Value().([]stackitem.MapElement)
-			metaValuesGot := notificationArgs[2].Value().([]stackitem.MapElement)
-			require.Equal(t, metaValuesExp, metaValuesGot)
-		})
-
-		t.Run("additional testing values", func(t *testing.T) {
-			// meta-on-chain feature is in progress, it may or may not include additional
-			// values passed through the contract, therefore, it should be allowed to
-			// accept unknown map KV pairs
-
-			meta := testMeta(cnt.id[:], oid)
-			meta.Add(stackitem.Make("test"), stackitem.Make("test"))
-			rawMeta, err := stackitem.Serialize(meta)
-			require.NoError(t, err)
-
-			hash := cSingleWithProxy.Invoke(t, stackitem.Null{}, "submitObjectPut", rawMeta, sigs)
-			res := cSingleWithProxy.GetTxExecResult(t, hash)
-			require.Len(t, res.Events, 1)
-			require.Equal(t, "ObjectPut", res.Events[0].Name)
-			notificationArgs := res.Events[0].Item.Value().([]stackitem.Item)
-			require.Len(t, notificationArgs, 3)
-			require.Equal(t, cnt.id[:], notificationArgs[0].Value().([]byte))
-			require.Equal(t, oid, notificationArgs[1].Value().([]byte))
-
-			metaValuesExp := meta.Value().([]stackitem.MapElement)
-			metaValuesGot := notificationArgs[2].Value().([]stackitem.MapElement)
-			require.Equal(t, metaValuesExp, metaValuesGot)
-		})
-
-		t.Run("not signed by Proxy", func(t *testing.T) {
-			meta := testMeta(cnt.id[:], oid)
-			rawMeta, err := stackitem.Serialize(meta)
-			require.NoError(t, err)
-
-			cCommitee.InvokeFail(t, "not signed by Proxy contract", "submitObjectPut", rawMeta, sigs)
-		})
-
-		t.Run("missing required values", func(t *testing.T) {
-			testFunc := func(key string) {
-				meta := testMeta(cnt.id[:], oid)
-				meta.Drop(meta.Index(stackitem.Make(key)))
-				raw, err := stackitem.Serialize(meta)
-				require.NoError(t, err)
-				cSingleWithProxy.InvokeFail(t, fmt.Sprintf("'%s' not found", key), "submitObjectPut", raw, sigs)
-			}
-
-			testFunc("oid")
-			testFunc("size")
-			testFunc("validUntil")
-			testFunc("network")
-		})
-
-		t.Run("incorrect values", func(t *testing.T) {
-			testFunc := func(key string, newVal any) {
-				meta := testMeta(cnt.id[:], oid)
-				meta.Add(stackitem.Make(key), stackitem.Make(newVal))
-				raw, err := stackitem.Serialize(meta)
-				require.NoError(t, err)
-				cSingleWithProxy.InvokeFail(t, "incorrect", "submitObjectPut", raw, sigs)
-			}
-
-			testFunc("oid", []byte{1})
-			testFunc("validUntil", 1) // tested chain will have some blocks for sure
-			testFunc("network", netmode.UnitTestNet+1)
-			testFunc("type", math.MaxInt64)
-			testFunc("firstPart", []byte{1})
-			testFunc("previousPart", []byte{1})
-			testFunc("deleted", []any{[]byte{1}})
-			testFunc("locked", []any{[]byte{1}})
-		})
-	})
-}
-
-func testMeta(cid, oid []byte) *stackitem.Map {
-	return stackitem.NewMapWithValue(
-		[]stackitem.MapElement{
-			{Key: stackitem.Make("network"), Value: stackitem.Make(netmode.UnitTestNet)},
-			{Key: stackitem.Make("cid"), Value: stackitem.Make(cid)},
-			{Key: stackitem.Make("oid"), Value: stackitem.Make(oid)},
-			{Key: stackitem.Make("firstPart"), Value: stackitem.Make(oid)},
-			{Key: stackitem.Make("size"), Value: stackitem.Make(123)},
-			{Key: stackitem.Make("deleted"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
-			{Key: stackitem.Make("locked"), Value: stackitem.Make([]any{randomBytes(sha256.Size)})},
-			{Key: stackitem.Make("validUntil"), Value: stackitem.Make(math.MaxInt)},
-		})
-}
-
 func TestContainerAlias(t *testing.T) {
 	c, cBal, _ := newContainerInvoker(t, false)
 
@@ -1670,7 +1523,6 @@ func TestContainerCreate(t *testing.T) {
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
 		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
-		require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// NNS
@@ -1753,7 +1605,6 @@ func TestContainerCreate(t *testing.T) {
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
 	require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
-	require.EqualValues(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
@@ -2094,7 +1945,6 @@ func TestContainerCreateV2(t *testing.T) {
 	anyValidInvocScript := randomBytes(10)
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
-	anyOID := randomBytes(32)
 
 	blockChain, committee := chain.NewSingle(t)
 	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
@@ -2120,17 +1970,7 @@ func TestContainerCreateV2(t *testing.T) {
 		exec.Validator.ScriptHash(), proxyContractAddr, int64(1_0000_0000), nil)
 
 	inv := exec.CommitteeInvoker(containerContract.Hash)
-	proxyInv := exec.NewInvoker(containerContract.Hash, neotest.NewContractSigner(proxyContractAddr, func(tx *transaction.Transaction) []any {
-		return nil
-	}))
 	nnsInv := exec.CommitteeInvoker(nnsContract)
-
-	testMeta := func(t *testing.T, id cid.ID) []byte {
-		m := testMeta(id[:], anyOID)
-		b, err := stackitem.Serialize(m)
-		require.NoError(t, err)
-		return b
-	}
 
 	owner := exec.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
@@ -2143,8 +1983,6 @@ func TestContainerCreateV2(t *testing.T) {
 	id := cid.NewFromMarshalledContainer(cnrBytes)
 
 	cnrFields := containerToStructFields(cnr)
-
-	anyMetaSigs := []any{[]any{randomBytes(interop.SignatureLen)}}
 
 	t.Run("no alphabet witness", func(t *testing.T) {
 		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
@@ -2272,8 +2110,6 @@ func TestContainerCreateV2(t *testing.T) {
 	inv.Invoke(t, 1, "totalSupply")
 	inv.Invoke(t, stackitem.Make(1), "count")
 	inv.Invoke(t, stackitem.Null{}, "alias", id[:])
-	proxyInv.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut",
-		testMeta(t, id), anyMetaSigs)
 	nnsInv.InvokeFail(t, "token not found", "getRecords", domainName+".container", int64(recordtype.TXT))
 
 	// storage
@@ -2328,9 +2164,6 @@ func TestContainerCreateV2(t *testing.T) {
 		assertSuccessAPI(t, id, cnrFields, cnrBytes, ownerID)
 		inv.Invoke(t, stackitem.Make(fullDomain), "alias", id[:])
 
-		proxyInv.InvokeFail(t, "container does not support meta-on-chain", "submitObjectPut",
-			testMeta(t, id), anyMetaSigs)
-
 		nnsInv.Invoke(t, stackitem.NewArray([]stackitem.Item{stackitem.Make(base58.Encode(id[:]))}), "getRecords",
 			fullDomain, int64(recordtype.TXT))
 
@@ -2365,12 +2198,9 @@ func TestContainerCreateV2(t *testing.T) {
 		// API
 		assertSuccessAPI(t, id, cnrFields, cnrBytes, ownerID)
 		inv.Invoke(t, stackitem.Null{}, "alias", id[:])
-		proxyInv.Invoke(t, stackitem.Null{}, "submitObjectPut",
-			testMeta(t, id), anyMetaSigs)
 
 		// storage
 		assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
-		require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
@@ -2401,12 +2231,9 @@ func TestContainerCreateV2(t *testing.T) {
 		// API
 		assertSuccessAPI(t, id, cnrFields, cnrBytes, ownerID)
 		inv.Invoke(t, stackitem.Null{}, "alias", id[:])
-		proxyInv.Invoke(t, stackitem.Null{}, "submitObjectPut",
-			testMeta(t, id), anyMetaSigs)
 
 		// storage
 		assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
-		require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications

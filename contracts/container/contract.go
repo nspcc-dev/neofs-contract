@@ -5,7 +5,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
-	"github.com/nspcc-dev/neo-go/pkg/interop/native/ledger"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
@@ -121,7 +120,6 @@ const (
 	reportsSummary             = 's'
 	maxNumberOfReportsPerEpoch = 3
 	reportersPrefix            = 'i'
-	containersWithMetaPrefix   = 'm'
 	containerKeyPrefix         = 'x'
 	ownerKeyPrefix             = 'o'
 	deletedKeyPrefix           = 'd'
@@ -177,6 +175,12 @@ func _deploy(data any, isUpdate bool) {
 					storage.Put(ctx, kv.Key, std.Serialize(billing))
 				}
 			}
+		}
+
+		if version < 27_000 {
+			const containersWithMetaPrefix = 'm'
+
+			deleteByPrefix(storage.GetContext(), []byte{containersWithMetaPrefix})
 		}
 
 		return
@@ -258,94 +262,6 @@ func Update(nefFile, manifest []byte, data any) {
 	runtime.Log("container contract updated")
 }
 
-// SubmitObjectPut registers successful object PUT operation and notifies about
-// it. metaInformation must be signed by container nodes according to
-// container's placement, see [VerifyPlacementSignatures]. metaInformation
-// must contain information about an object placed to a container that was
-// created using [Put] ([PutMeta]) with enabled meta-on-chain option.
-func SubmitObjectPut(metaInformation []byte, sigs [][]interop.Signature) {
-	ctx := storage.GetContext()
-	proxyH := storage.Get(ctx, proxyContractKey).(interop.Hash160)
-	if !runtime.CurrentSigners()[0].Account.Equals(proxyH) {
-		panic("not signed by Proxy contract")
-	}
-
-	metaMap := std.Deserialize(metaInformation).(map[string]any)
-
-	// required
-
-	cID := requireMapValue(metaMap, "cid").(interop.Hash256)
-	if len(cID) != interop.Hash256Len {
-		panic("incorrect container ID")
-	}
-	if storage.Get(ctx, append([]byte{containersWithMetaPrefix}, cID...)) == nil {
-		panic("container does not support meta-on-chain")
-	}
-	oID := requireMapValue(metaMap, "oid").(interop.Hash256)
-	if len(oID) != interop.Hash256Len {
-		panic("incorrect object ID")
-	}
-	_ = requireMapValue(metaMap, "size").(int)
-	vub := requireMapValue(metaMap, "validUntil").(int)
-	if vub <= ledger.CurrentIndex() {
-		panic("incorrect vub: exceeded")
-	}
-	magic := requireMapValue(metaMap, "network").(int)
-	if magic != runtime.GetNetwork() {
-		panic("incorrect network magic")
-	}
-
-	// optional
-
-	if v, ok := metaMap["type"]; ok {
-		typ := v.(int)
-		switch typ {
-		case 0, 1, 2, 3, 4: // regular, tombstone, storage group, lock, link
-		default:
-			panic("incorrect object type")
-		}
-	}
-	if v, ok := metaMap["firstPart"]; ok {
-		firstPart := v.(interop.Hash256)
-		if len(firstPart) != interop.Hash256Len {
-			panic("incorrect first part object ID")
-		}
-	}
-	if v, ok := metaMap["previousPart"]; ok {
-		previousPart := v.(interop.Hash256)
-		if len(previousPart) != interop.Hash256Len {
-			panic("incorrect previous part object ID")
-		}
-	}
-	if v, ok := metaMap["locked"]; ok {
-		locked := v.([]interop.Hash256)
-		for i, l := range locked {
-			if len(l) != interop.Hash256Len {
-				panic("incorrect " + std.Itoa10(i) + " locked object")
-			}
-		}
-	}
-	if v, ok := metaMap["deleted"]; ok {
-		deleted := v.([]interop.Hash256)
-		for i, d := range deleted {
-			if len(d) != interop.Hash256Len {
-				panic("incorrect " + std.Itoa10(i) + " deleted object")
-			}
-		}
-	}
-
-	runtime.Notify("ObjectPut", cID, oID, metaMap)
-}
-
-func requireMapValue(m map[string]any, key string) any {
-	v, ok := m[key]
-	if !ok {
-		panic("'" + key + "'" + " not found")
-	}
-
-	return v
-}
-
 // PutMeta is the same as [Put] and [PutNamed] (and exposed as put from
 // the contract via overload), but allows named containers and container's
 // meta-information be handled and notified using the chain. If name and
@@ -354,11 +270,6 @@ func requireMapValue(m map[string]any, key string) any {
 //
 // Deprecated: use [CreateV2] instead.
 func PutMeta(container []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte, name, zone string, metaOnChain bool) {
-	if metaOnChain {
-		ctx := storage.GetContext()
-		cID := crypto.Sha256(container)
-		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, cID...), []byte{})
-	}
 	PutNamed(container, signature, publicKey, token, name, zone)
 }
 
@@ -557,15 +468,12 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 	}
 
 	var name, zone string
-	var metaOnChain bool
 	for i := range cnr.Attributes {
 		switch cnr.Attributes[i].Key {
 		case "__NEOFS__NAME":
 			name = cnr.Attributes[i].Value
 		case "__NEOFS__ZONE":
 			zone = cnr.Attributes[i].Value
-		case "__NEOFS__METAINFO_CONSISTENCY":
-			metaOnChain = true
 		case lockAttributeName:
 			if _, exc := checkLockUntilAttribute(cnr.Attributes[i].Value); exc != "" {
 				panic(exc)
@@ -616,9 +524,6 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
 	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
 	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnrBytes)
-	if metaOnChain {
-		storage.Put(ctx, append([]byte{containersWithMetaPrefix}, id...), []byte{})
-	}
 
 	runtime.Notify("Created", id, ownerAddr)
 
@@ -1897,7 +1802,6 @@ func removeContainer(ctx storage.Context, id []byte, owner []byte) {
 
 	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
 	storage.Delete(ctx, append([]byte{infoPrefix}, id...))
-	storage.Delete(ctx, append([]byte{containersWithMetaPrefix}, id...))
 	storage.Delete(ctx, append(eACLPrefix, id...))
 	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
 }
