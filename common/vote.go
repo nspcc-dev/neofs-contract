@@ -23,16 +23,16 @@ const voteKey = "ballots"
 
 const blockDiff = 20 // change base on performance evaluation
 
-func InitVote(ctx storage.Context) {
-	SetSerialized(ctx, voteKey, []Ballot{})
+func InitVote() {
+	SetSerialized([]byte(voteKey), []Ballot{})
 }
 
 // Vote adds ballot for the decision with a specific 'id' and returns the amount
 // of unique voters for that decision.
-func Vote(ctx storage.Context, id, from []byte) int {
+func Vote(id, from []byte) int {
 	var (
 		newCandidates []Ballot
-		candidates    = getBallots(ctx)
+		candidates    = getBallots()
 		found         = -1
 		blockHeight   = ledger.CurrentIndex()
 	)
@@ -68,16 +68,16 @@ func Vote(ctx storage.Context, id, from []byte) int {
 		found = 1
 	}
 
-	SetSerialized(ctx, voteKey, newCandidates)
+	SetSerialized([]byte(voteKey), newCandidates)
 
 	return found
 }
 
 // RemoveVotes clears ballots of the decision that has been accepted by
 // inner ring nodes.
-func RemoveVotes(ctx storage.Context, id []byte) {
+func RemoveVotes(id []byte) {
 	var (
-		candidates = getBallots(ctx)
+		candidates = getBallots()
 		index      int
 	)
 
@@ -89,12 +89,12 @@ func RemoveVotes(ctx storage.Context, id []byte) {
 	}
 
 	util.Remove(candidates, index)
-	SetSerialized(ctx, voteKey, candidates)
+	SetSerialized([]byte(voteKey), candidates)
 }
 
 // getBallots returns a deserialized slice of vote ballots.
-func getBallots(ctx storage.Context) []Ballot {
-	data := storage.Get(ctx, voteKey)
+func getBallots() []Ballot {
+	data := storage.LocalGet([]byte(voteKey))
 	if data != nil {
 		return std.Deserialize(data.([]byte)).([]Ballot)
 	}

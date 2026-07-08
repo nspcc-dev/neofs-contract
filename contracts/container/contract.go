@@ -3,6 +3,7 @@ package container
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
@@ -151,16 +152,13 @@ func OnNEP11Payment(a interop.Hash160, b int, c []byte, d any) {
 
 // nolint:unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
 	args := data.([]any)
 	if isUpdate {
 		version := args[len(args)-1].(int)
 		common.CheckVersion(version)
 
 		if version < 26_001 {
-			ctx := storage.GetContext()
-
-			it := storage.Find(ctx, []byte{billingInfoKeyPrefix}, storage.None)
+			it := storage.LocalFind([]byte{billingInfoKeyPrefix}, storage.None)
 			for iterator.Next(it) {
 				kv := iterator.Value(it).(storage.KeyValue)
 				acc := kv.Key[1+interop.Hash256Len:] // key is 'f'<cID><account>
@@ -172,7 +170,7 @@ func _deploy(data any, isUpdate bool) {
 				billing := std.Deserialize(kv.Value).(EpochBillingStat)
 				if len(billing.Account) != interop.Hash160Len {
 					billing.Account = acc
-					storage.Put(ctx, kv.Key, std.Serialize(billing))
+					storage.LocalPut(kv.Key, std.Serialize(billing))
 				}
 			}
 		}
@@ -180,7 +178,7 @@ func _deploy(data any, isUpdate bool) {
 		if version < 27_000 {
 			const containersWithMetaPrefix = 'm'
 
-			deleteByPrefix(storage.GetContext(), []byte{containersWithMetaPrefix})
+			deleteByPrefix([]byte{containersWithMetaPrefix})
 		}
 
 		return
@@ -225,11 +223,11 @@ func _deploy(data any, isUpdate bool) {
 		nnsRoot = nnsDefaultTLD
 	}
 
-	storage.Put(ctx, netmapContractKey, addrNetmap)
-	storage.Put(ctx, balanceContractKey, addrBalance)
-	storage.Put(ctx, nnsContractKey, addrNNS)
-	storage.Put(ctx, proxyContractKey, addrProxy)
-	storage.Put(ctx, nnsRootKey, nnsRoot)
+	storage.LocalPut([]byte(netmapContractKey), addrNetmap)
+	storage.LocalPut([]byte(balanceContractKey), addrBalance)
+	storage.LocalPut([]byte(nnsContractKey), addrNNS)
+	storage.LocalPut([]byte(proxyContractKey), addrProxy)
+	storage.LocalPut([]byte(nnsRootKey), []byte(nnsRoot))
 
 	// add NNS root for container alias domains
 	registerNiceNameTLD(addrNNS, nnsRoot)
@@ -302,10 +300,8 @@ func PutNamedOverloaded(container []byte, signature interop.Signature, publicKey
 func PutNamed(container []byte, signature interop.Signature,
 	publicKey interop.PublicKey, token []byte,
 	name, zone string) {
-	ctx := storage.GetContext()
-
 	containerID := crypto.Sha256(container)
-	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
+	if storage.LocalGet(append([]byte{deletedKeyPrefix}, []byte(containerID)...)) != nil {
 		panic(cst.ErrorDeleted)
 	}
 
@@ -327,16 +323,16 @@ func PutNamed(container []byte, signature interop.Signature,
 	)
 	if name != "" {
 		if zone == "" {
-			zone = storage.Get(ctx, nnsRootKey).(string)
+			zone = storage.LocalGet([]byte(nnsRootKey)).(string)
 		}
-		nnsContractAddr = storage.Get(ctx, nnsContractKey).(interop.Hash160)
+		nnsContractAddr = storage.LocalGet([]byte(nnsContractKey)).(interop.Hash160)
 		domain = name + "." + zone
 		needRegister = checkNiceNameAvailable(nnsContractAddr, domain)
 	}
 
 	alphabet := common.AlphabetNodes()
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
-	balanceContractAddr := storage.Get(ctx, balanceContractKey).(interop.Hash160)
+	netmapContractAddr := storage.LocalGet([]byte(netmapContractKey)).(interop.Hash160)
+	balanceContractAddr := storage.LocalGet([]byte(balanceContractKey)).(interop.Hash160)
 	containerFee := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
 	balance := contract.Call(balanceContractAddr, "balanceOf", contract.ReadOnly, cnr.Owner).(int)
 	if name != "" {
@@ -366,7 +362,7 @@ func PutNamed(container []byte, signature interop.Signature,
 		}
 	}
 
-	addContainer(ctx, containerID, scriptHashToAddress(cnr.Owner), container, cnr)
+	addContainer(containerID, scriptHashToAddress(cnr.Owner), container, cnr)
 
 	if name != "" {
 		if needRegister {
@@ -381,7 +377,7 @@ func PutNamed(container []byte, signature interop.Signature,
 			domain, recordtype.TXT, std.Base58Encode(containerID))
 
 		key := append([]byte(nnsHasAliasKey), containerID...)
-		storage.Put(ctx, key, domain)
+		storage.LocalPut(key, []byte(domain))
 	}
 
 	runtime.Log("added new container")
@@ -459,11 +455,9 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
 		panic(common.ErrAlphabetWitnessFailed)
 	}
-
-	ctx := storage.GetContext()
 	cnrBytes := toBytes(cnr)
 	id := crypto.Sha256(cnrBytes)
-	if storage.Get(ctx, append([]byte{deletedKeyPrefix}, id...)) != nil {
+	if storage.LocalGet(append([]byte{deletedKeyPrefix}, id...)) != nil {
 		panic(cst.ErrorDeleted)
 	}
 
@@ -483,9 +477,9 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	if name != "" {
 		if zone == "" {
-			zone = storage.Get(ctx, nnsRootKey).(string)
+			zone = storage.LocalGet([]byte(nnsRootKey)).(string)
 		}
-		nnsContract := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+		nnsContract := storage.LocalGet([]byte(nnsContractKey)).(interop.Hash160)
 		domain := name + "." + zone
 
 		if checkNiceNameAvailable(nnsContract, domain) {
@@ -497,16 +491,16 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 		contract.Call(nnsContract, "addRecord", contract.All, domain, recordtype.TXT, std.Base58Encode(id))
 
-		storage.Put(ctx, append([]byte(nnsHasAliasKey), id...), domain)
+		storage.LocalPut(append([]byte(nnsHasAliasKey), id...), []byte(domain))
 	}
 
-	netmapContract := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	netmapContract := storage.LocalGet([]byte(netmapContractKey)).(interop.Hash160)
 	fee := contract.Call(netmapContract, "config", contract.ReadOnly, cst.RegistrationFeeKey).(int)
 	if name != "" {
 		fee += contract.Call(netmapContract, "config", contract.ReadOnly, cst.AliasFeeKey).(int)
 	}
 	if fee > 0 {
-		balanceContract := storage.Get(ctx, balanceContractKey).(interop.Hash160)
+		balanceContract := storage.LocalGet([]byte(balanceContractKey)).(interop.Hash160)
 		ownerBalance := contract.Call(balanceContract, "balanceOf", contract.ReadOnly, cnr.Owner).(int)
 		if ownerBalance < fee*len(alphabet) {
 			panic("insufficient balance to create container")
@@ -521,9 +515,9 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	ownerAddr := scriptHashToAddress(cnr.Owner)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(cnr))
-	storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, id...), cnrBytes)
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(cnr))
+	storage.LocalPut(append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
+	storage.LocalPut(append([]byte{containerKeyPrefix}, id...), cnrBytes)
 
 	runtime.Notify("Created", id, ownerAddr)
 
@@ -546,12 +540,11 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 func AddStructs() bool {
 	common.CheckAlphabetWitness()
 
-	ctx := storage.GetContext()
 	var done int
 	const doneLimit = 10
 	var structKey []byte
 
-	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.RemovePrefix)
+	it := storage.LocalFind([]byte{containerKeyPrefix}, storage.RemovePrefix)
 	for iterator.Next(it) {
 		protobufKV := iterator.Value(it).(storage.KeyValue)
 		if structKey == nil {
@@ -560,13 +553,13 @@ func AddStructs() bool {
 			copy(structKey[1:], protobufKV.Key)
 		}
 
-		if storage.Get(ctx, structKey) != nil {
+		if storage.LocalGet(structKey) != nil {
 			continue
 		}
 
 		cnr := fromBytes(protobufKV.Value)
 
-		storage.Put(ctx, structKey, std.Serialize(cnr))
+		storage.LocalPut(structKey, std.Serialize(cnr))
 
 		notifyNEP11Transfer(protobufKV.Key, nil, cnr.Owner)
 
@@ -618,9 +611,7 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 //
 // Deprecated: use [Remove] instead.
 func Delete(containerID []byte, signature interop.Signature, token []byte) {
-	ctx := storage.GetContext()
-
-	cnr, ok := tryGetInfo(ctx, containerID)
+	cnr, ok := tryGetInfo(containerID)
 	if !ok {
 		return
 	}
@@ -632,13 +623,13 @@ func Delete(containerID []byte, signature interop.Signature, token []byte) {
 	}
 
 	key := append([]byte(nnsHasAliasKey), containerID...)
-	domain := storage.Get(ctx, key).(string)
+	domain := storage.LocalGet(key).(string)
 	if len(domain) != 0 {
-		storage.Delete(ctx, key)
-		deleteNNSRecords(ctx, domain)
+		storage.LocalDelete(key)
+		deleteNNSRecords(domain)
 	}
 
-	removeContainer(ctx, containerID, scriptHashToAddress(cnr.Owner))
+	removeContainer(containerID, scriptHashToAddress(cnr.Owner))
 	runtime.Log("remove container")
 	runtime.Notify("DeleteSuccess", containerID)
 
@@ -660,9 +651,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 		panic("invalid container ID length")
 	}
 
-	ctx := storage.GetContext()
-
-	cnr, ok := tryGetInfo(ctx, id)
+	cnr, ok := tryGetInfo(id)
 	if !ok {
 		return
 	}
@@ -673,12 +662,12 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 
 	owner := scriptHashToAddress(cnr.Owner)
 
-	removeContainer(ctx, id, owner)
+	removeContainer(id, owner)
 
 	domainKey := append([]byte(nnsHasAliasKey), id...)
-	if domain := storage.Get(ctx, domainKey).(string); len(domain) != 0 { // != "" not working
-		storage.Delete(ctx, domainKey)
-		deleteNNSRecords(ctx, domain)
+	if domain := storage.LocalGet(domainKey).(string); len(domain) != 0 { // != "" not working
+		storage.LocalDelete(domainKey)
+		deleteNNSRecords(domain)
 	}
 
 	runtime.Notify("Removed", interop.Hash256(id), owner)
@@ -686,7 +675,7 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	notifyNEP11Transfer(id, cnr.Owner, nil)
 }
 
-func deleteNNSRecords(ctx storage.Context, domain string) {
+func deleteNNSRecords(domain string) {
 	defer func() {
 		// Exception happened.
 		if r := recover(); r != nil {
@@ -699,33 +688,29 @@ func deleteNNSRecords(ctx storage.Context, domain string) {
 		}
 	}()
 
-	nnsContractAddr := storage.Get(ctx, nnsContractKey).(interop.Hash160)
+	nnsContractAddr := storage.LocalGet([]byte(nnsContractKey)).(interop.Hash160)
 	contract.Call(nnsContractAddr, "deleteRecords", contract.All, domain, recordtype.TXT)
 }
 
 // GetInfo reads container by ID. If the container is missing, GetInfo throws
 // [cst.NotFoundError] exception.
 func GetInfo(id interop.Hash256) Info {
-	return getInfo(storage.GetReadOnlyContext(), id)
+	res, ok := tryGetInfo(id)
+	if !ok {
+		panic(cst.NotFoundError)
+	}
+	return res
 }
 
-func tryGetInfo(ctx storage.Context, id interop.Hash256) (Info, bool) {
-	val := storage.Get(ctx, append([]byte{infoPrefix}, id...))
+func tryGetInfo(id interop.Hash256) (Info, bool) {
+	val := storage.LocalGet(append([]byte{infoPrefix}, id...))
 	if val == nil {
-		if val = storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)); val != nil {
+		if val = storage.LocalGet(append([]byte{containerKeyPrefix}, id...)); val != nil {
 			return fromBytes(val.([]byte)), true
 		}
 		return Info{}, false
 	}
 	return std.Deserialize(val.([]byte)).(Info), true
-}
-
-func getInfo(ctx storage.Context, id interop.Hash256) Info {
-	res, ok := tryGetInfo(ctx, id)
-	if !ok {
-		panic(cst.NotFoundError)
-	}
-	return res
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
@@ -736,8 +721,7 @@ func getInfo(ctx storage.Context, id interop.Hash256) Info {
 //
 // Deprecated: use [GetInfo] instead.
 func Get(containerID []byte) Container {
-	ctx := storage.GetReadOnlyContext()
-	cnt := getContainer(ctx, containerID)
+	cnt := getContainer(containerID)
 	if len(cnt.Value) == 0 {
 		panic(cst.NotFoundError)
 	}
@@ -751,7 +735,7 @@ func Get(containerID []byte) Container {
 //
 // Deprecated: use [GetInfo] instead.
 func GetContainerData(id []byte) []byte {
-	cnr := storage.Get(storage.GetReadOnlyContext(), append([]byte{containerKeyPrefix}, id...))
+	cnr := storage.LocalGet(append([]byte{containerKeyPrefix}, id...))
 	if cnr == nil {
 		panic(cst.NotFoundError)
 	}
@@ -772,12 +756,11 @@ func Owner(containerID []byte) []byte {
 //
 // If the container doesn't exist, it panics with NotFoundError.
 func Alias(cid []byte) string {
-	ctx := storage.GetReadOnlyContext()
-	owner := getOwnerByID(ctx, cid)
+	owner := getOwnerByID(cid)
 	if owner == nil {
 		panic(cst.NotFoundError)
 	}
-	return storage.Get(ctx, append([]byte(nnsHasAliasKey), cid...)).(string)
+	return storage.LocalGet(append([]byte(nnsHasAliasKey), cid...)).(string)
 }
 
 // Count method returns the number of registered containers.
@@ -793,12 +776,11 @@ func Count() int {
 // Deprecated: use [TokensOf] for non-empty and [Tokens] for empty owner
 // correspondingly.
 func ContainersOf(owner []byte) iterator.Iterator {
-	ctx := storage.GetReadOnlyContext()
 	key := []byte{ownerKeyPrefix}
 	if len(owner) != 0 {
 		key = append(key, owner...)
 	}
-	return storage.Find(ctx, key, storage.ValuesOnly)
+	return storage.LocalFind(key, storage.ValuesOnly)
 }
 
 // maxNumOfREPs is a max supported number of REP value in container's policy
@@ -819,8 +801,7 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 	if placementVector >= maxNumOfREPs {
 		panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(placementVector)))
 	}
-	ctx := storage.GetContext()
-	validatePlacementIndex(ctx, cID, placementVector)
+	validatePlacementIndex(cID, placementVector)
 
 	common.CheckAlphabetWitness()
 
@@ -834,17 +815,17 @@ func AddNextEpochNodes(cID interop.Hash256, placementVector uint8, publicKeys []
 
 		account := contract.CreateStandardAccount(publicKey)
 		storageKey := append(commonPrefix, account...)
-		storage.Put(ctx, storageKey, publicKey)
+		storage.LocalPut(storageKey, publicKey)
 	}
 }
 
-func validatePlacementIndex(ctx storage.Context, cID interop.Hash256, inx uint8) {
+func validatePlacementIndex(cID interop.Hash256, inx uint8) {
 	if inx == 0 {
 		return
 	}
 
 	commonPrefix := append([]byte{nextEpochNodesPrefix}, cID...)
-	iter := storage.Find(ctx, append(commonPrefix, inx-1), storage.None)
+	iter := storage.LocalFind(append(commonPrefix, inx-1), storage.None)
 	if !iterator.Next(iter) {
 		panic("invalid placement vector: " + std.Itoa10(int(inx-1)) + " index not found but " + std.Itoa10(int(inx)) + " requested")
 	}
@@ -903,8 +884,6 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
 	}
 
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
 	oldNodesPrefix := append([]byte{nodesPrefix}, cID...)
@@ -915,7 +894,7 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		spaceDiff int
 		objsDiff  int
 	)
-	oldNodes := storage.Find(ctx, oldNodesPrefix, storage.None)
+	oldNodes := storage.LocalFind(oldNodesPrefix, storage.None)
 	for iterator.Next(oldNodes) {
 		oldNode := iterator.Value(oldNodes).(struct{ k, v []byte })
 
@@ -926,7 +905,7 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 
 		for i := range replicas {
 			newNodeKey[1+interop.Hash256Len] = uint8(i)
-			stillInNetmap = storage.Get(ctx, newNodeKey) != nil
+			stillInNetmap = storage.LocalGet(newNodeKey) != nil
 			if stillInNetmap {
 				break
 			}
@@ -935,34 +914,34 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		if !stillInNetmap {
 			reportKey := append([]byte{reportersPrefix}, oldNode.k[1:1+interop.Hash256Len]...)
 			reportKey = append(reportKey, oldNode.k[1+interop.Hash256Len+1:]...)
-			reportRaw := storage.Get(ctx, reportKey)
+			reportRaw := storage.LocalGet(reportKey)
 			if reportRaw != nil {
 				report := std.Deserialize(reportRaw.([]byte)).(NodeReport)
 
 				spaceDiff -= report.ContainerSize
 				objsDiff -= report.NumberOfObjects
 
-				storage.Delete(ctx, reportKey)
+				storage.LocalDelete(reportKey)
 			}
 		}
 
-		storage.Delete(ctx, oldNode.k)
+		storage.LocalDelete(oldNode.k)
 	}
 
-	newNodes := storage.Find(ctx, newNodesPrefix, storage.None)
+	newNodes := storage.LocalFind(newNodesPrefix, storage.None)
 	for iterator.Next(newNodes) {
 		newNode := iterator.Value(newNodes).(storage.KeyValue)
 
-		storage.Delete(ctx, newNode.Key)
+		storage.LocalDelete(newNode.Key)
 
 		newKey := append([]byte{nodesPrefix}, newNode.Key[1:]...)
-		storage.Put(ctx, newKey, newNode.Value)
+		storage.LocalPut(newKey, newNode.Value)
 	}
 
-	rr := storage.Find(ctx, replicasPrefix, storage.KeysOnly)
+	rr := storage.LocalFind(replicasPrefix, storage.KeysOnly)
 	for iterator.Next(rr) {
 		oldReplicasNumber := iterator.Value(rr).([]byte)
-		storage.Delete(ctx, oldReplicasNumber)
+		storage.LocalDelete(oldReplicasNumber)
 	}
 
 	for i, replica := range replicas {
@@ -970,7 +949,7 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 			panic(cst.ErrorTooBigNumberOfNodes + ": " + std.Itoa10(int(replica)))
 		}
 
-		storage.Put(ctx, append(replicasPrefix, uint8(i)), replica)
+		storage.LocalPut(append(replicasPrefix, uint8(i)), []byte{replica})
 	}
 
 	// update reports stat after netmap change
@@ -979,13 +958,13 @@ func CommitContainerListUpdate(cID interop.Hash256, replicas []uint8) {
 		// summary update
 
 		summaryKey := append([]byte{reportsSummary}, cID...)
-		rSummary := std.Deserialize(storage.Get(ctx, summaryKey).([]byte)).(NodeReportSummary)
+		rSummary := std.Deserialize(storage.LocalGet(summaryKey).([]byte)).(NodeReportSummary)
 		rSummary.ContainerSize += spaceDiff
 		rSummary.NumberOfObjects += objsDiff
-		storage.Put(ctx, summaryKey, std.Serialize(rSummary))
+		storage.LocalPut(summaryKey, std.Serialize(rSummary))
 
 		// user stat update
-		updateUserTakenSpace(ctx, getOwnerByID(ctx, cID), spaceDiff)
+		updateUserTakenSpace(getOwnerByID(cID), spaceDiff)
 	}
 
 	runtime.Notify("NodesUpdate", cID)
@@ -998,9 +977,7 @@ func ReplicasNumbers(cID interop.Hash256) iterator.Iterator {
 		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
 	}
 
-	ctx := storage.GetReadOnlyContext()
-
-	return storage.Find(ctx, append([]byte{replicasNumberPrefix}, cID...), storage.ValuesOnly)
+	return storage.LocalFind(append([]byte{replicasNumberPrefix}, cID...), storage.ValuesOnly)
 }
 
 // Nodes returns iterator over members of the container. The list is handled
@@ -1010,12 +987,10 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 	if len(cID) != interop.Hash256Len {
 		panic(cst.ErrorInvalidContainerID + ": length: " + std.Itoa10(len(cID)))
 	}
-
-	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{nodesPrefix}, cID...)
 	key = append(key, placementVector)
 
-	return storage.Find(ctx, key, storage.ValuesOnly)
+	return storage.LocalFind(key, storage.ValuesOnly)
 }
 
 // SetEACL method sets a new extended ACL table related to the contract
@@ -1034,8 +1009,6 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 //
 // Deprecated: use [PutEACL] instead.
 func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
-	ctx := storage.GetContext()
-
 	// V2 format
 	// get container ID
 	lnEACL := len(eACL)
@@ -1049,7 +1022,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 	}
 	containerID := eACL[offset : offset+containerIDSize]
 
-	ownerID := getOwnerByID(ctx, containerID)
+	ownerID := getOwnerByID(containerID)
 	if ownerID == nil {
 		panic(cst.NotFoundError)
 	}
@@ -1058,7 +1031,7 @@ func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicK
 
 	key := append(eACLPrefix, containerID...)
 
-	storage.Put(ctx, key, eACL)
+	storage.LocalPut(key, eACL)
 
 	runtime.Log("success")
 	runtime.Notify("SetEACLSuccess", containerID, publicKey)
@@ -1084,13 +1057,12 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 	}
 
 	id := eACL[idOff : idOff+containerIDSize]
-	ctx := storage.GetContext()
 
-	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+	if storage.LocalGet(append([]byte{containerKeyPrefix}, id...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
-	storage.Put(ctx, append(eACLPrefix, id...), eACL)
+	storage.LocalPut(append(eACLPrefix, id...), eACL)
 
 	runtime.Notify("EACLChanged", interop.Hash256(id))
 }
@@ -1103,14 +1075,12 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 //
 // Deprecated: use [GetEACLData] instead.
 func EACL(containerID []byte) ExtendedACL {
-	ctx := storage.GetReadOnlyContext()
-
-	ownerID := getOwnerByID(ctx, containerID)
+	ownerID := getOwnerByID(containerID)
 	if ownerID == nil {
 		panic(cst.NotFoundError)
 	}
 
-	return getEACL(ctx, containerID)
+	return getEACL(containerID)
 }
 
 // GetEACLData returns binary of container eACL it was put with by the container
@@ -1119,12 +1089,11 @@ func EACL(containerID []byte) ExtendedACL {
 // If the container is missing, GetEACLData throws [cst.NotFoundError]
 // exception.
 func GetEACLData(id []byte) []byte {
-	ctx := storage.GetReadOnlyContext()
-	if storage.Get(ctx, append([]byte{containerKeyPrefix}, id...)) == nil {
+	if storage.LocalGet(append([]byte{containerKeyPrefix}, id...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
-	return storage.Get(ctx, append(eACLPrefix, id...)).([]byte)
+	return storage.LocalGet(append(eACLPrefix, id...)).([]byte)
 }
 
 // PutReport method saves container's state report in contract memory.
@@ -1137,17 +1106,16 @@ func GetEACLData(id []byte) []byte {
 // If the container doesn't exist, it panics with [cst.NotFoundError].
 func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.PublicKey) {
 	common.CheckWitness(pubKey)
-	ctx := storage.GetContext()
-	owner := getOwnerByID(ctx, cid)
+	owner := getOwnerByID(cid)
 	if owner == nil {
 		panic(cst.NotFoundError)
 	}
 
-	if !nodeFromContainer(ctx, cid, pubKey) {
+	if !nodeFromContainer(cid, pubKey) {
 		panic("method must be invoked by storage node from container")
 	}
 
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+	netmapContractAddr := storage.LocalGet([]byte(netmapContractKey)).(interop.Hash160)
 	currEpoch := contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 
 	var (
@@ -1156,15 +1124,15 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		currTime    = runtime.GetTime()
 
 		summaryKey        = append([]byte{reportsSummary}, cid...)
-		reportsSummaryRaw = storage.Get(ctx, summaryKey)
+		reportsSummaryRaw = storage.LocalGet(summaryKey)
 		summary           NodeReportSummary
 
 		reportKey = append(append([]byte{reportersPrefix}, cid...), nodeAcc...)
-		reportRaw = storage.Get(ctx, reportKey)
+		reportRaw = storage.LocalGet(reportKey)
 		report    NodeReport
 
 		billingStatKey = append(append([]byte{billingInfoKeyPrefix}, cid...), nodeAcc...)
-		billingStatRaw = storage.Get(ctx, billingStatKey)
+		billingStatRaw = storage.LocalGet(billingStatKey)
 		billingStat    EpochBillingStat
 	)
 	if reportsSummaryRaw != nil {
@@ -1233,24 +1201,24 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		report.NumberOfObjects = objsNumber
 	}
 
-	storage.Put(ctx, reportKey, std.Serialize(report))
-	storage.Put(ctx, billingStatKey, std.Serialize(billingStat))
+	storage.LocalPut(reportKey, std.Serialize(report))
+	storage.LocalPut(billingStatKey, std.Serialize(billingStat))
 
-	updateUserTakenSpace(ctx, owner, storageDiff)
+	updateUserTakenSpace(owner, storageDiff)
 
-	storage.Put(ctx, summaryKey, std.Serialize(summary))
+	storage.LocalPut(summaryKey, std.Serialize(summary))
 	runtime.Log("saved container size report")
 }
 
 // GetTakenSpaceByUser returns total load space in all containers user owns.
 // If user have no containers, it returns 0.
 func GetTakenSpaceByUser(user []byte) int {
-	return getTakenSpaceByKey(storage.GetReadOnlyContext(), userTotalStorageKey(user))
+	return getTakenSpaceByKey(userTotalStorageKey(user))
 }
 
 // getTakenSpaceByKey simplifies nil handling for user taken space value.
-func getTakenSpaceByKey(ctx storage.Context, key []byte) int {
-	v := storage.Get(ctx, key)
+func getTakenSpaceByKey(key []byte) int {
+	v := storage.LocalGet(key)
 	if v == nil {
 		return 0
 	}
@@ -1258,20 +1226,20 @@ func getTakenSpaceByKey(ctx storage.Context, key []byte) int {
 	return v.(int)
 }
 
-func updateUserTakenSpace(ctx storage.Context, owner []byte, diff int) {
+func updateUserTakenSpace(owner []byte, diff int) {
 	if diff == 0 {
 		return
 	}
 	var (
 		usrSpaceKey = userTotalStorageKey(owner)
-		usrSpaceVal = getTakenSpaceByKey(ctx, usrSpaceKey)
+		usrSpaceVal = getTakenSpaceByKey(usrSpaceKey)
 	)
 	usrSpaceVal += diff
 
 	if usrSpaceVal > 0 {
-		storage.Put(ctx, usrSpaceKey, usrSpaceVal)
+		storage.LocalPut(usrSpaceKey, convert.ToBytes(usrSpaceVal))
 	} else {
-		storage.Delete(ctx, usrSpaceKey)
+		storage.LocalDelete(usrSpaceKey)
 	}
 }
 
@@ -1281,13 +1249,12 @@ func updateUserTakenSpace(ctx storage.Context, owner []byte, diff int) {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetNodeReportSummary(cid interop.Hash256) NodeReportSummary {
-	ctx := storage.GetReadOnlyContext()
-	if getOwnerByID(ctx, cid) == nil {
+	if getOwnerByID(cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
 	key := append([]byte{reportsSummary}, cid...)
-	cnrSummaryRaw := storage.Get(ctx, key).([]byte)
+	cnrSummaryRaw := storage.LocalGet(key).([]byte)
 	if cnrSummaryRaw == nil {
 		return NodeReportSummary{}
 	}
@@ -1301,18 +1268,17 @@ func GetNodeReportSummary(cid interop.Hash256) NodeReportSummary {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetReportByNode(cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
-	ctx := storage.GetReadOnlyContext()
-	if getOwnerByID(ctx, cid) == nil {
+	if getOwnerByID(cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
 	key := append([]byte{reportersPrefix}, cid...)
 	key = append(key, contract.CreateStandardAccount(pubKey)...)
-	return getReportByKey(ctx, key)
+	return getReportByKey(key)
 }
 
-func getReportByKey(ctx storage.Context, key []byte) NodeReport {
-	reportRaw := storage.Get(ctx, key)
+func getReportByKey(key []byte) NodeReport {
+	reportRaw := storage.LocalGet(key)
 	if reportRaw != nil {
 		return std.Deserialize(reportRaw.([]byte)).(NodeReport)
 	}
@@ -1326,8 +1292,7 @@ func getReportByKey(ctx storage.Context, key []byte) NodeReport {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetReportByAccount(cid interop.Hash256, acc interop.Hash160) NodeReport {
-	ctx := storage.GetReadOnlyContext()
-	if getOwnerByID(ctx, cid) == nil {
+	if getOwnerByID(cid) == nil {
 		panic(cst.NotFoundError)
 	}
 	if len(acc) != interop.Hash160Len {
@@ -1336,7 +1301,7 @@ func GetReportByAccount(cid interop.Hash256, acc interop.Hash160) NodeReport {
 
 	key := append([]byte{reportersPrefix}, cid...)
 	key = append(key, acc...)
-	return getReportByKey(ctx, key)
+	return getReportByKey(key)
 }
 
 // IterateReports method returns iterator over nodes' reports
@@ -1345,11 +1310,9 @@ func IterateReports(cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-
-	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{reportersPrefix}, cid...)
 
-	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+	return storage.LocalFind(key, storage.ValuesOnly|storage.DeserializeValues)
 }
 
 // GetBillingStatByNode method returns billing statistics based on submitted
@@ -1358,14 +1321,13 @@ func IterateReports(cid interop.Hash256) iterator.Iterator {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetBillingStatByNode(cid interop.Hash256, pubKey interop.PublicKey) EpochBillingStat {
-	ctx := storage.GetReadOnlyContext()
-	if getOwnerByID(ctx, cid) == nil {
+	if getOwnerByID(cid) == nil {
 		panic(cst.NotFoundError)
 	}
 
 	key := append([]byte{billingInfoKeyPrefix}, cid...)
 	key = append(key, contract.CreateStandardAccount(pubKey)...)
-	reportRaw := storage.Get(ctx, key)
+	reportRaw := storage.LocalGet(key)
 	if reportRaw != nil {
 		return std.Deserialize(reportRaw.([]byte)).(EpochBillingStat)
 	}
@@ -1379,11 +1341,9 @@ func IterateBillingStats(cid interop.Hash256) iterator.Iterator {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-
-	ctx := storage.GetReadOnlyContext()
 	key := append([]byte{billingInfoKeyPrefix}, cid...)
 
-	return storage.Find(ctx, key, storage.ValuesOnly|storage.DeserializeValues)
+	return storage.LocalFind(key, storage.ValuesOnly|storage.DeserializeValues)
 }
 
 // IterateAllReportSummaries method returns iterator over all total container sizes
@@ -1391,7 +1351,7 @@ func IterateBillingStats(cid interop.Hash256) iterator.Iterator {
 // are key-value pairs with keys having container ID as a prefix and values being
 // [NodeReportSummary] structures.
 func IterateAllReportSummaries() iterator.Iterator {
-	return storage.Find(storage.GetReadOnlyContext(), []byte{reportsSummary}, storage.RemovePrefix|storage.DeserializeValues)
+	return storage.LocalFind([]byte{reportsSummary}, storage.RemovePrefix|storage.DeserializeValues)
 }
 
 // SetSoftContainerQuota sets soft size quota that limits all space used for
@@ -1414,8 +1374,8 @@ func SetHardContainerQuota(cID interop.Hash256, size int) {
 	setContainerQuota(cID, size, true)
 }
 
-func checkQuotaSigner(ctx storage.Context, userScriptHash []byte) {
-	netmapContractAddr := storage.Get(ctx, netmapContractKey).(interop.Hash160)
+func checkQuotaSigner(userScriptHash []byte) {
+	netmapContractAddr := storage.LocalGet([]byte(netmapContractKey)).(interop.Hash160)
 	vRaw := contract.Call(netmapContractAddr, "config", contract.ReadOnly, cst.AlphabetManagesQuotasKey)
 	if vRaw == nil || !vRaw.(bool) {
 		common.CheckOwnerWitness(userScriptHash)
@@ -1428,16 +1388,15 @@ func setContainerQuota(cID interop.Hash256, size int, hard bool) {
 	if len(cID) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-	ctx := storage.GetContext()
-	ownerID := getOwnerByID(ctx, cID)
+	ownerID := getOwnerByID(cID)
 	if ownerID == nil {
 		panic(cst.NotFoundError)
 	}
 
-	checkQuotaSigner(ctx, common.WalletToScriptHash(ownerID))
+	checkQuotaSigner(common.WalletToScriptHash(ownerID))
 
 	var q Quota
-	v := storage.Get(ctx, containerQuotaKey(cID))
+	v := storage.LocalGet(containerQuotaKey(cID))
 	if v != nil {
 		q = std.Deserialize(v.([]byte)).(Quota)
 	}
@@ -1447,7 +1406,7 @@ func setContainerQuota(cID interop.Hash256, size int, hard bool) {
 		q.SoftLimit = size
 	}
 
-	storage.Put(ctx, containerQuotaKey(cID), std.Serialize(q))
+	storage.LocalPut(containerQuotaKey(cID), std.Serialize(q))
 	runtime.Notify("ContainerQuotaSet", cID, size, hard)
 }
 
@@ -1459,13 +1418,12 @@ func ContainerQuota(cID interop.Hash256) Quota {
 	if len(cID) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-	ctx := storage.GetReadOnlyContext()
-	ownerID := getOwnerByID(ctx, cID)
+	ownerID := getOwnerByID(cID)
 	if ownerID == nil {
 		panic(cst.NotFoundError)
 	}
 
-	v := storage.Get(ctx, containerQuotaKey(cID))
+	v := storage.LocalGet(containerQuotaKey(cID))
 	if v == nil {
 		return Quota{}
 	}
@@ -1500,12 +1458,11 @@ func setUserQuota(user []byte, size int, hard bool) {
 	if len(user) != common.NeoFSUserAccountLength {
 		panic("invalid user id")
 	}
-	ctx := storage.GetContext()
 
-	checkQuotaSigner(ctx, common.WalletToScriptHash(user))
+	checkQuotaSigner(common.WalletToScriptHash(user))
 
 	var q Quota
-	v := storage.Get(ctx, userQuotaKey(user))
+	v := storage.LocalGet(userQuotaKey(user))
 	if v != nil {
 		q = std.Deserialize(v.([]byte)).(Quota)
 	}
@@ -1515,7 +1472,7 @@ func setUserQuota(user []byte, size int, hard bool) {
 		q.SoftLimit = size
 	}
 
-	storage.Put(ctx, userQuotaKey(user), std.Serialize(q))
+	storage.LocalPut(userQuotaKey(user), std.Serialize(q))
 	runtime.Notify("UserQuotaSet", user, size, hard)
 }
 
@@ -1527,9 +1484,7 @@ func UserQuota(user []byte) Quota {
 	if len(user) != common.NeoFSUserAccountLength {
 		panic("invalid user id")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	v := storage.Get(ctx, userQuotaKey(user))
+	v := storage.LocalGet(userQuotaKey(user))
 	if v == nil {
 		return Quota{}
 	}
@@ -1563,8 +1518,7 @@ func Decimals() int {
 // TotalSupply implements NEP-11 method.
 func TotalSupply() int {
 	count := 0
-	ctx := storage.GetReadOnlyContext()
-	it := storage.Find(ctx, []byte{containerKeyPrefix}, storage.KeysOnly)
+	it := storage.LocalFind([]byte{containerKeyPrefix}, storage.KeysOnly)
 	for iterator.Next(it) {
 		count++
 	}
@@ -1582,7 +1536,7 @@ func BalanceOf(owner interop.Hash160) int {
 	var count int
 
 	prefix := append([]byte{ownerKeyPrefix}, scriptHashToAddress(owner)...)
-	it := storage.Find(storage.GetReadOnlyContext(), prefix, storage.KeysOnly)
+	it := storage.LocalFind(prefix, storage.KeysOnly)
 	for iterator.Next(it) {
 		count++
 	}
@@ -1599,7 +1553,7 @@ func TokensOf(owner interop.Hash160) iterator.Iterator {
 	}
 
 	prefix := append([]byte{ownerKeyPrefix}, scriptHashToAddress(owner)...)
-	return storage.Find(storage.GetReadOnlyContext(), prefix, storage.ValuesOnly)
+	return storage.LocalFind(prefix, storage.ValuesOnly)
 }
 
 // Transfer makes to an owner of the container identified by tokenID.
@@ -1614,12 +1568,10 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		panic("invalid receiver len " + std.Itoa10(len(to)))
 	}
 
-	ctx := storage.GetContext()
-
 	binKey := append([]byte{containerKeyPrefix}, tokenID...)
-	binItem := storage.Get(ctx, binKey)
+	binItem := storage.LocalGet(binKey)
 	if binItem == nil {
-		if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+		if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
 			panic(cst.ErrorDeleted)
 		}
 
@@ -1630,7 +1582,7 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 	key := append([]byte{infoPrefix}, tokenID...)
 
 	var cnr Info
-	if item := storage.Get(ctx, key); item == nil {
+	if item := storage.LocalGet(key); item == nil {
 		cnr = fromBytes(bin)
 	} else {
 		cnr = std.Deserialize(item.([]byte)).(Info)
@@ -1649,17 +1601,17 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 
 		cnr.Owner = to
 
-		storage.Put(ctx, key, std.Serialize(cnr))
-		storage.Put(ctx, append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
-		storage.Delete(ctx, append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
+		storage.LocalPut(key, std.Serialize(cnr))
+		storage.LocalPut(append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
+		storage.LocalDelete(append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
 
 		copy(bin[off:], toAddr)
-		storage.Put(ctx, binKey, bin)
+		storage.LocalPut(binKey, bin)
 
-		if cnrSizeItem := storage.Get(ctx, append([]byte{reportsSummary}, tokenID...)); cnrSizeItem != nil {
+		if cnrSizeItem := storage.LocalGet(append([]byte{reportsSummary}, tokenID...)); cnrSizeItem != nil {
 			cnrSize := cnrSizeItem.(int)
-			updateUserTakenSpace(ctx, scriptHashToAddress(from), -cnrSize)
-			updateUserTakenSpace(ctx, scriptHashToAddress(to), cnrSize)
+			updateUserTakenSpace(scriptHashToAddress(from), -cnrSize)
+			updateUserTakenSpace(scriptHashToAddress(to), cnrSize)
 		}
 	}
 
@@ -1678,10 +1630,9 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 //
 // OwnerOf implements NEP-11 method.
 func OwnerOf(tokenID []byte) interop.Hash160 {
-	ctx := storage.GetReadOnlyContext()
-	owner := getOwnerByID(ctx, tokenID)
+	owner := getOwnerByID(tokenID)
 	if owner == nil {
-		if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+		if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
 			panic(cst.ErrorDeleted)
 		}
 
@@ -1694,7 +1645,7 @@ func OwnerOf(tokenID []byte) interop.Hash160 {
 //
 // Tokens implements optional NEP-11 method.
 func Tokens() iterator.Iterator {
-	return storage.Find(storage.GetReadOnlyContext(), []byte{containerKeyPrefix}, storage.KeysOnly|storage.RemovePrefix)
+	return storage.LocalFind([]byte{containerKeyPrefix}, storage.KeysOnly|storage.RemovePrefix)
 }
 
 // Properties returns properties of referenced container. The properties are
@@ -1711,13 +1662,11 @@ func Tokens() iterator.Iterator {
 //
 // Properties implements optional NEP-11 method.
 func Properties(tokenID []byte) map[string]any {
-	ctx := storage.GetReadOnlyContext()
-
 	var cnr Info
-	if item := storage.Get(ctx, append([]byte{infoPrefix}, tokenID...)); item == nil {
-		binItem := storage.Get(ctx, append([]byte{containerKeyPrefix}, tokenID...))
+	if item := storage.LocalGet(append([]byte{infoPrefix}, tokenID...)); item == nil {
+		binItem := storage.LocalGet(append([]byte{containerKeyPrefix}, tokenID...))
 		if binItem == nil {
-			if storage.Get(ctx, append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+			if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
 				panic(cst.ErrorDeleted)
 			}
 
@@ -1765,50 +1714,50 @@ func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {
 	}
 }
 
-func addContainer(ctx storage.Context, id, owner, container []byte, info Info) {
+func addContainer(id, owner, container []byte, info Info) {
 	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
 	containerListKey = append(containerListKey, id...)
-	storage.Put(ctx, containerListKey, id)
+	storage.LocalPut(containerListKey, id)
 
 	idKey := append([]byte{containerKeyPrefix}, id...)
-	storage.Put(ctx, idKey, container)
+	storage.LocalPut(idKey, container)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, id...), std.Serialize(info))
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(info))
 }
 
-func removeContainer(ctx storage.Context, id []byte, owner []byte) {
+func removeContainer(id []byte, owner []byte) {
 	// reports stat update
 
 	summaryKey := append([]byte{reportsSummary}, id...)
-	summaryRaw := storage.Get(ctx, summaryKey)
+	summaryRaw := storage.LocalGet(summaryKey)
 	if summaryRaw != nil {
 		rSummary := std.Deserialize(summaryRaw.([]byte)).(NodeReportSummary)
-		updateUserTakenSpace(ctx, owner, -rSummary.ContainerSize)
+		updateUserTakenSpace(owner, -rSummary.ContainerSize)
 	}
 
 	// indexes clean up
 
 	containerListKey := append([]byte{ownerKeyPrefix}, owner...)
 	containerListKey = append(containerListKey, id...)
-	storage.Delete(ctx, containerListKey)
+	storage.LocalDelete(containerListKey)
 
-	deleteByPrefix(ctx, append([]byte{nodesPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{nextEpochNodesPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{replicasNumberPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{reportersPrefix}, id...))
-	deleteByPrefix(ctx, append([]byte{billingInfoKeyPrefix}, id...))
-	storage.Delete(ctx, containerQuotaKey(id))
-	storage.Delete(ctx, summaryKey)
+	deleteByPrefix(append([]byte{nodesPrefix}, id...))
+	deleteByPrefix(append([]byte{nextEpochNodesPrefix}, id...))
+	deleteByPrefix(append([]byte{replicasNumberPrefix}, id...))
+	deleteByPrefix(append([]byte{reportersPrefix}, id...))
+	deleteByPrefix(append([]byte{billingInfoKeyPrefix}, id...))
+	storage.LocalDelete(containerQuotaKey(id))
+	storage.LocalDelete(summaryKey)
 
-	storage.Delete(ctx, append([]byte{containerKeyPrefix}, id...))
-	storage.Delete(ctx, append([]byte{infoPrefix}, id...))
-	storage.Delete(ctx, append(eACLPrefix, id...))
-	storage.Put(ctx, append([]byte{deletedKeyPrefix}, id...), []byte{})
+	storage.LocalDelete(append([]byte{containerKeyPrefix}, id...))
+	storage.LocalDelete(append([]byte{infoPrefix}, id...))
+	storage.LocalDelete(append(eACLPrefix, id...))
+	storage.LocalPut(append([]byte{deletedKeyPrefix}, id...), []byte{})
 }
 
-func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
+func getEACL(cid []byte) ExtendedACL {
 	key := append(eACLPrefix, cid...)
-	data := storage.Get(ctx, key)
+	data := storage.LocalGet(key)
 	if data != nil {
 		return ExtendedACL{Value: data.([]byte), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 	}
@@ -1816,8 +1765,8 @@ func getEACL(ctx storage.Context, cid []byte) ExtendedACL {
 	return ExtendedACL{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
-func getContainer(ctx storage.Context, cid []byte) Container {
-	data := storage.Get(ctx, append([]byte{containerKeyPrefix}, cid...))
+func getContainer(cid []byte) Container {
+	data := storage.LocalGet(append([]byte{containerKeyPrefix}, cid...))
 	if data != nil {
 		return Container{Value: data.([]byte), Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 	}
@@ -1825,8 +1774,8 @@ func getContainer(ctx storage.Context, cid []byte) Container {
 	return Container{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
-func getOwnerByID(ctx storage.Context, cid []byte) []byte {
-	container := getContainer(ctx, cid)
+func getOwnerByID(cid []byte) []byte {
+	container := getContainer(cid)
 	if len(container.Value) == 0 {
 		return nil
 	}
@@ -1841,11 +1790,11 @@ func ownerFromBinaryContainer(container []byte) []byte {
 	return container[offset : offset+25] // offset + size of owner
 }
 
-func nodeFromContainer(ctx storage.Context, cID interop.Hash256, key interop.PublicKey) bool {
+func nodeFromContainer(cID interop.Hash256, key interop.PublicKey) bool {
 	k := []byte{nodesPrefix}
 	k = append(k, cID[:]...)
 
-	it := storage.Find(ctx, k, storage.ValuesOnly)
+	it := storage.LocalFind(k, storage.ValuesOnly)
 	for iterator.Next(it) {
 		pk := iterator.Value(it).(interop.PublicKey)
 		if key.Equals(pk) {
@@ -1856,10 +1805,10 @@ func nodeFromContainer(ctx storage.Context, cID interop.Hash256, key interop.Pub
 	return false
 }
 
-func deleteByPrefix(ctx storage.Context, prefix []byte) {
-	it := storage.Find(ctx, prefix, storage.KeysOnly)
+func deleteByPrefix(prefix []byte) {
+	it := storage.LocalFind(prefix, storage.KeysOnly)
 	for iterator.Next(it) {
-		storage.Delete(ctx, iterator.Value(it).([]byte))
+		storage.LocalDelete(iterator.Value(it).([]byte))
 	}
 }
 
@@ -2312,9 +2261,8 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 	}
 
 	var (
-		ctx  = storage.GetContext()
 		idx  = -1
-		info = getInfo(ctx, cID)
+		info = GetInfo(cID)
 	)
 
 	for i := range info.Attributes {
@@ -2365,8 +2313,8 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 
 	cnrBytes := toBytes(info)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
+	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
+	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
 }
@@ -2527,8 +2475,7 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 
 	var (
 		index = -1
-		ctx   = storage.GetContext()
-		info  = getInfo(ctx, cID)
+		info  = GetInfo(cID)
 	)
 
 	for i := range info.Attributes {
@@ -2561,8 +2508,8 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 	util.Remove(info.Attributes, index)
 	cnrBytes := toBytes(info)
 
-	storage.Put(ctx, append([]byte{infoPrefix}, cID...), std.Serialize(info))
-	storage.Put(ctx, append([]byte{containerKeyPrefix}, cID...), cnrBytes)
+	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
+	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
 }

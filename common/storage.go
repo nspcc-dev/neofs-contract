@@ -6,7 +6,7 @@ import (
 )
 
 // SetSerialized serializes data and puts it into contract storage.
-func SetSerialized(ctx storage.Context, key any, value any) {
+func SetSerialized(key []byte, value any) {
 	data := std.Serialize(value)
-	storage.Put(ctx, key, data)
+	storage.LocalPut(key, data)
 }

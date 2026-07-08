@@ -3,6 +3,7 @@ package alphabet
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
@@ -31,7 +32,6 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 
 // nolint:unused
 func _deploy(data any, isUpdate bool) {
-	ctx := storage.GetContext()
 	if isUpdate {
 		args := data.([]any)
 		version := args[len(args)-1].(int)
@@ -57,11 +57,11 @@ func _deploy(data any, isUpdate bool) {
 		args.addrProxy = common.ResolveFSContract("proxy")
 	}
 
-	storage.Put(ctx, netmapKey, args.addrNetmap)
-	storage.Put(ctx, proxyKey, args.addrProxy)
-	storage.Put(ctx, nameKey, args.name)
-	storage.Put(ctx, indexKey, args.index)
-	storage.Put(ctx, totalKey, args.total)
+	storage.LocalPut([]byte(netmapKey), args.addrNetmap)
+	storage.LocalPut([]byte(proxyKey), args.addrProxy)
+	storage.LocalPut([]byte(nameKey), []byte(args.name))
+	storage.LocalPut([]byte(indexKey), convert.ToBytes(args.index))
+	storage.LocalPut([]byte(totalKey), convert.ToBytes(args.total))
 
 	runtime.Log(args.name + " contract initialized")
 }
@@ -88,22 +88,17 @@ func Neo() int {
 	return neo.BalanceOf(runtime.GetExecutingScriptHash())
 }
 
-func currentEpoch(ctx storage.Context) int {
-	netmapContractAddr := storage.Get(ctx, netmapKey).(interop.Hash160)
+func currentEpoch() int {
+	netmapContractAddr := storage.LocalGet([]byte(netmapKey)).(interop.Hash160)
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
-func name(ctx storage.Context) string {
-	return storage.Get(ctx, nameKey).(string)
-}
-
-func index(ctx storage.Context) int {
-	return storage.Get(ctx, indexKey).(int)
+func index() int {
+	return storage.LocalGet([]byte(indexKey)).(int)
 }
 
 func checkPermission(ir []interop.PublicKey) bool {
-	ctx := storage.GetReadOnlyContext()
-	index := index(ctx) // read from contract memory
+	index := index() // read from contract memory
 
 	if len(ir) <= index {
 		return false
@@ -121,8 +116,6 @@ func checkPermission(ir []interop.PublicKey) bool {
 // transferred to proxy contract. 43.75% of the GAS are equally distributed
 // among all Inner Ring nodes. Remaining 6.25% of the GAS stay in the contract.
 func Emit() {
-	ctx := storage.GetReadOnlyContext()
-
 	alphabet := common.AlphabetNodes()
 	if !checkPermission(alphabet) {
 		panic("invalid invoker")
@@ -136,7 +129,7 @@ func Emit() {
 
 	gasBalance := gas.BalanceOf(contractHash)
 
-	proxyAddr := storage.Get(ctx, proxyKey).(interop.Hash160)
+	proxyAddr := storage.LocalGet([]byte(proxyKey)).(interop.Hash160)
 
 	proxyGas := gasBalance / 2
 	if proxyGas == 0 {
@@ -175,13 +168,12 @@ func Emit() {
 // it is required to change them as well. To do that, NEO holders (which are
 // alphabet contracts) should vote for a new committee.
 func Vote(epoch int, candidates []interop.PublicKey) {
-	ctx := storage.GetContext()
-	index := index(ctx)
-	name := name(ctx)
+	index := index()
+	name := Name()
 
 	common.CheckAlphabetWitness()
 
-	curEpoch := currentEpoch(ctx)
+	curEpoch := currentEpoch()
 	if epoch != curEpoch {
 		panic("invalid epoch")
 	}
@@ -199,8 +191,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 
 // Name returns the name of the contract set at deployment stage.
 func Name() string {
-	ctx := storage.GetReadOnlyContext()
-	return name(ctx)
+	return storage.LocalGet([]byte(nameKey)).(string)
 }
 
 // Version returns the version of the contract.

@@ -3,6 +3,7 @@ package balance
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
@@ -107,15 +108,13 @@ func Decimals() int {
 // TotalSupply is a NEP-17 standard method that returns total amount of main
 // chain GAS in NeoFS network.
 func TotalSupply() int {
-	ctx := storage.GetReadOnlyContext()
-	return token.getSupply(ctx)
+	return token.getSupply()
 }
 
 // BalanceOf is a NEP-17 standard method that returns NeoFS balance of the specified
 // account.
 func BalanceOf(account interop.Hash160) int {
-	ctx := storage.GetReadOnlyContext()
-	return token.balanceOf(ctx, account)
+	return token.balanceOf(account)
 }
 
 // Transfer is a NEP-17 standard method that transfers NeoFS balance from one
@@ -124,8 +123,7 @@ func BalanceOf(account interop.Hash160) int {
 // It produces Transfer and TransferX notifications. TransferX notification
 // will have empty details field.
 func Transfer(from, to interop.Hash160, amount int, data any) bool {
-	ctx := storage.GetContext()
-	return token.transfer(ctx, from, to, amount, false, nil)
+	return token.transfer(from, to, amount, false, nil)
 }
 
 // TransferX is a method for NeoFS balance to be transferred from one account to
@@ -137,11 +135,9 @@ func Transfer(from, to interop.Hash160, amount int, data any) bool {
 // TransferX method also allows to transfer assets by Alphabet nodes of the
 // Inner Ring with multisignature.
 func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
-	return token.transfer(ctx, from, to, amount, true, details)
+	return token.transfer(from, to, amount, true, details)
 }
 
 // Lock is a method that transfers assets from a user account to the lock account
@@ -153,8 +149,6 @@ func TransferX(from, to interop.Hash160, amount int, details []byte) bool {
 // Withdraw notification from NeoFS contract. This should transfer assets
 // to a new lock account that won't be used for anything beside Unlock and Burn.
 func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
 	details := common.LockTransferDetails(txDetails)
@@ -165,9 +159,9 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 		Parent:  from,
 	}
 
-	common.SetSerialized(ctx, append([]byte{accPrefix}, to...), lockAccount)
+	common.SetSerialized(append([]byte{accPrefix}, to...), lockAccount)
 
-	result := token.transfer(ctx, from, to, amount, true, details)
+	result := token.transfer(from, to, amount, true, details)
 	if !result {
 		// consider using `return false` to remove votes
 		panic("can't lock funds")
@@ -183,18 +177,16 @@ func Lock(txDetails []byte, from, to interop.Hash160, amount, until int) {
 //
 // It produces Transfer and TransferX notifications.
 func NewEpoch(epochNum int) {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
-	it := storage.Find(ctx, []byte{accPrefix}, storage.KeysOnly|storage.RemovePrefix)
+	it := storage.LocalFind([]byte{accPrefix}, storage.KeysOnly|storage.RemovePrefix)
 	for iterator.Next(it) {
 		addr := iterator.Value(it).(interop.Hash160) // it MUST BE `storage.KeysOnly`
 		if len(addr) != interop.Hash160Len {
 			continue
 		}
 
-		acc := getAccount(ctx, addr)
+		acc := getAccount(addr)
 		if acc.Until == 0 {
 			continue
 		}
@@ -202,7 +194,7 @@ func NewEpoch(epochNum int) {
 		if epochNum >= acc.Until {
 			details := common.UnlockTransferDetails(epochNum)
 			// return assets back to the parent
-			token.transfer(ctx, addr, acc.Parent, acc.Balance, true, details)
+			token.transfer(addr, acc.Parent, acc.Balance, true, details)
 		}
 	}
 }
@@ -217,20 +209,18 @@ func NewEpoch(epochNum int) {
 // synchronize precision of main chain GAS contract and Balance contract.
 // Mint increases total supply of NEP-17 compatible NeoFS token.
 func Mint(to interop.Hash160, amount int, txDetails []byte) {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
 	details := common.MintTransferDetails(txDetails)
 
-	ok := token.transfer(ctx, nil, to, amount, true, details)
+	ok := token.transfer(nil, to, amount, true, details)
 	if !ok {
 		panic("can't transfer assets")
 	}
 
-	supply := token.getSupply(ctx)
+	supply := token.getSupply()
 	supply = supply + amount
-	storage.Put(ctx, token.CirculationKey, supply)
+	storage.LocalPut([]byte(token.CirculationKey), convert.ToBytes(supply))
 	runtime.Log("assets were minted")
 }
 
@@ -246,24 +236,22 @@ func Mint(to interop.Hash160, amount int, txDetails []byte) {
 // contract and Balance contract. Burn decreases total supply of NEP-17
 // compatible NeoFS token.
 func Burn(from interop.Hash160, amount int, txDetails []byte) {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
 	details := common.BurnTransferDetails(txDetails)
 
-	ok := token.transfer(ctx, from, nil, amount, true, details)
+	ok := token.transfer(from, nil, amount, true, details)
 	if !ok {
 		panic("can't transfer assets")
 	}
 
-	supply := token.getSupply(ctx)
+	supply := token.getSupply()
 	if supply < amount {
 		panic("negative supply after burn")
 	}
 
 	supply = supply - amount
-	storage.Put(ctx, token.CirculationKey, supply)
+	storage.LocalPut([]byte(token.CirculationKey), convert.ToBytes(supply))
 	runtime.Log("assets were burned")
 }
 
@@ -302,9 +290,8 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 	common.CheckAlphabetWitness()
 
 	var (
-		ctx                   = storage.GetContext()
-		netmapContractAddr    = getContractHash(ctx, netmapContractKey, "netmap")
-		containerContractAddr = getContractHash(ctx, containerContractKey, "container")
+		netmapContractAddr    = getContractHash(netmapContractKey, "netmap")
+		containerContractAddr = getContractHash(containerContractKey, "container")
 
 		containerUserNeoFS = contract.Call(containerContractAddr, "owner", contract.ReadOnly, cid).([]byte)
 		containerOwner     = interop.Hash160(common.WalletToScriptHash(containerUserNeoFS))
@@ -322,7 +309,7 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 
 	var (
 		paidKey       = append([]byte{paidContainersPrefix}, cid...)
-		oldPaymentRaw = storage.Get(ctx, paidKey)
+		oldPaymentRaw = storage.LocalGet(paidKey)
 	)
 	if oldPaymentRaw != nil && oldPaymentRaw.(int) >= paymentEpoch {
 		return false // Already paid.
@@ -370,7 +357,7 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 			payment = 1
 		}
 
-		paymentOK = token.transfer(ctx, containerOwner, r.Account, payment, true, nil)
+		paymentOK = token.transfer(containerOwner, r.Account, payment, true, nil)
 		if !paymentOK {
 			break
 		}
@@ -379,17 +366,17 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 	}
 
 	k := append([]byte{unpaidContainersPrefix}, cid...)
-	alreadyMarkedUnpaid := storage.Get(ctx, k) != nil
+	alreadyMarkedUnpaid := storage.LocalGet(k) != nil
 	if paymentOK && alreadyMarkedUnpaid {
 		runtime.Notify("ChangePaymentStatus", cid, paymentEpoch, false)
-		storage.Delete(ctx, k)
+		storage.LocalDelete(k)
 	} else if !paymentOK && !alreadyMarkedUnpaid {
 		runtime.Notify("ChangePaymentStatus", cid, paymentEpoch, true)
-		storage.Put(ctx, k, paymentEpoch)
+		storage.LocalPut(k, convert.ToBytes(paymentEpoch))
 	}
 
 	if paymentOK {
-		storage.Put(ctx, paidKey, paymentEpoch)
+		storage.LocalPut(paidKey, convert.ToBytes(paymentEpoch))
 		runtime.Notify("Payment", containerOwner, cid, paymentEpoch, transferredTotal)
 	}
 
@@ -402,7 +389,7 @@ func GetUnpaidContainerEpoch(cid interop.Hash256) int {
 	if len(cid) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-	raw := storage.Get(storage.GetReadOnlyContext(), append([]byte{unpaidContainersPrefix}, cid...))
+	raw := storage.LocalGet(append([]byte{unpaidContainersPrefix}, cid...))
 	if raw == nil {
 		return -1
 	}
@@ -414,7 +401,7 @@ func GetUnpaidContainerEpoch(cid interop.Hash256) int {
 // container. Iteration is through key-value pair, where key is container ID,
 // value is epoch from which container is considered unpaid.
 func IterateUnpaid() iterator.Iterator {
-	return storage.Find(storage.GetReadOnlyContext(), []byte{unpaidContainersPrefix}, storage.RemovePrefix)
+	return storage.LocalFind([]byte{unpaidContainersPrefix}, storage.RemovePrefix)
 }
 
 // Version returns the version of the contract.
@@ -423,8 +410,8 @@ func Version() int {
 }
 
 // getSupply gets the token totalSupply value from VM storage.
-func (t Token) getSupply(ctx storage.Context) int {
-	supply := storage.Get(ctx, t.CirculationKey)
+func (t Token) getSupply() int {
+	supply := storage.LocalGet([]byte(t.CirculationKey))
 	if supply != nil {
 		return supply.(int)
 	}
@@ -433,18 +420,18 @@ func (t Token) getSupply(ctx storage.Context) int {
 }
 
 // BalanceOf gets the token balance of a specific address.
-func (t Token) balanceOf(ctx storage.Context, holder interop.Hash160) int {
-	acc := getAccount(ctx, holder)
+func (t Token) balanceOf(holder interop.Hash160) int {
+	acc := getAccount(holder)
 
 	return acc.Balance
 }
 
-func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount int, innerRing bool, details []byte) bool {
+func (t Token) transfer(from, to interop.Hash160, amount int, innerRing bool, details []byte) bool {
 	if amount < 0 {
 		panic("negative amount")
 	}
 
-	amountFrom, ok := t.canTransfer(ctx, from, to, amount, innerRing)
+	amountFrom, ok := t.canTransfer(from, to, amount, innerRing)
 	if !ok {
 		return false
 	}
@@ -453,19 +440,19 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 		var fromKey = append([]byte{accPrefix}, from...)
 
 		if amountFrom.Balance == amount {
-			storage.Delete(ctx, fromKey)
+			storage.LocalDelete(fromKey)
 		} else {
 			amountFrom.Balance -= amount
-			common.SetSerialized(ctx, fromKey, amountFrom)
+			common.SetSerialized(fromKey, amountFrom)
 		}
 	}
 
 	if len(to) == interop.Hash160Len {
 		var toKey = append([]byte{accPrefix}, to...)
 
-		amountTo := getAccount(ctx, to)
+		amountTo := getAccount(to)
 		amountTo.Balance += amount
-		common.SetSerialized(ctx, toKey, amountTo)
+		common.SetSerialized(toKey, amountTo)
 	}
 
 	runtime.Notify("Transfer", from, to, amount)
@@ -475,7 +462,7 @@ func (t Token) transfer(ctx storage.Context, from, to interop.Hash160, amount in
 }
 
 // canTransfer returns the amount it can transfer.
-func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount int, innerRing bool) (Account, bool) {
+func (t Token) canTransfer(from, to interop.Hash160, amount int, innerRing bool) (Account, bool) {
 	var (
 		emptyAcc = Account{}
 	)
@@ -489,7 +476,7 @@ func (t Token) canTransfer(ctx storage.Context, from, to interop.Hash160, amount
 		return emptyAcc, true
 	}
 
-	amountFrom := getAccount(ctx, from)
+	amountFrom := getAccount(from)
 	if amountFrom.Balance < amount {
 		runtime.Log("not enough assets")
 		return emptyAcc, false
@@ -516,8 +503,8 @@ func isUsableAddress(addr interop.Hash160) bool {
 	return false
 }
 
-func getAccount(ctx storage.Context, key interop.Hash160) Account {
-	data := storage.Get(ctx, append([]byte{accPrefix}, key...))
+func getAccount(key interop.Hash160) Account {
+	data := storage.LocalGet(append([]byte{accPrefix}, key...))
 	if data != nil {
 		return std.Deserialize(data.([]byte)).(Account)
 	}
@@ -525,15 +512,15 @@ func getAccount(ctx storage.Context, key interop.Hash160) Account {
 	return Account{}
 }
 
-func getContractHash(ctx storage.Context, storageKey byte, nnsKey string) interop.Hash160 {
-	contractH := storage.Get(ctx, storageKey)
+func getContractHash(storageKey byte, nnsKey string) interop.Hash160 {
+	contractH := storage.LocalGet([]byte{storageKey})
 	if contractH == nil {
 		nnsAddr := common.InferNNSHash()
 		h := common.ResolveFSContractWithNNS(nnsAddr, nnsKey)
 		if len(h) != interop.Hash160Len {
 			panic("NNS contract does not know " + nnsKey + " address")
 		}
-		storage.Put(ctx, storageKey, h)
+		storage.LocalPut([]byte{storageKey}, h)
 
 		contractH = h
 	}

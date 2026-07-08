@@ -49,24 +49,22 @@ func Update(nefFile, manifest []byte, data any) {
 // PeerID contains public key of the storage node that is the subject of the GlobalTrust.
 // Value contains a stable marshaled structure of GlobalTrust.
 func Put(epoch int, peerID []byte, value []byte) {
-	ctx := storage.GetContext()
-
 	common.CheckAlphabetWitness()
 
 	id := storageID(epoch, peerID)
 
 	key := getReputationKey(reputationCountPrefix, id)
-	rawCnt := storage.Get(ctx, key)
+	rawCnt := storage.LocalGet(key)
 	cnt := 0
 	if rawCnt != nil {
 		cnt = rawCnt.(int)
 	}
 	cnt++
-	storage.Put(ctx, key, cnt)
+	storage.LocalPut(key, convert.ToBytes(cnt))
 
 	key[0] = reputationValuePrefix
 	key = append(key, convert.ToBytes(cnt)...)
-	storage.Put(ctx, key, value)
+	storage.LocalPut(key, value)
 }
 
 // Get method returns a list of all stable marshaled GlobalTrust structures
@@ -79,11 +77,9 @@ func Get(epoch int, peerID []byte) [][]byte {
 // GetByID method returns a list of all stable marshaled GlobalTrust with
 // the specified id. Use ListByEpoch method to obtain the id.
 func GetByID(id []byte) [][]byte {
-	ctx := storage.GetReadOnlyContext()
-
 	var data [][]byte
 
-	it := storage.Find(ctx, getReputationKey(reputationValuePrefix, id), storage.ValuesOnly)
+	it := storage.LocalFind(getReputationKey(reputationValuePrefix, id), storage.ValuesOnly)
 	for iterator.Next(it) {
 		data = append(data, iterator.Value(it).([]byte))
 	}
@@ -97,9 +93,8 @@ func getReputationKey(prefix byte, id []byte) []byte {
 // ListByEpoch returns a list of IDs that may be used to get reputation data
 // with GetByID method.
 func ListByEpoch(epoch int) [][]byte {
-	ctx := storage.GetReadOnlyContext()
 	key := getReputationKey(reputationCountPrefix, convert.ToBytes(epoch))
-	it := storage.Find(ctx, key, storage.KeysOnly)
+	it := storage.LocalFind(key, storage.KeysOnly)
 
 	var result [][]byte
 

@@ -11,6 +11,7 @@ package nns
 import (
 	"github.com/nspcc-dev/neo-go/pkg/interop"
 	"github.com/nspcc-dev/neo-go/pkg/interop/contract"
+	"github.com/nspcc-dev/neo-go/pkg/interop/convert"
 	"github.com/nspcc-dev/neo-go/pkg/interop/iterator"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
@@ -106,10 +107,8 @@ func _deploy(data any, isUpdate bool) {
 
 		return
 	}
-
-	ctx := storage.GetContext()
-	storage.Put(ctx, []byte{prefixTotalSupply}, 0)
-	storage.Put(ctx, []byte{prefixRegisterPrice}, defaultRegisterPrice)
+	storage.LocalPut([]byte{prefixTotalSupply}, convert.ToBytes(0))
+	storage.LocalPut([]byte{prefixRegisterPrice}, convert.ToBytes(defaultRegisterPrice))
 
 	if data != nil { // for backward compatibility
 		args := data.(struct {
@@ -126,7 +125,7 @@ func _deploy(data any, isUpdate bool) {
 				expire  = 10 * 365 * 24 * 60 * 60 // 10 years
 				ttl     = 3600
 			)
-			saveCommitteeDomain(ctx, args.tldSet[i].name, args.tldSet[i].email, refresh, retry, expire, ttl)
+			saveCommitteeDomain(args.tldSet[i].name, args.tldSet[i].email, refresh, retry, expire, ttl)
 			runtime.Log("registered committee domain " + args.tldSet[i].name)
 		}
 	}
@@ -149,8 +148,8 @@ func Version() int {
 
 // TotalSupply returns the overall number of domains minted by NeoNameService contract.
 func TotalSupply() int {
-	ctx := storage.GetReadOnlyContext()
-	return getTotalSupply(ctx)
+	val := storage.LocalGet([]byte{prefixTotalSupply})
+	return val.(int)
 }
 
 // OwnerOf returns the owner of the specified domain. The tokenID domain MUST
@@ -160,9 +159,7 @@ func OwnerOf(tokenID []byte) interop.Hash160 {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns := getFragmentedNameState(tokenID, fragments)
 	return ns.Owner
 }
 
@@ -173,9 +170,7 @@ func Properties(tokenID []byte) map[string]any {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns := getFragmentedNameState(tokenID, fragments)
 	return map[string]any{
 		"name":       ns.Name,
 		"expiration": ns.Expiration,
@@ -188,8 +183,7 @@ func BalanceOf(owner interop.Hash160) int {
 	if !isValid(owner) {
 		panic(`invalid owner`)
 	}
-	ctx := storage.GetReadOnlyContext()
-	balance := storage.Get(ctx, append([]byte{prefixBalance}, owner...))
+	balance := storage.LocalGet(append([]byte{prefixBalance}, owner...))
 	if balance == nil {
 		return 0
 	}
@@ -198,8 +192,7 @@ func BalanceOf(owner interop.Hash160) int {
 
 // Tokens returns iterator over a set of all registered domain names.
 func Tokens() iterator.Iterator {
-	ctx := storage.GetReadOnlyContext()
-	return storage.Find(ctx, []byte{prefixName}, storage.ValuesOnly|storage.DeserializeValues|storage.PickField1)
+	return storage.LocalFind([]byte{prefixName}, storage.ValuesOnly|storage.DeserializeValues|storage.PickField1)
 }
 
 // TokensOf returns iterator over minted domains owned by the specified owner.
@@ -207,8 +200,7 @@ func TokensOf(owner interop.Hash160) iterator.Iterator {
 	if !isValid(owner) {
 		panic(`invalid owner`)
 	}
-	ctx := storage.GetReadOnlyContext()
-	return storage.Find(ctx, append([]byte{prefixAccountToken}, owner...), storage.ValuesOnly)
+	return storage.LocalFind(append([]byte{prefixAccountToken}, owner...), storage.ValuesOnly)
 }
 
 // Transfer transfers the domain with the specified name to a new owner.
@@ -223,11 +215,8 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		panic("token not found")
 	}
 
-	var (
-		tokenKey = getTokenKey(tokenID)
-		ctx      = storage.GetContext()
-	)
-	ns := getNameStateWithKey(ctx, tokenKey)
+	tokenKey := getTokenKey(tokenID)
+	ns := getNameStateWithKey(tokenKey)
 	from := ns.Owner
 	if !runtime.CheckWitness(from) {
 		return false
@@ -236,13 +225,13 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		// update token info
 		ns.Owner = to
 		ns.Admin = nil
-		putNameStateWithKey(ctx, tokenKey, ns)
+		putNameStateWithKey(tokenKey, ns)
 
 		// update `from` balance
-		updateBalance(ctx, tokenID, from, -1)
+		updateBalance(tokenID, from, -1)
 
 		// update `to` balance
-		updateBalance(ctx, tokenID, to, +1)
+		updateBalance(tokenID, to, +1)
 	}
 	postTransfer(from, to, tokenID, data)
 	return true
@@ -250,8 +239,7 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 
 // Roots returns iterator over a set of NameService roots.
 func Roots() iterator.Iterator {
-	ctx := storage.GetReadOnlyContext()
-	return storage.Find(ctx, []byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
+	return storage.LocalFind([]byte{prefixRoot}, storage.KeysOnly|storage.RemovePrefix)
 }
 
 // SetPrice sets the domain registration price.
@@ -260,40 +248,37 @@ func SetPrice(price int64) {
 	if price < 0 || price > maxRegisterPrice {
 		panic("The price is out of range.")
 	}
-	ctx := storage.GetContext()
-	storage.Put(ctx, []byte{prefixRegisterPrice}, price)
+	storage.LocalPut([]byte{prefixRegisterPrice}, convert.ToBytes(int(price)))
 }
 
 // GetPrice returns the domain registration price.
 func GetPrice() int {
-	ctx := storage.GetReadOnlyContext()
-	return storage.Get(ctx, []byte{prefixRegisterPrice}).(int)
+	return storage.LocalGet([]byte{prefixRegisterPrice}).(int)
 }
 
 // IsAvailable checks whether the provided domain name is available. Notice that
 // TLD is available for the committee only.
 func IsAvailable(name string) bool {
 	fragments := splitAndCheck(name)
-	ctx := storage.GetReadOnlyContext()
 	l := len(fragments)
-	if storage.Get(ctx, append([]byte{prefixRoot}, []byte(fragments[l-1])...)) == nil {
+	if storage.LocalGet(append([]byte{prefixRoot}, []byte(fragments[l-1])...)) == nil {
 		if l != 1 {
 			panic("TLD not found")
 		}
 		return true
 	}
-	if !parentExpired(ctx, 0, fragments) {
+	if !parentExpired(0, fragments) {
 		return false
 	}
-	return len(getParentConflictingRecord(ctx, name, fragments)) == 0
+	return len(getParentConflictingRecord(name, fragments)) == 0
 }
 
 // getPrentConflictingRecord returns record of '*.name' format if they are presented.
 // These records conflict with domain name to be registered.
-func getParentConflictingRecord(ctx storage.Context, name string, fragments []string) string {
+func getParentConflictingRecord(name string, fragments []string) string {
 	parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
 	parentRecKey := append([]byte{prefixRecord}, parentKey...)
-	it := storage.Find(ctx, parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
+	it := storage.LocalFind(parentRecKey, storage.ValuesOnly|storage.DeserializeValues)
 	suffix := []byte(name)
 	for iterator.Next(it) {
 		r := iterator.Value(it).(RecordState)
@@ -307,7 +292,7 @@ func getParentConflictingRecord(ctx storage.Context, name string, fragments []st
 
 // parentExpired returns true if any domain from fragments doesn't exist or is expired.
 // first denotes the deepest subdomain to check.
-func parentExpired(ctx storage.Context, first int, fragments []string) bool {
+func parentExpired(first int, fragments []string) bool {
 	now := int64(runtime.GetTime())
 	last := len(fragments) - 1
 	name := fragments[last]
@@ -315,7 +300,7 @@ func parentExpired(ctx storage.Context, first int, fragments []string) bool {
 		if i != last {
 			name = fragments[i] + "." + name
 		}
-		nsBytes := storage.Get(ctx, append([]byte{prefixName}, getTokenKey([]byte(name))...))
+		nsBytes := storage.LocalGet(append([]byte{prefixName}, getTokenKey([]byte(name))...))
 		if nsBytes == nil {
 			return true
 		}
@@ -343,23 +328,21 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		panic("TLD denied")
 	}
 
-	ctx := storage.GetContext()
-
-	if storage.Get(ctx, makeTLDKey(fragments[l-1])) == nil {
+	if storage.LocalGet(makeTLDKey(fragments[l-1])) == nil {
 		panic("TLD not found")
 	}
-	if parentExpired(ctx, 1, fragments) {
+	if parentExpired(1, fragments) {
 		panic("one of the parent domains is not registered")
 	}
 	parentKey := getTokenKey([]byte(name[len(fragments[0])+1:]))
 
 	if l > 2 {
-		nsBytes := storage.Get(ctx, append([]byte{prefixName}, parentKey...))
+		nsBytes := storage.LocalGet(append([]byte{prefixName}, parentKey...))
 		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 		ns.checkAdmin()
 	}
 
-	if conflict := getParentConflictingRecord(ctx, name, fragments); len(conflict) != 0 {
+	if conflict := getParentConflictingRecord(name, fragments); len(conflict) != 0 {
 		panic("parent domain has conflicting records: " + conflict)
 	}
 
@@ -372,19 +355,19 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 		tokenKey = getTokenKey([]byte(name))
 		oldOwner interop.Hash160
 	)
-	nsBytes := storage.Get(ctx, append([]byte{prefixName}, tokenKey...))
+	nsBytes := storage.LocalGet(append([]byte{prefixName}, tokenKey...))
 	if nsBytes != nil {
 		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 		if int64(runtime.GetTime()) < ns.Expiration {
 			return false
 		}
 		oldOwner = ns.Owner
-		updateBalance(ctx, []byte(name), oldOwner, -1)
+		updateBalance([]byte(name), oldOwner, -1)
 	} else {
-		updateTotalSupply(ctx, +1)
+		updateTotalSupply(+1)
 	}
-	saveDomain(ctx, name, email, refresh, retry, expire, ttl, owner)
-	updateBalance(ctx, []byte(name), owner, +1)
+	saveDomain(name, email, refresh, retry, expire, ttl, owner)
+	updateBalance([]byte(name), owner, +1)
 	postTransfer(oldOwner, owner, []byte(name), nil)
 	return true
 }
@@ -395,42 +378,40 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 // RegisterTLD panics with 'TLD already exists' if domain already exists.
 func RegisterTLD(name, email string, refresh, retry, expire, ttl int) {
 	checkCommittee()
-	saveCommitteeDomain(storage.GetContext(), name, email, refresh, retry, expire, ttl)
+	saveCommitteeDomain(name, email, refresh, retry, expire, ttl)
 }
 
 // saveCommitteeDomain marks TLD as registered via prefixRoot<name> storage
 // record and saves domain state calling saveDomain with given parameters and
 // empty owner. The name MUST be a valid TLD name.
-func saveCommitteeDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
+func saveCommitteeDomain(name, email string, refresh, retry, expire, ttl int) {
 	fragments := splitAndCheck(name)
 	if len(fragments) != 1 {
 		panic("not a TLD")
 	}
 
 	tldKey := makeTLDKey(name)
-	if storage.Get(ctx, tldKey) != nil && !parentExpired(ctx, 0, fragments) {
+	if storage.LocalGet(tldKey) != nil && !parentExpired(0, fragments) {
 		panic("TLD already exists")
 	}
 
-	storage.Put(ctx, tldKey, 0)
+	storage.LocalPut(tldKey, convert.ToBytes(0))
 
 	var committeeOwner interop.Hash160
-	saveDomain(ctx, name, email, refresh, retry, expire, ttl, committeeOwner)
+	saveDomain(name, email, refresh, retry, expire, ttl, committeeOwner)
 }
 
 // saveDomain constructs NameState and RecordState of SOA type for the domain
 // based on parameters and saves these descriptors in the contract storage.
 // Empty owner parameter corresponds to owner-by-committee domains.
-//
-// Provided storage.Context MUST be read-write.
-func saveDomain(ctx storage.Context, name, email string, refresh, retry, expire, ttl int, owner interop.Hash160) {
-	putNameStateWithKey(ctx, getTokenKey([]byte(name)), NameState{
+func saveDomain(name, email string, refresh, retry, expire, ttl int, owner interop.Hash160) {
+	putNameStateWithKey(getTokenKey([]byte(name)), NameState{
 		Owner: owner,
 		Name:  name,
 		// NNS expiration is in milliseconds
 		Expiration: int64(runtime.GetTime() + expire*millisecondsInSecond),
 	})
-	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
+	putSoaRecord(name, email, refresh, retry, expire, ttl)
 }
 
 // RenewDefault increases domain expiration date for 1 year and returns
@@ -450,8 +431,7 @@ func Renew(name string, years int) int64 {
 		panic("invalid domain name format")
 	}
 	runtime.BurnGas(int(GetPrice()) * years)
-	ctx := storage.GetContext()
-	ns := getNameState(ctx, []byte(name))
+	ns := getNameState([]byte(name))
 	ns.checkAdmin()
 	oldExpiration := ns.Expiration
 	ns.Expiration += millisecondsInYear * int64(years)
@@ -461,7 +441,7 @@ func Renew(name string, years int) int64 {
 	if len(fragments) > 1 && ns.Expiration > int64(runtime.GetTime())+millisecondsInTenYears {
 		panic("10 years of expiration period at max is allowed")
 	}
-	putNameState(ctx, ns)
+	putNameState(ns)
 	runtime.Notify("Renew", name, oldExpiration, ns.Expiration)
 	return ns.Expiration
 }
@@ -471,10 +451,9 @@ func UpdateSOA(name, email string, refresh, retry, expire, ttl int) {
 	if len(name) > maxDomainNameLength {
 		panic("too long name")
 	}
-	ctx := storage.GetContext()
-	ns := getNameState(ctx, []byte(name))
+	ns := getNameState([]byte(name))
 	ns.checkAdmin()
-	putSoaRecord(ctx, name, email, refresh, retry, expire, ttl)
+	putSoaRecord(name, email, refresh, retry, expire, ttl)
 }
 
 // SetAdmin updates domain admin. The name MUST NOT be a TLD.
@@ -491,12 +470,11 @@ func SetAdmin(name string, admin interop.Hash160) {
 	if admin != nil && !runtime.CheckWitness(admin) {
 		panic("not witnessed by admin")
 	}
-	ctx := storage.GetContext()
-	ns := getFragmentedNameState(ctx, []byte(name), fragments)
+	ns := getFragmentedNameState([]byte(name), fragments)
 	common.CheckOwnerWitness(ns.Owner)
 	oldAdm := ns.Admin
 	ns.Admin = admin
-	putNameState(ctx, ns)
+	putNameState(ns)
 	runtime.Notify("SetAdmin", name, oldAdm, admin)
 }
 
@@ -506,20 +484,19 @@ func SetRecord(name string, typ recordtype.Type, id byte, data string) {
 	if typ == recordtype.Neo {
 		panic("unsupported for Neo type")
 	}
-	ctx := storage.GetContext()
-	tokenID := checkRecord(ctx, name, typ, data)
+	tokenID := checkRecord(name, typ, data)
 	recordKey := getIdRecordKey(tokenID, name, typ, id)
-	recBytes := storage.Get(ctx, recordKey)
+	recBytes := storage.LocalGet(recordKey)
 	if recBytes == nil {
 		panic("invalid record id")
 	}
-	storeRecord(ctx, tokenID, name, typ, id, data)
-	updateSoaSerial(ctx, tokenID)
+	storeRecord(tokenID, name, typ, id, data)
+	updateSoaSerial(tokenID)
 }
 
 // checkRecord performs record validness check and returns token ID.
-func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data string) []byte {
-	tokenID := []byte(tokenIDFromName(ctx, name))
+func checkRecord(name string, typ recordtype.Type, data string) []byte {
+	tokenID := []byte(tokenIDFromName(name))
 	var ok bool
 	switch typ {
 	case recordtype.A:
@@ -545,7 +522,7 @@ func checkRecord(ctx storage.Context, name string, typ recordtype.Type, data str
 		panic("token not found")
 	}
 
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns := getFragmentedNameState(tokenID, fragments)
 	ns.checkAdmin()
 	return tokenID
 }
@@ -556,11 +533,10 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 	if typ == recordtype.Neo {
 		panic("use AddNeoRecord for Neo type")
 	}
-	ctx := storage.GetContext()
-	tokenID := checkRecord(ctx, name, typ, data)
+	tokenID := checkRecord(name, typ, data)
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
 	var id byte
-	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	records := storage.LocalFind(recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
 		id++
 
@@ -577,19 +553,18 @@ func AddRecord(name string, typ recordtype.Type, data string) {
 		panic("you shouldn't have more than one CNAME record")
 	}
 
-	storeRecord(ctx, tokenID, name, typ, id, data)
-	updateSoaSerial(ctx, tokenID)
+	storeRecord(tokenID, name, typ, id, data)
+	updateSoaSerial(tokenID)
 }
 
 // AddNeoRecord adds domain record of the Neo type for the specified address in
 // 20-byte hash format. The name MUST NOT be a TLD.
 func AddNeoRecord(name string, address interop.Hash160) {
-	ctx := storage.GetContext()
-	tokenID := checkRecord(ctx, name, recordtype.Neo, string(address))
+	tokenID := checkRecord(name, recordtype.Neo, string(address))
 	key := getNeoRecordKey(tokenID, name, address)
 
-	storage.Put(ctx, key, []byte{})
-	updateSoaSerial(ctx, tokenID)
+	storage.LocalPut(key, []byte{})
+	updateSoaSerial(tokenID)
 }
 
 // GetRecords returns domain record of the specified type if it exists or an empty
@@ -602,11 +577,9 @@ func GetRecords(name string, typ recordtype.Type) []string {
 	if typ == recordtype.Neo {
 		panic("use GetNeoRecordsIterator for Neo type")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	tokenID := []byte(tokenIDFromName(ctx, name))
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
-	return getRecordsByType(ctx, tokenID, name, typ)
+	tokenID := []byte(tokenIDFromName(name))
+	_ = getFragmentedNameState(tokenID, fragments) // ensure not expired
+	return getRecordsByType(tokenID, name, typ)
 }
 
 // GetNeoRecordsIterator returns an iterator over domain records of the Neo type.
@@ -616,12 +589,10 @@ func GetNeoRecordsIterator(name string) iterator.Iterator {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
+	tokenID := []byte(tokenIDFromName(name))
+	_ = getFragmentedNameState(tokenID, fragments) // ensure not expired
 
-	ctx := storage.GetReadOnlyContext()
-	tokenID := []byte(tokenIDFromName(ctx, name))
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
-
-	return getNeoRecordsIterator(ctx, tokenID, name)
+	return getNeoRecordsIterator(tokenID, name)
 }
 
 // DeleteRecords removes domain records with the specified type. The name MUST
@@ -630,24 +601,22 @@ func DeleteRecords(name string, typ recordtype.Type) {
 	if typ == recordtype.SOA {
 		panic("you cannot delete soa record")
 	}
-
-	ctx := storage.GetContext()
-	tokenID := []byte(tokenIDFromName(ctx, name))
+	tokenID := []byte(tokenIDFromName(name))
 
 	fragments := std.StringSplit(string(tokenID), ".")
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
 
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns := getFragmentedNameState(tokenID, fragments)
 	ns.checkAdmin()
 	recordsKey := getRecordsKeyByType(tokenID, name, typ)
-	records := storage.Find(ctx, recordsKey, storage.KeysOnly)
+	records := storage.LocalFind(recordsKey, storage.KeysOnly)
 	for iterator.Next(records) {
-		r := iterator.Value(records).(string)
-		storage.Delete(ctx, r)
+		r := iterator.Value(records).([]byte)
+		storage.LocalDelete(r)
 	}
-	updateSoaSerial(ctx, tokenID)
+	updateSoaSerial(tokenID)
 }
 
 // DeleteNeoRecord removes domain record of the Neo type for the specified address in
@@ -656,19 +625,18 @@ func DeleteNeoRecord(name string, address interop.Hash160) {
 	if len(address) != interop.Hash160Len {
 		panic("invalid address format")
 	}
-	ctx := storage.GetContext()
-	tokenID := []byte(tokenIDFromName(ctx, name))
+	tokenID := []byte(tokenIDFromName(name))
 
 	fragments := std.StringSplit(string(tokenID), ".")
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
 
-	ns := getFragmentedNameState(ctx, tokenID, fragments)
+	ns := getFragmentedNameState(tokenID, fragments)
 	ns.checkAdmin()
 	key := getNeoRecordKey(tokenID, name, address)
-	storage.Delete(ctx, key)
-	updateSoaSerial(ctx, tokenID)
+	storage.LocalDelete(key)
+	updateSoaSerial(tokenID)
 }
 
 // Resolve resolves given name (not more than three redirects are allowed).
@@ -682,9 +650,7 @@ func Resolve(name string, typ recordtype.Type) []string {
 	if typ == recordtype.Neo {
 		panic("use ResolveNeoIterator for Neo type")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	return resolve(ctx, []string{}, name, typ, 2)
+	return resolve([]string{}, name, typ, 2)
 }
 
 // ResolveNeoIterator resolves given name and returns an iterator over records
@@ -695,9 +661,7 @@ func ResolveNeoIterator(name string) iterator.Iterator {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	return resolveNeoIterator(ctx, name, 2)
+	return resolveNeoIterator(name, 2)
 }
 
 // GetAllRecords returns an Iterator with RecordState items for the given name.
@@ -707,9 +671,7 @@ func GetAllRecords(name string) iterator.Iterator {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	return getAllRecords(ctx, name, fragments)
+	return getAllRecords(name, fragments)
 }
 
 // HasNeoRecord checks if a record of the Neo type exists
@@ -719,35 +681,33 @@ func HasNeoRecord(name string, address interop.Hash160) bool {
 	if len(fragments) == 1 {
 		panic("token not found")
 	}
-
-	ctx := storage.GetReadOnlyContext()
-	tokenID := []byte(tokenIDFromName(ctx, name))
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+	tokenID := []byte(tokenIDFromName(name))
+	_ = getFragmentedNameState(tokenID, fragments) // ensure not expired
 
 	key := getNeoRecordKey(tokenID, name, address)
-	return storage.Get(ctx, key) != nil
+	return storage.LocalGet(key) != nil
 }
 
 // updateBalance updates account's balance and account's tokens.
-func updateBalance(ctx storage.Context, tokenId []byte, acc interop.Hash160, diff int) {
+func updateBalance(tokenId []byte, acc interop.Hash160, diff int) {
 	balanceKey := append([]byte{prefixBalance}, acc...)
 	var balance int
-	if b := storage.Get(ctx, balanceKey); b != nil {
+	if b := storage.LocalGet(balanceKey); b != nil {
 		balance = b.(int)
 	}
 	balance += diff
 	if balance == 0 {
-		storage.Delete(ctx, balanceKey)
+		storage.LocalDelete(balanceKey)
 	} else {
-		storage.Put(ctx, balanceKey, balance)
+		storage.LocalPut(balanceKey, convert.ToBytes(balance))
 	}
 
 	tokenKey := getTokenKey(tokenId)
 	accountTokenKey := append(append([]byte{prefixAccountToken}, acc...), tokenKey...)
 	if diff < 0 {
-		storage.Delete(ctx, accountTokenKey)
+		storage.LocalDelete(accountTokenKey)
 	} else {
-		storage.Put(ctx, accountTokenKey, tokenId)
+		storage.LocalPut(accountTokenKey, tokenId)
 	}
 }
 
@@ -760,17 +720,11 @@ func postTransfer(from, to interop.Hash160, tokenID []byte, data any) {
 	}
 }
 
-// getTotalSupply returns total supply from storage.
-func getTotalSupply(ctx storage.Context) int {
-	val := storage.Get(ctx, []byte{prefixTotalSupply})
-	return val.(int)
-}
-
 // updateTotalSupply adds the specified diff to the total supply.
-func updateTotalSupply(ctx storage.Context, diff int) {
+func updateTotalSupply(diff int) {
 	tsKey := []byte{prefixTotalSupply}
-	ts := getTotalSupply(ctx)
-	storage.Put(ctx, tsKey, ts+diff)
+	ts := TotalSupply()
+	storage.LocalPut(tsKey, convert.ToBytes(ts+diff))
 }
 
 // getTokenKey computes hash160 from the given tokenID.
@@ -779,29 +733,29 @@ func getTokenKey(tokenID []byte) []byte {
 }
 
 // getNameState returns domain name state by the specified tokenID.
-func getNameState(ctx storage.Context, tokenID []byte) NameState {
-	return getFragmentedNameState(ctx, tokenID, nil)
+func getNameState(tokenID []byte) NameState {
+	return getFragmentedNameState(tokenID, nil)
 }
 
 // getFragmentedNameState returns domain name state by the specified tokenID.
 // Optional fragments parameter allows to pass pre-calculated elements of the
 // domain name path: if empty, getFragmentedNameState splits name on its own.
-func getFragmentedNameState(ctx storage.Context, tokenID []byte, fragments []string) NameState {
+func getFragmentedNameState(tokenID []byte, fragments []string) NameState {
 	tokenKey := getTokenKey(tokenID)
-	ns := getNameStateWithKey(ctx, tokenKey)
+	ns := getNameStateWithKey(tokenKey)
 	if len(fragments) == 0 {
 		fragments = std.StringSplit(string(tokenID), ".")
 	}
-	if parentExpired(ctx, 1, fragments) {
+	if parentExpired(1, fragments) {
 		panic("parent domain has expired")
 	}
 	return ns
 }
 
 // getNameStateWithKey returns domain name state by the specified token key.
-func getNameStateWithKey(ctx storage.Context, tokenKey []byte) NameState {
+func getNameStateWithKey(tokenKey []byte) NameState {
 	nameKey := getNameStateKey(tokenKey)
-	nsBytes := storage.Get(ctx, nameKey)
+	nsBytes := storage.LocalGet(nameKey)
 	if nsBytes == nil {
 		panic("token not found")
 	}
@@ -816,24 +770,24 @@ func getNameStateKey(tokenKey []byte) []byte {
 }
 
 // putNameState stores domain name state.
-func putNameState(ctx storage.Context, ns NameState) {
+func putNameState(ns NameState) {
 	tokenKey := getTokenKey([]byte(ns.Name))
-	putNameStateWithKey(ctx, tokenKey, ns)
+	putNameStateWithKey(tokenKey, ns)
 }
 
 // putNameStateWithKey stores domain name state with the specified token key.
-func putNameStateWithKey(ctx storage.Context, tokenKey []byte, ns NameState) {
+func putNameStateWithKey(tokenKey []byte, ns NameState) {
 	nameKey := append([]byte{prefixName}, tokenKey...)
 	nsBytes := std.Serialize(ns)
-	storage.Put(ctx, nameKey, nsBytes)
+	storage.LocalPut(nameKey, nsBytes)
 }
 
 // getRecordsByType returns domain record. It returns empty array if no records found.
-func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type) []string {
+func getRecordsByType(tokenId []byte, name string, typ recordtype.Type) []string {
 	recordsKey := getRecordsKeyByType(tokenId, name, typ)
 
 	result := []string{}
-	records := storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	records := storage.LocalFind(recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
 		if r.Type == typ {
@@ -844,9 +798,9 @@ func getRecordsByType(ctx storage.Context, tokenId []byte, name string, typ reco
 }
 
 // getNeoRecordsIterator returns an iterator over domain records of the Neo type.
-func getNeoRecordsIterator(ctx storage.Context, tokenId []byte, name string) iterator.Iterator {
+func getNeoRecordsIterator(tokenId []byte, name string) iterator.Iterator {
 	recordsKey := getRecordsKeyByType(tokenId, name, recordtype.Neo)
-	return storage.Find(ctx, recordsKey, storage.KeysOnly|storage.RemovePrefix)
+	return storage.LocalFind(recordsKey, storage.KeysOnly|storage.RemovePrefix)
 }
 
 // getNeoRecordKey returns the storage key for a Neo record.
@@ -856,7 +810,7 @@ func getNeoRecordKey(tokenId []byte, name string, address interop.Hash160) []byt
 }
 
 // storeRecord puts record to storage and performs no additional checks.
-func storeRecord(ctx storage.Context, tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
+func storeRecord(tokenId []byte, name string, typ recordtype.Type, id byte, data string) {
 	recordKey := getIdRecordKey(tokenId, name, typ, id)
 	rs := RecordState{
 		Name: name,
@@ -865,27 +819,27 @@ func storeRecord(ctx storage.Context, tokenId []byte, name string, typ recordtyp
 		ID:   id,
 	}
 	recBytes := std.Serialize(rs)
-	storage.Put(ctx, recordKey, recBytes)
+	storage.LocalPut(recordKey, recBytes)
 }
 
 // putSoaRecord stores soa domain record.
-func putSoaRecord(ctx storage.Context, name, email string, refresh, retry, expire, ttl int) {
-	tokenId := []byte(tokenIDFromName(ctx, name))
+func putSoaRecord(name, email string, refresh, retry, expire, ttl int) {
+	tokenId := []byte(tokenIDFromName(name))
 	data := name + " " + email + " " +
 		std.Itoa(runtime.GetTime(), 10) + " " +
 		std.Itoa(refresh, 10) + " " +
 		std.Itoa(retry, 10) + " " +
 		std.Itoa(expire, 10) + " " +
 		std.Itoa(ttl, 10)
-	storeRecord(ctx, tokenId, name, recordtype.SOA, 0, data)
+	storeRecord(tokenId, name, recordtype.SOA, 0, data)
 }
 
 // updateSoaSerial stores soa domain record.
-func updateSoaSerial(ctx storage.Context, tokenId []byte) {
+func updateSoaSerial(tokenId []byte) {
 	var id byte
 	recordKey := getIdRecordKey(tokenId, string(tokenId), recordtype.SOA, id)
 
-	recBytes := storage.Get(ctx, recordKey)
+	recBytes := storage.LocalGet(recordKey)
 	if recBytes == nil {
 		panic("not found soa record")
 	}
@@ -902,7 +856,7 @@ func updateSoaSerial(ctx storage.Context, tokenId []byte) {
 		split[6]
 
 	recBytes = std.Serialize(rec)
-	storage.Put(ctx, recordKey, recBytes)
+	storage.LocalPut(recordKey, recBytes.([]byte))
 }
 
 // getRecordsKey returns the prefix used to store domain records of different types.
@@ -1113,7 +1067,7 @@ func checkIPv6(data string) bool {
 }
 
 // tokenIDFromName returns token ID (domain.root) from the provided name.
-func tokenIDFromName(ctx storage.Context, name string) string {
+func tokenIDFromName(name string) string {
 	fragments := splitAndCheck(name)
 
 	sum := 0
@@ -1121,7 +1075,7 @@ func tokenIDFromName(ctx storage.Context, name string) string {
 	for i := range l {
 		tokenKey := getTokenKey([]byte(name[sum:]))
 		nameKey := getNameStateKey(tokenKey)
-		nsBytes := storage.Get(ctx, nameKey)
+		nsBytes := storage.LocalGet(nameKey)
 		if nsBytes != nil {
 			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
 			if int64(runtime.GetTime()) < ns.Expiration {
@@ -1135,7 +1089,7 @@ func tokenIDFromName(ctx storage.Context, name string) string {
 
 // resolve resolves the provided name using record with the specified type and given
 // maximum redirections constraint.
-func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type, redirect int) []string {
+func resolve(res []string, name string, typ recordtype.Type, redirect int) []string {
 	if redirect < 0 {
 		panic("invalid redirect")
 	}
@@ -1145,7 +1099,7 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 	if name[len(name)-1] == '.' {
 		name = name[:len(name)-1]
 	}
-	records := getAllRecords(ctx, name, nil)
+	records := getAllRecords(name, nil)
 	cname := ""
 	for iterator.Next(records) {
 		r := iterator.Value(records).(RecordState)
@@ -1160,13 +1114,13 @@ func resolve(ctx storage.Context, res []string, name string, typ recordtype.Type
 		return res
 	}
 
-	return resolve(ctx, res, cname, typ, redirect-1)
+	return resolve(res, cname, typ, redirect-1)
 }
 
 // resolveNeoIterator resolves the provided name using record with the Neo type
 // and returns an iterator over the results in 20-byte address hash format.
 // This handles CNAME redirection and follows up to the specified number of redirects.
-func resolveNeoIterator(ctx storage.Context, name string, redirect int) iterator.Iterator {
+func resolveNeoIterator(name string, redirect int) iterator.Iterator {
 	if redirect < 0 {
 		panic("invalid redirect")
 	}
@@ -1177,32 +1131,32 @@ func resolveNeoIterator(ctx storage.Context, name string, redirect int) iterator
 		name = name[:len(name)-1]
 	}
 
-	tokenID := []byte(tokenIDFromName(ctx, name))
-	_ = getFragmentedNameState(ctx, tokenID, nil)
+	tokenID := []byte(tokenIDFromName(name))
+	_ = getFragmentedNameState(tokenID, nil)
 
 	// If we still can redirect, try to find CNAME directly using its prefix.
 	if redirect > 0 {
 		cnameKey := getRecordsKeyByType(tokenID, name, recordtype.CNAME)
-		cnameIter := storage.Find(ctx, cnameKey, storage.ValuesOnly|storage.DeserializeValues)
+		cnameIter := storage.LocalFind(cnameKey, storage.ValuesOnly|storage.DeserializeValues)
 		if iterator.Next(cnameIter) {
 			r := iterator.Value(cnameIter).(RecordState)
 			if r.Data != "" {
-				return resolveNeoIterator(ctx, r.Data, redirect-1)
+				return resolveNeoIterator(r.Data, redirect-1)
 			}
 		}
 	}
 
-	return getNeoRecordsIterator(ctx, tokenID, name)
+	return getNeoRecordsIterator(tokenID, name)
 }
 
 // getAllRecords returns iterator over the set of records corresponded with the
 // specified name. Optional fragments parameter allows to pass pre-calculated
 // elements of the domain name path: if empty, splits name on its own.
-func getAllRecords(ctx storage.Context, name string, fragments []string) iterator.Iterator {
-	tokenID := []byte(tokenIDFromName(ctx, name))
-	_ = getFragmentedNameState(ctx, tokenID, fragments) // ensure not expired
+func getAllRecords(name string, fragments []string) iterator.Iterator {
+	tokenID := []byte(tokenIDFromName(name))
+	_ = getFragmentedNameState(tokenID, fragments) // ensure not expired
 	recordsKey := getRecordsKey(tokenID, name)
-	return storage.Find(ctx, recordsKey, storage.ValuesOnly|storage.DeserializeValues)
+	return storage.LocalFind(recordsKey, storage.ValuesOnly|storage.DeserializeValues)
 }
 
 func makeTLDKey(name string) []byte {
