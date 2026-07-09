@@ -260,7 +260,7 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 func NewEpoch(epochNum int) {
 	common.CheckAlphabetWitness()
 
-	currentEpoch := storage.LocalGet([]byte(snapshotEpoch)).(int)
+	currentEpoch := convert.ToInteger(storage.LocalGet([]byte(snapshotEpoch)))
 	if epochNum <= currentEpoch {
 		panic("invalid epoch") // ignore invocations with invalid epoch
 	}
@@ -289,7 +289,7 @@ func NewEpoch(epochNum int) {
 
 // Epoch method returns the current epoch number.
 func Epoch() int {
-	return storage.LocalGet([]byte(snapshotEpoch)).(int)
+	return convert.ToInteger(storage.LocalGet([]byte(snapshotEpoch)))
 }
 
 // LastEpochBlock method returns the block number when the current epoch was
@@ -297,12 +297,12 @@ func Epoch() int {
 //
 // Use [GetEpochBlock] for specific epoch.
 func LastEpochBlock() int {
-	curEpoch := storage.LocalGet([]byte(snapshotEpoch)).(int)
+	curEpoch := Epoch()
 	val := storage.LocalGet(append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...))
 	if val == nil {
 		return 0
 	}
-	return std.Deserialize(val.([]byte)).(epochItem).height
+	return std.Deserialize(val).(epochItem).height
 }
 
 // LastEpochTime method returns the block time when the current epoch was
@@ -310,12 +310,12 @@ func LastEpochBlock() int {
 //
 // Use [GetEpochTime] for specific epoch.
 func LastEpochTime() int {
-	curEpoch := storage.LocalGet([]byte(snapshotEpoch)).(int)
+	curEpoch := Epoch()
 	val := storage.LocalGet(append([]byte{epochIndexKey}, convert.Uint32ToBytesBE(uint32(curEpoch))...))
 	if val == nil {
 		return 0
 	}
-	return std.Deserialize(val.([]byte)).(epochItem).time
+	return std.Deserialize(val).(epochItem).time
 }
 
 // ListNodes provides an iterator to walk over current (as in corresponding
@@ -360,7 +360,7 @@ func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
 	return getStorageNodeInEpoch(key, epoch) != nil
 }
 
-func getStorageNodeInEpoch(key interop.PublicKey, epoch int) any {
+func getStorageNodeInEpoch(key interop.PublicKey, epoch int) []byte {
 	dbkey := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
 	return storage.LocalGet(dbkey)
 }
@@ -375,12 +375,12 @@ func IsStorageNodeStatus(key interop.PublicKey, epoch int, status nodestate.Type
 	if nodeRaw == nil {
 		return status == nodestate.Offline // Offline is missing node.
 	}
-	var n2 = std.Deserialize(nodeRaw.([]byte)).(Node2)
+	var n2 = std.Deserialize(nodeRaw).(Node2)
 	return n2.State == status
 }
 
 func getSnapshotCount() int {
-	return storage.LocalGet([]byte(snapshotCountKey)).(int)
+	return convert.ToInteger(storage.LocalGet([]byte(snapshotCountKey)))
 }
 
 // UpdateSnapshotCount updates the number of the stored snapshots.
@@ -409,7 +409,7 @@ func UpdateSnapshotCount(count int) {
 
 // Config returns configuration value of NeoFS configuration. If key does
 // not exist, returns nil.
-func Config(key []byte) any {
+func Config(key []byte) []byte {
 	return storage.LocalGet(append(configPrefix, key...))
 }
 
@@ -518,7 +518,7 @@ func SetCleanupThreshold(val int) {
 // do not update their state for this number of epochs get kicked out of the
 // network map. Zero means cleanups are disabled.
 func CleanupThreshold() int {
-	return storage.LocalGet([]byte(cleanupThresholdKey)).(int)
+	return convert.ToInteger(storage.LocalGet([]byte(cleanupThresholdKey)))
 }
 
 // UnusedCandidate does nothing except marking Candidate structure as used one
@@ -537,7 +537,7 @@ func GetEpochBlock(epoch int) int {
 	if val == nil {
 		return 0
 	}
-	return std.Deserialize(val.([]byte)).(epochItem).height
+	return std.Deserialize(val).(epochItem).height
 }
 
 // GetEpochTime returns block time when given epoch came. Returns 0 if the epoch
@@ -549,7 +549,7 @@ func GetEpochTime(epoch int) int {
 	if val == nil {
 		return 0
 	}
-	return std.Deserialize(val.([]byte)).(epochItem).time
+	return std.Deserialize(val).(epochItem).time
 }
 
 // GetEpochBlockByTime returns the block index when the latest epoch that
@@ -586,7 +586,7 @@ func removeFromNetmap(key interop.PublicKey) {
 
 func updateNetmapState(key interop.PublicKey, state nodestate.Type) {
 	storageKey := append([]byte(node2CandidatePrefix), key...)
-	raw := storage.LocalGet(storageKey).([]byte)
+	raw := storage.LocalGet(storageKey)
 	if raw == nil {
 		panic("peer is missing")
 	}

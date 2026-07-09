@@ -89,12 +89,12 @@ func Neo() int {
 }
 
 func currentEpoch() int {
-	netmapContractAddr := storage.LocalGet([]byte(netmapKey)).(interop.Hash160)
+	netmapContractAddr := interop.Hash160(storage.LocalGet([]byte(netmapKey)))
 	return contract.Call(netmapContractAddr, "epoch", contract.ReadOnly).(int)
 }
 
 func index() int {
-	return storage.LocalGet([]byte(indexKey)).(int)
+	return convert.ToInteger(storage.LocalGet([]byte(indexKey)))
 }
 
 func checkPermission(ir []interop.PublicKey) bool {
@@ -129,7 +129,7 @@ func Emit() {
 
 	gasBalance := gas.BalanceOf(contractHash)
 
-	proxyAddr := storage.LocalGet([]byte(proxyKey)).(interop.Hash160)
+	proxyAddr := interop.Hash160(storage.LocalGet([]byte(proxyKey)))
 
 	proxyGas := gasBalance / 2
 	if proxyGas == 0 {
@@ -191,7 +191,7 @@ func Vote(epoch int, candidates []interop.PublicKey) {
 
 // Name returns the name of the contract set at deployment stage.
 func Name() string {
-	return storage.LocalGet([]byte(nameKey)).(string)
+	return string(storage.LocalGet([]byte(nameKey)))
 }
 
 // Version returns the version of the contract.

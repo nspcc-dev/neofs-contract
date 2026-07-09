@@ -57,7 +57,7 @@ func Put(epoch int, peerID []byte, value []byte) {
 	rawCnt := storage.LocalGet(key)
 	cnt := 0
 	if rawCnt != nil {
-		cnt = rawCnt.(int)
+		cnt = convert.ToInteger(rawCnt)
 	}
 	cnt++
 	storage.LocalPut(key, convert.ToBytes(cnt))

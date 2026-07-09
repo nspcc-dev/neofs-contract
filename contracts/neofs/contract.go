@@ -182,10 +182,10 @@ func Withdraw(user interop.Hash160, amount int) {
 		panic("out of max amount limit")
 	}
 
-	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
+	notaryDisabled := convert.ToBool(storage.LocalGet([]byte(notaryDisabledKey)))
 
 	// transfer fee to proxy contract to pay cheque invocation
-	fee := Config([]byte(withdrawFeeConfigKey)).(int)
+	fee := convert.ToInteger(Config([]byte(withdrawFeeConfigKey)))
 
 	if notaryDisabled {
 		alphabet := getAlphabetNodes()
@@ -198,7 +198,7 @@ func Withdraw(user interop.Hash160, amount int) {
 			}
 		}
 	} else {
-		processingAddr := storage.LocalGet([]byte(processingContractKey)).(interop.Hash160)
+		processingAddr := interop.Hash160(storage.LocalGet([]byte(processingContractKey)))
 
 		transferred := gas.Transfer(user, processingAddr, fee, []byte{})
 		if !transferred {
@@ -219,7 +219,7 @@ func Withdraw(user interop.Hash160, amount int) {
 //
 // This method produces Cheque notification to burn assets in FS chain.
 func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
-	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
+	notaryDisabled := convert.ToBool(storage.LocalGet([]byte(notaryDisabledKey)))
 
 	var ( // for invocation collection without notary
 		alphabet []interop.PublicKey
@@ -264,7 +264,7 @@ func Cheque(id []byte, user interop.Hash160, amount int, lockAcc []byte) {
 // This method is used in notary-disabled FS chain environment. In this case,
 // the actual alphabet list should be stored in the NeoFS contract.
 func AlphabetUpdate(id []byte, args []interop.PublicKey) {
-	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
+	notaryDisabled := convert.ToBool(storage.LocalGet([]byte(notaryDisabledKey)))
 
 	if len(args) == 0 {
 		panic("bad arguments")
@@ -314,14 +314,14 @@ func AlphabetUpdate(id []byte, args []interop.PublicKey) {
 
 // Config returns configuration value of NeoFS configuration. If the key does
 // not exist, returns nil.
-func Config(key []byte) any {
+func Config(key []byte) []byte {
 	return storage.LocalGet(append(configPrefix, key...))
 }
 
 // SetConfig key-value pair as a NeoFS runtime configuration value. It can be invoked
 // only by Alphabet nodes.
 func SetConfig(id, key, val []byte) {
-	notaryDisabled := storage.LocalGet([]byte(notaryDisabledKey)).(bool)
+	notaryDisabled := convert.ToBool(storage.LocalGet([]byte(notaryDisabledKey)))
 
 	var ( // for invocation collection without notary
 		alphabet []interop.PublicKey
@@ -381,7 +381,7 @@ func Version() int {
 func getAlphabetNodes() []interop.PublicKey {
 	data := storage.LocalGet([]byte(alphabetKey))
 	if data != nil {
-		return std.Deserialize(data.([]byte)).([]interop.PublicKey)
+		return std.Deserialize(data).([]interop.PublicKey)
 	}
 
 	return []interop.PublicKey{}

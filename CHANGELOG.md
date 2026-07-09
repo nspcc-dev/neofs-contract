@@ -10,7 +10,7 @@ Changelog for NeoFS Contract
 - Proxy contract can be used for payments with None alphabet/committee signer scope (#579)
 
 ### Updated
-- NeoGo dependency to 0.117.0 (#585)
+- NeoGo dependency to 0.121.0 (#585, #604)
 - NeoFS SDK dependency to RC17 (#585)
 - go.uber.org/zap dependency to v1.27.1 (#585)
 - google.golang.org/protobuf dependency to v1.36.11 (#585)

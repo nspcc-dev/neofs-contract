@@ -311,7 +311,7 @@ func SettleContainerPayment(cid interop.Hash256) bool {
 		paidKey       = append([]byte{paidContainersPrefix}, cid...)
 		oldPaymentRaw = storage.LocalGet(paidKey)
 	)
-	if oldPaymentRaw != nil && oldPaymentRaw.(int) >= paymentEpoch {
+	if oldPaymentRaw != nil && convert.ToInteger(oldPaymentRaw) >= paymentEpoch {
 		return false // Already paid.
 	}
 
@@ -394,7 +394,7 @@ func GetUnpaidContainerEpoch(cid interop.Hash256) int {
 		return -1
 	}
 
-	return raw.(int)
+	return convert.ToInteger(raw)
 }
 
 // IterateUnpaid is like [GetUnpaidContainerEpoch] but for every unpaid
@@ -413,7 +413,7 @@ func Version() int {
 func (t Token) getSupply() int {
 	supply := storage.LocalGet([]byte(t.CirculationKey))
 	if supply != nil {
-		return supply.(int)
+		return convert.ToInteger(supply)
 	}
 
 	return 0
@@ -506,7 +506,7 @@ func isUsableAddress(addr interop.Hash160) bool {
 func getAccount(key interop.Hash160) Account {
 	data := storage.LocalGet(append([]byte{accPrefix}, key...))
 	if data != nil {
-		return std.Deserialize(data.([]byte)).(Account)
+		return std.Deserialize(data).(Account)
 	}
 
 	return Account{}
@@ -525,5 +525,5 @@ func getContractHash(storageKey byte, nnsKey string) interop.Hash160 {
 		contractH = h
 	}
 
-	return contractH.(interop.Hash160)
+	return interop.Hash160(contractH)
 }

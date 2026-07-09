@@ -149,7 +149,7 @@ func Version() int {
 // TotalSupply returns the overall number of domains minted by NeoNameService contract.
 func TotalSupply() int {
 	val := storage.LocalGet([]byte{prefixTotalSupply})
-	return val.(int)
+	return convert.ToInteger(val)
 }
 
 // OwnerOf returns the owner of the specified domain. The tokenID domain MUST
@@ -187,7 +187,7 @@ func BalanceOf(owner interop.Hash160) int {
 	if balance == nil {
 		return 0
 	}
-	return balance.(int)
+	return convert.ToInteger(balance)
 }
 
 // Tokens returns iterator over a set of all registered domain names.
@@ -253,7 +253,7 @@ func SetPrice(price int64) {
 
 // GetPrice returns the domain registration price.
 func GetPrice() int {
-	return storage.LocalGet([]byte{prefixRegisterPrice}).(int)
+	return convert.ToInteger(storage.LocalGet([]byte{prefixRegisterPrice}))
 }
 
 // IsAvailable checks whether the provided domain name is available. Notice that
@@ -304,7 +304,7 @@ func parentExpired(first int, fragments []string) bool {
 		if nsBytes == nil {
 			return true
 		}
-		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+		ns := std.Deserialize(nsBytes).(NameState)
 		if now >= ns.Expiration {
 			return true
 		}
@@ -338,7 +338,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 
 	if l > 2 {
 		nsBytes := storage.LocalGet(append([]byte{prefixName}, parentKey...))
-		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+		ns := std.Deserialize(nsBytes).(NameState)
 		ns.checkAdmin()
 	}
 
@@ -357,7 +357,7 @@ func Register(name string, owner interop.Hash160, email string, refresh, retry, 
 	)
 	nsBytes := storage.LocalGet(append([]byte{prefixName}, tokenKey...))
 	if nsBytes != nil {
-		ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+		ns := std.Deserialize(nsBytes).(NameState)
 		if int64(runtime.GetTime()) < ns.Expiration {
 			return false
 		}
@@ -693,7 +693,7 @@ func updateBalance(tokenId []byte, acc interop.Hash160, diff int) {
 	balanceKey := append([]byte{prefixBalance}, acc...)
 	var balance int
 	if b := storage.LocalGet(balanceKey); b != nil {
-		balance = b.(int)
+		balance = convert.ToInteger(b)
 	}
 	balance += diff
 	if balance == 0 {
@@ -759,7 +759,7 @@ func getNameStateWithKey(tokenKey []byte) NameState {
 	if nsBytes == nil {
 		panic("token not found")
 	}
-	ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+	ns := std.Deserialize(nsBytes).(NameState)
 	ns.ensureNotExpired()
 	return ns
 }
@@ -843,7 +843,7 @@ func updateSoaSerial(tokenId []byte) {
 	if recBytes == nil {
 		panic("not found soa record")
 	}
-	rec := std.Deserialize(recBytes.([]byte)).(RecordState)
+	rec := std.Deserialize(recBytes).(RecordState)
 
 	split := std.StringSplitNonEmpty(rec.Data, " ")
 	if len(split) != 7 {
@@ -856,7 +856,7 @@ func updateSoaSerial(tokenId []byte) {
 		split[6]
 
 	recBytes = std.Serialize(rec)
-	storage.LocalPut(recordKey, recBytes.([]byte))
+	storage.LocalPut(recordKey, recBytes)
 }
 
 // getRecordsKey returns the prefix used to store domain records of different types.
@@ -1077,7 +1077,7 @@ func tokenIDFromName(name string) string {
 		nameKey := getNameStateKey(tokenKey)
 		nsBytes := storage.LocalGet(nameKey)
 		if nsBytes != nil {
-			ns := std.Deserialize(nsBytes.([]byte)).(NameState)
+			ns := std.Deserialize(nsBytes).(NameState)
 			if int64(runtime.GetTime()) < ns.Expiration {
 				return name[sum:]
 			}
