@@ -17,7 +17,6 @@ const (
 	proxyKey  = "proxyScriptHash"
 
 	indexKey = "index"
-	totalKey = "threshold"
 	nameKey  = "name"
 
 	emissionDivisor   = 16
@@ -42,6 +41,12 @@ func _deploy(data any, isUpdate bool) {
 
 		common.CheckVersion(version)
 
+		if version < 27_000 {
+			const totalKey = "threshold"
+
+			storage.LocalDelete([]byte(totalKey))
+		}
+
 		return
 	}
 
@@ -51,7 +56,7 @@ func _deploy(data any, isUpdate bool) {
 		addrProxy  interop.Hash160
 		name       string
 		index      int
-		total      int
+		_          int // total
 	})
 
 	if len(args.addrNetmap) != interop.Hash160Len {
@@ -65,7 +70,6 @@ func _deploy(data any, isUpdate bool) {
 	storage.LocalPut([]byte(proxyKey), args.addrProxy)
 	storage.LocalPut([]byte(nameKey), []byte(args.name))
 	storage.LocalPut([]byte(indexKey), convert.ToBytes(args.index))
-	storage.LocalPut([]byte(totalKey), convert.ToBytes(args.total))
 
 	runtime.Log(args.name + " contract initialized")
 }

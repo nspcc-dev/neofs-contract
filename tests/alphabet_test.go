@@ -17,7 +17,7 @@ import (
 
 const alphabetPath = "../contracts/alphabet"
 
-func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy *util.Uint160, name string, index, total int64) util.Uint160 {
+func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy *util.Uint160, name string, index int) util.Uint160 {
 	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
 
 	args := make([]any, 6)
@@ -26,7 +26,6 @@ func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrP
 	args[2] = addrProxy
 	args[3] = name
 	args[4] = index
-	args[5] = total
 
 	e.DeployContract(t, c, args)
 	return c.Hash
@@ -51,7 +50,7 @@ func newAlphabetInvoker(t *testing.T, autohashes bool) (*neotest.Executor, *neot
 	if !autohashes {
 		addrNetmap, addrProxy = &ctrNetmap.Hash, &ctrProxy.Hash
 	}
-	hash := deployAlphabetContract(t, e, addrNetmap, addrProxy, "Az", 0, 1)
+	hash := deployAlphabetContract(t, e, addrNetmap, addrProxy, "Az", 0)
 
 	alphabet := getAlphabetAcc(t, e)
 
