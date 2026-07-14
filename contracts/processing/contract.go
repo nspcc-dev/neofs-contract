@@ -66,7 +66,7 @@ func Update(nefFile, manifest []byte, data any) {
 // Verify method returns true if transaction contains valid multisignature of
 // Alphabet nodes of the Inner Ring.
 func Verify() bool {
-	neofsContractAddr := storage.LocalGet([]byte(neofsContractKey)).(interop.Hash160)
+	neofsContractAddr := interop.Hash160(storage.LocalGet([]byte(neofsContractKey)))
 	multiaddr := contract.Call(neofsContractAddr, multiaddrMethod, contract.ReadOnly).(interop.Hash160)
 
 	return runtime.CheckWitness(multiaddr)

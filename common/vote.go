@@ -96,7 +96,7 @@ func RemoveVotes(id []byte) {
 func getBallots() []Ballot {
 	data := storage.LocalGet([]byte(voteKey))
 	if data != nil {
-		return std.Deserialize(data.([]byte)).([]Ballot)
+		return std.Deserialize(data).([]Ballot)
 	}
 
 	return []Ballot{}

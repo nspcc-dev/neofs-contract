@@ -367,7 +367,7 @@ func TestContainerGet(t *testing.T) {
 	})
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewBuffer(cnt.value),
+		stackitem.Make(cnt.value),
 		stackitem.NewBuffer([]byte{}),
 		stackitem.NewBuffer([]byte{}),
 		stackitem.NewBuffer([]byte{}),
@@ -413,7 +413,7 @@ func TestContainerSetEACL(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
 
 	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.NewBuffer(e.value),
+		stackitem.Make(e.value),
 		stackitem.NewBuffer([]byte{}),
 		stackitem.NewBuffer([]byte{}),
 		stackitem.NewBuffer([]byte{}),
@@ -1897,7 +1897,7 @@ func TestGetContainerData(t *testing.T) {
 	inv.Invoke(t, stackitem.Null{}, "create",
 		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
 
-	inv.Invoke(t, stackitem.NewBuffer(anyValidCnr), "getContainerData", anyValidCnrID)
+	inv.Invoke(t, stackitem.Make(anyValidCnr), "getContainerData", anyValidCnrID)
 }
 
 func TestGetEACLData(t *testing.T) {
@@ -1938,7 +1938,7 @@ func TestGetEACLData(t *testing.T) {
 	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
 		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
-	inv.Invoke(t, stackitem.NewBuffer(anyValidEACL), "getEACLData", anyValidCnrID)
+	inv.Invoke(t, stackitem.Make(anyValidEACL), "getEACLData", anyValidCnrID)
 }
 
 func TestContainerCreateV2(t *testing.T) {
@@ -2038,10 +2038,10 @@ func TestContainerCreateV2(t *testing.T) {
 
 	assertSuccessAPI := func(t *testing.T, id cid.ID, cnrFields []stackitem.Item, cnrBytes []byte, ownerID user.ID) {
 		inv.Invoke(t, stackitem.NewStruct(cnrFields), "getInfo", id[:])
-		inv.Invoke(t, stackitem.NewBuffer(cnrBytes), "getContainerData", id[:])
+		inv.Invoke(t, stackitem.Make(cnrBytes), "getContainerData", id[:])
 		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", id[:])
 		inv.Invoke(t, stackitem.NewStruct([]stackitem.Item{
-			stackitem.NewBuffer(cnrBytes),
+			stackitem.Make(cnrBytes),
 			stackitem.NewBuffer([]byte{}),
 			stackitem.NewBuffer([]byte{}),
 			stackitem.NewBuffer([]byte{}),
@@ -2521,7 +2521,7 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.NewBuffer(cnr.Marshal()), "getContainerData", id[:])
+	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(usr1Acc[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 1, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)
@@ -2555,7 +2555,7 @@ func TestContainerTransfer(t *testing.T) {
 
 	cnr.SetOwner(user.NewFromScriptHash(usr2Acc))
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.NewBuffer(cnr.Marshal()), "getContainerData", id[:])
+	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(usr2Acc[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 0, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 1, "balanceOf", usr2Acc)
@@ -2573,7 +2573,7 @@ func TestContainerTransfer(t *testing.T) {
 
 	cnr.SetOwner(user.NewFromScriptHash(testContract))
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.NewBuffer(cnr.Marshal()), "getContainerData", id[:])
+	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(testContract[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 0, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)

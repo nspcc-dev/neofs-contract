@@ -147,13 +147,8 @@ func (c *ContractReader) AlphabetList() ([]*CommonIRNode, error) {
 }
 
 // Config invokes `config` method of contract.
-func (c *ContractReader) Config(key []byte) (any, error) {
-	return func(item stackitem.Item, err error) (any, error) {
-		if err != nil {
-			return nil, err
-		}
-		return item.Value(), error(nil)
-	}(unwrap.Item(c.invoker.Call(c.hash, "config", key)))
+func (c *ContractReader) Config(key []byte) ([]byte, error) {
+	return unwrap.Bytes(c.invoker.Call(c.hash, "config", key))
 }
 
 // ListConfig invokes `listConfig` method of contract.
