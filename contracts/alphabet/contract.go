@@ -19,6 +19,10 @@ const (
 	indexKey = "index"
 	totalKey = "threshold"
 	nameKey  = "name"
+
+	emissionDivisor   = 16
+	emissionProxyPart = 14
+	emissionIRPart    = 1
 )
 
 // OnNEP17Payment is a callback for NEP-17 compatible native GAS and NEO
@@ -112,9 +116,9 @@ func checkPermission(ir []interop.PublicKey) bool {
 // and proxy contract. It can be invoked only by an Alphabet node of the Inner Ring.
 //
 // To produce GAS, an alphabet contract transfers all available NEO from the
-// contract account to itself. 50% of the GAS in the contract account are
-// transferred to proxy contract. 43.75% of the GAS are equally distributed
-// among all Inner Ring nodes. Remaining 6.25% of the GAS stay in the contract.
+// contract account to itself. 7/8 of the GAS in the contract account are
+// transferred to proxy contract. 1/16 of the GAS are equally distributed
+// among all Inner Ring nodes. Remaining 1/16 of the GAS stay in the contract.
 func Emit() {
 	alphabet := common.AlphabetNodes()
 	if !checkPermission(alphabet) {
@@ -127,26 +131,26 @@ func Emit() {
 		panic("failed to transfer funds, aborting")
 	}
 
-	gasBalance := gas.BalanceOf(contractHash)
+	var (
+		gasBalance = gas.BalanceOf(contractHash)
+		gasDivided = gasBalance / emissionDivisor
+		proxyGas   = gasDivided * emissionProxyPart
+		IRGas      = gasDivided * emissionIRPart
+	)
 
-	proxyAddr := interop.Hash160(storage.LocalGet([]byte(proxyKey)))
-
-	proxyGas := gasBalance / 2
-	if proxyGas == 0 {
+	if gasDivided == 0 {
 		panic("no gas to emit")
 	}
 
-	if !gas.Transfer(contractHash, proxyAddr, proxyGas, nil) {
+	if !gas.Transfer(contractHash, interop.Hash160(storage.LocalGet([]byte(proxyKey))), proxyGas, nil) {
 		runtime.Log("could not transfer GAS to proxy contract")
 	}
-
-	gasBalance -= proxyGas
 
 	runtime.Log("utility token has been emitted to proxy contract")
 
 	innerRing := common.InnerRingNodes()
 
-	gasPerNode := gasBalance * 7 / 8 / len(innerRing)
+	gasPerNode := IRGas / len(innerRing)
 
 	if gasPerNode != 0 {
 		for _, node := range innerRing {
