@@ -40,7 +40,7 @@ func SetInnerRing(tb testing.TB, e *neotest.Executor, _keys keys.PublicKeys) {
 		bKeys[i] = _keys[i].Bytes()
 	}
 
-	_setAlphabetRole(tb, e, bKeys)
+	setAlphabetRole(tb, e, bKeys...)
 }
 
 // InnerRing reads Inner Ring composition from given neotest.Executor using
@@ -72,14 +72,10 @@ func InnerRing(tb testing.TB, e *neotest.Executor) keys.PublicKeys {
 	return res
 }
 
-func setAlphabetRole(tb testing.TB, e *neotest.Executor, key []byte) {
-	_setAlphabetRole(tb, e, [][]byte{key})
-}
-
-func _setAlphabetRole(tb testing.TB, e *neotest.Executor, _keys [][]byte) {
-	keysArg := make([]any, len(_keys))
-	for i := range _keys {
-		keysArg[i] = _keys[i]
+func setAlphabetRole(tb testing.TB, e *neotest.Executor, keys ...[]byte) {
+	keysArg := make([]any, len(keys))
+	for i := range keys {
+		keysArg[i] = keys[i]
 	}
 
 	roleManagementInvoker(tb, e).Invoke(tb, stackitem.Null{}, "designateAsRole",
