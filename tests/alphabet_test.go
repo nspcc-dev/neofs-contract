@@ -149,11 +149,12 @@ func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker) {
 	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Validator.ScriptHash(), invoker.Hash, res.Top().BigInt().Int64(), nil)
 }
 
-func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
-	multi, ok := e.Committee.(neotest.MultiSigner)
-	require.True(t, ok)
+func transferGasToAccount(t *testing.T, e *neotest.Executor, sender neotest.Signer) {
+	gasSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+	require.NoError(t, err)
 
-	return multi.Single(0).Account()
+	gasInvoker := e.ValidatorInvoker(gasSH)
+	gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Validator.ScriptHash(), sender.ScriptHash(), 1000_0000_0000, nil)
 }
 
 func TestAlphabetVerify(t *testing.T) {

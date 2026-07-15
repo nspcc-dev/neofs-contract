@@ -29,14 +29,17 @@ const (
 )
 
 func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
-	c := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
+	alphaS := alphaSigner(t, e)
+	transferGasToAccount(t, e, alphaS) // Need to deploy from alpha for subscription to succeed.
+
+	c := neotest.CompileFile(t, alphaS.ScriptHash(), balancePath, path.Join(balancePath, "config.yml"))
 
 	args := make([]any, 3)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrContainer
 
-	e.DeployContract(t, c, args)
+	e.DeployContractBy(t, alphaS, c, args)
 	regContractNNS(t, e, "balance", c.Hash)
 	return c.Hash
 }
@@ -44,19 +47,15 @@ func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrCo
 func newBalanceInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration),
 		balanceconst.BasicIncomeRateKey, int64(basicIncomeRate))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
 	deployProxyContract(t, e)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
-	return e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
+	return e.CommitteeInvoker(balanceHash), e.CommitteeInvoker(containerHash), e.CommitteeInvoker(netmapHash)
 }
 
 func TestPayments(t *testing.T) {
