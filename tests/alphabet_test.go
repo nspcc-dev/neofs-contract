@@ -140,13 +140,13 @@ func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker) {
 	neoSH, err := invoker.Chain.GetNativeContractScriptHash(nativenames.Neo)
 	require.NoError(t, err)
 
-	neoInvoker := invoker.CommitteeInvoker(neoSH)
+	neoInvoker := invoker.ValidatorInvoker(neoSH)
 
 	res, err := neoInvoker.TestInvoke(t, "balanceOf", neoInvoker.Committee.ScriptHash())
 	require.NoError(t, err)
 
 	// transfer all NEO to alphabet contract
-	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Committee.ScriptHash(), invoker.Hash, res.Top().BigInt().Int64(), nil)
+	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Validator.ScriptHash(), invoker.Hash, res.Top().BigInt().Int64(), nil)
 }
 
 func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
