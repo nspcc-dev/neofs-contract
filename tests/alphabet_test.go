@@ -156,6 +156,14 @@ func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
 	return multi.Single(0).Account()
 }
 
+func transferSomeGasToAccount(t *testing.T, e *neotest.Executor, recipient neotest.Signer) {
+	gasSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+	require.NoError(t, err)
+
+	gasInvoker := e.ValidatorInvoker(gasSH)
+	gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Validator.ScriptHash(), recipient.ScriptHash(), 1000_0000_0000, nil)
+}
+
 func TestAlphabetVerify(t *testing.T) {
 	_, contract := newAlphabetInvoker(t, false)
 	testVerify(t, contract)

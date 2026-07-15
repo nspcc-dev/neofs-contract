@@ -12,8 +12,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
+	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,4 +90,41 @@ func roleManagementInvoker(tb testing.TB, e *neotest.Executor) *neotest.Contract
 	roleMgmtContract, err := e.Chain.GetNativeContractScriptHash(nativenames.Designation)
 	require.NoError(tb, err)
 	return e.CommitteeInvoker(roleMgmtContract)
+}
+
+func getAlphabetAccs(t *testing.T, e *neotest.Executor) []*wallet.Account {
+	multi, ok := e.Committee.(neotest.MultiSigner)
+	require.True(t, ok)
+
+	var (
+		res     []*wallet.Account
+		vals, _ = e.Chain.GetCommittee()
+	)
+	for i := range vals {
+		res = append(res, multi.Single(i).Account())
+	}
+
+	return res
+}
+
+func alphaSigner(t *testing.T, e *neotest.Executor) neotest.Signer {
+	var (
+		alphaAccs     []*wallet.Account
+		committeeAccs = getAlphabetAccs(t, e)
+		pubs          []*keys.PublicKey
+	)
+
+	m := smartcontract.GetDefaultHonestNodeCount(len(committeeAccs))
+
+	for _, a := range committeeAccs {
+		pubs = append(pubs, a.PublicKey())
+	}
+
+	for i, a := range committeeAccs {
+		alphaAccs = append(alphaAccs, wallet.NewAccountFromPrivateKey(a.PrivateKey()))
+		err := alphaAccs[i].ConvertMultisig(m, pubs)
+		require.NoError(t, err)
+	}
+
+	return neotest.NewMultiSigner(alphaAccs...)
 }

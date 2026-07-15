@@ -34,7 +34,7 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 	args[3] = []any{pubs[0]}
 	args[4] = config
 
-	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
+	c := neotest.CompileFile(t, e.Validator.ScriptHash(), netmapPath, path.Join(netmapPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	regContractNNS(t, e, "netmap", c.Hash)
 	return c.Hash
@@ -43,10 +43,9 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 func newNetmapInvoker(t *testing.T, config ...any) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, config...)
-	return e.CommitteeInvoker(ctrNetmap.Hash)
+	h := deployNetmapContract(t, e, config...)
+	return e.CommitteeInvoker(h)
 }
 
 func TestDeploySetConfig(t *testing.T) {
