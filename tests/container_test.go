@@ -22,7 +22,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
-	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -39,7 +38,6 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 const containerPath = "../contracts/container"
@@ -84,51 +82,43 @@ func deployContainerContractInternal(t *testing.T, e *neotest.Executor, args []a
 	return c.Hash
 }
 
-func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
+func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
 	deployProxyContract(t, e)
+	var containerHash util.Uint160
 	if !autohashes {
-		deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+		containerHash = deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 	} else {
-		deployContainerContractInternal(t, e, nil)
+		containerHash = deployContainerContractInternal(t, e, nil)
 	}
-	return e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
+	return e.CommitteeInvoker(containerHash), e.CommitteeInvoker(balanceHash), e.CommitteeInvoker(netmapHash), e.CommitteeInvoker(nnsHash)
 }
 
 func newProxySponsorInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
-
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployProxyContract(t, e)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
+	proxyHash := deployProxyContract(t, e)
+	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
 	gasHash, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
 	require.NoError(t, err)
 	gasInv := e.CommitteeInvoker(gasHash).WithSigners(e.Validator)
 	gasInv.Invoke(t, true, "transfer",
-		e.Validator.ScriptHash(), ctrProxy.Hash,
+		e.Validator.ScriptHash(), proxyHash,
 		int64(10_0000_0000), nil)
 
-	return e.NewInvoker(ctrContainer.Hash, neotest.NewContractSigner(ctrProxy.Hash, func(tx *transaction.Transaction) []any {
+	return e.NewInvoker(containerHash, neotest.NewContractSigner(proxyHash, func(tx *transaction.Transaction) []any {
 		return []any{}
-	}), e.NewAccount(t)), e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrBalance.Hash)
+	}), e.NewAccount(t)), e.CommitteeInvoker(containerHash), e.CommitteeInvoker(balanceHash)
 }
 
 type testContainer struct {
@@ -155,7 +145,7 @@ func dummyContainer(owner neotest.Signer) testContainer {
 }
 
 func TestContainerCount(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	checkCount := func(t *testing.T, expected int64) {
 		s, err := c.TestInvoke(t, "count")
@@ -174,7 +164,7 @@ func TestContainerCount(t *testing.T) {
 
 	// Same owner.
 	cnt3 := dummyContainer(acc1)
-	balanceMint(t, cBal, acc1, containerFee*1, []byte{})
+	balanceMint(t, cBal, acc1.ScriptHash(), containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
 	checkContainerList(t, c, [][]byte{cnt1.id[:], cnt2.id[:], cnt3.id[:]})
 
@@ -216,7 +206,7 @@ func TestContainerPut(t *testing.T) {
 		true:  "deploy with no hashes",
 	} {
 		t.Run(name, func(t *testing.T) {
-			c, cBal, _ := newContainerInvoker(t, autohashes)
+			c, cBal, _, cNNS := newContainerInvoker(t, autohashes)
 
 			acc := c.NewAccount(t)
 			cnt := dummyContainer(acc)
@@ -225,7 +215,7 @@ func TestContainerPut(t *testing.T) {
 			putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token}
 			c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
 
-			balanceMint(t, cBal, acc, containerFee*1, []byte{})
+			balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
 
 			cAcc := c.WithSigners(acc)
 			cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
@@ -244,17 +234,14 @@ func TestContainerPut(t *testing.T) {
 			assertGetInfo(t, c, cnt.id, cnr)
 
 			t.Run("with nice names", func(t *testing.T) {
-				ctrNNS := neotest.CompileFile(t, c.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
-				nnsHash := ctrNNS.Hash
-
-				balanceMint(t, cBal, acc, containerFee*1, []byte{})
+				balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
 
 				putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
 				t.Run("no fee for alias", func(t *testing.T) {
 					c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
 				})
 
-				balanceMint(t, cBal, acc, containerAliasFee*1, []byte{})
+				balanceMint(t, cBal, acc.ScriptHash(), containerAliasFee*1, []byte{})
 				txHash := c.Invoke(t, stackitem.Null{}, "put", putArgs...)
 
 				res := c.GetTxExecResult(t, txHash)
@@ -265,7 +252,6 @@ func TestContainerPut(t *testing.T) {
 				expected := stackitem.NewArray([]stackitem.Item{
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
 				})
-				cNNS := c.CommitteeInvoker(nnsHash)
 				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
 
@@ -287,7 +273,7 @@ func TestContainerPut(t *testing.T) {
 						"domain.cdn", c.CommitteeHash,
 						"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
 
-					balanceMint(t, cBal, acc, (containerFee+containerAliasFee)*1, []byte{})
+					balanceMint(t, cBal, acc.ScriptHash(), (containerFee+containerAliasFee)*1, []byte{})
 
 					putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
 					c2 := c.WithSigners(c.Committee, acc)
@@ -306,13 +292,13 @@ func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signe
 	acc := c.NewAccount(t)
 	cnt := dummyContainer(acc)
 
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
+	balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 	return acc, cnt
 }
 
 func TestContainerDelete(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 	ownerAcc := cnt.owner.ScriptHash()
@@ -337,12 +323,12 @@ func TestContainerDelete(t *testing.T) {
 	c.InvokeFail(t, containerconst.NotFoundError, "get", cnt.id[:])
 	c.InvokeFail(t, containerconst.NotFoundError, "getInfo", cnt.id[:])
 	// Try to put the same container again (replay attack).
-	balanceMint(t, cBal, acc, containerFee*1, []byte{})
+	balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
 	c.InvokeFail(t, containerconst.ErrorDeleted, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 }
 
 func TestContainerOwner(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -357,7 +343,7 @@ func TestContainerOwner(t *testing.T) {
 }
 
 func TestContainerGet(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	_, cnt := addContainer(t, c, cBal)
 
@@ -395,7 +381,7 @@ func dummyEACL(containerID [32]byte) eacl {
 }
 
 func TestContainerSetEACL(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	acc, cnt := addContainer(t, c, cBal)
 
@@ -452,7 +438,7 @@ func TestContainerSetEACL(t *testing.T) {
 }
 
 func TestContainerSizeReports(t *testing.T) {
-	c, cBal, cNm := newContainerInvoker(t, false)
+	c, cBal, cNm, _ := newContainerInvoker(t, false)
 	nodes := []testNodeInfo{
 		newStorageNode(t, c),
 		newStorageNode(t, c),
@@ -928,16 +914,16 @@ func addContainerWithNodes(t *testing.T, cnrInv, balInv *neotest.ContractInvoker
 
 func TestQuotas(t *testing.T) {
 	var (
-		c, cBal, cNm = newContainerInvoker(t, false)
-		ownerAcc     = c.NewAccount(t)
-		ownerSH      = ownerAcc.ScriptHash()
-		owner        = user.NewFromScriptHash(ownerSH)
-		cnr          = containertest.Container()
+		c, cBal, cNm, _ = newContainerInvoker(t, false)
+		ownerAcc        = c.NewAccount(t)
+		ownerSH         = ownerAcc.ScriptHash()
+		owner           = user.NewFromScriptHash(ownerSH)
+		cnr             = containertest.Container()
 	)
 	cnr.SetOwner(owner)
 	rawCnr := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(rawCnr)
-	balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+	balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
 	c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
 
 	nodes := []testNodeInfo{
@@ -1077,7 +1063,7 @@ func TestQuotas(t *testing.T) {
 }
 
 func TestTotalUserSpace(t *testing.T) {
-	c, cBal, cNm := newContainerInvoker(t, false)
+	c, cBal, cNm, _ := newContainerInvoker(t, false)
 	node := newStorageNode(t, c)
 	nodeKey := node.pub
 	ownerAcc := c.NewAccount(t)
@@ -1095,7 +1081,7 @@ func TestTotalUserSpace(t *testing.T) {
 			rawCnr := cnr.Marshal()
 			cID := cid.NewFromMarshalledContainer(rawCnr)
 
-			balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+			balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
 			c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
 
 			c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
@@ -1134,7 +1120,7 @@ func TestTotalUserSpace(t *testing.T) {
 		rawCnr := cnr.Marshal()
 		cID := cid.NewFromMarshalledContainer(rawCnr)
 
-		balanceMint(t, cBal, ownerAcc, containerFee*1, []byte{})
+		balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
 		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
 
 		const nodesInNetmap = 10
@@ -1172,7 +1158,7 @@ func TestTotalUserSpace(t *testing.T) {
 }
 
 func TestContainerList(t *testing.T) {
-	c, _, _ := newContainerInvoker(t, false)
+	c, _, _, _ := newContainerInvoker(t, false)
 
 	t.Run("happy path", func(t *testing.T) {
 		cID := make([]byte, sha256.Size)
@@ -1323,7 +1309,7 @@ func TestVerifyPlacementSignature(t *testing.T) {
 	cID := make([]byte, sha256.Size)
 	_, _ = rand.Read(cID)
 
-	c, _, _ := newContainerInvoker(t, false)
+	c, _, _, _ := newContainerInvoker(t, false)
 
 	const nodesNumber = 1024
 	const numberOfVectors = 4
@@ -1404,7 +1390,7 @@ func stackWithBool(t *testing.T, stack *vm.Stack, v bool) {
 }
 
 func TestContainerAlias(t *testing.T) {
-	c, cBal, _ := newContainerInvoker(t, false)
+	c, cBal, _, _ := newContainerInvoker(t, false)
 
 	t.Run("missing container", func(t *testing.T) {
 		c.InvokeFail(t, containerconst.NotFoundError, "alias", make([]byte, 32))
@@ -1419,7 +1405,7 @@ func TestContainerAlias(t *testing.T) {
 
 	t.Run("good", func(t *testing.T) {
 		acc, cnt := addContainer(t, c, cBal)
-		balanceMint(t, cBal, acc, containerFee+containerAliasFee, []byte{})
+		balanceMint(t, cBal, acc.ScriptHash(), containerFee+containerAliasFee, []byte{})
 		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", "")
 
 		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
@@ -1437,72 +1423,32 @@ func TestContainerCreate(t *testing.T) {
 	const anyValidDomainName = ""
 	const anyValidDomainZone = ""
 	const anyValidMetaOnChain = false
+
+	exec, balInv, _, nnsInv := newContainerInvoker(t, false)
 	t.Run("invalid container", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
+		t.Skip("TODO")
 	})
 	t.Run("no alphabet witness", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
 		otherAcc := exec.NewAccount(t)
 
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "create",
+		exec.NewInvoker(exec.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "create",
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 	})
 	t.Run("already deleted", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
+		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee+containerAliasFee, []byte{})
 
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		exec.Invoke(t, stackitem.Null{}, "create",
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 
 		// TODO: do not mix test with the other ops. Instead, preset contract storage.
 		//  It will be easier with https://github.com/nspcc-dev/neo-go/issues/2926.
-		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "remove",
+		exec.Invoke(t, stackitem.Null{}, "remove",
 			anyValidCnrID, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
-		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "container was previously deleted", "create",
+		exec.InvokeFail(t, "container was previously deleted", "create",
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 	})
 	t.Run("domain register failure", func(t *testing.T) {
-		const fee = 1000
-		const aliasFee = 500
-		blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-		exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-		nnsContract := deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee, "ContainerAliasFee", aliasFee)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
 		owner := exec.NewAccount(t, 0)
 		ownerAcc := owner.ScriptHash()
 		ownerAddr := user.NewFromScriptHash(ownerAcc)
@@ -1513,21 +1459,21 @@ func TestContainerCreate(t *testing.T) {
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee+aliasFee, []byte{})
+		balanceMint(t, balInv, ownerAcc, containerFee+containerAliasFee, []byte{})
 
-		txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		txHash := exec.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "my-domain", "", true)
 
 		// storage
 		getStorageItem := func(key []byte) []byte {
-			return getContractStorageItem(t, exec, containerContract.Hash, key)
+			return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
 		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// NNS
-		exec.CommitteeInvoker(nnsContract).Invoke(t, stackitem.NewArray([]stackitem.Item{
+		nnsInv.Invoke(t, stackitem.NewArray([]stackitem.Item{
 			stackitem.NewByteArray([]byte(base58.Encode(id[:]))),
 		}), "getRecords", "my-domain.container", int64(recordtype.TXT))
 
@@ -1535,55 +1481,30 @@ func TestContainerCreate(t *testing.T) {
 		res := exec.GetTxExecResult(t, txHash)
 		events := res.Events
 		require.Len(t, events, 5)
-		committeeAcc := committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
-		assertNotificationEvent(t, events[0], "Transfer", nil, containerContract.Hash[:], big.NewInt(1), []byte("my-domain.container"))
-		assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee+aliasFee))
-		assertNotificationEvent(t, events[2], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee+aliasFee), slices.Concat([]byte{0x10}, id[:]))
+		committeeAcc := exec.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
+		assertNotificationEvent(t, events[0], "Transfer", nil, exec.Hash[:], big.NewInt(1), []byte("my-domain.container"))
+		assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee))
+		assertNotificationEvent(t, events[2], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee), slices.Concat([]byte{0x10}, id[:]))
 		assertNotificationEvent(t, events[3], "Created", id[:], ownerAddr[:])
 		assertNotificationEvent(t, events[4], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 	})
 	t.Run("not enough funds", func(t *testing.T) {
-		const fee = 1000
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
 		owner := exec.NewAccount(t, 0)
 		cnr := cnr
 		cnr.SetOwner(user.NewFromScriptHash(owner.ScriptHash()))
 		cnrBytes := cnr.Marshal()
 
-		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "insufficient balance to create container", "create",
+		exec.InvokeFail(t, "insufficient balance to create container", "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee-1, []byte{})
+		balanceMint(t, balInv, owner.ScriptHash(), containerFee-1, []byte{})
 
-		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "insufficient balance to create container", "create",
+		exec.InvokeFail(t, "insufficient balance to create container", "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
 	})
 	t.Run("payment failure", func(t *testing.T) {
 		t.Skip("TODO")
 	})
-
-	const fee = 1000
-	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
 
 	owner := exec.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
@@ -1593,16 +1514,16 @@ func TestContainerCreate(t *testing.T) {
 	cnrBytes := cnr.Marshal()
 	id := cid.NewFromMarshalledContainer(cnrBytes)
 
-	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee, []byte{})
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
-	inv := exec.CommitteeInvoker(containerContract.Hash)
+	inv := exec
 
 	txHash := inv.Invoke(t, stackitem.Null{}, "create",
 		cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, true)
 
 	// storage
 	getStorageItem := func(key []byte) []byte {
-		return getContractStorageItem(t, exec, containerContract.Hash, key)
+		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
 	require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
@@ -1610,9 +1531,9 @@ func TestContainerCreate(t *testing.T) {
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
 	require.Len(t, events, 4)
-	committeeAcc := committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
-	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee))
-	assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee), slices.Concat([]byte{0x10}, id[:]))
+	committeeAcc := exec.Executor.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
+	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee))
+	assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee), slices.Concat([]byte{0x10}, id[:]))
 	assertNotificationEvent(t, events[2], "Created", id[:], ownerAddr[:])
 	assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 
@@ -1624,34 +1545,14 @@ func TestContainerRemove(t *testing.T) {
 	anyValidInvocScript := randomBytes(10)
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
+
+	exec, balInv, _, _ := newContainerInvoker(t, false)
 	t.Run("no alphabet witness", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
 		otherAcc := exec.NewAccount(t)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "remove",
+		exec.NewInvoker(exec.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "remove",
 			anyValidCnrID, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 	t.Run("invalid ID", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
 		for _, tc := range []struct {
 			name, err string
 			ln        int
@@ -1661,7 +1562,7 @@ func TestContainerRemove(t *testing.T) {
 			{name: "oversize", err: "invalid container ID length", ln: 33},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "", "remove",
+				exec.InvokeFail(t, "", "remove",
 					randomBytes(tc.ln), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 			})
 		}
@@ -1670,20 +1571,10 @@ func TestContainerRemove(t *testing.T) {
 		t.Skip("TODO https://github.com/nspcc-dev/neo-go/issues/2926")
 	})
 	t.Run("lock", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, nil)
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		inv := exec.CommitteeInvoker(containerContract.Hash)
+		inv := exec
 
 		cnr := containertest.Container()
+		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 
 		curBlockTime := exec.TopBlock(t).Timestamp
 		expMs := curBlockTime + 1000
@@ -1704,18 +1595,6 @@ func TestContainerRemove(t *testing.T) {
 		inv.Invoke(t, nil, "remove", id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
-	const createFee = 1000
-	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", createFee)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
 	// TODO: store items manually instead instead of creation call.
 	//  https://github.com/nspcc-dev/neo-go/issues/2926 would help
 	owner := exec.NewAccount(t, 0)
@@ -1724,27 +1603,27 @@ func TestContainerRemove(t *testing.T) {
 	cnr := dummyContainer(owner).value
 	id := sha256.Sum256(cnr)
 
-	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, createFee, []byte{})
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
-	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+	exec.Invoke(t, stackitem.Null{}, "create",
 		cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", true)
-	txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "remove",
+	txHash := exec.Invoke(t, stackitem.Null{}, "remove",
 		id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	// storage
 	getStorageItem := func(key []byte) []byte {
-		return getContractStorageItem(t, exec, containerContract.Hash, key)
+		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 	}
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
-	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'n'}, id[:])) {
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'n'}, id[:])) {
 		t.Fatalf("SN item not removed: key %x, val %x", k, v)
 	}
-	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'u'}, id[:])) {
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'u'}, id[:])) {
 		t.Fatalf("next epoch SN item not removed: key %x, val %x", k, v)
 	}
-	for k, v := range contractStorageItems(t, exec, containerContract.Hash, slices.Concat([]byte{'r'}, id[:])) {
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'r'}, id[:])) {
 		t.Fatalf("replica num item not removed: key %x, val %x", k, v)
 	}
 	require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'d'}, id[:])))
@@ -1767,82 +1646,42 @@ func TestContainerPutEACL(t *testing.T) {
 	anyValidInvocScript := randomBytes(10)
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
+
+	cntr, cBal, _, _ := newContainerInvoker(t, false)
 	t.Run("invalid eACL", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		balanceMint(t, cBal, cnr.Owner().ScriptHash(), containerFee, []byte{})
+		cntr.Invoke(t, stackitem.Null{}, "create",
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
 		t.Run("no fields", func(t *testing.T) {
 			for ln := range 2 {
-				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "missing version field in eACL BLOB", "putEACL",
+				cntr.InvokeFail(t, "missing version field in eACL BLOB", "putEACL",
 					make([]byte, ln), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 			}
 		})
 		t.Run("cut container ID", func(t *testing.T) {
 			for idLn := range 32 {
-				exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "missing container ID field in eACL BLOB", "putEACL",
+				cntr.InvokeFail(t, "missing container ID field in eACL BLOB", "putEACL",
 					anyValidEACL[:6+idLn], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 			}
 		})
 	})
 	t.Run("no alphabet witness", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-		otherAcc := exec.NewAccount(t)
+		otherAcc := cntr.NewAccount(t)
+		balanceMint(t, cBal, cnr.Owner().ScriptHash(), containerFee, []byte{})
 
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+		cntr.Invoke(t, stackitem.Null{}, "create",
 			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
 
-		exec.NewInvoker(containerContract.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "putEACL",
+		cntr.NewInvoker(cntr.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "putEACL",
 			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 	t.Run("missing container", func(t *testing.T) {
-		blockChain, signer := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-		exec := neotest.NewExecutor(t, blockChain, signer, signer)
-
-		deployDefaultNNS(t, exec)
-		netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-		containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-		deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-		deployProxyContract(t, exec)
-
-		exec.DeployContract(t, containerContract, nil)
-
-		exec.CommitteeInvoker(containerContract.Hash).InvokeFail(t, "container does not exist", "putEACL",
+		anyValidEACL[6]++ // change container ID
+		cntr.InvokeFail(t, "container does not exist", "putEACL",
 			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
-	const fee = 1000
-	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	owner := exec.NewAccount(t, 0)
+	owner := cntr.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr.SetOwner(ownerAddr)
@@ -1850,21 +1689,21 @@ func TestContainerPutEACL(t *testing.T) {
 	id := sha256.Sum256(cnrBytes)
 	copy(anyValidEACL[6:], id[:])
 
-	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee, []byte{})
+	balanceMint(t, cBal, ownerAcc, containerFee, []byte{})
 
 	// TODO: store items manually instead instead of creation call.
 	//  https://github.com/nspcc-dev/neo-go/issues/2926 would help
-	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "create",
+	cntr.Invoke(t, stackitem.Null{}, "create",
 		cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
-	txHash := exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
+	txHash := cntr.Invoke(t, stackitem.Null{}, "putEACL",
 		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	// storage
 	getStorageItem := func(key []byte) []byte {
-		return getContractStorageItem(t, exec, containerContract.Hash, key)
+		return getContractStorageItem(t, cntr.Executor, cntr.Hash, key)
 	}
 	require.EqualValues(t, anyValidEACL, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
 	// notifications
-	res := exec.GetTxExecResult(t, txHash)
+	res := cntr.GetTxExecResult(t, txHash)
 	events := res.Events
 	require.Len(t, events, 1)
 	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
@@ -1879,17 +1718,8 @@ func TestGetContainerData(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
+	balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 
 	t.Run("missing", func(t *testing.T) {
 		inv.InvokeFail(t, "container does not exist", "getContainerData", anyValidCnrID)
@@ -1913,17 +1743,8 @@ func TestGetEACLData(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingleWithOptions(t, &chain.Options{Logger: zap.NewNop()})
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
+	balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 
 	t.Run("missing container", func(t *testing.T) {
 		inv.InvokeFail(t, "container does not exist", "getEACLData", anyValidCnrID)
@@ -1936,7 +1757,7 @@ func TestGetEACLData(t *testing.T) {
 		inv.Invoke(t, stackitem.Null{}, "getEACLData", anyValidCnrID)
 	})
 
-	exec.CommitteeInvoker(containerContract.Hash).Invoke(t, stackitem.Null{}, "putEACL",
+	inv.Invoke(t, stackitem.Null{}, "putEACL",
 		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	inv.Invoke(t, stackitem.Make(anyValidEACL), "getEACLData", anyValidCnrID)
@@ -1947,33 +1768,16 @@ func TestContainerCreateV2(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
-
-	const fee = 1000
-	const aliasFee = 500
 	const domainName = "my-domain"
 	const fullDomain = domainName + ".container"
 
-	nnsContract := deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", fee, "ContainerAliasFee", aliasFee)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	balanceContract := deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	proxyContractAddr := deployProxyContract(t, exec)
-	exec.DeployContract(t, containerContract, nil)
+	inv, balInv, _, nnsInv := newContainerInvoker(t, false)
 
 	getStorageItem := func(key []byte) []byte {
-		return getContractStorageItem(t, exec, containerContract.Hash, key)
+		return getContractStorageItem(t, inv.Executor, inv.Hash, key)
 	}
 
-	exec.CommitteeInvoker(exec.NativeHash(t, nativenames.Gas)).Invoke(t, true, "transfer",
-		exec.Validator.ScriptHash(), proxyContractAddr, int64(1_0000_0000), nil)
-
-	inv := exec.CommitteeInvoker(containerContract.Hash)
-	nnsInv := exec.CommitteeInvoker(nnsContract)
-
-	owner := exec.NewAccount(t, 0)
+	owner := inv.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
 	ownerID := user.NewFromScriptHash(ownerAcc)
 
@@ -1986,7 +1790,7 @@ func TestContainerCreateV2(t *testing.T) {
 	cnrFields := containerToStructFields(cnr)
 
 	t.Run("no alphabet witness", func(t *testing.T) {
-		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
@@ -2013,7 +1817,7 @@ func TestContainerCreateV2(t *testing.T) {
 			})
 
 			t.Run("already passed", func(t *testing.T) {
-				curBlockTime := exec.TopBlock(t).Timestamp
+				curBlockTime := inv.TopBlock(t).Timestamp
 				curBlockTimeSec := strconv.FormatUint(curBlockTime/1000, 10)
 				assert(t, curBlockTimeSec, "lock expiration time "+curBlockTimeSec+"000 is not later than current "+strconv.FormatUint(curBlockTime+1, 10))
 			})
@@ -2025,14 +1829,14 @@ func TestContainerCreateV2(t *testing.T) {
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
-	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee-1, []byte{})
+	balanceMint(t, balInv, ownerAcc, containerFee-1, []byte{})
 
 	t.Run("insufficient deposit", func(t *testing.T) {
 		inv.InvokeFail(t, "insufficient balance to create container", "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
 
-	balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, 1, []byte{})
+	balanceMint(t, balInv, ownerAcc, 1, []byte{})
 
 	txHash := inv.Invoke(t, id[:], "createV2",
 		stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -2081,7 +1885,7 @@ func TestContainerCreateV2(t *testing.T) {
 	}
 
 	assertSuccessNotifications := func(t *testing.T, txHash util.Uint256, fee int64, id cid.ID, domain string, ownerID user.ID) {
-		res := exec.GetTxExecResult(t, txHash)
+		res := inv.GetTxExecResult(t, txHash)
 		events := res.Events
 		if domain != "" {
 			require.Len(t, events, 5)
@@ -2089,20 +1893,20 @@ func TestContainerCreateV2(t *testing.T) {
 			require.Len(t, events, 4)
 		}
 
-		committeeAcc := committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
+		committeeAcc := inv.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash()
 
 		if domain != "" {
-			assertNotificationEvent(t, events[0], "Transfer", nil, containerContract.Hash[:], big.NewInt(1), []byte(fullDomain))
+			assertNotificationEvent(t, events[0], "Transfer", nil, inv.Hash[:], big.NewInt(1), []byte(fullDomain))
 			events = events[1:]
 		}
 
 		ownerAcc := ownerID.ScriptHash()
 
-		require.Equal(t, balanceContract, events[0].ScriptHash)
+		require.Equal(t, balInv.Hash, events[0].ScriptHash)
 		assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee))
 		assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee), slices.Concat([]byte{0x10}, id[:]))
 		assertNotificationEvent(t, events[2], "Created", id[:], ownerID[:])
-		require.Equal(t, containerContract.Hash, events[3].ScriptHash)
+		require.Equal(t, inv.Hash, events[3].ScriptHash)
 		assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 	}
 
@@ -2119,7 +1923,7 @@ func TestContainerCreateV2(t *testing.T) {
 	require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 	// notifications
-	assertSuccessNotifications(t, txHash, fee, id, "", ownerID)
+	assertSuccessNotifications(t, txHash, containerFee, id, "", ownerID)
 
 	inv.Invoke(t, stackitem.Null{}, "remove",
 		id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -2149,14 +1953,14 @@ func TestContainerCreateV2(t *testing.T) {
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee+aliasFee-1, []byte{})
+		balanceMint(t, balInv, ownerAcc, containerFee+containerAliasFee-1, []byte{})
 
 		t.Run("insufficient deposit", func(t *testing.T) {
 			inv.InvokeFail(t, "insufficient balance to create container", "createV2",
 				stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, 1, []byte{})
+		balanceMint(t, balInv, ownerAcc, 1, []byte{})
 
 		txHash := inv.Invoke(t, id[:], "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -2174,7 +1978,7 @@ func TestContainerCreateV2(t *testing.T) {
 		require.EqualValues(t, "my-domain.container", getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
-		assertSuccessNotifications(t, txHash, fee+aliasFee, id, fullDomain, ownerID)
+		assertSuccessNotifications(t, txHash, containerFee+containerAliasFee, id, fullDomain, ownerID)
 
 		t.Run("name already token", func(t *testing.T) {
 			inv.InvokeFail(t, "name is already taken", "createV2",
@@ -2191,7 +1995,7 @@ func TestContainerCreateV2(t *testing.T) {
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), owner, fee, []byte{})
+		balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
 		txHash := inv.Invoke(t, id[:], "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -2205,11 +2009,11 @@ func TestContainerCreateV2(t *testing.T) {
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
-		assertSuccessNotifications(t, txHash, fee, id, "", ownerID)
+		assertSuccessNotifications(t, txHash, containerFee, id, "", ownerID)
 	})
 
 	t.Run("contract owner", func(t *testing.T) {
-		testContract := deployTestNEP11Receiver(t, exec)
+		testContract := deployTestNEP11Receiver(t, inv.Executor)
 		contractSigner := neotest.NewContractSigner(testContract, func(tx *transaction.Transaction) []any {
 			return nil
 		})
@@ -2224,7 +2028,7 @@ func TestContainerCreateV2(t *testing.T) {
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
-		balanceMint(t, exec.CommitteeInvoker(balanceContract), contractSigner, fee, []byte{})
+		balanceMint(t, balInv, contractSigner.ScriptHash(), containerFee, []byte{})
 
 		txHash := inv.Invoke(t, id[:], "createV2",
 			stackitem.NewStruct(cnrFields), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -2238,9 +2042,9 @@ func TestContainerCreateV2(t *testing.T) {
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
-		assertSuccessNotifications(t, txHash, fee, id, "", ownerID)
+		assertSuccessNotifications(t, txHash, containerFee, id, "", ownerID)
 
-		stack, err := exec.CommitteeInvoker(testContract).TestInvoke(t, "get")
+		stack, err := inv.CommitteeInvoker(testContract).TestInvoke(t, "get")
 		require.NoError(t, err)
 		require.EqualValues(t, 1, stack.Len())
 		assertEqualItemArray(t, []stackitem.Item{
@@ -2252,13 +2056,13 @@ func TestContainerCreateV2(t *testing.T) {
 }
 
 func TestContainerSymbol(t *testing.T) {
-	cnrContract, _, _ := newContainerInvoker(t, true)
+	cnrContract, _, _, _ := newContainerInvoker(t, true)
 
 	cnrContract.Invoke(t, "FSCNTR", "symbol")
 }
 
 func TestContainerDecimals(t *testing.T) {
-	cnrContract, _, _ := newContainerInvoker(t, true)
+	cnrContract, _, _, _ := newContainerInvoker(t, true)
 
 	cnrContract.Invoke(t, 0, "decimals")
 }
@@ -2268,17 +2072,7 @@ func TestContainerTotalSupply(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	assert := func(t *testing.T, expected int) {
 		cnrInv.Invoke(t, expected, "totalSupply")
@@ -2288,6 +2082,7 @@ func TestContainerTotalSupply(t *testing.T) {
 
 	cnr1 := containertest.Container()
 	id1 := cid.NewFromMarshalledContainer(cnr1.Marshal())
+	balanceMint(t, balInv, cnr1.Owner().ScriptHash(), containerFee, []byte{})
 
 	cnrInv.Invoke(t, id1[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr1)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
@@ -2295,6 +2090,7 @@ func TestContainerTotalSupply(t *testing.T) {
 
 	cnr2 := containertest.Container()
 	id2 := cid.NewFromMarshalledContainer(cnr2.Marshal())
+	balanceMint(t, balInv, cnr2.Owner().ScriptHash(), containerFee, []byte{})
 
 	cnrInv.Invoke(t, id2[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr2)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
@@ -2310,17 +2106,7 @@ func TestContainerBalanceOf(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	t.Run("invalid len", func(t *testing.T) {
 		for _, tc := range [][]byte{
@@ -2345,6 +2131,7 @@ func TestContainerBalanceOf(t *testing.T) {
 		cnr1 := containertest.Container()
 		cnr1.SetOwner(owner)
 		id := cid.NewFromMarshalledContainer(cnr1.Marshal())
+		balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 
 		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr1)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
@@ -2387,17 +2174,7 @@ func TestContainerTokensOf(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	t.Run("invalid len", func(t *testing.T) {
 		for _, tc := range [][]byte{
@@ -2438,6 +2215,7 @@ func TestContainerTokensOf(t *testing.T) {
 		cnr := containertest.Container()
 		cnr.SetOwner(owner)
 		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+		balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 
 		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
@@ -2480,24 +2258,15 @@ func TestContainerTransfer(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
+	cmtInv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	usr1 := exec.NewAccount(t)
+	usr1 := cmtInv.NewAccount(t)
 	usr1Acc := usr1.ScriptHash()
-	usr2 := exec.NewAccount(t)
+	usr2 := cmtInv.NewAccount(t)
 	usr2Acc := usr2.ScriptHash()
 
-	cmtInv := exec.CommitteeInvoker(cnrContract.Hash)
-	usr1Inv := exec.NewInvoker(cnrContract.Hash, usr1)
-	usr2Inv := exec.NewInvoker(cnrContract.Hash, usr2)
+	usr1Inv := cmtInv.NewInvoker(cmtInv.Hash, usr1)
+	usr2Inv := cmtInv.NewInvoker(cmtInv.Hash, usr2)
 
 	t.Run("invalid receiver len", func(t *testing.T) {
 		for _, tc := range [][]byte{
@@ -2519,6 +2288,7 @@ func TestContainerTransfer(t *testing.T) {
 
 	cmtInv.InvokeFail(t, containerconst.NotFoundError, "transfer", usr2Acc, id[:], nil)
 
+	balanceMint(t, balInv, usr1Acc, containerFee, []byte{})
 	cmtInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	assertGetInfo(t, cmtInv, id, cnr)
@@ -2546,12 +2316,12 @@ func TestContainerTransfer(t *testing.T) {
 		cmtInv.Invoke(t, 1, "balanceOf", usr1Acc)
 		cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)
 
-		events := exec.GetTxExecResult(t, txHash).Events
+		events := cmtInv.GetTxExecResult(t, txHash).Events
 		require.Len(t, events, 1)
 		assertNotificationEvent(t, events[0], "Transfer", usr1Acc[:], usr1Acc[:], big.NewInt(1), id[:])
 	})
 
-	txHash := exec.NewInvoker(cnrContract.Hash, usr1, usr2).
+	txHash := cmtInv.NewInvoker(cmtInv.Hash, usr1, usr2).
 		Invoke(t, true, "transfer", usr2Acc, id[:], nil)
 
 	cnr.SetOwner(user.NewFromScriptHash(usr2Acc))
@@ -2561,14 +2331,14 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, 0, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 1, "balanceOf", usr2Acc)
 
-	events := exec.GetTxExecResult(t, txHash).Events
+	events := cmtInv.GetTxExecResult(t, txHash).Events
 	require.Len(t, events, 1)
 	assertNotificationEvent(t, events[0], "Transfer", usr1Acc[:], usr2Acc[:], big.NewInt(1), id[:])
 
 	// contract receiver
-	testContract := deployTestNEP11Receiver(t, exec)
+	testContract := deployTestNEP11Receiver(t, cmtInv.Executor)
 
-	txHash = exec.NewInvoker(cnrContract.Hash, usr2, neotest.NewContractSigner(testContract, func(tx *transaction.Transaction) []any {
+	txHash = cmtInv.NewInvoker(cmtInv.Hash, usr2, neotest.NewContractSigner(testContract, func(tx *transaction.Transaction) []any {
 		return nil
 	})).Invoke(t, true, "transfer", testContract, id[:], "foo")
 
@@ -2580,11 +2350,11 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)
 	cmtInv.Invoke(t, 1, "balanceOf", testContract)
 
-	events = exec.GetTxExecResult(t, txHash).Events
+	events = cmtInv.GetTxExecResult(t, txHash).Events
 	require.Len(t, events, 1)
 	assertNotificationEvent(t, events[0], "Transfer", usr2Acc[:], testContract[:], big.NewInt(1), id[:])
 
-	stack, err := exec.CommitteeInvoker(testContract).TestInvoke(t, "get")
+	stack, err := cmtInv.CommitteeInvoker(testContract).TestInvoke(t, "get")
 	require.NoError(t, err)
 	require.EqualValues(t, 1, stack.Len())
 	assertEqualItemArray(t, []stackitem.Item{stackitem.NewBuffer(usr2Acc[:]), stackitem.NewBuffer(id[:])}, stack.Pop().Array())
@@ -2600,17 +2370,7 @@ func TestContainerOwnerOf(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	assertNotFound := func(t *testing.T, id cid.ID) {
 		cnrInv.InvokeFail(t, containerconst.NotFoundError, "ownerOf", id[:])
@@ -2622,6 +2382,7 @@ func TestContainerOwnerOf(t *testing.T) {
 	}
 
 	create := func(t *testing.T, cnr container.Container, id cid.ID) {
+		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	}
 
@@ -2659,17 +2420,7 @@ func TestContainerTokens(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	assert := func(t *testing.T, ids []cid.ID) {
 		s, err := cnrInv.TestInvoke(t, "tokens")
@@ -2698,6 +2449,7 @@ func TestContainerTokens(t *testing.T) {
 	assert(t, []cid.ID{})
 
 	create := func(t *testing.T, cnr container.Container, id cid.ID) {
+		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	}
 
@@ -2723,17 +2475,7 @@ func TestContainerProperties(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	bc, committee := chain.NewSingle(t)
-	exec := neotest.NewExecutor(t, bc, committee, committee)
-
-	deployDefaultNNS(t, exec)
-	nmContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	cnrContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, nmContract, cnrContract.Hash)
-	deployProxyContract(t, exec)
-	exec.DeployContract(t, cnrContract, nil)
-
-	cnrInv := exec.CommitteeInvoker(cnrContract.Hash)
+	cnrInv, balInv, _, _ := newContainerInvoker(t, false)
 
 	assert := func(t *testing.T, id cid.ID, expected map[string]any) {
 		s, err := cnrInv.TestInvoke(t, "properties", id[:])
@@ -2776,6 +2518,7 @@ func TestContainerProperties(t *testing.T) {
 	cnrInv.InvokeFail(t, containerconst.NotFoundError, "properties", id[:])
 
 	create := func(t *testing.T, cnr container.Container, id cid.ID) {
+		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
 		cnrInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	}
 
@@ -2845,21 +2588,9 @@ func TestSetAttribute(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
-
-	owner := exec.NewAccount(t, 200_0000_0000)
+	owner := inv.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr := containertest.Container()
@@ -2867,10 +2598,10 @@ func TestSetAttribute(t *testing.T) {
 
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
 	t.Run("no alphabet witness", func(t *testing.T) {
-		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "setAttribute",
 			cID[:], "any_attribute", "any_value", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
@@ -2889,14 +2620,14 @@ func TestSetAttribute(t *testing.T) {
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
-		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
 
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
 	t.Run("passed valid until", func(t *testing.T) {
-		curBlockTime := exec.TopBlock(t).Timestamp
+		curBlockTime := inv.TopBlock(t).Timestamp
 		validUntil := curBlockTime / 1000
 
 		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
@@ -2958,7 +2689,8 @@ func TestSetAttribute(t *testing.T) {
 		cnr := cp
 
 		id := cid.NewFromMarshalledContainer(cnr.Marshal())
-		committeeInvoker.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), nil, nil, anyValidSessionToken)
+		balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+		inv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), nil, nil, anyValidSessionToken)
 
 		assertFail := func(t *testing.T, val string, exc string) {
 			inv.InvokeFail(t, exc, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", val,
@@ -2977,12 +2709,12 @@ func TestSetAttribute(t *testing.T) {
 		})
 
 		t.Run("already passed", func(t *testing.T) {
-			curBlockTime := exec.TopBlock(t).Timestamp
+			curBlockTime := inv.TopBlock(t).Timestamp
 			curBlockTimeSec := strconv.FormatUint(curBlockTime/1000, 10)
 			assertFail(t, curBlockTimeSec, "lock expiration time "+curBlockTimeSec+"000 is not later than current "+strconv.FormatUint(curBlockTime+1, 10))
 		})
 
-		curBlockTime := exec.TopBlock(t).Timestamp
+		curBlockTime := inv.TopBlock(t).Timestamp
 		expMs := curBlockTime + 2000
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
@@ -3019,19 +2751,9 @@ func TestRemoveAttribute(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	owner := exec.NewAccount(t, 200_0000_0000)
+	owner := inv.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr := containertest.Container()
@@ -3039,10 +2761,10 @@ func TestRemoveAttribute(t *testing.T) {
 
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
 
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 	t.Run("no alphabet witness", func(t *testing.T) {
-		inv := exec.NewInvoker(containerContract.Hash, exec.NewAccount(t))
+		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "removeAttribute",
 			cID[:], "any_attribute", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	})
@@ -3056,16 +2778,14 @@ func TestRemoveAttribute(t *testing.T) {
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
-		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
-
-		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
 
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
 	t.Run("passed valid until", func(t *testing.T) {
-		curBlockTime := exec.TopBlock(t).Timestamp
+		curBlockTime := inv.TopBlock(t).Timestamp
 		validUntil := curBlockTime / 1000
 
 		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
@@ -3116,7 +2836,7 @@ func TestRemoveAttribute(t *testing.T) {
 	})
 
 	t.Run("lock", func(t *testing.T) {
-		curBlockTime := exec.TopBlock(t).Timestamp
+		curBlockTime := inv.TopBlock(t).Timestamp
 		expMs := curBlockTime + 1000
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
@@ -3133,9 +2853,9 @@ func TestRemoveAttribute(t *testing.T) {
 				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		})
 
-		blk := exec.NewUnsignedBlock(t)
+		blk := inv.NewUnsignedBlock(t)
 		blk.Timestamp = expMs
-		require.NoError(t, exec.Chain.AddBlock(exec.SignBlock(blk)))
+		require.NoError(t, inv.Chain.AddBlock(inv.SignBlock(blk)))
 
 		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
@@ -3153,34 +2873,22 @@ func TestSetCORSAttribute(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	owner := exec.NewAccount(t, 200_0000_0000)
+	owner := inv.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr := containertest.Container()
 	cnr.SetOwner(ownerAddr)
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
 
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
-		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
-
-		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
 
 		assertGetInfo(t, inv, cID, cnr)
@@ -3451,34 +3159,22 @@ func TestSetS3TAGSAttribute(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	owner := exec.NewAccount(t, 200_0000_0000)
+	owner := inv.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr := containertest.Container()
 	cnr.SetOwner(ownerAddr)
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
 
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
-		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
-
-		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
 
 		assertGetInfo(t, inv, cID, cnr)
@@ -3536,34 +3232,22 @@ func TestSetS3Attributes(t *testing.T) {
 	anyValidVerifScript := randomBytes(10)
 	anyValidSessionToken := randomBytes(10)
 
-	blockChain, committee := chain.NewSingle(t)
-	require.Implements(t, (*neotest.MultiSigner)(nil), committee)
-	exec := neotest.NewExecutor(t, blockChain, committee, committee)
+	inv, balInv, _, _ := newContainerInvoker(t, false)
 
-	deployDefaultNNS(t, exec)
-	netmapContract := deployNetmapContract(t, exec, "ContainerFee", 0)
-	containerContract := neotest.CompileFile(t, exec.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	deployBalanceContract(t, exec, netmapContract, containerContract.Hash)
-	deployProxyContract(t, exec)
-
-	exec.DeployContract(t, containerContract, nil)
-
-	owner := exec.NewAccount(t, 200_0000_0000)
+	owner := inv.NewAccount(t, 200_0000_0000)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr := user.NewFromScriptHash(ownerAcc)
 	cnr := containertest.Container()
 	cnr.SetOwner(ownerAddr)
 	cnrBytes := cnr.Marshal()
 	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	inv := exec.CommitteeInvoker(containerContract.Hash)
 
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
 		const anyValidDomainName = ""
 		const anyValidDomainZone = ""
 
-		committeeInvoker := exec.CommitteeInvoker(containerContract.Hash)
-
-		_ = committeeInvoker.Invoke(t, stackitem.Null{}, "create",
+		_ = inv.Invoke(t, stackitem.Null{}, "create",
 			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
 
 		assertGetInfo(t, inv, cID, cnr)

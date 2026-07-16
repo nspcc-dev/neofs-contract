@@ -30,7 +30,7 @@ func deployNeoFSContract(t *testing.T, e *neotest.Executor, addrProc util.Uint16
 	args[2] = arr
 	args[3] = config
 
-	c := neotest.CompileFile(t, e.CommitteeHash, neofsPath, path.Join(neofsPath, "config.yml"))
+	c := neotest.CompileFile(t, e.Validator.ScriptHash(), neofsPath, path.Join(neofsPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	return c.Hash
 }

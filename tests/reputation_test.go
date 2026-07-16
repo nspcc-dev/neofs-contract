@@ -13,7 +13,7 @@ import (
 const reputationPath = "../contracts/reputation"
 
 func deployReputationContract(t *testing.T, e *neotest.Executor) util.Uint160 {
-	c := neotest.CompileFile(t, e.CommitteeHash, reputationPath,
+	c := neotest.CompileFile(t, e.Validator.ScriptHash(), reputationPath,
 		path.Join(reputationPath, "config.yml"))
 
 	args := make([]any, 1)
