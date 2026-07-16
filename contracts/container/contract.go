@@ -101,7 +101,6 @@ type (
 const (
 	balanceContractKey = "balanceScriptHash"
 	netmapContractKey  = "netmapScriptHash"
-	proxyContractKey   = "proxyScriptHash"
 	nnsContractKey     = "nnsScriptHash"
 	nnsRootKey         = "nnsRoot"
 	nnsHasAliasKey     = "nnsHasAlias"
@@ -179,6 +178,9 @@ func _deploy(data any, isUpdate bool) {
 			const containersWithMetaPrefix = 'm'
 
 			deleteByPrefix([]byte{containersWithMetaPrefix})
+
+			const proxyContractKey = "proxyScriptHash"
+			storage.LocalDelete([]byte(proxyContractKey))
 		}
 
 		return
@@ -188,7 +190,6 @@ func _deploy(data any, isUpdate bool) {
 		addrNetmap  interop.Hash160
 		addrBalance interop.Hash160
 		addrNNS     interop.Hash160
-		addrProxy   interop.Hash160
 		nnsRoot     string
 	)
 	// args[0] is notaryDisabled flag
@@ -215,8 +216,6 @@ func _deploy(data any, isUpdate bool) {
 
 	// args[3] is neofsid hash, no longer used
 
-	addrProxy = common.ResolveFSContractWithNNS(addrNNS, "proxy")
-
 	if len(args) >= 6 && len(args[5].(string)) > 0 {
 		nnsRoot = args[5].(string)
 	} else {
@@ -226,7 +225,6 @@ func _deploy(data any, isUpdate bool) {
 	storage.LocalPut([]byte(netmapContractKey), addrNetmap)
 	storage.LocalPut([]byte(balanceContractKey), addrBalance)
 	storage.LocalPut([]byte(nnsContractKey), addrNNS)
-	storage.LocalPut([]byte(proxyContractKey), addrProxy)
 	storage.LocalPut([]byte(nnsRootKey), []byte(nnsRoot))
 
 	// add NNS root for container alias domains
