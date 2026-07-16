@@ -102,7 +102,7 @@ func TestPayments(t *testing.T) {
 	owner := cntI.NewAccount(t)
 	neofsOwnerSH := owner.ScriptHash()
 	cnt := dummyContainer(owner)
-	balanceMint(t, balI, owner, containerFee*1, []byte{})
+	balanceMint(t, balI, owner.ScriptHash(), containerFee*1, []byte{})
 	cntI.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 	cntI.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnt.id[:], 0, nodesKeys)
 	cntI.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnt.id[:], []uint8{uint8(len(nodesKeys))})
@@ -148,7 +148,7 @@ func TestPayments(t *testing.T) {
 			}
 
 			balanceBurnEverything(t, balI, owner, []byte{})
-			balanceMint(t, balI, owner, startBalance, []byte{})
+			balanceMint(t, balI, owner.ScriptHash(), startBalance, []byte{})
 			require.Equal(t, startBalance, balance(t, balI, owner))
 
 			putReports(gbsInEveryNode << 30)
@@ -246,7 +246,7 @@ func TestPayments(t *testing.T) {
 		var shouldPay = int64(gbsInEveryNode * len(nodes) * basicIncomeRate)
 
 		balanceBurnEverything(t, balI, owner, []byte{})
-		balanceMint(t, balI, owner, shouldPay-1, []byte{})
+		balanceMint(t, balI, owner.ScriptHash(), shouldPay-1, []byte{})
 		require.Equal(t, shouldPay-1, balance(t, balI, owner))
 
 		currEpoch++
@@ -290,7 +290,7 @@ func TestPayments(t *testing.T) {
 		// make balance sufficient and pay one more time
 
 		balanceBurnEverything(t, balI, owner, []byte{})
-		balanceMint(t, balI, owner, shouldPay, []byte{})
+		balanceMint(t, balI, owner.ScriptHash(), shouldPay, []byte{})
 		require.Equal(t, shouldPay, balance(t, balI, owner))
 
 		txH = balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
@@ -330,8 +330,8 @@ func balanceBurnEverything(t *testing.T, c *neotest.ContractInvoker, acc neotest
 	}
 }
 
-func balanceMint(t *testing.T, c *neotest.ContractInvoker, acc neotest.Signer, amount int64, details []byte) {
-	c.Invoke(t, stackitem.Null{}, "mint", acc.ScriptHash(), amount, details)
+func balanceMint(t *testing.T, c *neotest.ContractInvoker, sc util.Uint160, amount int64, details []byte) {
+	c.Invoke(t, stackitem.Null{}, "mint", sc, amount, details)
 }
 
 func TestBalanceLifecycle(t *testing.T) {

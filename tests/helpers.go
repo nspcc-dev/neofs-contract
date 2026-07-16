@@ -78,7 +78,7 @@ func stackItemToArray(item stackitem.Item) []stackitem.Item {
 
 func deployTestNEP11Receiver(t testing.TB, exec *neotest.Executor) util.Uint160 {
 	const dir = "../internal/testcontracts/nep11recv"
-	contract := neotest.CompileFile(t, exec.CommitteeHash, dir, filepath.Join(dir, "config.yml"))
+	contract := neotest.CompileFile(t, exec.Validator.ScriptHash(), dir, filepath.Join(dir, "config.yml"))
 
 	exec.DeployContract(t, contract, nil)
 

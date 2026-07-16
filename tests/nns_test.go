@@ -30,7 +30,7 @@ const (
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
-	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	ctr := neotest.CompileFile(t, e.Validator.ScriptHash(), nnsPath, path.Join(nnsPath, "config.yml"))
 	if len(tldSet) > 0 {
 		_tldSet := make([]any, len(tldSet))
 		for i := range tldSet {
