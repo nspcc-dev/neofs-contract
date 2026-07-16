@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"math/big"
 	"path"
 	"strconv"
 	"testing"
@@ -40,7 +42,7 @@ func deployAlphabetContract(t *testing.T, e *neotest.Executor, sender neotest.Si
 	return c.Hash
 }
 
-func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Executor, []*neotest.ContractInvoker) {
+func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Executor, []*neotest.ContractInvoker, util.Uint160) {
 	var e *neotest.Executor
 
 	if multi {
@@ -69,7 +71,10 @@ func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Exe
 		addrNetmap, addrProxy = &netmapHash, &proxyHash
 	}
 
-	var invokers []*neotest.ContractInvoker
+	var (
+		invokers []*neotest.ContractInvoker
+		irKeys   keys.PublicKeys
+	)
 
 	accs := getAlphabetAccs(t, e)
 	for i, acc := range accs {
@@ -80,11 +85,12 @@ func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Exe
 		}
 		h := deployAlphabetContract(t, e, ss, addrNetmap, addrProxy, name, index)
 		invokers = append(invokers, e.NewInvoker(h, ss))
+		irKeys = append(irKeys, acc.PublicKey())
 	}
 
-	SetInnerRing(t, e, keys.PublicKeys(e.Chain.ComputeNextBlockValidators()))
+	SetInnerRing(t, e, irKeys)
 
-	return e, invokers
+	return e, invokers, proxyHash
 }
 
 func TestEmit(t *testing.T) {
@@ -93,7 +99,9 @@ func TestEmit(t *testing.T) {
 		true:  "deploy with no hashes",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, cs := newAlphabetInvoker(t, autohashes, true)
+			e, cs, proxyHash := newAlphabetInvoker(t, autohashes, true)
+			gasSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+			require.NoError(t, err)
 
 			const method = "emit"
 
@@ -105,8 +113,42 @@ func TestEmit(t *testing.T) {
 				transferNeoToContract(t, c, int64(neoTotalSupply/len(cs)))
 			}
 
+			var (
+				irEmission    = make([]int64, len(cs))
+				proxyEmission int64
+			)
 			for _, c := range cs {
-				c.Invoke(t, stackitem.Null{}, method)
+				txHash := c.Invoke(t, stackitem.Null{}, method)
+				aer := e.GetTxExecResult(t, txHash)
+
+				for _, ev := range aer.Events {
+					if ev.Name == "Transfer" && ev.ScriptHash == gasSH {
+						itms := ev.Item.Value().([]stackitem.Item)
+						snd, err := itms[0].TryBytes()
+						if err == nil && len(itms) == 3 && bytes.Equal(snd, c.Hash[:]) {
+							tgt, err := itms[1].TryBytes()
+							require.NoError(t, err)
+							if bytes.Equal(tgt, proxyHash[:]) {
+								proxyEmission += itms[2].Value().(*big.Int).Int64()
+							}
+							for i := range cs {
+								sh := cs[i].Signers[0].ScriptHash()
+								if bytes.Equal(tgt, sh[:]) {
+									irEmission[i] += itms[2].Value().(*big.Int).Int64()
+								}
+							}
+						}
+					}
+				}
+			}
+			require.NotZero(t, proxyEmission)
+			for i, ire := range irEmission {
+				require.NotZero(t, ire)
+				require.Less(t, ire, proxyEmission)
+				if i > 1 {
+					// All IR nodes should receive the same amount of GAS.
+					require.Equal(t, irEmission[i-1], ire, i)
+				}
 			}
 
 			notAlphabet := cs[0].NewAccount(t)
@@ -123,7 +165,7 @@ func TestVote(t *testing.T) {
 		true:  "deploy with no hashes",
 	} {
 		t.Run(name, func(t *testing.T) {
-			e, cs := newAlphabetInvoker(t, autohashes, false)
+			e, cs, _ := newAlphabetInvoker(t, autohashes, false)
 
 			c := cs[0]
 			cComm := c.CommitteeInvoker(c.Hash)
@@ -185,6 +227,6 @@ func transferGasToAccount(t *testing.T, e *neotest.Executor, sender neotest.Sign
 }
 
 func TestAlphabetVerify(t *testing.T) {
-	_, contract := newAlphabetInvoker(t, false, false)
+	_, contract, _ := newAlphabetInvoker(t, false, false)
 	testVerify(t, contract[0].CommitteeInvoker(contract[0].Hash))
 }
