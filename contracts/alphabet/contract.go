@@ -7,6 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/gas"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/management"
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/neo"
+	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
 	"github.com/nspcc-dev/neofs-contract/common"
@@ -17,7 +18,6 @@ const (
 	proxyKey  = "proxyScriptHash"
 
 	indexKey = "index"
-	totalKey = "threshold"
 	nameKey  = "name"
 
 	emissionDivisor   = 16
@@ -36,38 +36,69 @@ func OnNEP17Payment(from interop.Hash160, amount int, data any) {
 
 // nolint:unused
 func _deploy(data any, isUpdate bool) {
+	args := data.([]any)
+
 	if isUpdate {
-		args := data.([]any)
 		version := args[len(args)-1].(int)
 
 		common.CheckVersion(version)
 
+		if version < 27_000 {
+			const totalKey = "threshold"
+
+			storage.LocalDelete([]byte(totalKey))
+		}
+
 		return
 	}
 
-	args := data.(struct {
-		_          bool // notaryDisabled
+	var (
 		addrNetmap interop.Hash160
 		addrProxy  interop.Hash160
 		name       string
 		index      int
-		total      int
-	})
+	)
 
-	if len(args.addrNetmap) != interop.Hash160Len {
-		args.addrNetmap = common.ResolveFSContract("netmap")
+	if len(args) > 1 && len(args[1].(interop.Hash160)) == interop.Hash160Len {
+		addrNetmap = args[1].(interop.Hash160)
+	} else {
+		addrNetmap = common.ResolveFSContract("netmap")
 	}
-	if len(args.addrProxy) != interop.Hash160Len {
-		args.addrProxy = common.ResolveFSContract("proxy")
+	if len(args) > 2 && len(args[2].(interop.Hash160)) == interop.Hash160Len {
+		addrProxy = args[2].(interop.Hash160)
+	} else {
+		addrProxy = common.ResolveFSContract("proxy")
+	}
+	if len(args) > 4 && args[4] != nil {
+		index = args[4].(int)
+	} else {
+		var (
+			alphabet = common.AlphabetNodes()
+			sender   = runtime.GetScriptContainer().Sender
+		)
+		index = -1
+		for i := range alphabet {
+			if sender.Equals(contract.CreateStandardAccount(alphabet[i])) {
+				index = i
+				break
+			}
+		}
+		if index == -1 {
+			panic("alphabet node not found")
+		}
+	}
+	if len(args) > 3 && len(args[3].(string)) > 0 {
+		name = args[3].(string)
+	} else {
+		name = "alphabet" + std.Itoa(index, 10)
 	}
 
-	storage.LocalPut([]byte(netmapKey), args.addrNetmap)
-	storage.LocalPut([]byte(proxyKey), args.addrProxy)
-	storage.LocalPut([]byte(nameKey), []byte(args.name))
-	storage.LocalPut([]byte(indexKey), convert.ToBytes(args.index))
-	storage.LocalPut([]byte(totalKey), convert.ToBytes(args.total))
+	storage.LocalPut([]byte(netmapKey), addrNetmap)
+	storage.LocalPut([]byte(proxyKey), addrProxy)
+	storage.LocalPut([]byte(nameKey), []byte(name))
+	storage.LocalPut([]byte(indexKey), convert.ToBytes(index))
 
-	runtime.Log(args.name + " contract initialized")
+	runtime.Log(name + " contract initialized")
 }
 
 // Update method updates contract source code and manifest. It can be invoked

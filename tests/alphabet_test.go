@@ -1,15 +1,20 @@
 package tests
 
 import (
+	"bytes"
+	"math/big"
 	"path"
+	"strconv"
 	"testing"
 
+	"github.com/nspcc-dev/neo-go/pkg/config"
 	"github.com/nspcc-dev/neo-go/pkg/core/native/nativenames"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
+	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/scparser"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
-	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
 	"github.com/stretchr/testify/require"
@@ -17,47 +22,75 @@ import (
 
 const alphabetPath = "../contracts/alphabet"
 
-func deployAlphabetContract(t *testing.T, e *neotest.Executor, addrNetmap, addrProxy *util.Uint160, name string, index, total int64) util.Uint160 {
-	c := neotest.CompileFile(t, e.CommitteeHash, alphabetPath, path.Join(alphabetPath, "config.yml"))
+const neoTotalSupply = 1_0000_0000
+
+func deployAlphabetContract(t *testing.T, e *neotest.Executor, sender neotest.Signer, addrNetmap, addrProxy *util.Uint160, name string, index *int) util.Uint160 {
+	transferGasToAccount(t, e, sender)
+
+	c := neotest.CompileFile(t, sender.ScriptHash(), alphabetPath, path.Join(alphabetPath, "config.yml"))
 
 	args := make([]any, 6)
 	args[0] = false
 	args[1] = addrNetmap
 	args[2] = addrProxy
 	args[3] = name
-	args[4] = index
-	args[5] = total
+	if index != nil {
+		args[4] = *index
+	}
 
-	e.DeployContract(t, c, args)
+	e.DeployContractBy(t, sender, c, args)
 	return c.Hash
 }
 
-func newAlphabetInvoker(t *testing.T, autohashes bool) (*neotest.Executor, *neotest.ContractInvoker) {
-	e := newExecutor(t)
+func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Executor, []*neotest.ContractInvoker, util.Uint160) {
+	var e *neotest.Executor
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	ctrProxy := neotest.CompileFile(t, e.CommitteeHash, proxyPath, path.Join(proxyPath, "config.yml"))
+	if multi {
+		bc, vals, comm := chain.NewMultiWithCustomConfig(t, func(c *config.Blockchain) {
+			c.Hardforks = nil // Enable all of them, contracts depend on it.
+		})
+		e = neotest.NewExecutor(t, bc, vals, comm)
+	} else {
+		e = newExecutor(t)
+	}
 
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
-	deployProxyContract(t, e)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	balanceHash := deployBalanceContract(t, e)
+	proxyHash := deployProxyContract(t, e)
+	deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
-	var addrNetmap, addrProxy *util.Uint160
+	var (
+		addrNetmap *util.Uint160
+		addrProxy  *util.Uint160
+		name       string
+		index      *int
+	)
 	if !autohashes {
-		addrNetmap, addrProxy = &ctrNetmap.Hash, &ctrProxy.Hash
+		addrNetmap, addrProxy = &netmapHash, &proxyHash
 	}
-	hash := deployAlphabetContract(t, e, addrNetmap, addrProxy, "Az", 0, 1)
 
-	alphabet := getAlphabetAcc(t, e)
+	var (
+		invokers []*neotest.ContractInvoker
+		irKeys   keys.PublicKeys
+	)
 
-	setAlphabetRole(t, e, alphabet.PrivateKey().PublicKey().Bytes())
+	accs := getAlphabetAccs(t, e)
+	for i, acc := range accs {
+		ss := neotest.NewSingleSigner(acc)
+		if !autohashes {
+			name = "alpha" + strconv.Itoa(i)
+			index = &i
+		}
+		h := deployAlphabetContract(t, e, ss, addrNetmap, addrProxy, name, index)
+		invokers = append(invokers, e.NewInvoker(h, ss))
+		irKeys = append(irKeys, acc.PublicKey())
+	}
 
-	return e, e.CommitteeInvoker(hash)
+	SetInnerRing(t, e, irKeys)
+
+	return e, invokers, proxyHash
 }
 
 func TestEmit(t *testing.T) {
@@ -66,21 +99,60 @@ func TestEmit(t *testing.T) {
 		true:  "deploy with no hashes",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, c := newAlphabetInvoker(t, autohashes)
+			e, cs, proxyHash := newAlphabetInvoker(t, autohashes, true)
+			gasSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+			require.NoError(t, err)
 
 			const method = "emit"
 
-			alphabet := getAlphabetAcc(t, c.Executor)
+			for _, c := range cs {
+				c.InvokeFail(t, "no gas to emit", method)
+			}
 
-			cCommittee := c.WithSigners(neotest.NewSingleSigner(alphabet))
-			cCommittee.InvokeFail(t, "no gas to emit", method)
+			for _, c := range cs {
+				transferNeoToContract(t, c, int64(neoTotalSupply/len(cs)))
+			}
 
-			transferNeoToContract(t, c)
+			var (
+				irEmission    = make([]int64, len(cs))
+				proxyEmission int64
+			)
+			for _, c := range cs {
+				txHash := c.Invoke(t, stackitem.Null{}, method)
+				aer := e.GetTxExecResult(t, txHash)
 
-			cCommittee.Invoke(t, stackitem.Null{}, method)
+				for _, ev := range aer.Events {
+					if ev.Name == "Transfer" && ev.ScriptHash == gasSH {
+						itms := ev.Item.Value().([]stackitem.Item)
+						snd, err := itms[0].TryBytes()
+						if err == nil && len(itms) == 3 && bytes.Equal(snd, c.Hash[:]) {
+							tgt, err := itms[1].TryBytes()
+							require.NoError(t, err)
+							if bytes.Equal(tgt, proxyHash[:]) {
+								proxyEmission += itms[2].Value().(*big.Int).Int64()
+							}
+							for i := range cs {
+								sh := cs[i].Signers[0].ScriptHash()
+								if bytes.Equal(tgt, sh[:]) {
+									irEmission[i] += itms[2].Value().(*big.Int).Int64()
+								}
+							}
+						}
+					}
+				}
+			}
+			require.NotZero(t, proxyEmission)
+			for i, ire := range irEmission {
+				require.NotZero(t, ire)
+				require.Less(t, ire, proxyEmission)
+				if i > 1 {
+					// All IR nodes should receive the same amount of GAS.
+					require.Equal(t, irEmission[i-1], ire, i)
+				}
+			}
 
-			notAlphabet := c.NewAccount(t)
-			cNotAlphabet := c.WithSigners(notAlphabet)
+			notAlphabet := cs[0].NewAccount(t)
+			cNotAlphabet := cs[0].WithSigners(notAlphabet)
 
 			cNotAlphabet.InvokeFail(t, "invalid invoker", method)
 		})
@@ -93,7 +165,10 @@ func TestVote(t *testing.T) {
 		true:  "deploy with no hashes",
 	} {
 		t.Run(name, func(t *testing.T) {
-			e, c := newAlphabetInvoker(t, autohashes)
+			e, cs, _ := newAlphabetInvoker(t, autohashes, false)
+
+			c := cs[0]
+			cComm := c.CommitteeInvoker(c.Hash)
 
 			const method = "vote"
 
@@ -103,29 +178,25 @@ func TestVote(t *testing.T) {
 			cNewAlphabet := c.WithSigners(newAlphabet)
 
 			cNewAlphabet.InvokeFail(t, common.ErrAlphabetWitnessFailed, method, int64(0), []any{newAlphabetPub})
-			c.InvokeFail(t, "invalid epoch", method, int64(1), []any{newAlphabetPub})
+			cComm.InvokeFail(t, "invalid epoch", method, int64(1), []any{newAlphabetPub})
 
 			setAlphabetRole(t, e, newAlphabetPub)
-			transferNeoToContract(t, c)
+			transferNeoToContract(t, c, neoTotalSupply)
 
 			neoSH := e.NativeHash(t, nativenames.Neo)
 			neoInvoker := c.CommitteeInvoker(neoSH)
 
-			gasSH := e.NativeHash(t, nativenames.Gas)
-			gasInvoker := e.CommitteeInvoker(gasSH)
-
-			res, err := gasInvoker.TestInvoke(t, "balanceOf", gasInvoker.Committee.ScriptHash())
-			require.NoError(t, err)
-
-			// transfer some GAS to the new alphabet node
-			gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Committee.ScriptHash(), newAlphabet.ScriptHash(), res.Top().BigInt().Int64()/2, nil)
-
 			// set registration price to minimum so the new alphabet node can afford it
 			neoInvoker.Invoke(t, stackitem.Null{}, "setRegisterPrice", int64(1))
 
+			transferGasToAccount(t, e, c.Signers[0])
+
+			gasSH := e.NativeHash(t, nativenames.Gas)
+			gasInvoker := e.CommitteeInvoker(gasSH)
+
 			// register new alphabet node as candidate via NEP-27: transfer GAS to NEO contract
 			gasInvoker.WithSigners(newAlphabet).Invoke(t, stackitem.NewBool(true), "transfer", newAlphabet.ScriptHash(), neoSH, int64(1), newAlphabetPub)
-			c.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
+			cComm.Invoke(t, stackitem.Null{}, method, int64(0), []any{newAlphabetPub})
 
 			// wait one block util
 			// a new committee is accepted
@@ -137,27 +208,25 @@ func TestVote(t *testing.T) {
 	}
 }
 
-func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker) {
+func transferNeoToContract(t *testing.T, invoker *neotest.ContractInvoker, amount int64) {
 	neoSH, err := invoker.Chain.GetNativeContractScriptHash(nativenames.Neo)
 	require.NoError(t, err)
 
-	neoInvoker := invoker.CommitteeInvoker(neoSH)
+	neoInvoker := invoker.ValidatorInvoker(neoSH)
 
-	res, err := neoInvoker.TestInvoke(t, "balanceOf", neoInvoker.Committee.ScriptHash())
-	require.NoError(t, err)
-
-	// transfer all NEO to alphabet contract
-	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Committee.ScriptHash(), invoker.Hash, res.Top().BigInt().Int64(), nil)
+	// transfer required amount of NEO to alphabet contract
+	neoInvoker.Invoke(t, stackitem.NewBool(true), "transfer", neoInvoker.Validator.ScriptHash(), invoker.Hash, amount, nil)
 }
 
-func getAlphabetAcc(t *testing.T, e *neotest.Executor) *wallet.Account {
-	multi, ok := e.Committee.(neotest.MultiSigner)
-	require.True(t, ok)
+func transferGasToAccount(t *testing.T, e *neotest.Executor, sender neotest.Signer) {
+	gasSH, err := e.Chain.GetNativeContractScriptHash(nativenames.Gas)
+	require.NoError(t, err)
 
-	return multi.Single(0).Account()
+	gasInvoker := e.ValidatorInvoker(gasSH)
+	gasInvoker.Invoke(t, stackitem.NewBool(true), "transfer", gasInvoker.Validator.ScriptHash(), sender.ScriptHash(), 1000_0000_0000, nil)
 }
 
 func TestAlphabetVerify(t *testing.T) {
-	_, contract := newAlphabetInvoker(t, false)
-	testVerify(t, contract)
+	_, contract, _ := newAlphabetInvoker(t, false, false)
+	testVerify(t, contract[0].CommitteeInvoker(contract[0].Hash))
 }

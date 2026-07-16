@@ -28,15 +28,13 @@ const (
 	basicIncomeRate = 1_0000_0000
 )
 
-func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
-	c := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
+func deployBalanceContract(t *testing.T, e *neotest.Executor) util.Uint160 {
+	alphaS := alphaSigner(t, e)
+	transferGasToAccount(t, e, alphaS) // Need to deploy from alpha for subscription to succeed.
 
-	args := make([]any, 3)
-	args[0] = false
-	args[1] = addrNetmap
-	args[2] = addrContainer
+	c := neotest.CompileFile(t, alphaS.ScriptHash(), balancePath, path.Join(balancePath, "config.yml"))
 
-	e.DeployContract(t, c, args)
+	e.DeployContractBy(t, alphaS, c, nil)
 	regContractNNS(t, e, "balance", c.Hash)
 	return c.Hash
 }
@@ -44,19 +42,15 @@ func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrCo
 func newBalanceInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.ContractInvoker, *neotest.ContractInvoker) {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
+	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration),
 		balanceconst.BasicIncomeRateKey, int64(basicIncomeRate))
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	balanceHash := deployBalanceContract(t, e)
 	deployProxyContract(t, e)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
+	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
-	return e.CommitteeInvoker(ctrBalance.Hash), e.CommitteeInvoker(ctrContainer.Hash), e.CommitteeInvoker(ctrNetmap.Hash)
+	return e.CommitteeInvoker(balanceHash), e.CommitteeInvoker(containerHash), e.CommitteeInvoker(netmapHash)
 }
 
 func TestPayments(t *testing.T) {
@@ -103,7 +97,7 @@ func TestPayments(t *testing.T) {
 	owner := cntI.NewAccount(t)
 	neofsOwnerSH := owner.ScriptHash()
 	cnt := dummyContainer(owner)
-	balanceMint(t, balI, owner, containerFee*1, []byte{})
+	balanceMint(t, balI, owner.ScriptHash(), containerFee*1, []byte{})
 	cntI.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
 	cntI.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnt.id[:], 0, nodesKeys)
 	cntI.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnt.id[:], []uint8{uint8(len(nodesKeys))})
@@ -149,7 +143,7 @@ func TestPayments(t *testing.T) {
 			}
 
 			balanceBurnEverything(t, balI, owner, []byte{})
-			balanceMint(t, balI, owner, startBalance, []byte{})
+			balanceMint(t, balI, owner.ScriptHash(), startBalance, []byte{})
 			require.Equal(t, startBalance, balance(t, balI, owner))
 
 			putReports(gbsInEveryNode << 30)
@@ -247,7 +241,7 @@ func TestPayments(t *testing.T) {
 		var shouldPay = int64(gbsInEveryNode * len(nodes) * basicIncomeRate)
 
 		balanceBurnEverything(t, balI, owner, []byte{})
-		balanceMint(t, balI, owner, shouldPay-1, []byte{})
+		balanceMint(t, balI, owner.ScriptHash(), shouldPay-1, []byte{})
 		require.Equal(t, shouldPay-1, balance(t, balI, owner))
 
 		currEpoch++
@@ -291,7 +285,7 @@ func TestPayments(t *testing.T) {
 		// make balance sufficient and pay one more time
 
 		balanceBurnEverything(t, balI, owner, []byte{})
-		balanceMint(t, balI, owner, shouldPay, []byte{})
+		balanceMint(t, balI, owner.ScriptHash(), shouldPay, []byte{})
 		require.Equal(t, shouldPay, balance(t, balI, owner))
 
 		txH = balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
@@ -331,8 +325,8 @@ func balanceBurnEverything(t *testing.T, c *neotest.ContractInvoker, acc neotest
 	}
 }
 
-func balanceMint(t *testing.T, c *neotest.ContractInvoker, acc neotest.Signer, amount int64, details []byte) {
-	c.Invoke(t, stackitem.Null{}, "mint", acc.ScriptHash(), amount, details)
+func balanceMint(t *testing.T, c *neotest.ContractInvoker, sc util.Uint160, amount int64, details []byte) {
+	c.Invoke(t, stackitem.Null{}, "mint", sc, amount, details)
 }
 
 func TestBalanceLifecycle(t *testing.T) {
@@ -340,7 +334,7 @@ func TestBalanceLifecycle(t *testing.T) {
 
 	deployDefaultNNS(t, e)
 	nHash := deployNetmapContract(t, e)
-	bHash := deployBalanceContract(t, e, util.Uint160{}, util.Uint160{})
+	bHash := deployBalanceContract(t, e)
 
 	c := e.CommitteeInvoker(bHash)
 	acc1 := c.NewAccount(t)
