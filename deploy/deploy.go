@@ -512,16 +512,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 	syncPrm.domainName = domainContainer
 	syncPrm.deployWitness = WitnessValidatorsAndCommittee
 	syncPrm.validatorsDeployAllowedContracts = []util.Uint160{netmapContractAddress}
-	syncPrm.buildExtraDeployArgs = func() ([]any, error) {
-		return []any{
-			notaryDisabledExtraUpdateArg,
-			netmapContractAddress,
-			balanceContractAddress,
-			util.Uint160{}, // neofsid address
-			nnsOnChainAddress,
-			domainContainers,
-		}, nil
-	}
+	syncPrm.buildExtraDeployArgs = noExtraDeployArgs
 
 	prm.Logger.Info("synchronizing Container contract with the chain...")
 
