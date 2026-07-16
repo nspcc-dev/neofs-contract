@@ -32,7 +32,9 @@ func deployAlphabetContract(t *testing.T, e *neotest.Executor, sender neotest.Si
 	args[1] = addrNetmap
 	args[2] = addrProxy
 	args[3] = name
-	args[4] = index
+	if index != nil {
+		args[4] = *index
+	}
 
 	e.DeployContractBy(t, sender, c, args)
 	return c.Hash
@@ -57,7 +59,12 @@ func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Exe
 	proxyHash := deployProxyContract(t, e)
 	deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
-	var addrNetmap, addrProxy *util.Uint160
+	var (
+		addrNetmap *util.Uint160
+		addrProxy  *util.Uint160
+		name       string
+		index      *int
+	)
 	if !autohashes {
 		addrNetmap, addrProxy = &netmapHash, &proxyHash
 	}
@@ -67,7 +74,11 @@ func newAlphabetInvoker(t *testing.T, autohashes bool, multi bool) (*neotest.Exe
 	accs := getAlphabetAccs(t, e)
 	for i, acc := range accs {
 		ss := neotest.NewSingleSigner(acc)
-		h := deployAlphabetContract(t, e, ss, addrNetmap, addrProxy, "alpha"+strconv.Itoa(i), i)
+		if !autohashes {
+			name = "alpha" + strconv.Itoa(i)
+			index = &i
+		}
+		h := deployAlphabetContract(t, e, ss, addrNetmap, addrProxy, name, index)
 		invokers = append(invokers, e.NewInvoker(h, ss))
 	}
 
