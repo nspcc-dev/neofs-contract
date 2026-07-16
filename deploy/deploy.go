@@ -541,16 +541,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 			syncPrm.designatedDeployer = &temp
 		}
 		syncPrm.domainName = calculateAlphabetContractAddressDomain(ind)
-		syncPrm.buildExtraDeployArgs = func() ([]any, error) {
-			return []any{
-				notaryDisabledExtraUpdateArg,
-				netmapContractAddress,
-				proxyContractAddress,
-				syncPrm.domainName,
-				ind,
-				len(committee),
-			}, nil
-		}
+		syncPrm.buildExtraDeployArgs = noExtraDeployArgs
 
 		prm.Logger.Info("synchronizing Alphabet contract with the chain...", zap.Int("index", ind))
 
