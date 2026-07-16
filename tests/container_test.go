@@ -74,10 +74,7 @@ func deployContainerContractInternal(t *testing.T, e *neotest.Executor, args []a
 	transferGasToAccount(t, e, e.Committee)
 	e.DeployContractBy(t, e.Committee, c, args) // NNS requires committee signature.
 
-	// Container contract cannot be deployed without Proxy knowing its hash
-	// so its hash must always be precalculated externally and be registered
-	// in NNS beforehand, that is why there is no NNS registering in
-	// `deployContainer*` functions ever
+	regContractNNS(t, e, "container", c.Hash)
 
 	return c.Hash
 }
