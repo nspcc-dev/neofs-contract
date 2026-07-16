@@ -28,18 +28,13 @@ const (
 	basicIncomeRate = 1_0000_0000
 )
 
-func deployBalanceContract(t *testing.T, e *neotest.Executor, addrNetmap, addrContainer util.Uint160) util.Uint160 {
+func deployBalanceContract(t *testing.T, e *neotest.Executor) util.Uint160 {
 	alphaS := alphaSigner(t, e)
 	transferGasToAccount(t, e, alphaS) // Need to deploy from alpha for subscription to succeed.
 
 	c := neotest.CompileFile(t, alphaS.ScriptHash(), balancePath, path.Join(balancePath, "config.yml"))
 
-	args := make([]any, 3)
-	args[0] = false
-	args[1] = addrNetmap
-	args[2] = addrContainer
-
-	e.DeployContractBy(t, alphaS, c, args)
+	e.DeployContractBy(t, alphaS, c, nil)
 	regContractNNS(t, e, "balance", c.Hash)
 	return c.Hash
 }
@@ -51,7 +46,7 @@ func newBalanceInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.Contrac
 	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration),
 		balanceconst.BasicIncomeRateKey, int64(basicIncomeRate))
-	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
+	balanceHash := deployBalanceContract(t, e)
 	deployProxyContract(t, e)
 	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
@@ -339,7 +334,7 @@ func TestBalanceLifecycle(t *testing.T) {
 
 	deployDefaultNNS(t, e)
 	nHash := deployNetmapContract(t, e)
-	bHash := deployBalanceContract(t, e, util.Uint160{}, util.Uint160{})
+	bHash := deployBalanceContract(t, e)
 
 	c := e.CommitteeInvoker(bHash)
 	acc1 := c.NewAccount(t)

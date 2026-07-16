@@ -92,7 +92,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 
 	// balance and container contracts subscribe to NewEpoch on their deployments
 	deployProxyContract(t, e)
-	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
+	balanceHash := deployBalanceContract(t, e)
 	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
 	t.Run("new epoch", func(t *testing.T) {

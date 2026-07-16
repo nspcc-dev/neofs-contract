@@ -88,7 +88,7 @@ func newContainerInvoker(t *testing.T, autohashes bool) (*neotest.ContractInvoke
 	nnsHash := deployDefaultNNS(t, e)
 	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee), containerconst.EpochDurationKey, int64(epochDuration))
-	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
+	balanceHash := deployBalanceContract(t, e)
 	deployProxyContract(t, e)
 	var containerHash util.Uint160
 	if !autohashes {
@@ -105,7 +105,7 @@ func newProxySponsorInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.Co
 	nnsHash := deployDefaultNNS(t, e)
 	netmapHash := deployNetmapContract(t, e, containerconst.RegistrationFeeKey, int64(containerFee),
 		containerconst.AliasFeeKey, int64(containerAliasFee))
-	balanceHash := deployBalanceContract(t, e, netmapHash, util.Uint160{})
+	balanceHash := deployBalanceContract(t, e)
 	proxyHash := deployProxyContract(t, e)
 	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
