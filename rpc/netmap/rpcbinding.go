@@ -79,6 +79,11 @@ type NewEpochUnsubscriptionEvent struct {
 	Contract util.Uint160
 }
 
+// NewNetmapEvent represents "NewNetmap" event emitted by the contract.
+type NewNetmapEvent struct {
+	Version *big.Int
+}
+
 // Invoker is used by ContractReader to call various safe methods.
 type Invoker interface {
 	Call(contract util.Uint160, operation string, params ...any) (*result.Invoke, error)
@@ -238,6 +243,11 @@ func (c *ContractReader) ListNodes2(epoch *big.Int) (uuid.UUID, result.Iterator,
 // you. It's only limited by VM stack and GAS available for RPC invocations.
 func (c *ContractReader) ListNodes2Expanded(epoch *big.Int, _numOfIteratorItems int) ([]stackitem.Item, error) {
 	return unwrap.Array(c.invoker.CallAndExpandIterator(c.hash, "listNodes", _numOfIteratorItems, epoch))
+}
+
+// NetworkMapVersion invokes `networkMapVersion` method of contract.
+func (c *ContractReader) NetworkMapVersion() (*big.Int, error) {
+	return unwrap.BigInt(c.invoker.Call(c.hash, "networkMapVersion"))
 }
 
 // UnusedCandidate invokes `unusedCandidate` method of contract.
@@ -1551,6 +1561,58 @@ func (e *NewEpochUnsubscriptionEvent) FromStackItem(item *stackitem.Array) error
 	}(arr[index])
 	if err != nil {
 		return fmt.Errorf("field Contract: %w", err)
+	}
+
+	return nil
+}
+
+// NewNetmapEventsFromApplicationLog retrieves a set of all emitted events
+// with "NewNetmap" name from the provided [result.ApplicationLog].
+func NewNetmapEventsFromApplicationLog(log *result.ApplicationLog) ([]*NewNetmapEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*NewNetmapEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "NewNetmap" {
+				continue
+			}
+			event := new(NewNetmapEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize NewNetmapEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to NewNetmapEvent or
+// returns an error if it's not possible to do to so.
+func (e *NewNetmapEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 1 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Version, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Version: %w", err)
 	}
 
 	return nil
