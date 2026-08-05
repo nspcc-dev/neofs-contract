@@ -30,7 +30,7 @@ const (
 
 func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.ContractInvoker {
 	e := newExecutor(t)
-	ctr := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	ctr := neotest.CompileFile(t, e.Validator.ScriptHash(), nnsPath, path.Join(nnsPath, "config.yml"))
 	if len(tldSet) > 0 {
 		_tldSet := make([]any, len(tldSet))
 		for i := range tldSet {
@@ -52,7 +52,7 @@ func newNNSInvoker(t *testing.T, addRoot bool, tldSet ...string) *neotest.Contra
 }
 
 func deployDefaultNNS(t *testing.T, e *neotest.Executor) util.Uint160 {
-	ctrNNS := neotest.CompileFile(t, e.CommitteeHash, nnsPath, path.Join(nnsPath, "config.yml"))
+	ctrNNS := neotest.CompileFile(t, e.Validator.ScriptHash(), nnsPath, path.Join(nnsPath, "config.yml"))
 	e.DeployContract(t, ctrNNS, []any{[]any{[]any{"neofs", "ops@nspcc.io"}}})
 	return ctrNNS.Hash
 }
@@ -60,8 +60,8 @@ func deployDefaultNNS(t *testing.T, e *neotest.Executor) util.Uint160 {
 func regContractNNS(t *testing.T, e *neotest.Executor, name string, h util.Uint160) {
 	nnsHash, err := e.Chain.GetContractScriptHash(1)
 	require.NoError(t, err)
-	nnsInv := e.CommitteeInvoker(nnsHash)
-	nnsInv.Invoke(t, true, "register", name+".neofs", e.CommitteeHash, "ops@nspcc.ru", int64(3600), int64(600), int64(10*msPerYear), int64(3600))
+	nnsInv := e.ValidatorInvoker(nnsHash)
+	nnsInv.Invoke(t, true, "register", name+".neofs", e.Validator.ScriptHash(), "ops@nspcc.ru", int64(3600), int64(600), int64(10*msPerYear), int64(3600))
 	var addr = h.StringLE()
 	if h[0] > 127 {
 		addr = address.Uint160ToString(h) // There are two valid representations, so alternate between them.

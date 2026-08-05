@@ -34,7 +34,7 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 	args[3] = []any{pubs[0]}
 	args[4] = config
 
-	c := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
+	c := neotest.CompileFile(t, e.Validator.ScriptHash(), netmapPath, path.Join(netmapPath, "config.yml"))
 	e.DeployContract(t, c, args)
 	regContractNNS(t, e, "netmap", c.Hash)
 	return c.Hash
@@ -43,10 +43,9 @@ func deployNetmapContract(t *testing.T, e *neotest.Executor, config ...any) util
 func newNetmapInvoker(t *testing.T, config ...any) *neotest.ContractInvoker {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
 	deployDefaultNNS(t, e)
-	deployNetmapContract(t, e, config...)
-	return e.CommitteeInvoker(ctrNetmap.Hash)
+	h := deployNetmapContract(t, e, config...)
+	return e.CommitteeInvoker(h)
 }
 
 func TestDeploySetConfig(t *testing.T) {
@@ -87,18 +86,14 @@ func newStorageNode(t *testing.T, c *neotest.ContractInvoker) testNodeInfo {
 func TestSubscribeForNewEpoch(t *testing.T) {
 	e := newExecutor(t)
 
-	ctrNetmap := neotest.CompileFile(t, e.CommitteeHash, netmapPath, path.Join(netmapPath, "config.yml"))
-	ctrBalance := neotest.CompileFile(t, e.CommitteeHash, balancePath, path.Join(balancePath, "config.yml"))
-	ctrContainer := neotest.CompileFile(t, e.CommitteeHash, containerPath, path.Join(containerPath, "config.yml"))
-	netmapInvoker := e.CommitteeInvoker(ctrNetmap.Hash)
-
 	nnsHash := deployDefaultNNS(t, e)
-	deployNetmapContract(t, e)
+	netmapHash := deployNetmapContract(t, e)
+	netmapInvoker := e.CommitteeInvoker(netmapHash)
 
 	// balance and container contracts subscribe to NewEpoch on their deployments
 	deployProxyContract(t, e)
-	deployContainerContract(t, e, &ctrNetmap.Hash, &ctrBalance.Hash, &nnsHash)
-	deployBalanceContract(t, e, ctrNetmap.Hash, ctrContainer.Hash)
+	balanceHash := deployBalanceContract(t, e)
+	containerHash := deployContainerContract(t, e, &netmapHash, &balanceHash, &nnsHash)
 
 	t.Run("new epoch", func(t *testing.T) {
 		netmapInvoker.Invoke(t, stackitem.Null{}, "newEpoch", 1) // no panic so registrations and calls are OK
@@ -107,8 +102,8 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	const subscribersPrefix = "e"
 
 	t.Run("double subscription", func(t *testing.T) {
-		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
-		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", ctrBalance.Hash)
+		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", balanceHash)
+		netmapInvoker.Invoke(t, stackitem.Null{}, "subscribeForNewEpoch", balanceHash)
 
 		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
 
@@ -118,9 +113,9 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 
 		netmapInvoker.Chain.SeekStorage(netmapContractID, []byte(subscribersPrefix), func(k, v []byte) bool {
 			switch {
-			case bytes.Equal(k[1:], ctrBalance.Hash[:]):
+			case bytes.Equal(k[1:], balanceHash[:]):
 				balanceSubscribers++
-			case bytes.Equal(k[1:], ctrContainer.Hash[:]):
+			case bytes.Equal(k[1:], containerHash[:]):
 				containerSubscribers++
 			default:
 				unknownSubscriberFound = true
@@ -135,7 +130,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 	})
 
 	t.Run("unsubscribe", func(t *testing.T) {
-		hash := netmapInvoker.Invoke(t, stackitem.Null{}, "unsubscribeFromNewEpoch", ctrBalance.Hash)
+		hash := netmapInvoker.Invoke(t, stackitem.Null{}, "unsubscribeFromNewEpoch", balanceHash)
 		res := e.GetTxExecResult(t, hash)
 		require.Len(t, res.Events, 1)
 		require.Equal(t, "NewEpochUnsubscription", res.Events[0].Name)
@@ -143,7 +138,7 @@ func TestSubscribeForNewEpoch(t *testing.T) {
 		var foundCnrHash bool
 		netmapContractID := netmapInvoker.Executor.Chain.GetContractState(netmapInvoker.Hash).ID
 		netmapInvoker.Chain.SeekStorage(netmapContractID, []byte(subscribersPrefix), func(k, v []byte) bool {
-			if bytes.Equal(k[1:], ctrBalance.Hash[:]) {
+			if bytes.Equal(k[1:], balanceHash[:]) {
 				foundCnrHash = true
 				return false
 			}

@@ -32,8 +32,6 @@ Key-value storage format:
    name of the contract set at its deployment
  - 'index' -> int
    member index in the Alphabet list
- - 'threshold' -> int
-   currently unused value
 
 # Setting
 To handle some events, the contract refers to other contracts.

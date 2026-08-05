@@ -12,8 +12,10 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/neotest/chain"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
+	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +40,7 @@ func SetInnerRing(tb testing.TB, e *neotest.Executor, _keys keys.PublicKeys) {
 		bKeys[i] = _keys[i].Bytes()
 	}
 
-	_setAlphabetRole(tb, e, bKeys)
+	setAlphabetRole(tb, e, bKeys...)
 }
 
 // InnerRing reads Inner Ring composition from given neotest.Executor using
@@ -70,14 +72,10 @@ func InnerRing(tb testing.TB, e *neotest.Executor) keys.PublicKeys {
 	return res
 }
 
-func setAlphabetRole(tb testing.TB, e *neotest.Executor, key []byte) {
-	_setAlphabetRole(tb, e, [][]byte{key})
-}
-
-func _setAlphabetRole(tb testing.TB, e *neotest.Executor, _keys [][]byte) {
-	keysArg := make([]any, len(_keys))
-	for i := range _keys {
-		keysArg[i] = _keys[i]
+func setAlphabetRole(tb testing.TB, e *neotest.Executor, keys ...[]byte) {
+	keysArg := make([]any, len(keys))
+	for i := range keys {
+		keysArg[i] = keys[i]
 	}
 
 	roleManagementInvoker(tb, e).Invoke(tb, stackitem.Null{}, "designateAsRole",
@@ -88,4 +86,41 @@ func roleManagementInvoker(tb testing.TB, e *neotest.Executor) *neotest.Contract
 	roleMgmtContract, err := e.Chain.GetNativeContractScriptHash(nativenames.Designation)
 	require.NoError(tb, err)
 	return e.CommitteeInvoker(roleMgmtContract)
+}
+
+func getAlphabetAccs(t *testing.T, e *neotest.Executor) []*wallet.Account {
+	multi, ok := e.Committee.(neotest.MultiSigner)
+	require.True(t, ok)
+
+	var (
+		res     []*wallet.Account
+		vals, _ = e.Chain.GetCommittee()
+	)
+	for i := range vals {
+		res = append(res, multi.Single(i).Account())
+	}
+
+	return res
+}
+
+func alphaSigner(t *testing.T, e *neotest.Executor) neotest.Signer {
+	var (
+		alphaAccs     []*wallet.Account
+		committeeAccs = getAlphabetAccs(t, e)
+		pubs          []*keys.PublicKey
+	)
+
+	m := smartcontract.GetDefaultHonestNodeCount(len(committeeAccs))
+
+	for _, a := range committeeAccs {
+		pubs = append(pubs, a.PublicKey())
+	}
+
+	for i, a := range committeeAccs {
+		alphaAccs = append(alphaAccs, wallet.NewAccountFromPrivateKey(a.PrivateKey()))
+		err := alphaAccs[i].ConvertMultisig(m, pubs)
+		require.NoError(t, err)
+	}
+
+	return neotest.NewMultiSigner(alphaAccs...)
 }

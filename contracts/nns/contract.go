@@ -884,13 +884,7 @@ func isValid(address interop.Hash160) bool {
 
 // checkCommittee panics if the script container is not signed by the committee.
 func checkCommittee() {
-	committee := neo.GetCommittee()
-	if committee == nil {
-		panic("failed to get committee")
-	}
-	l := len(committee)
-	committeeMultisig := contract.CreateMultisigAccount(l-(l-1)/2, committee)
-	if committeeMultisig == nil || !runtime.CheckWitness(committeeMultisig) {
+	if !runtime.CheckWitness(neo.GetCommitteeAddress()) {
 		panic("not witnessed by committee")
 	}
 }
