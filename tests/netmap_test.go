@@ -13,6 +13,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/scparser"
 	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/container/containerconst"
@@ -210,9 +211,10 @@ func TestAddNodeNewEpoch(t *testing.T) {
 			aer := c.CheckHalt(t, h)
 			epochExp++
 
-			require.Equal(t, 2, len(aer.Events))
+			require.Equal(t, 3, len(aer.Events))
 			require.Equal(t, "AddNode", aer.Events[0].Name)
-			require.Equal(t, "NewEpoch", aer.Events[1].Name)
+			require.Equal(t, "NewNetmap", aer.Events[1].Name)
+			require.Equal(t, "NewEpoch", aer.Events[2].Name)
 
 			epochAfterCandidate := getEpoch()
 			require.EqualValues(t, epochExp, epochAfterCandidate)
@@ -370,8 +372,6 @@ func TestAddNode(t *testing.T) {
 	}
 	// Current map is still empty.
 	checkZeroList("listNodes")
-	// And historic data is gone.
-	checkZeroList("listNodes", 1)
 
 	// We're at epoch 11, add node again
 	_ = cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
@@ -650,4 +650,162 @@ func addNodeCandidate(t *testing.T, e *neotest.ContractInvoker) (util.Uint256, n
 	approvedAcc.Signers = append(approvedAcc.Signers, acc)
 
 	return approvedAcc.Invoke(t, stackitem.Null{}, "addNode", node), acc
+}
+
+func TestNetmapVersion(t *testing.T) {
+	var (
+		epoch                   = 1
+		version                 int
+		_, _, inv, _            = newContainerInvoker(t, true)
+		checkNetmapVersionEvent = func(expV int, evArr *stackitem.Array) {
+			require.Equal(t, 1, evArr.Len())
+			arr := evArr.Value().([]stackitem.Item)
+			require.Len(t, arr, 1)
+			v, err := arr[0].TryInteger()
+			require.NoError(t, err)
+			require.EqualValues(t, expV, v.Int64())
+		}
+	)
+
+	t.Run("initial value", func(t *testing.T) {
+		inv.Invoke(t, stackitem.Make(0), "networkMapVersion")
+	})
+
+	t.Run("add new node", func(t *testing.T) {
+		h, _ := addNodeCandidate(t, inv)
+		epoch++
+		version++
+
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 3, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[2].Name)
+		require.Equal(t, "NewNetmap", aer.Events[1].Name)
+		require.Equal(t, "AddNode", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[1].Item)
+	})
+
+	t.Run("node is expired", func(t *testing.T) {
+		s, err := inv.TestInvoke(t, "cleanupThreshold")
+		require.NoError(t, err)
+		threshold := s.Pop().BigInt().Int64()
+
+		for range threshold - 1 {
+			h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+			epoch++
+
+			aer := inv.CheckHalt(t, h)
+			// new epoch only events
+			require.Equal(t, 1, len(aer.Events))
+			require.Equal(t, "NewEpoch", aer.Events[0].Name)
+		}
+
+		h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 3, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[2].Name)
+		require.Equal(t, "NewNetmap", aer.Events[1].Name)
+		require.Equal(t, "UpdateStateSuccess", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[1].Item)
+	})
+
+	t.Run("manual node removal", func(t *testing.T) {
+		var (
+			h, acc = addNodeCandidate(t, inv)
+			pKey   = acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+		)
+		epoch++
+		version++
+
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 3, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[2].Name)
+		require.Equal(t, "NewNetmap", aer.Events[1].Name)
+		require.Equal(t, "AddNode", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[1].Item)
+
+		// manually remove it
+
+		var approvedAcc = new(neotest.ContractInvoker)
+		*approvedAcc = *inv
+		approvedAcc.Signers = append(approvedAcc.Signers, acc)
+
+		approvedAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Offline), pKey)
+
+		// check new epoch updates netmap version
+
+		h = inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+
+		aer = inv.CheckHalt(t, h)
+		require.Equal(t, 2, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[1].Name)
+		require.Equal(t, "NewNetmap", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[0].Item)
+	})
+
+	t.Run("epochs to versions map", func(t *testing.T) {
+		getNodesByNode := func(method string, counter int) []stackitem.Item {
+			var (
+				s   *vm.Stack
+				err error
+			)
+			if counter > 0 {
+				s, err = inv.TestInvoke(t, method, counter)
+			} else {
+				s, err = inv.TestInvoke(t, method)
+			}
+			require.NoError(t, err)
+			require.Equal(t, 1, s.Len())
+
+			iter, ok := s.Top().Value().(*storage.Iterator)
+			require.True(t, ok)
+			actual := make([]stackitem.Item, 0, 1)
+			for iter.Next() {
+				actual = append(actual, iter.Value())
+			}
+			return actual
+		}
+
+		var (
+			epoch, version int
+		)
+		resE, err := inv.TestInvoke(t, "epoch")
+		require.NoError(t, err)
+		epoch = int(resE.Pop().BigInt().Int64())
+		resE, err = inv.TestInvoke(t, "networkMapVersion")
+		require.NoError(t, err)
+		version = int(resE.Pop().BigInt().Int64())
+
+		// prev network map by epoch and by version
+		addNodeCandidate(t, inv)
+		epoch++
+		version++
+		prevNodesByEpoch := getNodesByNode("listNodes", -1)
+		prevNodesByVersion := getNodesByNode("listNodesVersion", version)
+		prevEpoch := epoch
+		prevVersion := version
+
+		// curr network map by epoch and by version
+		addNodeCandidate(t, inv)
+		epoch++
+		version++
+		currNodesByEpoch := getNodesByNode("listNodes", -1)
+		currNodesByVersion := getNodesByNode("listNodesVersion", version)
+		currEpoch := epoch
+		currVersion := version
+
+		require.ElementsMatch(t, prevNodesByEpoch, getNodesByNode("listNodes", prevEpoch))
+		require.ElementsMatch(t, prevNodesByVersion, getNodesByNode("listNodesVersion", prevVersion))
+
+		require.ElementsMatch(t, currNodesByEpoch, getNodesByNode("listNodes", currEpoch))
+		require.ElementsMatch(t, currNodesByVersion, getNodesByNode("listNodesVersion", currVersion))
+	})
 }

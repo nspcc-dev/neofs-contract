@@ -1,6 +1,6 @@
 name: "NeoFS Netmap"
 supportedstandards: ["NEP-22"]
-safemethods: ["epoch", "config", "listConfig", "version", "listNodes", "listCandidates", "cleanupThreshold", "unusedCandidate", "isStorageNode", "getEpochBlock", "getEpochTime", "getEpochBlockByTime", "lastEpochTime", "isStorageNodeStatus"]
+safemethods: ["epoch", "config", "listConfig", "version", "listNodes", "listCandidates", "cleanupThreshold", "unusedCandidate", "isStorageNode", "getEpochBlock", "getEpochTime", "getEpochBlockByTime", "lastEpochTime", "isStorageNodeStatus", "networkMapVersion", "listNodesVersion"]
 permissions:
   - methods: ["update", "newEpoch"]
 events:
@@ -34,6 +34,10 @@ events:
     parameters:
     - name: contract
       type: Hash160
+  - name: NewNetmap
+    parameters:
+      - name: version
+        type: Integer
 overloads:
   listNodesEpoch: listNodes
   isStorageNodeInEpoch: isStorageNode
