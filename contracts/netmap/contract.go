@@ -189,6 +189,12 @@ func AddNode(n Node2) {
 	)
 	storage.LocalPut(key, std.Serialize(c))
 	runtime.Notify("AddNode", n.Key, n.Addresses, n.Attributes)
+
+	numOfContainers := contract.Call(common.ResolveFSContract("container"), "totalSupply", contract.ReadOnly).(int)
+	if numOfContainers == 0 {
+		curr := Epoch()
+		NewEpoch(curr + 1)
+	}
 }
 
 // DeleteNode removes a node with the given public key from candidate list.
