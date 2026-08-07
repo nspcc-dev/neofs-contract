@@ -532,7 +532,7 @@ func prefillNNS(ctx context.Context, cnr ContainerContractPrm, prm syncNeoFSCont
 			return fmt.Errorf("container contract lookup in NNS: %w", err)
 		}
 		if !prm.tryDeploy {
-			prm.logger.Info("waiting for Proxy contract hash to be in NNS contract")
+			prm.logger.Info("waiting for Container contract hash to be in NNS contract")
 			continue
 		}
 
