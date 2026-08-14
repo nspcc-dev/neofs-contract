@@ -81,6 +81,12 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.SetInnerRing(t, ir)
 
+	readNetmapVersion := func() int64 {
+		v, err := c.Call(t, "networkMapVersion").TryInteger()
+		require.NoError(t, err)
+		return v.Int64()
+	}
+
 	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
@@ -90,6 +96,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	newNodes := readNodes()
 	newCandidates := readCandidates()
 	newConfigs := readConfigs()
+	newNetmapVersion := readNetmapVersion()
 
 	require.Equal(t, uint64(26*1000+1), newVersion)
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
@@ -98,6 +105,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.Nil(t, c.GetStorageItem([]byte("snapshotBlock")), "current epoch block should be removed (storage)")
 	require.EqualValues(t, prevCurrentEpochBlock, readUint64("getEpochBlock", prevCurrentEpoch),
 		"current epoch block should be resolvable")
+	require.EqualValues(t, 1, newNetmapVersion, "netmap version should be increased to 1")
 	// Adjust configs for migration.
 	prevConfigs = slices.DeleteFunc(prevConfigs, func(s stackitem.Item) bool {
 		sa := s.Value().([]stackitem.Item)

@@ -312,8 +312,6 @@ func TestAddNode(t *testing.T) {
 	}
 	// Current map is still empty.
 	checkZeroList("listNodes")
-	// And historic data is gone.
-	checkZeroList("listNodes", 1)
 
 	// We're at epoch 11, add node again
 	_ = cAcc.Invoke(t, stackitem.Null{}, "addNode", nodeStruct)
@@ -569,4 +567,132 @@ func TestGetEpochBlockByTime(t *testing.T) {
 	}
 
 	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, secondEpochBlock.Index)
+}
+
+func TestNetmapVersion(t *testing.T) {
+	var (
+		epoch   = 1
+		version int
+
+		inv              = newNetmapInvoker(t)
+		addNodeCandidate = func() neotest.Signer {
+			var (
+				acc  = inv.NewAccount(t)
+				pKey = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey()
+			)
+
+			node := stackitem.NewStruct([]stackitem.Item{
+				stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
+				stackitem.NewMapWithValue([]stackitem.MapElement{
+					{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
+					{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
+				}),
+				stackitem.NewByteArray(pKey.Bytes()),
+				stackitem.Make(nodestate.Online),
+			})
+
+			var approvedAcc = new(neotest.ContractInvoker)
+			*approvedAcc = *inv
+			approvedAcc.Signers = append(approvedAcc.Signers, acc)
+
+			approvedAcc.Invoke(t, stackitem.Null{}, "addNode", node)
+
+			return acc
+		}
+		checkNetmapVersionEvent = func(expV int, evArr *stackitem.Array) {
+			require.Equal(t, 1, evArr.Len())
+			arr := evArr.Value().([]stackitem.Item)
+			require.Len(t, arr, 1)
+			v, err := arr[0].TryInteger()
+			require.NoError(t, err)
+			require.EqualValues(t, expV, v.Int64())
+		}
+	)
+
+	t.Run("initial value", func(t *testing.T) {
+		inv.Invoke(t, stackitem.Make(0), "networkMapVersion")
+	})
+
+	t.Run("add new node", func(t *testing.T) {
+		addNodeCandidate()
+
+		h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 2, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[1].Name)
+		require.Equal(t, "NewNetmap", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[0].Item)
+	})
+
+	t.Run("node is expired", func(t *testing.T) {
+		s, err := inv.TestInvoke(t, "cleanupThreshold")
+		require.NoError(t, err)
+		threshold := s.Pop().BigInt().Int64()
+
+		for range threshold - 1 {
+			h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+			epoch++
+
+			aer := inv.CheckHalt(t, h)
+			// new epoch only events
+			require.Equal(t, 1, len(aer.Events))
+			require.Equal(t, "NewEpoch", aer.Events[0].Name)
+		}
+
+		h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 3, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[2].Name)
+		require.Equal(t, "NewNetmap", aer.Events[1].Name)
+		require.Equal(t, "UpdateStateSuccess", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[1].Item)
+	})
+
+	t.Run("manual node removal", func(t *testing.T) {
+		var (
+			acc  = addNodeCandidate()
+			pKey = acc.(neotest.SingleSigner).Account().PrivateKey().PublicKey().Bytes()
+		)
+
+		// add new node to empty list
+
+		h := inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+		aer := inv.CheckHalt(t, h)
+		require.Equal(t, 2, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[1].Name)
+		require.Equal(t, "NewNetmap", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[0].Item)
+
+		// manually remove it
+
+		var approvedAcc = new(neotest.ContractInvoker)
+		*approvedAcc = *inv
+		approvedAcc.Signers = append(approvedAcc.Signers, acc)
+
+		approvedAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Offline), pKey)
+
+		// check new epoch updates netmap version
+
+		h = inv.Invoke(t, stackitem.Null{}, "newEpoch", epoch)
+		epoch++
+		version++
+
+		aer = inv.CheckHalt(t, h)
+		require.Equal(t, 2, len(aer.Events))
+		require.Equal(t, "NewEpoch", aer.Events[1].Name)
+		require.Equal(t, "NewNetmap", aer.Events[0].Name)
+
+		checkNetmapVersionEvent(version, aer.Events[0].Item)
+	})
 }

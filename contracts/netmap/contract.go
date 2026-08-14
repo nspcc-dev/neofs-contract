@@ -72,7 +72,10 @@ const (
 	defaultCleanupThreshold = 3
 	cleanupThresholdKey     = "t"
 
-	epochIndexKey = 'i'
+	epochIndexKey           = 'i'
+	netmapVersionKey        = 'j'
+	epochToNetmapVersionKey = 'k'
+	netmapChangedFlagKey    = 'l'
 )
 
 var (
@@ -117,6 +120,8 @@ func _deploy(data any, isUpdate bool) {
 			// * https://github.com/nspcc-dev/neofs-api/pull/385
 			// * https://github.com/nspcc-dev/neofs-node/issues/3847
 			storage.LocalDelete(append(configPrefix, []byte("HomomorphicHashingDisabled")...))
+
+			migrateToVersionedNetmap()
 		}
 
 		return
@@ -147,6 +152,8 @@ func _deploy(data any, isUpdate bool) {
 	storage.LocalPut([]byte(snapshotCountKey), convert.ToBytes(DefaultSnapshotCount))
 	storage.LocalPut([]byte(snapshotEpoch), convert.ToBytes(0))
 	storage.LocalPut([]byte(cleanupThresholdKey), convert.ToBytes(defaultCleanupThreshold))
+	storage.LocalPut([]byte{netmapVersionKey}, make([]byte, 4))
+	storage.LocalPut(append([]byte{epochToNetmapVersionKey}, make([]byte, 4)...), convert.ToBytes(0))
 
 	runtime.Log("netmap contract initialized")
 }
@@ -188,6 +195,10 @@ func AddNode(n Node2) {
 		key = append([]byte(node2CandidatePrefix), n.Key...)
 	)
 	storage.LocalPut(key, std.Serialize(c))
+	// consider any `AddNode` call as a new network map, a node may change
+	// its addresses, attributes, etc. in the worst scenario it just triggers
+	// new network map version without changes
+	setNetmapChangedFlag(true)
 	runtime.Notify("AddNode", n.Key, n.Addresses, n.Attributes)
 }
 
@@ -212,6 +223,7 @@ func updateCandidateState(publicKey interop.PublicKey, state nodestate.Type) {
 	switch state {
 	case nodestate.Offline:
 		removeFromNetmap(publicKey)
+		setNetmapChangedFlag(true)
 		runtime.Log("remove storage node from the network map")
 	case nodestate.Online, nodestate.Maintenance:
 		updateNetmapState(publicKey, state)
@@ -221,6 +233,14 @@ func updateCandidateState(publicKey interop.PublicKey, state nodestate.Type) {
 	}
 
 	runtime.Notify("UpdateStateSuccess", publicKey, state)
+}
+
+func setNetmapChangedFlag(flag bool) {
+	storage.LocalPut([]byte{netmapChangedFlagKey}, convert.ToBytes(flag))
+}
+
+func netmapChangedFlag() bool {
+	return convert.ToBool(storage.LocalGet([]byte{netmapChangedFlagKey}))
 }
 
 // UpdateState proposes a new state of candidate for the next-epoch network map.
@@ -268,7 +288,7 @@ func NewEpoch(epochNum int) {
 	runtime.Log("process new epoch")
 
 	storage.LocalPut([]byte(snapshotEpoch), convert.ToBytes(epochNum))
-	fillNetmap(epochNum)
+	updateNetmap(epochNum)
 
 	var snapCount = getSnapshotCount()
 
@@ -332,7 +352,7 @@ func ListNodes() iterator.Iterator {
 // iterator.
 func ListNodesEpoch(epoch int) iterator.Iterator {
 	return storage.LocalFind(
-		append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...),
+		append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(nmVersionForEpoch(epoch))...),
 		storage.ValuesOnly|storage.DeserializeValues)
 }
 
@@ -360,8 +380,24 @@ func IsStorageNodeInEpoch(key interop.PublicKey, epoch int) bool {
 	return getStorageNodeInEpoch(key, epoch) != nil
 }
 
+func nmVersionForEpoch(epoch int) uint32 {
+	var (
+		it          = storage.LocalFind([]byte{epochToNetmapVersionKey}, storage.RemovePrefix)
+		verForEpoch int
+	)
+	for iterator.Next(it) {
+		kv := iterator.Value(it).(storage.KeyValue)
+		verForEpoch = convert.ToInteger(kv.Value)
+		if convert.BytesBEToUint32(kv.Key) >= uint32(epoch) {
+			break
+		}
+	}
+
+	return uint32(verForEpoch)
+}
+
 func getStorageNodeInEpoch(key interop.PublicKey, epoch int) []byte {
-	dbkey := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), key...)
+	dbkey := append(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(nmVersionForEpoch(epoch))...), key...)
 	return storage.LocalGet(dbkey)
 }
 
@@ -528,6 +564,12 @@ func UnusedCandidate() Candidate {
 	return Candidate{}
 }
 
+// NetworkMapVersion return current network map version. Version monotonically
+// increases with each change to the network map.
+func NetworkMapVersion() int {
+	return netmapVersion()
+}
+
 // GetEpochBlock returns block index when given epoch came. Returns 0 if the
 // epoch is missing. Do not confuse with [GetEpochTime].
 //
@@ -591,15 +633,18 @@ func updateNetmapState(key interop.PublicKey, state nodestate.Type) {
 		panic("peer is missing")
 	}
 	cand := std.Deserialize(raw).(Candidate)
+	if cand.State != state {
+		setNetmapChangedFlag(true)
+	}
 	cand.State = state
 	cand.LastActiveEpoch = Epoch()
 	storage.LocalPut(storageKey, std.Serialize(cand))
 }
 
-func fillNetmap(epoch int) {
+func updateNetmap(epoch int) {
 	var (
+		netmapChanged    = netmapChangedFlag()
 		cleanupThreshold = CleanupThreshold()
-		epochPrefix      = append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...)
 		it               = storage.LocalFind([]byte(node2CandidatePrefix), storage.RemovePrefix)
 	)
 	for iterator.Next(it) {
@@ -609,23 +654,93 @@ func fillNetmap(epoch int) {
 		if cleanupThreshold > 0 && cand.LastActiveEpoch < epoch-cleanupThreshold {
 			// Forget about stale nodes.
 			updateCandidateState(interop.PublicKey(kv.Key), nodestate.Offline)
-		} else {
-			var n2 = Node2{
-				Addresses:  cand.Addresses,
-				Attributes: cand.Attributes,
-				Key:        cand.Key,
-				State:      cand.State,
-			}
-			// Offline nodes are just deleted, so we can omit state check.
-			storage.LocalPut(append(epochPrefix, kv.Key...), std.Serialize(n2))
+			netmapChanged = true
 		}
 	}
+
+	if !netmapChanged {
+		return
+	}
+
+	var (
+		currVersion   = netmapVersion()
+		newVersion    = currVersion + 1
+		versionPrefix = append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(newVersion))...)
+	)
+
+	it = storage.LocalFind([]byte(node2CandidatePrefix), storage.RemovePrefix)
+	for iterator.Next(it) {
+		kv := iterator.Value(it).(storage.KeyValue)
+		cand := std.Deserialize(kv.Value).(Candidate)
+		var n2 = Node2{
+			Addresses:  cand.Addresses,
+			Attributes: cand.Attributes,
+			Key:        cand.Key,
+			State:      cand.State,
+		}
+		// Offline nodes are just deleted, so we can omit state check.
+		storage.LocalPut(append(versionPrefix, kv.Key...), std.Serialize(n2))
+	}
+
+	newVersion = incNetmapVersion()
+	storage.LocalPut(append([]byte{epochToNetmapVersionKey}, convert.Uint32ToBytesBE(uint32(epoch))...), convert.ToBytes(newVersion))
+	setNetmapChangedFlag(false)
+	runtime.Notify("NewNetmap", newVersion)
+}
+
+func netmapVersion() int {
+	vRaw := storage.LocalGet([]byte{netmapVersionKey})
+	if vRaw == nil {
+		panic("unknown netmap version")
+	}
+	return convert.ToInteger(vRaw)
+}
+
+func incNetmapVersion() int {
+	var (
+		k      = []byte{netmapVersionKey}
+		ver    int
+		verRaw = storage.LocalGet(k)
+	)
+	if verRaw == nil {
+		ver = 0
+	} else {
+		ver = convert.ToInteger(verRaw)
+	}
+
+	ver++
+	storage.LocalPut(k, convert.ToBytes(ver))
+	return ver
 }
 
 func dropNetmap(epoch int) {
-	var it = storage.LocalFind(append([]byte(node2NetmapPrefix), convert.Uint32ToBytesBE(uint32(epoch))...), storage.KeysOnly)
-	for iterator.Next(it) {
-		storage.LocalDelete(iterator.Value(it).([]byte))
+	var (
+		latestValidVersion = netmapVersion()
+		verIt              = storage.LocalFind([]byte{epochToNetmapVersionKey}, storage.None)
+		prevVersion        []byte
+	)
+	for iterator.Next(verIt) {
+		var (
+			kv = iterator.Value(verIt).(storage.KeyValue)
+			e  = convert.BytesBEToUint32(kv.Key[1:])
+		)
+		if int(e) >= epoch {
+			latestValidVersion = convert.ToInteger(kv.Value)
+			break
+		}
+		if prevVersion != nil {
+			storage.LocalDelete(prevVersion)
+		}
+		prevVersion = kv.Value
+	}
+	var nmIt = storage.LocalFind([]byte(node2NetmapPrefix), storage.KeysOnly)
+	for iterator.Next(nmIt) {
+		ver := convert.BytesBEToUint32(iterator.Value(nmIt).([]byte)[1:5])
+		if int(ver) >= latestValidVersion {
+			return
+		}
+
+		storage.LocalDelete(iterator.Value(nmIt).([]byte))
 	}
 }
 
@@ -640,5 +755,33 @@ func cleanup(epoch int) {
 	for iterator.Next(it) {
 		contractHash := interop.Hash160(iterator.Value(it).([]byte)[1:]) // one byte is for number prefix
 		contract.Call(contractHash, cleanupEpochMethod, contract.All, epoch)
+	}
+}
+
+// nolint:unused
+func migrateToVersionedNetmap() {
+	var (
+		newVersion = incNetmapVersion()
+		currEpoch  = Epoch()
+		nmIt       = storage.LocalFind([]byte(node2NetmapPrefix), storage.None)
+	)
+
+	storage.LocalPut(append([]byte{epochToNetmapVersionKey}, convert.Uint32ToBytesBE(uint32(currEpoch))...), convert.ToBytes(newVersion))
+	storage.LocalPut([]byte{netmapChangedFlagKey}, []byte{0})
+
+	for iterator.Next(nmIt) {
+		kv := iterator.Value(nmIt).(storage.KeyValue)
+
+		if convert.BytesBEToUint32(kv.Key[1:5]) != uint32(currEpoch) {
+			storage.LocalDelete(kv.Key)
+			continue
+		}
+
+		var newKey = []byte(node2NetmapPrefix)
+		newKey = append(newKey, convert.Uint32ToBytesBE(uint32(newVersion))...)
+		newKey = append(newKey, kv.Key[1+4:]...)
+
+		storage.LocalPut(newKey, kv.Value)
+		storage.LocalDelete(kv.Key)
 	}
 }
