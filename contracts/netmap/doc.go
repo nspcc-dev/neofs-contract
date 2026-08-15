@@ -63,10 +63,6 @@ Key-value storage format:
    state info of block which "ticked" the epoch which is encoded as 4-byte BE integer
  - 'snapshotCount' -> int
    number of stored network maps including current one
- - 'containerScriptHash' -> 20-byte script hash
-   Container contract reference
- - 'balanceScriptHash' -> 20-byte script hash
-   Balance contract reference
  - 'config<name>' -> []byte
    value of the particular NeoFS network parameter
  - '2<public_key>' -> std.Serialize(Candidate)

@@ -166,9 +166,63 @@ func TestInnerRing(t *testing.T) {
 	require.ElementsMatch(t, ir, InnerRing(t, e))
 }
 
+func TestAddNodeNewEpoch(t *testing.T) {
+	var (
+		cnrInv, bInv, c, _ = newContainerInvoker(t, true)
+		getEpoch           = func() int {
+			s, err := c.TestInvoke(t, "epoch")
+			require.NoError(t, err)
+			return int(s.Pop().BigInt().Int64())
+		}
+		epochExp               = getEpoch()
+		candidates             []neotest.Signer
+		addAndAppendCandidates = func() util.Uint256 {
+			h, c := addNodeCandidate(t, c)
+			candidates = append(candidates, c)
+			return h
+		}
+	)
+
+	t.Run("new candidate with existing containers", func(t *testing.T) {
+		_, cnt := addContainer(t, cnrInv, bInv)
+		addAndAppendCandidates()
+
+		epochAfterCandidate := getEpoch()
+		require.Equal(t, epochExp, epochAfterCandidate)
+
+		cnrInv.Invoke(t, stackitem.Null{}, "remove", cnt.id[:], []byte{}, []byte{}, []byte{})
+	})
+
+	t.Run("new candidate with empty containers network", func(t *testing.T) {
+		for range 10 {
+			// keep nodes active, do not allow cleaning them up
+			for _, acc := range candidates {
+				var (
+					approvedAcc = new(neotest.ContractInvoker)
+					nodeKey     = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey().Bytes()
+				)
+				*approvedAcc = *c
+				approvedAcc.Signers = append(approvedAcc.Signers, acc)
+				approvedAcc.Invoke(t, stackitem.Null{}, "updateState", int(nodestate.Online), nodeKey)
+			}
+
+			h := addAndAppendCandidates()
+			aer := c.CheckHalt(t, h)
+			epochExp++
+
+			require.Equal(t, 2, len(aer.Events))
+			require.Equal(t, "AddNode", aer.Events[0].Name)
+			require.Equal(t, "NewEpoch", aer.Events[1].Name)
+
+			epochAfterCandidate := getEpoch()
+			require.EqualValues(t, epochExp, epochAfterCandidate)
+		}
+	})
+}
+
 func TestAddNode(t *testing.T) {
 	var (
-		c = newNetmapInvoker(t)
+		cnrInv, bInv, c, _ = newContainerInvoker(t, true)
 
 		acc  = c.NewAccount(t)
 		pKey = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey()
@@ -183,6 +237,10 @@ func TestAddNode(t *testing.T) {
 			stackitem.Make(nodestate.Online),
 		})
 	)
+
+	// make this network "not new" to prevent fast epoch event optimizations,
+	// this test is not about it
+	addContainer(t, cnrInv, bInv)
 
 	candidateStruct, err := nodeStruct.Clone()
 	require.NoError(t, err)
@@ -569,4 +627,27 @@ func TestGetEpochBlockByTime(t *testing.T) {
 	}
 
 	assertBlock(netmapContract.GetBlockByIndex(t, netmapContract.Chain.BlockHeight()).Timestamp, secondEpochBlock.Index)
+}
+
+func addNodeCandidate(t *testing.T, e *neotest.ContractInvoker) (util.Uint256, neotest.Signer) {
+	var (
+		acc  = e.NewAccount(t)
+		pKey = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey()
+	)
+
+	node := stackitem.NewStruct([]stackitem.Item{
+		stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
+		stackitem.NewMapWithValue([]stackitem.MapElement{
+			{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
+			{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
+		}),
+		stackitem.NewByteArray(pKey.Bytes()),
+		stackitem.Make(nodestate.Online),
+	})
+
+	var approvedAcc = new(neotest.ContractInvoker)
+	*approvedAcc = *e
+	approvedAcc.Signers = append(approvedAcc.Signers, acc)
+
+	return approvedAcc.Invoke(t, stackitem.Null{}, "addNode", node), acc
 }
