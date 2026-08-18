@@ -90,6 +90,8 @@ jobs:
           if [[ $(git diff --name-only | grep '^rpc/*' -c) != 0 ]]; then
           echo "Fresh version of RPC bindings should be committed for the following contracts:";
           git diff --name-only;
+          echo "Full git diff:";
+          git diff;
           exit 1;
           fi
 
@@ -98,6 +100,8 @@ jobs:
           if [[ $(git diff --name-only | grep '^contracts/*' -c) != 0 ]]; then
           echo "Fresh version of binaries/manifests should be committed for the following contracts:";
           git diff --name-only;
+          echo "Full git diff:";
+          git diff;
           exit 1;
           fi
 
