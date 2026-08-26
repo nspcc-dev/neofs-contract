@@ -187,8 +187,8 @@ func initNNSContract(ctx context.Context, prm deployNNSContractPrm) (res util.Ui
 func lookupNNSDomainRecord(inv *invoker.Invoker, nnsContract util.Uint160, domainName string) (string, error) {
 	item, err := unwrap.Item(inv.Call(nnsContract, methodNNSResolve, domainName, int64(nns.TXT)))
 	if err != nil {
-		var except unwrap.Exception
-		if errors.As(err, &except) && strings.Contains(string(except), "token not found") {
+		except, isExcept := errors.AsType[unwrap.Exception](err)
+		if isExcept && strings.Contains(string(except), "token not found") {
 			return "", errMissingDomain
 		}
 
