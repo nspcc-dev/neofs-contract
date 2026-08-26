@@ -1157,6 +1157,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			LastUpdateEpoch: currEpoch,
 		}
 		billingStat = EpochBillingStat{
+			Account:                nodeAcc,
 			LatestEpochAverageSize: sizeBytes,
 			LatestContainerSize:    sizeBytes,
 			LatestEpoch:            currEpoch,
