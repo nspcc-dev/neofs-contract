@@ -6,14 +6,15 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Go 1.25+ is required now (#585)
+- Go 1.26+ is required now (#585, #617)
 - Proxy contract can be used for payments with None alphabet/committee signer scope (#579)
 
 ### Updated
-- NeoGo dependency to 0.121.0 (#585, #604)
-- NeoFS SDK dependency to RC17 (#585)
-- go.uber.org/zap dependency to v1.27.1 (#585)
-- google.golang.org/protobuf dependency to v1.36.11 (#585)
+- NeoGo dependency to 0.122.0 (#585, #604, #609)
+- NeoFS SDK dependency to RC21 (#585, #609)
+- go.uber.org/zap dependency to v1.28.0 (#585, #609)
+- google.golang.org/protobuf dependency to v1.36.12 (#585, #609)
+- github.com/mr-tron/base58 dependency from v1.2.0 to v1.3.0 (#609)
 
 ### Removed
 - Deprecated InnerRingList method from netmap contract (#598)
