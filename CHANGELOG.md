@@ -14,6 +14,7 @@ Changelog for NeoFS Contract
 - NeoFS SDK dependency to RC17 (#585)
 - go.uber.org/zap dependency to v1.27.1 (#585)
 - google.golang.org/protobuf dependency to v1.36.11 (#585)
+- github.com/mr-tron/base58 dependency from v1.2.0 to v1.3.0 (#609)
 
 ### Removed
 - Deprecated InnerRingList method from netmap contract (#598)
