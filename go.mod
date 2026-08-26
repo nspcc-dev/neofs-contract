@@ -9,7 +9,7 @@ require (
 	github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20260609115526-14bc7067ea2e
 	github.com/nspcc-dev/neofs-sdk-go v1.0.0-rc.21
 	github.com/stretchr/testify v1.12.1
-	go.uber.org/zap v1.27.1
+	go.uber.org/zap v1.28.0
 	google.golang.org/protobuf v1.36.11
 )
 
