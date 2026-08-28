@@ -268,7 +268,8 @@ func NewEpoch(epochNum int) {
 
 	currentEpoch := convert.ToInteger(storage.LocalGet([]byte(snapshotEpoch)))
 	if epochNum <= currentEpoch {
-		panic("invalid epoch") // ignore invocations with invalid epoch
+		// ignore invocations with invalid epoch
+		panic("invalid epoch, current: " + std.Itoa(currentEpoch, 10) + ", received: " + std.Itoa(epochNum, 10))
 	}
 
 	runtime.Log("process new epoch")
