@@ -40,10 +40,16 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 		return n.Uint64()
 	}
 
-	readNodes := func() []stackitem.Item {
-		var nodes []stackitem.Item
+	readNodes := func(epoch uint64) []stackitem.Item {
+		var (
+			nodes []stackitem.Item
+			args  []any
+		)
+		if epoch != 0 {
+			args = append(args, epoch)
+		}
 
-		iter := c.Call(t, "listNodes").Value().(*storage.Iterator)
+		iter := c.Call(t, "listNodes", args...).Value().(*storage.Iterator)
 		for iter.Next() {
 			nodes = append(nodes, iter.Value())
 		}
@@ -67,7 +73,8 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	prevCurrentEpoch := readCurrentEpoch()
 	prevCurrentEpochBlock := readCurrentEpochBlock()
-	prevNodes := readNodes()
+	prevNodes := readNodes(prevCurrentEpoch)
+	prevNodesPrevEpoch := readNodes(prevCurrentEpoch - 1)
 	prevCandidates := readCandidates()
 	prevConfigs := readConfigs()
 
@@ -81,15 +88,23 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	c.SetInnerRing(t, ir)
 
+	readNetmapVersion := func() int64 {
+		v, err := c.Call(t, "networkMapVersion").TryInteger()
+		require.NoError(t, err)
+		return v.Int64()
+	}
+
 	c.CheckUpdateSuccess(t)
 
 	// check that contract was updates as expected
 	newVersion := readVersion()
 	newCurrentEpoch := readCurrentEpoch()
 	newCurrentEpochBlock := readCurrentEpochBlock()
-	newNodes := readNodes()
+	newNodes := readNodes(prevCurrentEpoch)
+	newNodesPrevEpoch := readNodes(prevCurrentEpoch - 1)
 	newCandidates := readCandidates()
 	newConfigs := readConfigs()
+	newNetmapVersion := readNetmapVersion()
 
 	require.Equal(t, uint64(26*1000+1), newVersion)
 	require.Nil(t, c.GetStorageItem([]byte("innerring")), "Inner Ring nodes should be removed")
@@ -98,6 +113,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	require.Nil(t, c.GetStorageItem([]byte("snapshotBlock")), "current epoch block should be removed (storage)")
 	require.EqualValues(t, prevCurrentEpochBlock, readUint64("getEpochBlock", prevCurrentEpoch),
 		"current epoch block should be resolvable")
+	require.EqualValues(t, 2, newNetmapVersion, "netmap version should be set and should be 2")
 	// Adjust configs for migration.
 	prevConfigs = slices.DeleteFunc(prevConfigs, func(s stackitem.Item) bool {
 		sa := s.Value().([]stackitem.Item)
@@ -115,6 +131,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	})
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.Equal(t, prevNodes, newNodes)
+	require.Equal(t, prevNodesPrevEpoch, newNodesPrevEpoch)
 	require.Equal(t, prevCandidates, newCandidates)
 	require.ElementsMatch(t, ir, c.InnerRing(t))
 

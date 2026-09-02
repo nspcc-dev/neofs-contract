@@ -49,6 +49,13 @@ contract was subscribed to new epoch event.
 	NewEpochSubscription
 	  - name: contract
 		type: Hash160
+
+NewNetmap notification. This notification is produced when a new version of
+network map is registered.
+
+	NewNetmap
+	  - name: version
+		type: Integer
 */
 package netmap
 
@@ -74,6 +81,15 @@ Key-value storage format:
  - 'e<counter><contractHash>' -> empty byte array
    Contracts that are subscribed for new epoch events. <counter> is a 1-byte
    monotonically increasing number unique for every subscription.
+ - 'j' -> int
+	Current version of network map.
+ - 'k<epoch>' -> int
+	A network map version counter mapped to the epoch this version was emitted.
+    Epoch is encoded as 4-byte BE integer.
+ - 'l' -> bool
+    A changed netmap flag. It is the internal flag describing the state of the
+    latest network map compared to the candidates list. When true, a new
+    network map version will be emitted in the next epoch.
 
 # Setting
 To handle some events, the contract refers to other contracts.
