@@ -60,7 +60,7 @@ const (
 	// Must be less than 255.
 	DefaultSnapshotCount = 10
 	snapshotCountKey     = "snapshotCount"
-	snapshotEpoch        = "snapshotEpoch"
+	epochKey             = "snapshotEpoch"
 
 	newEpochSubscribersPrefix = "e"
 	cleanupEpochMethod        = "newEpoch"
@@ -150,7 +150,7 @@ func _deploy(data any, isUpdate bool) {
 
 	// epoch number is a little endian int, it doesn't need to be serialized
 	storage.LocalPut([]byte(snapshotCountKey), convert.ToBytes(DefaultSnapshotCount))
-	storage.LocalPut([]byte(snapshotEpoch), convert.ToBytes(0))
+	storage.LocalPut([]byte(epochKey), convert.ToBytes(0))
 	storage.LocalPut([]byte(cleanupThresholdKey), convert.ToBytes(defaultCleanupThreshold))
 	storage.LocalPut([]byte{netmapVersionKey}, convert.ToBytes(0))
 	storage.LocalPut(append([]byte{epochToNetmapVersionKey}, make([]byte, 4)...), convert.ToBytes(0))
@@ -286,7 +286,7 @@ func UpdateState(state nodestate.Type, publicKey interop.PublicKey) {
 func NewEpoch(epochNum int) {
 	common.CheckAlphabetWitness()
 
-	currentEpoch := convert.ToInteger(storage.LocalGet([]byte(snapshotEpoch)))
+	currentEpoch := convert.ToInteger(storage.LocalGet([]byte(epochKey)))
 	if epochNum <= currentEpoch {
 		// ignore invocations with invalid epoch
 		panic("invalid epoch, current: " + std.Itoa(currentEpoch, 10) + ", received: " + std.Itoa(epochNum, 10))
@@ -294,7 +294,7 @@ func NewEpoch(epochNum int) {
 
 	runtime.Log("process new epoch")
 
-	storage.LocalPut([]byte(snapshotEpoch), convert.ToBytes(epochNum))
+	storage.LocalPut([]byte(epochKey), convert.ToBytes(epochNum))
 	updateNetmap(epochNum)
 
 	dropNetmaps()
@@ -312,7 +312,7 @@ func NewEpoch(epochNum int) {
 
 // Epoch method returns the current epoch number.
 func Epoch() int {
-	return convert.ToInteger(storage.LocalGet([]byte(snapshotEpoch)))
+	return convert.ToInteger(storage.LocalGet([]byte(epochKey)))
 }
 
 // LastEpochBlock method returns the block number when the current epoch was
