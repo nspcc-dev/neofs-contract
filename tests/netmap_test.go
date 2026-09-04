@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"path"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/storage"
@@ -229,24 +230,27 @@ func TestAddNode(t *testing.T) {
 		acc  = c.NewAccount(t)
 		pKey = (acc.(neotest.SingleSigner)).Account().PrivateKey().PublicKey()
 
-		nodeStruct = stackitem.NewStruct([]stackitem.Item{
+		nodeItems = []stackitem.Item{
 			stackitem.NewArray([]stackitem.Item{stackitem.Make("grpcs://192.0.2.100:8090")}),
 			stackitem.NewMapWithValue([]stackitem.MapElement{
 				{Key: stackitem.Make("key"), Value: stackitem.Make("value")},
 				{Key: stackitem.Make("Capacity"), Value: stackitem.Make("100500")},
 			}),
-			stackitem.NewByteArray(pKey.Bytes()),
+			stackitem.NewBuffer(pKey.Bytes()),
 			stackitem.Make(nodestate.Online),
-		})
+		}
+
+		nodeStruct = stackitem.NewStruct(nodeItems)
 	)
 
 	// make this network "not new" to prevent fast epoch event optimizations,
 	// this test is not about it
 	addContainer(t, cnrInv, bInv)
 
-	candidateStruct, err := nodeStruct.Clone()
-	require.NoError(t, err)
-	candidateStruct.Append(stackitem.Make(0))
+	candidateItems := slices.Clone(nodeItems)
+	candidateItems[2] = stackitem.Make(pKey.Bytes())
+
+	candidateStruct := stackitem.NewStruct(append(candidateItems, stackitem.Make(0)))
 
 	acc1 := c.NewAccount(t)
 	cAcc1 := c.WithSigners(acc1)
@@ -410,8 +414,8 @@ func TestListConfig(t *testing.T) {
 	arr, ok := s.Pop().Item().(*stackitem.Array)
 	require.True(t, ok)
 	require.Equal(t, stackitem.NewArray([]stackitem.Item{
-		stackitem.NewStruct([]stackitem.Item{stackitem.Make("key"), stackitem.Make("value")}),
-		stackitem.NewStruct([]stackitem.Item{stackitem.Make("some"), stackitem.Make("setting")}),
+		stackitem.NewStruct([]stackitem.Item{stackitem.NewBuffer([]byte("key")), stackitem.NewBuffer([]byte("value"))}),
+		stackitem.NewStruct([]stackitem.Item{stackitem.NewBuffer([]byte("some")), stackitem.NewBuffer([]byte("setting"))}),
 	}), arr)
 }
 
