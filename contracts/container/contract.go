@@ -1592,7 +1592,7 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 
 	from := cnr.Owner
 
-	if !util.Equals(from, to) {
+	if !from.Equals(to) {
 		// from ownerFromBinaryContainer()
 		off := 2 + int(bin[1]) + 4
 		toAddr := scriptHashToAddress(to)

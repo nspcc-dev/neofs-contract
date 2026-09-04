@@ -19,7 +19,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/interop/native/std"
 	"github.com/nspcc-dev/neo-go/pkg/interop/runtime"
 	"github.com/nspcc-dev/neo-go/pkg/interop/storage"
-	"github.com/nspcc-dev/neo-go/pkg/interop/util"
 	"github.com/nspcc-dev/neofs-contract/common"
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 )
@@ -221,7 +220,7 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 	if !runtime.CheckWitness(from) {
 		return false
 	}
-	if !util.Equals(from, to) {
+	if !from.Equals(to) {
 		// update token info
 		ns.Owner = to
 		ns.Admin = nil
