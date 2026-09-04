@@ -1600,8 +1600,8 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		cnr.Owner = to
 
 		storage.LocalPut(key, std.Serialize(cnr))
-		storage.LocalPut(append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
 		storage.LocalDelete(append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
+		storage.LocalPut(append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
 
 		copy(bin[off:], toAddr)
 		storage.LocalPut(binKey, bin)
