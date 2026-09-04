@@ -371,7 +371,7 @@ func TestNNSSetAdmin(t *testing.T) {
 	expectedProps := stackitem.NewMapWithValue([]stackitem.MapElement{
 		{Key: stackitem.Make("name"), Value: stackitem.Make("testdomain.com")},
 		{Key: stackitem.Make("expiration"), Value: stackitem.Make(expiration)},
-		{Key: stackitem.Make("admin"), Value: stackitem.Make(acc.ScriptHash().BytesBE())}})
+		{Key: stackitem.Make("admin"), Value: stackitem.NewBuffer(acc.ScriptHash().BytesBE())}})
 	cAcc.Invoke(t, expectedProps, "properties", "testdomain.com")
 
 	cAcc.Invoke(t, stackitem.Null{}, "addRecord",
