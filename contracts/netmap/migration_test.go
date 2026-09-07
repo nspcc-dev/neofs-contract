@@ -129,6 +129,13 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 				// removed starting from 0.27.0 contracts
 				bytes.Equal(sa[0].Value().([]byte), []byte("HomomorphicHashingDisabled")))
 	})
+	// NeoGo 0.123.0 quirk.
+	for i := range newConfigs {
+		newConfigs[i] = stackitem.DeepCopy(newConfigs[i], true)
+	}
+	for i := range prevConfigs {
+		prevConfigs[i] = stackitem.DeepCopy(prevConfigs[i], true)
+	}
 	require.ElementsMatch(t, prevConfigs, newConfigs, "config should remain")
 	require.Equal(t, prevNodes, newNodes)
 	require.Equal(t, prevNodesPrevEpoch, newNodesPrevEpoch)

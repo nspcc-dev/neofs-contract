@@ -1787,6 +1787,7 @@ func TestContainerCreateV2(t *testing.T) {
 	id := cid.NewFromMarshalledContainer(cnrBytes)
 
 	cnrFields := containerToStructFields(cnr)
+	cnrFieldsStatic := containerToStructFieldsStatic(cnr)
 
 	t.Run("no alphabet witness", func(t *testing.T) {
 		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
@@ -1917,7 +1918,7 @@ func TestContainerCreateV2(t *testing.T) {
 	nnsInv.InvokeFail(t, "token not found", "getRecords", domainName+".container", int64(recordtype.TXT))
 
 	// storage
-	assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
+	assertSuccessStorage(t, id, cnrFieldsStatic, cnrBytes, ownerID)
 	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 	require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
@@ -1949,6 +1950,7 @@ func TestContainerCreateV2(t *testing.T) {
 
 		cnr.WriteDomain(d)
 		cnrFields := containerToStructFields(cnr)
+		cnrFieldsStatic := containerToStructFieldsStatic(cnr)
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
@@ -1972,7 +1974,7 @@ func TestContainerCreateV2(t *testing.T) {
 			fullDomain, int64(recordtype.TXT))
 
 		// storage
-		assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
+		assertSuccessStorage(t, id, cnrFieldsStatic, cnrBytes, ownerID)
 		require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
 		require.EqualValues(t, "my-domain.container", getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
@@ -1991,6 +1993,7 @@ func TestContainerCreateV2(t *testing.T) {
 		cnr.SetAttribute("__NEOFS__METAINFO_CONSISTENCY", "any")
 
 		cnrFields := containerToStructFields(cnr)
+		cnrFieldsStatic := containerToStructFieldsStatic(cnr)
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
@@ -2004,7 +2007,7 @@ func TestContainerCreateV2(t *testing.T) {
 		inv.Invoke(t, stackitem.Null{}, "alias", id[:])
 
 		// storage
-		assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
+		assertSuccessStorage(t, id, cnrFieldsStatic, cnrBytes, ownerID)
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
@@ -2024,6 +2027,7 @@ func TestContainerCreateV2(t *testing.T) {
 		cnr.SetAttribute("__NEOFS__METAINFO_CONSISTENCY", "any")
 
 		cnrFields := containerToStructFields(cnr)
+		cnrFieldsStatic := containerToStructFieldsStatic(cnr)
 		cnrBytes := cnr.Marshal()
 		id := cid.NewFromMarshalledContainer(cnrBytes)
 
@@ -2037,7 +2041,7 @@ func TestContainerCreateV2(t *testing.T) {
 		inv.Invoke(t, stackitem.Null{}, "alias", id[:])
 
 		// storage
-		assertSuccessStorage(t, id, cnrFields, cnrBytes, ownerID)
+		assertSuccessStorage(t, id, cnrFieldsStatic, cnrBytes, ownerID)
 		require.Nil(t, getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// notifications
@@ -2561,12 +2565,22 @@ func containerToStructFields(cnr container.Container) []stackitem.Item {
 			stackitem.Make(cnr.Version().Major()),
 			stackitem.Make(cnr.Version().Minor()),
 		}),
-		stackitem.Make(ownerID[1:][:20]),
-		stackitem.Make(cnr.ProtoMessage().Nonce),
+		stackitem.NewBuffer(ownerID[1:][:20]),
+		stackitem.NewBuffer(cnr.ProtoMessage().Nonce),
 		stackitem.Make(uint32(cnr.BasicACL())),
 		stackitem.NewArray(attrs),
-		stackitem.NewByteArray(cnr.PlacementPolicy().Marshal()),
+		stackitem.NewBuffer(cnr.PlacementPolicy().Marshal()),
 	}
+}
+
+func containerToStructFieldsStatic(cnr container.Container) []stackitem.Item {
+	var res = containerToStructFields(cnr)
+
+	res[1], _ = res[1].Convert(stackitem.ByteArrayT)
+	res[2], _ = res[2].Convert(stackitem.ByteArrayT)
+	res[5], _ = res[5].Convert(stackitem.ByteArrayT)
+
+	return res
 }
 
 func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr container.Container) {
