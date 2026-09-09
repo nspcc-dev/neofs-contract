@@ -2688,7 +2688,7 @@ func TestSetAttribute(t *testing.T) {
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
+		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res = inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 1)
