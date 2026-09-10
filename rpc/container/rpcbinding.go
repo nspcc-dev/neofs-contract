@@ -74,6 +74,12 @@ type ContainerInfo struct {
 	StoragePolicy []byte
 }
 
+// ContainerInfoVersioned is a contract-specific container.InfoVersioned type used by its methods.
+type ContainerInfoVersioned struct {
+	Info             *ContainerInfo
+	ContainerVersion *big.Int
+}
+
 // ContainerNodeReport is a contract-specific container.NodeReport type used by its methods.
 type ContainerNodeReport struct {
 	PublicKey       *keys.PublicKey
@@ -152,6 +158,12 @@ type UserQuotaSetEvent struct {
 	UserID     []byte
 	LimitValue *big.Int
 	Hard       bool
+}
+
+// ContainerUpdatedEvent represents "ContainerUpdated" event emitted by the contract.
+type ContainerUpdatedEvent struct {
+	Container util.Uint256
+	Version   *big.Int
 }
 
 // Invoker is used by ContractReader to call various safe methods.
@@ -277,6 +289,11 @@ func (c *ContractReader) GetReportByNode(cid util.Uint256, pubKey *keys.PublicKe
 // GetTakenSpaceByUser invokes `getTakenSpaceByUser` method of contract.
 func (c *ContractReader) GetTakenSpaceByUser(user []byte) (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "getTakenSpaceByUser", user))
+}
+
+// GetVersionedInfo invokes `getVersionedInfo` method of contract.
+func (c *ContractReader) GetVersionedInfo(id util.Uint256) (*ContainerInfoVersioned, error) {
+	return itemToContainerInfoVersioned(unwrap.Item(c.invoker.Call(c.hash, "getVersionedInfo", id)))
 }
 
 // IterateAllReportSummaries invokes `iterateAllReportSummaries` method of contract.
@@ -1818,6 +1835,113 @@ func (res *ContainerInfo) ToSCParameter() (smartcontract.Parameter, error) {
 	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
 }
 
+// itemToContainerInfoVersioned converts stack item into *ContainerInfoVersioned.
+// NULL item is returned as nil pointer without error.
+func itemToContainerInfoVersioned(item stackitem.Item, err error) (*ContainerInfoVersioned, error) {
+	if err != nil {
+		return nil, err
+	}
+	_, null := item.(stackitem.Null)
+	if null {
+		return nil, nil
+	}
+	var res = new(ContainerInfoVersioned)
+	err = res.FromStackItem(item)
+	return res, err
+}
+
+// Ensure *ContainerInfoVersioned is a proper [stackitem.Convertible].
+var _ = stackitem.Convertible(&ContainerInfoVersioned{})
+
+// Ensure *ContainerInfoVersioned is a proper [smartcontract.Convertible].
+var _ = smartcontract.Convertible(&ContainerInfoVersioned{})
+
+// FromStackItem retrieves fields of ContainerInfoVersioned from the given
+// [stackitem.Item] or returns an error if it's not possible to do to so.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerInfoVersioned) FromStackItem(item stackitem.Item) error {
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	res.Info, err = itemToContainerInfo(arr[index], nil)
+	if err != nil {
+		return fmt.Errorf("field Info: %w", err)
+	}
+
+	index++
+	res.ContainerVersion, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field ContainerVersion: %w", err)
+	}
+
+	return nil
+}
+
+// ToStackItem creates [stackitem.Item] representing ContainerInfoVersioned.
+// It implements [stackitem.Convertible] interface.
+func (res *ContainerInfoVersioned) ToStackItem() (stackitem.Item, error) {
+	if res == nil {
+		return stackitem.Null{}, nil
+	}
+
+	var (
+		err   error
+		itm   stackitem.Item
+		items = make([]stackitem.Item, 0, 2)
+	)
+	itm, err = res.Info.ToStackItem()
+	if err != nil {
+		return nil, fmt.Errorf("field Info: %w", err)
+	}
+	items = append(items, itm)
+
+	itm, err = (*stackitem.BigInteger)(res.ContainerVersion), error(nil)
+	if err != nil {
+		return nil, fmt.Errorf("field ContainerVersion: %w", err)
+	}
+	items = append(items, itm)
+
+	return stackitem.NewStruct(items), nil
+}
+
+// ToSCParameter creates [smartcontract.Parameter] representing ContainerInfoVersioned.
+// It implements [smartcontract.Convertible] interface so that ContainerInfoVersioned
+// could be used with invokers.
+func (res *ContainerInfoVersioned) ToSCParameter() (smartcontract.Parameter, error) {
+	if res == nil {
+		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
+	}
+
+	var (
+		err  error
+		prm  smartcontract.Parameter
+		prms = make([]smartcontract.Parameter, 0, 2)
+	)
+	prm, err = res.Info.ToSCParameter()
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field Info: %w", err)
+	}
+	prms = append(prms, prm)
+
+	prm, err = smartcontract.NewParameterFromValue(res.ContainerVersion)
+	if err != nil {
+		return smartcontract.Parameter{}, fmt.Errorf("field ContainerVersion: %w", err)
+	}
+	prms = append(prms, prm)
+
+	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
+}
+
 // itemToContainerNodeReport converts stack item into *ContainerNodeReport.
 // NULL item is returned as nil pointer without error.
 func itemToContainerNodeReport(item stackitem.Item, err error) (*ContainerNodeReport, error) {
@@ -2871,6 +2995,74 @@ func (e *UserQuotaSetEvent) FromStackItem(item *stackitem.Array) error {
 	e.Hard, err = arr[index].TryBool()
 	if err != nil {
 		return fmt.Errorf("field Hard: %w", err)
+	}
+
+	return nil
+}
+
+// ContainerUpdatedEventsFromApplicationLog retrieves a set of all emitted events
+// with "ContainerUpdated" name from the provided [result.ApplicationLog].
+func ContainerUpdatedEventsFromApplicationLog(log *result.ApplicationLog) ([]*ContainerUpdatedEvent, error) {
+	if log == nil {
+		return nil, errors.New("nil application log")
+	}
+
+	var res []*ContainerUpdatedEvent
+	for i, ex := range log.Executions {
+		for j, e := range ex.Events {
+			if e.Name != "ContainerUpdated" {
+				continue
+			}
+			event := new(ContainerUpdatedEvent)
+			err := event.FromStackItem(e.Item)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize ContainerUpdatedEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
+			}
+			res = append(res, event)
+		}
+	}
+
+	return res, nil
+}
+
+// FromStackItem converts provided [stackitem.Array] to ContainerUpdatedEvent or
+// returns an error if it's not possible to do to so.
+func (e *ContainerUpdatedEvent) FromStackItem(item *stackitem.Array) error {
+	if item == nil {
+		return errors.New("nil item")
+	}
+	arr, ok := item.Value().([]stackitem.Item)
+	if !ok {
+		return errors.New("not an array")
+	}
+	if len(arr) != 2 {
+		return errors.New("wrong number of structure elements")
+	}
+
+	var (
+		index = -1
+		err   error
+	)
+	index++
+	e.Container, err = func(item stackitem.Item) (util.Uint256, error) {
+		b, err := item.TryBytes()
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		u, err := util.Uint256DecodeBytesBE(b)
+		if err != nil {
+			return util.Uint256{}, err
+		}
+		return u, nil
+	}(arr[index])
+	if err != nil {
+		return fmt.Errorf("field Container: %w", err)
+	}
+
+	index++
+	e.Version, err = arr[index].TryInteger()
+	if err != nil {
+		return fmt.Errorf("field Version: %w", err)
 	}
 
 	return nil

@@ -40,6 +40,13 @@ type (
 		StoragePolicy []byte
 	}
 
+	// InfoVersioned is the same Info, but it also is versioned.
+	// Every container changing action increases version counter.
+	InfoVersioned struct {
+		Info
+		ContainerVersion uint32
+	}
+
 	StorageNode struct {
 		Info []byte
 	}
@@ -181,6 +188,8 @@ func _deploy(data any, isUpdate bool) {
 
 			const proxyContractKey = "proxyScriptHash"
 			storage.LocalDelete([]byte(proxyContractKey))
+
+			migrateVersionedContainers()
 		}
 
 		return
@@ -513,7 +522,7 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	ownerAddr := scriptHashToAddress(cnr.Owner)
 
-	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(cnr))
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initialContainerInfo(cnr)))
 	storage.LocalPut(append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
 	storage.LocalPut(append([]byte{containerKeyPrefix}, id...), cnrBytes)
 
@@ -557,7 +566,7 @@ func AddStructs() bool {
 
 		cnr := fromBytes(protobufKV.Value)
 
-		storage.LocalPut(structKey, std.Serialize(cnr))
+		storage.LocalPut(structKey, std.Serialize(initialContainerInfo(cnr)))
 
 		notifyNEP11Transfer(protobufKV.Key, nil, cnr.Owner)
 
@@ -692,7 +701,15 @@ func deleteNNSRecords(domain string) {
 
 // GetInfo reads container by ID. If the container is missing, GetInfo throws
 // [cst.NotFoundError] exception.
+//
+// Deprecated: use [GetVersionedInfo] instead.
 func GetInfo(id interop.Hash256) Info {
+	return GetVersionedInfo(id).Info
+}
+
+// GetVersionedInfo reads versioned container by ID. If the container is
+// missing, GetVersionedInfo throws [cst.NotFoundError] exception.
+func GetVersionedInfo(id interop.Hash256) InfoVersioned {
 	res, ok := tryGetInfo(id)
 	if !ok {
 		panic(cst.NotFoundError)
@@ -700,15 +717,17 @@ func GetInfo(id interop.Hash256) Info {
 	return res
 }
 
-func tryGetInfo(id interop.Hash256) (Info, bool) {
+func tryGetInfo(id interop.Hash256) (InfoVersioned, bool) {
 	val := storage.LocalGet(append([]byte{infoPrefix}, id...))
 	if val == nil {
 		if val = storage.LocalGet(append([]byte{containerKeyPrefix}, id...)); val != nil {
-			return fromBytes(val), true
+			// raw container data is useless in terms of versioning anyway
+			info := fromBytes(val)
+			return initialContainerInfo(info), true
 		}
-		return Info{}, false
+		return InfoVersioned{}, false
 	}
-	return std.Deserialize(val).(Info), true
+	return std.Deserialize(val).(InfoVersioned), true
 }
 
 // Get method returns a structure that contains a stable marshaled Container structure,
@@ -1562,6 +1581,9 @@ func TokensOf(owner interop.Hash160) iterator.Iterator {
 // [cst.ErrorDeleted] exception.
 //
 // Transfer implements NEP-11 method.
+//
+// Changing container owner increments container version and emits 'ContainerUpdated'
+// notification.
 func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 	if len(to) != interop.Hash160Len {
 		panic("invalid receiver len " + std.Itoa10(len(to)))
@@ -1579,11 +1601,11 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 
 	key := append([]byte{infoPrefix}, tokenID...)
 
-	var cnr Info
+	var cnr InfoVersioned
 	if item := storage.LocalGet(key); item == nil {
-		cnr = fromBytes(bin)
+		cnr = initialContainerInfo(fromBytes(bin))
 	} else {
-		cnr = std.Deserialize(item).(Info)
+		cnr = std.Deserialize(item).(InfoVersioned)
 	}
 
 	if !runtime.CheckWitness(cnr.Owner) || !runtime.CheckWitness(to) {
@@ -1598,6 +1620,9 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		toAddr := scriptHashToAddress(to)
 
 		cnr.Owner = to
+		cnr.ContainerVersion++
+
+		runtime.Notify("ContainerUpdated", interop.Hash256(tokenID), cnr.ContainerVersion)
 
 		storage.LocalPut(key, std.Serialize(cnr))
 		storage.LocalDelete(append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
@@ -1673,7 +1698,7 @@ func Properties(tokenID []byte) map[string]any {
 
 		cnr = fromBytes(binItem)
 	} else {
-		cnr = std.Deserialize(item).(Info)
+		cnr = std.Deserialize(item).(InfoVersioned).Info
 	}
 
 	props := make(map[string]any, 1+len(cnr.Attributes))
@@ -1720,7 +1745,7 @@ func addContainer(id, owner, container []byte, info Info) {
 	idKey := append([]byte{containerKeyPrefix}, id...)
 	storage.LocalPut(idKey, container)
 
-	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(info))
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initialContainerInfo(info)))
 }
 
 func removeContainer(id []byte, owner []byte) {
@@ -1842,7 +1867,7 @@ func scriptHashToAddress(h interop.Hash160) []byte {
 	return addr
 }
 
-func checkLock(cnr Info) string {
+func checkLock(cnr InfoVersioned) string {
 	for i := range cnr.Attributes {
 		if cnr.Attributes[i].Key == lockAttributeName {
 			until := std.Atoi10(cnr.Attributes[i].Value) * 1000
@@ -2243,6 +2268,9 @@ func attributeFromBytes(b []byte) (Attribute, string) {
 // protocol.
 //
 // If container is missing, SetAttribute throws [cst.NotFoundError] exception.
+//
+// Setting an attribute increments container version and emits 'ContainerUpdated'
+// notification.
 func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
@@ -2260,7 +2288,7 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 
 	var (
 		idx  = -1
-		info = GetInfo(cID)
+		info = GetVersionedInfo(cID)
 	)
 
 	for i := range info.Attributes {
@@ -2309,12 +2337,14 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 		})
 	}
 
-	cnrBytes := toBytes(info)
+	info.ContainerVersion++
+	cnrBytes := toBytes(info.Info)
 
 	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
 	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
+	runtime.Notify("ContainerUpdated", cID, info.ContainerVersion)
 }
 
 func validateCORSAttribute(payload string) {
@@ -2460,6 +2490,9 @@ func validateCORSExposeHeaders(items []any) string {
 // protocol.
 //
 // If container is missing, RemoveAttribute throws [cst.NotFoundError] exception.
+//
+// Removing an attribute increments container version and emits 'ContainerUpdated'
+// notification.
 func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
@@ -2473,7 +2506,7 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 
 	var (
 		index = -1
-		info  = GetInfo(cID)
+		info  = GetVersionedInfo(cID)
 	)
 
 	for i := range info.Attributes {
@@ -2503,11 +2536,35 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 		return
 	}
 
+	info.ContainerVersion++
+
 	util.Remove(info.Attributes, index)
-	cnrBytes := toBytes(info)
+	cnrBytes := toBytes(info.Info)
 
 	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
 	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
+	runtime.Notify("ContainerUpdated", cID, info.ContainerVersion)
+}
+
+func initialContainerInfo(cnr Info) InfoVersioned {
+	const initialVersion = 1
+	return InfoVersioned{
+		Info:             cnr,
+		ContainerVersion: initialVersion,
+	}
+}
+
+// nolint:unused
+func migrateVersionedContainers() {
+	it := storage.LocalFind([]byte{infoPrefix}, storage.None)
+	for iterator.Next(it) {
+		var (
+			kv            = iterator.Value(it).(storage.KeyValue)
+			info          = std.Deserialize(kv.Value).(Info)
+			versionedInfo = initialContainerInfo(info)
+		)
+		storage.LocalPut(kv.Key, std.Serialize(versionedInfo))
+	}
 }
