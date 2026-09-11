@@ -129,6 +129,26 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	// assert billing info's Account field is filled (< 0.26.1 migration)
 	assertBillingMigration(t, c)
+
+	// assert containers have default "1" versions (< 0.27.0 migration)
+	assertContainerVersions(t, c)
+}
+
+func assertContainerVersions(t *testing.T, c *migration.Contract) {
+	c.SeekStorage([]byte{0}, func(k, v []byte) bool {
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+
+		fields := item.Value().([]stackitem.Item)
+		require.Len(t, fields, 2) // {Info, ContainerVersion}
+
+		ver, err := fields[1].TryInteger()
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, ver.Int64())
+
+		return true
+	})
 }
 
 func assertBillingMigration(t *testing.T, c *migration.Contract) {

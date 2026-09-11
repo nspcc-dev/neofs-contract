@@ -1879,7 +1879,12 @@ func TestContainerCreateV2(t *testing.T) {
 		gotStruct, err := stackitem.Deserialize(getStorageItem(slices.Concat([]byte{0}, id[:])))
 		require.NoError(t, err)
 
-		require.Equal(t, stackitem.NewStruct(cnrFields), gotStruct)
+		var cnrVersioned = []stackitem.Item{
+			stackitem.NewStruct(cnrFields),
+			stackitem.Make(1),
+		}
+
+		require.Equal(t, stackitem.NewStruct(cnrVersioned), gotStruct)
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerID[:], id[:])))
 		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	}
@@ -2335,8 +2340,9 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, 1, "balanceOf", usr2Acc)
 
 	events := cmtInv.GetTxExecResult(t, txHash).Events
-	require.Len(t, events, 1)
-	assertNotificationEvent(t, events[0], "Transfer", usr1Acc[:], usr2Acc[:], big.NewInt(1), id[:])
+	require.Len(t, events, 2)
+	assertNotificationEvent(t, events[1], "Transfer", usr1Acc[:], usr2Acc[:], big.NewInt(1), id[:])
+	assertNotificationEvent(t, events[0], "ContainerUpdated", id[:], big.NewInt(2))
 
 	// contract receiver
 	testContract := deployTestNEP11Receiver(t, cmtInv.Executor)
@@ -2354,8 +2360,9 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, 1, "balanceOf", testContract)
 
 	events = cmtInv.GetTxExecResult(t, txHash).Events
-	require.Len(t, events, 1)
-	assertNotificationEvent(t, events[0], "Transfer", usr2Acc[:], testContract[:], big.NewInt(1), id[:])
+	require.Len(t, events, 2)
+	assertNotificationEvent(t, events[1], "Transfer", usr2Acc[:], testContract[:], big.NewInt(1), id[:])
+	assertNotificationEvent(t, events[0], "ContainerUpdated", id[:], big.NewInt(3))
 
 	stack, err := cmtInv.CommitteeInvoker(testContract).TestInvoke(t, "get")
 	require.NoError(t, err)
@@ -2565,11 +2572,11 @@ func containerToStructFields(cnr container.Container) []stackitem.Item {
 			stackitem.Make(cnr.Version().Major()),
 			stackitem.Make(cnr.Version().Minor()),
 		}),
-		stackitem.NewBuffer(ownerID[1:][:20]),
-		stackitem.NewBuffer(cnr.ProtoMessage().Nonce),
+		stackitem.NewByteArray(ownerID[1:][:20]),
+		stackitem.NewByteArray(cnr.ProtoMessage().Nonce),
 		stackitem.Make(uint32(cnr.BasicACL())),
 		stackitem.NewArray(attrs),
-		stackitem.NewBuffer(cnr.PlacementPolicy().Marshal()),
+		stackitem.NewByteArray(cnr.PlacementPolicy().Marshal()),
 	}
 }
 
@@ -2682,17 +2689,19 @@ func TestSetAttribute(t *testing.T) {
 		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res := inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(2))
 
 		cnr2.SetAttribute("CORS", string(pl))
 		assertGetInfo(t, inv, cID, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
+		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res = inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(3))
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -2735,11 +2744,12 @@ func TestSetAttribute(t *testing.T) {
 		txHash := inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res := inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
+		require.Len(t, res.Events, 2)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", id[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", id[:], big.NewInt(2))
 
 		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, id, cnr)
 
 		t.Run("change", func(t *testing.T) {
 			newVal := strconv.Itoa(int(exp - 1))
@@ -2749,11 +2759,12 @@ func TestSetAttribute(t *testing.T) {
 			txHash = inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal,
 				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 			res = inv.GetTxExecResult(t, txHash)
-			require.Len(t, res.Events, 1)
-			assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
+			require.Len(t, res.Events, 2)
+			assertNotificationEvent(t, res.Events[0], "AttributeChanged", id[:], []byte("__NEOFS__LOCK_UNTIL"))
+			assertNotificationEvent(t, res.Events[1], "ContainerUpdated", id[:], big.NewInt(3))
 
 			cnr.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
-			assertGetInfo(t, inv, cID, cnr)
+			assertGetInfo(t, inv, id, cnr)
 		})
 	})
 }
@@ -2832,8 +2843,9 @@ func TestRemoveAttribute(t *testing.T) {
 		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res := inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(2))
 
 		var cnr2 container.Container
 		cnr.CopyTo(&cnr2)
@@ -2843,8 +2855,9 @@ func TestRemoveAttribute(t *testing.T) {
 		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res = inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(3))
 		assertGetInfo(t, inv, cID, cnr)
 	})
 
@@ -2857,8 +2870,9 @@ func TestRemoveAttribute(t *testing.T) {
 		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr,
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res := inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(4))
 
 		t.Run("not yet passed", func(t *testing.T) {
 			inv.InvokeFail(t, "lock expiration time "+strconv.Itoa(int(exp*1000))+" has not passed yet, now "+strconv.Itoa(int(curBlockTime+2)),
@@ -2873,8 +2887,9 @@ func TestRemoveAttribute(t *testing.T) {
 		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
 			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 		res = inv.GetTxExecResult(t, txHash)
-		require.Len(t, res.Events, 1)
+		require.Len(t, res.Events, 2)
 		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(5))
 
 		assertGetInfo(t, inv, cID, cnr)
 	})

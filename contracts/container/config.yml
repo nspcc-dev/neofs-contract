@@ -3,7 +3,7 @@ supportedstandards: ["NEP-11", "NEP-22"]
 safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
               "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser",
-              "getBillingStatByNode", "iterateBillingStats", "getInfo",
+              "getBillingStatByNode", "iterateBillingStats", "getInfo", "getVersionedInfo",
               "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties",
               "getReportByAccount"]
 permissions:
@@ -78,6 +78,12 @@ events:
         type: Integer
       - name: tokenId
         type: ByteString
+  - name: ContainerUpdated
+    parameters:
+      - name: Container
+        type: Hash256
+      - name: Version
+        type: Integer
 overloads:
   putMeta: put
   putNamedOverloaded: put

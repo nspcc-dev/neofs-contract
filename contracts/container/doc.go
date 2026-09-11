@@ -89,6 +89,14 @@ removeAttribute invocations when mentioned attribute is affected.
 	    type: Hash256
 	  - name: attribute
 	    type: String # Name of attribute
+
+ContainerUpdated notification. Produced when container has been changed.
+
+	ContainerUpdated
+	  - name: ContainerID
+	    type: Hash256
+	  - name: Version
+	    type: Integer
 */
 package container
 
@@ -113,7 +121,7 @@ Key-value storage format:
    NNS root domain zone for containers
  - 'x<cid>' -> []byte
    container descriptors encoded into NeoFS API binary protocol format
- - '0x00<cid>' -> std.Serialize(Info)
+ - '0x00<cid>' -> std.Serialize(InfoVersioned)
    container descriptors
  - 'd<cid>' -> ""
    deleted container IDs with no values for replay protection
