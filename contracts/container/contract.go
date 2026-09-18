@@ -606,43 +606,6 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	return false
 }
 
-// Delete method removes a container from the contract storage if it has been
-// invoked by Alphabet nodes of the Inner Ring. Otherwise, it produces
-// containerDelete notification.
-//
-// Signature is a RFC6979 signature of the container ID.
-// Token is optional and should be a stable marshaled SessionToken structure from
-// API.
-//
-// If the container doesn't exist, it panics with NotFoundError.
-//
-// Deprecated: use [Remove] instead.
-func Delete(containerID []byte, signature interop.Signature, token []byte) {
-	cnr, ok := tryGetInfo(containerID)
-	if !ok {
-		return
-	}
-
-	common.CheckAlphabetWitness()
-
-	if e := checkLock(cnr); e != "" {
-		panic(e)
-	}
-
-	key := append([]byte(nnsHasAliasKey), containerID...)
-	domain := string(storage.LocalGet(key))
-	if len(domain) != 0 {
-		storage.LocalDelete(key)
-		deleteNNSRecords(domain)
-	}
-
-	removeContainer(containerID, scriptHashToAddress(cnr.Owner))
-	runtime.Log("remove container")
-	runtime.Notify("DeleteSuccess", containerID)
-
-	notifyNEP11Transfer(containerID, cnr.Owner, nil)
-}
-
 // Remove removes all data for the referenced container. Remove is no-op if
 // container does not exist. On success, Remove throws 'Removed' notification
 // event.
@@ -728,21 +691,6 @@ func tryGetInfo(id interop.Hash256) (InfoWithRevision, bool) {
 		return InfoWithRevision{}, false
 	}
 	return std.Deserialize(val).(InfoWithRevision), true
-}
-
-// Get method returns a structure that contains a stable marshaled Container structure,
-// the signature, the public key of the container creator and a stable marshaled SessionToken
-// structure if it was provided.
-//
-// If the container doesn't exist, it panics with NotFoundError.
-//
-// Deprecated: use [GetInfo] instead.
-func Get(containerID []byte) Container {
-	cnt := getContainer(containerID)
-	if len(cnt.Value) == 0 {
-		panic(cst.NotFoundError)
-	}
-	return cnt
 }
 
 // GetContainerData returns binary of the container it was created with by ID.
@@ -1010,50 +958,6 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 	return storage.LocalFind(key, storage.ValuesOnly)
 }
 
-// SetEACL method sets a new extended ACL table related to the contract
-// if it was invoked by Alphabet nodes of the Inner Ring. Otherwise, it produces
-// setEACL notification.
-//
-// EACL should be a stable marshaled EACLTable structure from API. Protocol
-// version and container reference must be set in 'version' and 'container_id'
-// fields respectively.
-// Signature is a RFC6979 signature of the Container.
-// PublicKey contains the public key of the signer.
-// Token is optional and should be a stable marshaled SessionToken structure from
-// API.
-//
-// If the container doesn't exist, it panics with NotFoundError.
-//
-// Deprecated: use [PutEACL] instead.
-func SetEACL(eACL []byte, signature interop.Signature, publicKey interop.PublicKey, token []byte) {
-	// V2 format
-	// get container ID
-	lnEACL := len(eACL)
-	if lnEACL < 2 {
-		panic("missing version field in eACL BLOB")
-	}
-	offset := int(eACL[1])
-	offset = 2 + offset + 4
-	if lnEACL < offset+containerIDSize {
-		panic("missing container ID field in eACL BLOB")
-	}
-	containerID := eACL[offset : offset+containerIDSize]
-
-	ownerID := getOwnerByID(containerID)
-	if ownerID == nil {
-		panic(cst.NotFoundError)
-	}
-
-	common.CheckAlphabetWitness()
-
-	key := append(eACLPrefix, containerID...)
-
-	storage.LocalPut(key, eACL)
-
-	runtime.Log("success")
-	runtime.Notify("SetEACLSuccess", containerID, publicKey)
-}
-
 // PutEACL puts given eACL serialized according to the NeoFS API binary protocol
 // for the container it is referenced to. Operation must be allowed in the
 // container's basic ACL. If container does not exist, PutEACL throws
@@ -1082,22 +986,6 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 	storage.LocalPut(append(eACLPrefix, id...), eACL)
 
 	runtime.Notify("EACLChanged", interop.Hash256(id))
-}
-
-// EACL method returns a structure that contains a stable marshaled EACLTable structure,
-// the signature, the public key of the extended ACL setter and a stable marshaled SessionToken
-// structure if it was provided.
-//
-// If the container doesn't exist, it panics with NotFoundError.
-//
-// Deprecated: use [GetEACLData] instead.
-func EACL(containerID []byte) ExtendedACL {
-	ownerID := getOwnerByID(containerID)
-	if ownerID == nil {
-		panic(cst.NotFoundError)
-	}
-
-	return getEACL(containerID)
 }
 
 // GetEACLData returns binary of container eACL it was put with by the container
@@ -1776,16 +1664,6 @@ func removeContainer(id []byte, owner []byte) {
 	storage.LocalDelete(append([]byte{infoPrefix}, id...))
 	storage.LocalDelete(append(eACLPrefix, id...))
 	storage.LocalPut(append([]byte{deletedKeyPrefix}, id...), []byte{})
-}
-
-func getEACL(cid []byte) ExtendedACL {
-	key := append(eACLPrefix, cid...)
-	data := storage.LocalGet(key)
-	if data != nil {
-		return ExtendedACL{Value: data, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
-	}
-
-	return ExtendedACL{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
 }
 
 func getContainer(cid []byte) Container {

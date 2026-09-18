@@ -166,15 +166,15 @@ func TestContainerCount(t *testing.T) {
 	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
 	checkContainerList(t, c, [][]byte{cnt1.id[:], cnt2.id[:], cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt1.id[:], cnt1.sig, cnt1.token)
+	c.Invoke(t, stackitem.Null{}, "remove", cnt1.id[:], nil, nil, nil)
 	checkCount(t, 2)
 	checkContainerList(t, c, [][]byte{cnt2.id[:], cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt2.id[:], cnt2.sig, cnt2.token)
+	c.Invoke(t, stackitem.Null{}, "remove", cnt2.id[:], nil, nil, nil)
 	checkCount(t, 1)
 	checkContainerList(t, c, [][]byte{cnt3.id[:]})
 
-	c.Invoke(t, stackitem.Null{}, "delete", cnt3.id[:], cnt3.sig, cnt3.token)
+	c.Invoke(t, stackitem.Null{}, "remove", cnt3.id[:], nil, nil, nil)
 	checkCount(t, 0)
 	checkContainerList(t, c, [][]byte{})
 }
@@ -257,7 +257,7 @@ func TestContainerPut(t *testing.T) {
 					c.InvokeFail(t, "name is already taken", "put", putArgs...)
 				})
 
-				c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
+				c.Invoke(t, stackitem.Null{}, "remove", cnt.id[:], nil, nil, nil)
 				cNNS.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
 
 				t.Run("register in advance", func(t *testing.T) {
@@ -295,36 +295,6 @@ func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signe
 	return acc, cnt
 }
 
-func TestContainerDelete(t *testing.T) {
-	c, cBal, _, _ := newContainerInvoker(t, false)
-
-	acc, cnt := addContainer(t, c, cBal)
-	ownerAcc := cnt.owner.ScriptHash()
-	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "delete",
-		cnt.id[:], cnt.sig, cnt.token)
-
-	txHash := c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-
-	res := c.GetTxExecResult(t, txHash)
-	events := res.Events
-	require.Len(t, events, 2)
-	assertNotificationEvent(t, events[0], "DeleteSuccess", cnt.id[:])
-	assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], nil, big.NewInt(1), cnt.id[:])
-
-	t.Run("missing container", func(t *testing.T) {
-		id := cnt.id
-		id[0] ^= 0xFF
-		c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-	})
-
-	c.InvokeFail(t, containerconst.NotFoundError, "get", cnt.id[:])
-	c.InvokeFail(t, containerconst.NotFoundError, "getInfo", cnt.id[:])
-	// Try to put the same container again (replay attack).
-	balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
-	c.InvokeFail(t, containerconst.ErrorDeleted, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
-}
-
 func TestContainerOwner(t *testing.T) {
 	c, cBal, _, _ := newContainerInvoker(t, false)
 
@@ -338,101 +308,6 @@ func TestContainerOwner(t *testing.T) {
 
 	owner, _ := base58.Decode(address.Uint160ToString(acc.ScriptHash()))
 	c.Invoke(t, stackitem.NewBuffer(owner), "owner", cnt.id[:])
-}
-
-func TestContainerGet(t *testing.T) {
-	c, cBal, _, _ := newContainerInvoker(t, false)
-
-	_, cnt := addContainer(t, c, cBal)
-
-	t.Run("missing container", func(t *testing.T) {
-		id := cnt.id
-		id[0] ^= 0xFF
-		c.InvokeFail(t, containerconst.NotFoundError, "get", id[:])
-	})
-
-	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make(cnt.value),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-	})
-	c.Invoke(t, expected, "get", cnt.id[:])
-}
-
-type eacl struct {
-	value []byte
-	sig   []byte
-	pub   []byte
-	token []byte
-}
-
-func dummyEACL(containerID [32]byte) eacl {
-	e := make([]byte, 50)
-	copy(e[6:], containerID[:])
-	return eacl{
-		value: e,
-		sig:   randomBytes(64),
-		pub:   randomBytes(33),
-		token: randomBytes(42),
-	}
-}
-
-func TestContainerSetEACL(t *testing.T) {
-	c, cBal, _, _ := newContainerInvoker(t, false)
-
-	acc, cnt := addContainer(t, c, cBal)
-
-	t.Run("missing container", func(t *testing.T) {
-		id := cnt.id
-		id[0] ^= 0xFF
-		e := dummyEACL(id)
-		c.InvokeFail(t, containerconst.NotFoundError, "setEACL", e.value, e.sig, e.pub, e.token)
-	})
-
-	e := dummyEACL(cnt.id)
-	setArgs := []any{e.value, e.sig, e.pub, e.token}
-	cAcc := c.WithSigners(acc)
-	cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "setEACL", setArgs...)
-
-	c.Invoke(t, stackitem.Null{}, "setEACL", setArgs...)
-
-	expected := stackitem.NewStruct([]stackitem.Item{
-		stackitem.Make(e.value),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-		stackitem.NewBuffer([]byte{}),
-	})
-	c.Invoke(t, expected, "eACL", cnt.id[:])
-
-	replaceEACLArg := func(eACL []byte) []any {
-		res := make([]any, len(setArgs))
-		copy(res, setArgs)
-		res[0] = eACL
-		return res
-	}
-
-	checkInvalidEACL := func(eACL []byte, exception string) {
-		c.InvokeFail(t, exception, "setEACL", replaceEACLArg(eACL)...)
-	}
-
-	const missingVersionException = "missing version field in eACL BLOB"
-	const missingContainerException = "missing container ID field in eACL BLOB"
-
-	checkInvalidEACL([]byte{}, missingVersionException)
-	checkInvalidEACL([]byte{0}, missingVersionException)
-	checkInvalidEACL([]byte{0, 0, 0}, missingContainerException)
-
-	const offset = byte(20) // any
-
-	// first byte can be any since protobuf is not completely decoded
-	prefix := append([]byte{0, offset}, make([]byte, offset+4)...)
-
-	checkInvalidEACL(prefix, missingContainerException)
-	checkInvalidEACL(append(prefix, make([]byte, len(cnt.id)-1)...), missingContainerException)
-	c.Invoke(t, stackitem.Null{}, "setEACL", replaceEACLArg(append(prefix, cnt.id[:]...))...)
-	c.Invoke(t, stackitem.Null{}, "delete", cnt.id[:], cnt.sig, cnt.token)
-	c.InvokeFail(t, containerconst.NotFoundError, "eACL", cnt.id[:])
 }
 
 func TestContainerSizeReports(t *testing.T) {
@@ -1845,12 +1720,6 @@ func TestContainerCreateV2(t *testing.T) {
 		inv.Invoke(t, stackitem.NewStruct(cnrFields), "getInfo", id[:])
 		inv.Invoke(t, stackitem.Make(cnrBytes), "getContainerData", id[:])
 		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", id[:])
-		inv.Invoke(t, stackitem.NewStruct([]stackitem.Item{
-			stackitem.Make(cnrBytes),
-			stackitem.NewBuffer([]byte{}),
-			stackitem.NewBuffer([]byte{}),
-			stackitem.NewBuffer([]byte{}),
-		}), "get", id[:])
 		zeroQuota := stackitem.NewStruct([]stackitem.Item{stackitem.Make(0), stackitem.Make(0)})
 		inv.Invoke(t, zeroQuota, "userQuota", ownerID[:])
 		inv.Invoke(t, zeroQuota, "containerQuota", id[:])

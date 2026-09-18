@@ -56,14 +56,6 @@ type ContainerEpochBillingStat struct {
 	PreviousEpochAverageSize *big.Int
 }
 
-// ContainerExtendedACL is a contract-specific container.ExtendedACL type used by its methods.
-type ContainerExtendedACL struct {
-	Value []byte
-	Sig   []byte
-	Pub   *keys.PublicKey
-	Token []byte
-}
-
 // ContainerInfo is a contract-specific container.Info type used by its methods.
 type ContainerInfo struct {
 	Version       *ContainerAPIVersion
@@ -119,21 +111,10 @@ type CreatedEvent struct {
 	Owner       []byte
 }
 
-// DeleteSuccessEvent represents "DeleteSuccess" event emitted by the contract.
-type DeleteSuccessEvent struct {
-	ContainerID []byte
-}
-
 // RemovedEvent represents "Removed" event emitted by the contract.
 type RemovedEvent struct {
 	ContainerID util.Uint256
 	Owner       []byte
-}
-
-// SetEACLSuccessEvent represents "SetEACLSuccess" event emitted by the contract.
-type SetEACLSuccessEvent struct {
-	ContainerID []byte
-	PublicKey   *keys.PublicKey
 }
 
 // EACLChangedEvent represents "EACLChanged" event emitted by the contract.
@@ -239,16 +220,6 @@ func (c *ContractReader) ContainersOfExpanded(owner []byte, _numOfIteratorItems 
 // Count invokes `count` method of contract.
 func (c *ContractReader) Count() (*big.Int, error) {
 	return unwrap.BigInt(c.invoker.Call(c.hash, "count"))
-}
-
-// EACL invokes `eACL` method of contract.
-func (c *ContractReader) EACL(containerID []byte) (*ContainerExtendedACL, error) {
-	return itemToContainerExtendedACL(unwrap.Item(c.invoker.Call(c.hash, "eACL", containerID)))
-}
-
-// Get invokes `get` method of contract.
-func (c *ContractReader) Get(containerID []byte) (*ContainerContainer, error) {
-	return itemToContainerContainer(unwrap.Item(c.invoker.Call(c.hash, "get", containerID)))
 }
 
 // GetBillingStatByNode invokes `getBillingStatByNode` method of contract.
@@ -512,28 +483,6 @@ func (c *Contract) CreateV2Unsigned(cnr *ContainerInfo, invocScript []byte, veri
 	return c.actor.MakeUnsignedCall(c.hash, "createV2", nil, cnr, invocScript, verifScript, sessionToken)
 }
 
-// Delete creates a transaction invoking `delete` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) Delete(containerID []byte, signature []byte, token []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "delete", containerID, signature, token)
-}
-
-// DeleteTransaction creates a transaction invoking `delete` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) DeleteTransaction(containerID []byte, signature []byte, token []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "delete", containerID, signature, token)
-}
-
-// DeleteUnsigned creates a transaction invoking `delete` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) DeleteUnsigned(containerID []byte, signature []byte, token []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "delete", nil, containerID, signature, token)
-}
-
 // Put creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -730,28 +679,6 @@ func (c *Contract) SetAttributeTransaction(cID util.Uint256, name string, value 
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetAttributeUnsigned(cID util.Uint256, name string, value string, validUntil *big.Int, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setAttribute", nil, cID, name, value, validUntil, invocScript, verifScript, sessionToken)
-}
-
-// SetEACL creates a transaction invoking `setEACL` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) SetEACL(eACL []byte, signature []byte, publicKey *keys.PublicKey, token []byte) (util.Uint256, uint32, error) {
-	return c.actor.SendCall(c.hash, "setEACL", eACL, signature, publicKey, token)
-}
-
-// SetEACLTransaction creates a transaction invoking `setEACL` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) SetEACLTransaction(eACL []byte, signature []byte, publicKey *keys.PublicKey, token []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeCall(c.hash, "setEACL", eACL, signature, publicKey, token)
-}
-
-// SetEACLUnsigned creates a transaction invoking `setEACL` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) SetEACLUnsigned(eACL []byte, signature []byte, publicKey *keys.PublicKey, token []byte) (*transaction.Transaction, error) {
-	return c.actor.MakeUnsignedCall(c.hash, "setEACL", nil, eACL, signature, publicKey, token)
 }
 
 // SetHardContainerQuota creates a transaction invoking `setHardContainerQuota` method of the contract.
@@ -1446,159 +1373,6 @@ func (res *ContainerEpochBillingStat) ToSCParameter() (smartcontract.Parameter, 
 	prm, err = smartcontract.NewParameterFromValue(res.PreviousEpochAverageSize)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field PreviousEpochAverageSize: %w", err)
-	}
-	prms = append(prms, prm)
-
-	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
-}
-
-// itemToContainerExtendedACL converts stack item into *ContainerExtendedACL.
-// NULL item is returned as nil pointer without error.
-func itemToContainerExtendedACL(item stackitem.Item, err error) (*ContainerExtendedACL, error) {
-	if err != nil {
-		return nil, err
-	}
-	_, null := item.(stackitem.Null)
-	if null {
-		return nil, nil
-	}
-	var res = new(ContainerExtendedACL)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// Ensure *ContainerExtendedACL is a proper [stackitem.Convertible].
-var _ = stackitem.Convertible(&ContainerExtendedACL{})
-
-// Ensure *ContainerExtendedACL is a proper [smartcontract.Convertible].
-var _ = smartcontract.Convertible(&ContainerExtendedACL{})
-
-// FromStackItem retrieves fields of ContainerExtendedACL from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerExtendedACL) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 4 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	res.Value, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Value: %w", err)
-	}
-
-	index++
-	res.Sig, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Sig: %w", err)
-	}
-
-	index++
-	res.Pub, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field Pub: %w", err)
-	}
-
-	index++
-	res.Token, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Token: %w", err)
-	}
-
-	return nil
-}
-
-// ToStackItem creates [stackitem.Item] representing ContainerExtendedACL.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerExtendedACL) ToStackItem() (stackitem.Item, error) {
-	if res == nil {
-		return stackitem.Null{}, nil
-	}
-
-	var (
-		err   error
-		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 4)
-	)
-	itm, err = stackitem.NewByteArray(res.Value), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Value: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Sig), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Sig: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Pub.Bytes()), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Pub: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Token), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Token: %w", err)
-	}
-	items = append(items, itm)
-
-	return stackitem.NewStruct(items), nil
-}
-
-// ToSCParameter creates [smartcontract.Parameter] representing ContainerExtendedACL.
-// It implements [smartcontract.Convertible] interface so that ContainerExtendedACL
-// could be used with invokers.
-func (res *ContainerExtendedACL) ToSCParameter() (smartcontract.Parameter, error) {
-	if res == nil {
-		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
-	}
-
-	var (
-		err  error
-		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 4)
-	)
-	prm, err = smartcontract.NewParameterFromValue(res.Value)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Sig)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Sig: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Pub)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Pub: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Token)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Token: %w", err)
 	}
 	prms = append(prms, prm)
 
@@ -2550,58 +2324,6 @@ func (e *CreatedEvent) FromStackItem(item *stackitem.Array) error {
 	return nil
 }
 
-// DeleteSuccessEventsFromApplicationLog retrieves a set of all emitted events
-// with "DeleteSuccess" name from the provided [result.ApplicationLog].
-func DeleteSuccessEventsFromApplicationLog(log *result.ApplicationLog) ([]*DeleteSuccessEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*DeleteSuccessEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "DeleteSuccess" {
-				continue
-			}
-			event := new(DeleteSuccessEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize DeleteSuccessEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to DeleteSuccessEvent or
-// returns an error if it's not possible to do to so.
-func (e *DeleteSuccessEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 1 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.ContainerID, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field ContainerID: %w", err)
-	}
-
-	return nil
-}
-
 // RemovedEventsFromApplicationLog retrieves a set of all emitted events
 // with "Removed" name from the provided [result.ApplicationLog].
 func RemovedEventsFromApplicationLog(log *result.ApplicationLog) ([]*RemovedEvent, error) {
@@ -2665,74 +2387,6 @@ func (e *RemovedEvent) FromStackItem(item *stackitem.Array) error {
 	e.Owner, err = arr[index].TryBytes()
 	if err != nil {
 		return fmt.Errorf("field Owner: %w", err)
-	}
-
-	return nil
-}
-
-// SetEACLSuccessEventsFromApplicationLog retrieves a set of all emitted events
-// with "SetEACLSuccess" name from the provided [result.ApplicationLog].
-func SetEACLSuccessEventsFromApplicationLog(log *result.ApplicationLog) ([]*SetEACLSuccessEvent, error) {
-	if log == nil {
-		return nil, errors.New("nil application log")
-	}
-
-	var res []*SetEACLSuccessEvent
-	for i, ex := range log.Executions {
-		for j, e := range ex.Events {
-			if e.Name != "SetEACLSuccess" {
-				continue
-			}
-			event := new(SetEACLSuccessEvent)
-			err := event.FromStackItem(e.Item)
-			if err != nil {
-				return nil, fmt.Errorf("failed to deserialize SetEACLSuccessEvent from stackitem (execution #%d, event #%d): %w", i, j, err)
-			}
-			res = append(res, event)
-		}
-	}
-
-	return res, nil
-}
-
-// FromStackItem converts provided [stackitem.Array] to SetEACLSuccessEvent or
-// returns an error if it's not possible to do to so.
-func (e *SetEACLSuccessEvent) FromStackItem(item *stackitem.Array) error {
-	if item == nil {
-		return errors.New("nil item")
-	}
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 2 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	e.ContainerID, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field ContainerID: %w", err)
-	}
-
-	index++
-	e.PublicKey, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field PublicKey: %w", err)
 	}
 
 	return nil
