@@ -1,7 +1,7 @@
 name: "NeoFS Container"
 supportedstandards: ["NEP-11", "NEP-22"]
-safemethods: ["alias", "count", "containersOf", "get", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
-              "eACL", "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
+safemethods: ["alias", "count", "containersOf", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
+              "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser",
               "getBillingStatByNode", "iterateBillingStats", "getInfo", "getRevisionedInfo",
               "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties",
@@ -28,22 +28,12 @@ events:
         type: Hash256
       - name: owner
         type: ByteArray # 25 byte N3 address
-  - name: DeleteSuccess
-    parameters:
-      - name: containerID
-        type: ByteArray
   - name: Removed
     parameters:
       - name: containerID
         type: Hash256
       - name: owner
         type: ByteArray # 25 byte N3 address
-  - name: SetEACLSuccess
-    parameters:
-      - name: containerID
-        type: ByteArray
-      - name: publicKey
-        type: PublicKey
   - name: EACLChanged
     parameters:
       - name: containerID
