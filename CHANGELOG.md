@@ -6,21 +6,43 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Go 1.26+ is required now (#585, #617)
-- Proxy contract can be used for payments with None alphabet/committee signer scope (#579)
 
 ### Updated
-- NeoGo dependency to 0.122.0 (#585, #604, #609)
-- NeoFS SDK dependency to RC21 (#585, #609)
+
+### Removed
+
+### Fixed
+
+## [0.27.0] - 2026-09-24
+
+### Added
+- Network map versioning (#612)
+- Container versioning (#624, #628)
+
+### Changed
+- Go 1.26+ is required now (#585, #617)
+- Proxy contract can be used for payments with None alphabet/committee signer scope (#579)
+- Deployment code uses NEP-27 transfers for candidate registration (available from Echidna N3 hardfork, #602)
+- Contracts use Local* storage syscalls now (available from Faun N3 hardfork, #603)
+- More GAS is left to proxy contract in balance.Emit (#608)
+- All alphabet deployment arguments are optional now (#609)
+- Netmap ticks epochs automatically with node changes on container-less networks (#613)
+
+### Updated
+- NeoGo dependency to 0.123.0 (#585, #604, #609, #620)
+- NeoFS SDK dependency to RC22 (#585, #609, #620)
 - go.uber.org/zap dependency to v1.28.0 (#585, #609)
 - google.golang.org/protobuf dependency to v1.36.12 (#585, #609)
 - github.com/mr-tron/base58 dependency from v1.2.0 to v1.3.0 (#609)
 
 ### Removed
+- Deprecated HomomorphicHashingDisabled setting from netmap contract (#591)
 - Deprecated InnerRingList method from netmap contract (#598)
 - SubmitObjectPut method from container contract with associated proxy contract logic (#601)
+- Deprecated container contract methods (#625)
 
 ### Fixed
+- Missing account in billing statistics in some cases (#618)
 
 ## [0.26.1] - 2026-02-18
 
@@ -671,7 +693,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.1...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.27.0...master
+[0.27.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...v0.26.0
 [0.25.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.0...v0.25.1
