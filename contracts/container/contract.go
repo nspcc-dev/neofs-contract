@@ -522,7 +522,7 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	ownerAddr := scriptHashToAddress(cnr.Owner)
 
-	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(InfoWithRevision{Info: cnr}))
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initInfo(cnr)))
 	storage.LocalPut(append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
 	storage.LocalPut(append([]byte{containerKeyPrefix}, id...), cnrBytes)
 
@@ -566,7 +566,7 @@ func AddStructs() bool {
 
 		cnr := fromBytes(protobufKV.Value)
 
-		storage.LocalPut(structKey, std.Serialize(InfoWithRevision{Info: cnr}))
+		storage.LocalPut(structKey, std.Serialize(initInfo(cnr)))
 
 		notifyNEP11Transfer(protobufKV.Key, nil, cnr.Owner)
 
@@ -686,7 +686,7 @@ func tryGetInfo(id interop.Hash256) (InfoWithRevision, bool) {
 		if val = storage.LocalGet(append([]byte{containerKeyPrefix}, id...)); val != nil {
 			// raw container data is useless in terms of revisions anyway
 			info := fromBytes(val)
-			return InfoWithRevision{Info: info}, true
+			return initInfo(info), true
 		}
 		return InfoWithRevision{}, false
 	}
@@ -1491,7 +1491,7 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 
 	var cnr InfoWithRevision
 	if item := storage.LocalGet(key); item == nil {
-		cnr = InfoWithRevision{Info: fromBytes(bin)}
+		cnr = initInfo(fromBytes(bin))
 	} else {
 		cnr = std.Deserialize(item).(InfoWithRevision)
 	}
@@ -1633,7 +1633,7 @@ func addContainer(id, owner, container []byte, info Info) {
 	idKey := append([]byte{containerKeyPrefix}, id...)
 	storage.LocalPut(idKey, container)
 
-	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(InfoWithRevision{Info: info}))
+	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initInfo(info)))
 }
 
 func removeContainer(id []byte, owner []byte) {
@@ -2426,6 +2426,13 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 	runtime.Notify("ContainerUpdated", cID, info.Revision)
 }
 
+func initInfo(cnr Info) InfoWithRevision {
+	return InfoWithRevision{
+		Info:     cnr,
+		Revision: 1,
+	}
+}
+
 // nolint:unused
 func migrateToContainersWithRevision() {
 	it := storage.LocalFind([]byte{infoPrefix}, storage.None)
@@ -2433,7 +2440,7 @@ func migrateToContainersWithRevision() {
 		var (
 			kv            = iterator.Value(it).(storage.KeyValue)
 			info          = std.Deserialize(kv.Value).(Info)
-			versionedInfo = InfoWithRevision{Info: info}
+			versionedInfo = initInfo(info)
 		)
 		storage.LocalPut(kv.Key, std.Serialize(versionedInfo))
 	}
