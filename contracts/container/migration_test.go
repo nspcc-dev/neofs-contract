@@ -145,7 +145,7 @@ func assertContainerVersions(t *testing.T, c *migration.Contract) {
 		rev, err := fields[1].TryInteger()
 		require.NoError(t, err)
 
-		require.EqualValues(t, 0, rev.Int64())
+		require.EqualValues(t, 1, rev.Int64())
 
 		return true
 	})
