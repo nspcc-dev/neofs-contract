@@ -979,13 +979,19 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 
 	id := eACL[idOff : idOff+containerIDSize]
 
-	if storage.LocalGet(append([]byte{containerKeyPrefix}, id...)) == nil {
+	infoKey := append([]byte{infoPrefix}, id...)
+	cnrRaw := storage.LocalGet(infoKey)
+	if cnrRaw == nil {
 		panic(cst.NotFoundError)
 	}
+	cnr := std.Deserialize(cnrRaw).(InfoWithRevision)
+	cnr.Revision++
 
 	storage.LocalPut(append(eACLPrefix, id...), eACL)
+	storage.LocalPut(infoKey, std.Serialize(cnr))
 
 	runtime.Notify("EACLChanged", interop.Hash256(id))
+	runtime.Notify("ContainerUpdated", interop.Hash256(id), cnr.Revision)
 }
 
 // GetEACLData returns binary of container eACL it was put with by the container

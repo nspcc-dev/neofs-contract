@@ -1579,8 +1579,9 @@ func TestContainerPutEACL(t *testing.T) {
 	// notifications
 	res := cntr.GetTxExecResult(t, txHash)
 	events := res.Events
-	require.Len(t, events, 1)
+	require.Len(t, events, 2)
 	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
+	assertNotificationEvent(t, events[1], "ContainerUpdated", id[:], big.NewInt(2))
 }
 
 func TestGetContainerData(t *testing.T) {
