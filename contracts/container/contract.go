@@ -1804,8 +1804,15 @@ const (
 func toBytes(cnr Info) []byte {
 	ownerAddr := scriptHashToAddress(cnr.Owner)
 
-	versionLen := iproto.SizeTag(fieldAPIVersionMajor) + iproto.SizeVarint(uint64(cnr.Version.Major)) +
-		iproto.SizeTag(fieldAPIVersionMinor) + iproto.SizeVarint(uint64(cnr.Version.Minor))
+	// proto3 omits scalar defaults. Including them would change the container
+	// bytes and CID compared with the SDK serialization.
+	var versionLen int
+	if cnr.Version.Major != 0 {
+		versionLen += iproto.SizeTag(fieldAPIVersionMajor) + iproto.SizeVarint(uint64(cnr.Version.Major))
+	}
+	if cnr.Version.Minor != 0 {
+		versionLen += iproto.SizeTag(fieldAPIVersionMinor) + iproto.SizeVarint(uint64(cnr.Version.Minor))
+	}
 
 	ownerLen := iproto.SizeTag(fieldOwnerVal) + iproto.SizeLEN(len(ownerAddr))
 
@@ -1815,14 +1822,20 @@ func toBytes(cnr Info) []byte {
 	fullLen := iproto.SizeTag(fieldAPIVersion) + iproto.SizeLEN(versionLen) +
 		iproto.SizeTag(fieldOwner) + iproto.SizeLEN(ownerLen) +
 		iproto.SizeTag(fieldNonce) + iproto.SizeLEN(len(cnr.Nonce)) +
-		iproto.SizeTag(fieldBasicACL) + iproto.SizeVarint(uint64(cnr.BasicACL)) +
 		len(cnr.Attributes)*iproto.SizeTag(fieldAttribute) +
 		iproto.SizeTag(fieldPolicy) + iproto.SizeLEN(len(cnr.StoragePolicy))
+	if cnr.BasicACL != 0 {
+		fullLen += iproto.SizeTag(fieldBasicACL) + iproto.SizeVarint(uint64(cnr.BasicACL))
+	}
 
 	attrLens := make([]int, len(cnr.Attributes))
 	for i := range cnr.Attributes {
-		attrLens[i] = attributeKeyTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Key)) +
-			attributeValTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Value))
+		if cnr.Attributes[i].Key != "" {
+			attrLens[i] += attributeKeyTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Key))
+		}
+		if cnr.Attributes[i].Value != "" {
+			attrLens[i] += attributeValTagLen + iproto.SizeLEN(len(cnr.Attributes[i].Value))
+		}
 		fullLen += iproto.SizeLEN(attrLens[i])
 	}
 
@@ -1831,10 +1844,14 @@ func toBytes(cnr Info) []byte {
 	// version
 	off := iproto.PutUvarint(b, 0, iproto.EncodeTag(fieldAPIVersion, iproto.FieldTypeLEN))
 	off += iproto.PutUvarint(b, off, uint64(versionLen))
-	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMajor, iproto.FieldTypeVARINT))
-	off += iproto.PutUvarint(b, off, uint64(cnr.Version.Major))
-	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMinor, iproto.FieldTypeVARINT))
-	off += iproto.PutUvarint(b, off, uint64(cnr.Version.Minor))
+	if cnr.Version.Major != 0 {
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMajor, iproto.FieldTypeVARINT))
+		off += iproto.PutUvarint(b, off, uint64(cnr.Version.Major))
+	}
+	if cnr.Version.Minor != 0 {
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAPIVersionMinor, iproto.FieldTypeVARINT))
+		off += iproto.PutUvarint(b, off, uint64(cnr.Version.Minor))
+	}
 
 	// owner
 	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldOwner, iproto.FieldTypeLEN))
@@ -1849,21 +1866,27 @@ func toBytes(cnr Info) []byte {
 	off += copy(b[off:], cnr.Nonce[:])
 
 	// basic ACL
-	off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldBasicACL, iproto.FieldTypeVARINT))
-	off += iproto.PutUvarint(b, off, uint64(cnr.BasicACL))
+	if cnr.BasicACL != 0 {
+		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldBasicACL, iproto.FieldTypeVARINT))
+		off += iproto.PutUvarint(b, off, uint64(cnr.BasicACL))
+	}
 
 	// attributes
 	for i := range cnr.Attributes {
 		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttribute, iproto.FieldTypeLEN))
 		off += iproto.PutUvarint(b, off, uint64(attrLens[i]))
 		// key
-		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeKey, iproto.FieldTypeLEN))
-		off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Key)))
-		off += copy(b[off:], []byte(cnr.Attributes[i].Key))
+		if cnr.Attributes[i].Key != "" {
+			off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeKey, iproto.FieldTypeLEN))
+			off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Key)))
+			off += copy(b[off:], []byte(cnr.Attributes[i].Key))
+		}
 		// value
-		off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeValue, iproto.FieldTypeLEN))
-		off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Value)))
-		off += copy(b[off:], []byte(cnr.Attributes[i].Value))
+		if cnr.Attributes[i].Value != "" {
+			off += iproto.PutUvarint(b, off, iproto.EncodeTag(fieldAttributeValue, iproto.FieldTypeLEN))
+			off += iproto.PutUvarint(b, off, uint64(len(cnr.Attributes[i].Value)))
+			off += copy(b[off:], []byte(cnr.Attributes[i].Value))
+		}
 	}
 
 	// policy

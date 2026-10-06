@@ -32,12 +32,16 @@ import (
 	"github.com/nspcc-dev/neofs-contract/contracts/nns/recordtype"
 	containerrpc "github.com/nspcc-dev/neofs-contract/rpc/container"
 	"github.com/nspcc-dev/neofs-sdk-go/container"
+	"github.com/nspcc-dev/neofs-sdk-go/container/acl"
 	cid "github.com/nspcc-dev/neofs-sdk-go/container/id"
 	containertest "github.com/nspcc-dev/neofs-sdk-go/container/test"
+	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	netmaptest "github.com/nspcc-dev/neofs-sdk-go/netmap/test"
+	protocontainer "github.com/nspcc-dev/neofs-sdk-go/proto/container"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
 	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const containerPath = "../contracts/container"
@@ -1930,6 +1934,116 @@ func TestContainerCreateV2(t *testing.T) {
 			stackitem.NewBuffer(id[:]),
 			stackitem.Null{}, // data
 		}, stack.Pop().Array())
+	})
+
+	t.Run("protobuf defaults", func(t *testing.T) {
+		tests := []struct {
+			name              string
+			major             uint32
+			minor             uint32
+			zeroACL           bool
+			attributes        []*protocontainer.Container_Attribute
+			invalidAttributes bool
+		}{
+			{name: "nonzero version", major: 2, minor: 1},
+			{name: "zero minor", major: 2},
+			{name: "zero major", minor: 1},
+			{name: "zero version"},
+			{name: "zero basic ACL", major: 2, minor: 1, zeroACL: true},
+			{name: "combined scalar defaults", zeroACL: true},
+			{name: "nonempty attributes", major: 2, minor: 1,
+				attributes: []*protocontainer.Container_Attribute{{Key: "key", Value: "value"}}},
+			{name: "empty attribute key", major: 2, minor: 1, invalidAttributes: true,
+				attributes: []*protocontainer.Container_Attribute{{Value: "value"}}},
+			{name: "empty attribute value", major: 2, minor: 1, invalidAttributes: true,
+				attributes: []*protocontainer.Container_Attribute{{Key: "key"}}},
+			{name: "empty attribute", major: 2, minor: 1, invalidAttributes: true,
+				attributes: []*protocontainer.Container_Attribute{{}}},
+			{name: "combined defaults", zeroACL: true, invalidAttributes: true,
+				attributes: []*protocontainer.Container_Attribute{{Key: "key"}, {Value: "value"}, {}}},
+		}
+
+		balanceMint(t, balInv, ownerAcc, int64(len(tests))*containerFee, nil)
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				var testCnr container.Container
+				testCnr.Init()
+				testCnr.SetOwner(ownerID)
+				var basic acl.Basic
+				require.NoError(t, basic.DecodeString("public-read-write"))
+				testCnr.SetBasicACL(basic)
+				var policy netmap.PlacementPolicy
+				require.NoError(t, policy.DecodeString("REP 2"))
+				testCnr.SetPlacementPolicy(policy)
+
+				msg := testCnr.ProtoMessage()
+				msg.Version.Major, msg.Version.Minor = tc.major, tc.minor
+				if tc.zeroACL {
+					msg.BasicAcl = 0
+				}
+				msg.Attributes = tc.attributes
+				var sdkCnr container.Container
+				var expectedBytes []byte
+				if tc.invalidAttributes {
+					// SDK rejects empty attributes, so check their encoding against protobuf.
+					require.Error(t, sdkCnr.FromProtoMessage(msg))
+					var err error
+					expectedBytes, err = proto.Marshal(msg)
+					require.NoError(t, err)
+				} else {
+					require.NoError(t, sdkCnr.FromProtoMessage(msg))
+					expectedBytes = sdkCnr.Marshal()
+				}
+				expectedID := cid.NewFromMarshalledContainer(expectedBytes)
+
+				fields := containerToStructFields(testCnr)
+				fields[0] = stackitem.NewStruct([]stackitem.Item{
+					stackitem.Make(tc.major), stackitem.Make(tc.minor),
+				})
+				fields[3] = stackitem.Make(msg.BasicAcl)
+				attrs := make([]stackitem.Item, len(tc.attributes))
+				for i, attr := range tc.attributes {
+					attrs[i] = stackitem.NewStruct([]stackitem.Item{
+						stackitem.Make(attr.Key), stackitem.Make(attr.Value),
+					})
+				}
+				fields[4] = stackitem.NewArray(attrs)
+
+				tx := inv.Invoke(t, expectedID[:], "createV2", stackitem.NewStruct(fields), nil, nil, nil)
+				inv.Invoke(t, stackitem.Make(expectedBytes), "getContainerData", expectedID[:])
+				inv.Invoke(t, stackitem.NewStruct(fields), "getInfo", expectedID[:])
+				inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", expectedID[:])
+				assertSuccessNotifications(t, tx, containerFee, expectedID, "", ownerID)
+			})
+		}
+	})
+
+	t.Run("preserve non-canonical version", func(t *testing.T) {
+		balanceMint(t, balInv, ownerAcc, containerFee, nil)
+
+		var testCnr container.Container
+		testCnr.Init()
+		testCnr.SetOwner(ownerID)
+		var policy netmap.PlacementPolicy
+		require.NoError(t, policy.DecodeString("REP 2"))
+		testCnr.SetPlacementPolicy(policy)
+		msg := testCnr.ProtoMessage()
+		msg.Version.Major, msg.Version.Minor = 2, 0
+		require.NoError(t, testCnr.FromProtoMessage(msg))
+		canonical := testCnr.Marshal()
+		require.Equal(t, []byte{0x0a, 0x02, 0x08, 0x02}, canonical[:4])
+
+		// Existing containers may explicitly encode minor=0. Their original
+		// bytes and CID must remain accessible, without rehashing them on reads.
+		raw := append([]byte{0x0a, 0x04, 0x08, 0x02, 0x10, 0x00}, canonical[4:]...)
+		originalID := cid.NewFromMarshalledContainer(raw)
+		canonicalID := cid.NewFromMarshalledContainer(canonical)
+		require.NotEqual(t, originalID, canonicalID)
+		inv.Invoke(t, stackitem.Null{}, "put", raw, randomBytes(64), randomBytes(33), nil)
+		inv.Invoke(t, stackitem.Make(raw), "getContainerData", originalID[:])
+		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", originalID[:])
+		inv.InvokeFail(t, containerconst.NotFoundError, "getContainerData", canonicalID[:])
 	})
 }
 
