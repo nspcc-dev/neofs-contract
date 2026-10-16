@@ -140,7 +140,7 @@ func TestPayments(t *testing.T) {
 				balI.CheckHalt(t, tx.Hash(), stackitem.Make(nil))
 			}
 		}
-		fillTestValues := func(gbsInEveryNode, startBalance int64) {
+		fillTestValues := func(gbsInEveryNode, startBalance int64, objects ...int64) {
 			// ensure fresh reports
 			for range 3 {
 				currEpoch++
@@ -151,7 +151,7 @@ func TestPayments(t *testing.T) {
 			balanceMint(t, balI, owner.ScriptHash(), startBalance, []byte{})
 			require.Equal(t, startBalance, balance(t, balI, owner))
 
-			putReports(gbsInEveryNode << 30)
+			putReports(gbsInEveryNode<<30, objects...)
 		}
 
 		t.Run("no info for prev epoch", func(t *testing.T) {
@@ -194,21 +194,25 @@ func TestPayments(t *testing.T) {
 
 		t.Run("object count charge", func(t *testing.T) {
 			const objectsPerNode = 1 << 16
-			shouldPay := int64(len(nodes)) * basicIncomeRate
-			fillTestValues(0, shouldPay)
+			startBalance := int64(len(nodes)) * basicIncomeRate
+			fillTestValues(0, startBalance, objectsPerNode)
 
 			currEpoch++
 			trueEpochTick()
-			putReports(0, objectsPerNode)
-			currEpoch++
-			trueEpochTick()
+
+			stack, err := cntI.TestInvoke(t, "iterateBillingStats", cnt.id[:])
+			require.NoError(t, err)
+			var shouldPay int64
+			for _, stat := range parseEpochBillingStatFromStackIterator(t, stack) {
+				shouldPay += int64(basicIncomeRate) * stat.LatestEpochAverageSize.Int64() / (1 << 30)
+			}
 
 			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
 			res := balI.GetTxExecResult(t, txH)
 			require.Len(t, res.Events, 2*len(nodes)+1)
 			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
-			require.Zero(t, balance(t, balI, owner))
+			require.Equal(t, startBalance-shouldPay, balance(t, balI, owner))
 		})
 
 		t.Run("no info for more that 2 epoches", func(t *testing.T) {
@@ -273,7 +277,7 @@ func TestPayments(t *testing.T) {
 
 		for _, node := range nodes {
 			cntI.WithSigners(node.signer).Invoke(t, stackitem.Null{}, "putReport",
-				cnt.id[:], gbsInEveryNode<<30, 455, node.pub,
+				cnt.id[:], gbsInEveryNode<<30, 0, node.pub,
 			)
 		}
 

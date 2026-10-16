@@ -65,7 +65,8 @@ type (
 		Token []byte
 	}
 
-	// EpochBillingStat represents container statistics for a certain epoch.
+	// EpochBillingStat represents container billing statistics for a certain epoch.
+	// Sizes include the billing size of every object.
 	EpochBillingStat struct {
 		Account interop.Hash160
 
@@ -146,7 +147,7 @@ const (
 	defaultTTL     = 3600                 // 1 hour
 
 	nep11TransferAmount = 1 // non-divisible NFT
-	objectBillingSize  = 16 << 10
+	objectBillingSize   = 16 << 10
 )
 
 var (
