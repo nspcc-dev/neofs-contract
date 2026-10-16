@@ -146,6 +146,7 @@ const (
 	defaultTTL     = 3600                 // 1 hour
 
 	nep11TransferAmount = 1 // non-divisible NFT
+	objectBillingSize  = 16 << 10
 )
 
 var (
@@ -1032,6 +1033,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	var (
 		nodeAcc     = contract.CreateStandardAccount(pubKey)
 		storageDiff int
+		billingSize = sizeBytes + objsNumber*objectBillingSize
 		currTime    = runtime.GetTime()
 
 		summaryKey        = append([]byte{reportsSummary}, cid...)
@@ -1071,8 +1073,8 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		}
 		billingStat = EpochBillingStat{
 			Account:                nodeAcc,
-			LatestEpochAverageSize: sizeBytes,
-			LatestContainerSize:    sizeBytes,
+			LatestEpochAverageSize: billingSize,
+			LatestContainerSize:    billingSize,
 			LatestEpoch:            currEpoch,
 			LastUpdateTime:         currTime,
 		}
@@ -1093,7 +1095,8 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			epochRest     = nextEpochTick - currTime
 		)
 		if report.LastUpdateEpoch == currEpoch {
-			billingStat.LatestEpochAverageSize += (sizeBytes - report.ContainerSize) * epochRest / epochDuration
+			oldBillingSize := report.ContainerSize + report.NumberOfObjects*objectBillingSize
+			billingStat.LatestEpochAverageSize += (billingSize - oldBillingSize) * epochRest / epochDuration
 			billingStat.LastUpdateTime = currTime
 
 			report.NumberOfReports += 1
@@ -1103,12 +1106,13 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			billingStat.PreviousEpochAverageSize = billingStat.LatestEpochAverageSize
 			billingStat.LastUpdateTime = currTime
 			billingStat.LatestEpoch = currEpoch
-			billingStat.LatestEpochAverageSize = (report.ContainerSize*(currTime-lastEpochTick) + (sizeBytes * epochRest)) / epochDuration
+			oldBillingSize := report.ContainerSize + report.NumberOfObjects*objectBillingSize
+			billingStat.LatestEpochAverageSize = (oldBillingSize*(currTime-lastEpochTick) + (billingSize * epochRest)) / epochDuration
 
 			report.LastUpdateEpoch = currEpoch
 			report.NumberOfReports = 1
 		}
-		billingStat.LatestContainerSize = sizeBytes
+		billingStat.LatestContainerSize = billingSize
 		report.ContainerSize = sizeBytes
 		report.NumberOfObjects = objsNumber
 	}

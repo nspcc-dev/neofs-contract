@@ -111,10 +111,15 @@ func TestPayments(t *testing.T) {
 	})
 
 	t.Run("successful payments", func(t *testing.T) {
-		putReports := func(size int64) {
+		putReports := func(size int64, objsNumber ...int64) {
+			var objects int64
+			if len(objsNumber) != 0 {
+				objects = objsNumber[0]
+			}
+
 			var reportTxs []*transaction.Transaction
 			for _, node := range nodes {
-				reportTxs = append(reportTxs, cntI.WithSigners(node.signer).PrepareInvoke(t, "putReport", cnt.id[:], size, 455, node.pub))
+				reportTxs = append(reportTxs, cntI.WithSigners(node.signer).PrepareInvoke(t, "putReport", cnt.id[:], size, objects, node.pub))
 			}
 
 			b := balI.NewUnsignedBlock(t, reportTxs...)
@@ -181,6 +186,25 @@ func TestPayments(t *testing.T) {
 			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
 			res := balI.GetTxExecResult(t, txH)
 			// (Transfer, TransferX) pair for every transfer + Payment itself
+			require.Len(t, res.Events, 2*len(nodes)+1)
+			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
+
+			require.Zero(t, balance(t, balI, owner))
+		})
+
+		t.Run("object count charge", func(t *testing.T) {
+			const objectsPerNode = 1 << 16
+			shouldPay := int64(len(nodes)) * basicIncomeRate
+			fillTestValues(0, shouldPay)
+
+			currEpoch++
+			trueEpochTick()
+			putReports(0, objectsPerNode)
+			currEpoch++
+			trueEpochTick()
+
+			txH := balI.Invoke(t, stackitem.Make(true), "settleContainerPayment", cnt.id[:])
+			res := balI.GetTxExecResult(t, txH)
 			require.Len(t, res.Events, 2*len(nodes)+1)
 			assertNotificationEvent(t, res.Events[len(res.Events)-1], "Payment", neofsOwnerSH[:], cnt.id[:], big.NewInt(currEpoch-1), big.NewInt(shouldPay))
 
