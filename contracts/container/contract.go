@@ -51,13 +51,6 @@ type (
 		Info []byte
 	}
 
-	Container struct {
-		Value []byte
-		Sig   interop.Signature
-		Pub   interop.PublicKey
-		Token []byte
-	}
-
 	ExtendedACL struct {
 		Value []byte
 		Sig   interop.Signature
@@ -739,8 +732,7 @@ func Owner(containerID []byte) []byte {
 //
 // If the container doesn't exist, it panics with NotFoundError.
 func Alias(cid []byte) string {
-	owner := getOwnerByID(cid)
-	if owner == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cid...)) == nil {
 		panic(cst.NotFoundError)
 	}
 	return string(storage.LocalGet(append([]byte(nnsHasAliasKey), cid...)))
@@ -1034,7 +1026,7 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 // If the container is missing, GetEACLData throws [cst.NotFoundError]
 // exception.
 func GetEACLData(id []byte) []byte {
-	if storage.LocalGet(append([]byte{containerKeyPrefix}, id...)) == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, id...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1197,7 +1189,7 @@ func updateUserTakenSpace(owner []byte, diff int) {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetNodeReportSummary(cid interop.Hash256) NodeReportSummary {
-	if getOwnerByID(cid) == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cid...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1216,7 +1208,7 @@ func GetNodeReportSummary(cid interop.Hash256) NodeReportSummary {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetReportByNode(cid interop.Hash256, pubKey interop.PublicKey) NodeReport {
-	if getOwnerByID(cid) == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cid...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1240,7 +1232,7 @@ func getReportByKey(key []byte) NodeReport {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetReportByAccount(cid interop.Hash256, acc interop.Hash160) NodeReport {
-	if getOwnerByID(cid) == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cid...)) == nil {
 		panic(cst.NotFoundError)
 	}
 	if len(acc) != interop.Hash160Len {
@@ -1269,7 +1261,7 @@ func IterateReports(cid interop.Hash256) iterator.Iterator {
 // If the container doesn't exist, it panics with [cst.NotFoundError]. If no
 // reports were claimed, it returns zero values.
 func GetBillingStatByNode(cid interop.Hash256, pubKey interop.PublicKey) EpochBillingStat {
-	if getOwnerByID(cid) == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cid...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1366,8 +1358,7 @@ func ContainerQuota(cID interop.Hash256) Quota {
 	if len(cID) != interop.Hash256Len {
 		panic("invalid container id")
 	}
-	ownerID := getOwnerByID(cID)
-	if ownerID == nil {
+	if storage.LocalGet(append([]byte{infoPrefix}, cID...)) == nil {
 		panic(cst.NotFoundError)
 	}
 
@@ -1466,7 +1457,7 @@ func Decimals() int {
 // TotalSupply implements NEP-11 method.
 func TotalSupply() int {
 	count := 0
-	it := storage.LocalFind([]byte{containerKeyPrefix}, storage.KeysOnly)
+	it := storage.LocalFind([]byte{infoPrefix}, storage.KeysOnly)
 	for iterator.Next(it) {
 		count++
 	}
@@ -1598,7 +1589,7 @@ func OwnerOf(tokenID []byte) interop.Hash160 {
 //
 // Tokens implements optional NEP-11 method.
 func Tokens() iterator.Iterator {
-	return storage.LocalFind([]byte{containerKeyPrefix}, storage.KeysOnly|storage.RemovePrefix)
+	return storage.LocalFind([]byte{infoPrefix}, storage.KeysOnly|storage.RemovePrefix)
 }
 
 // Properties returns properties of referenced container. The properties are
@@ -1708,29 +1699,15 @@ func removeContainer(id []byte, owner []byte) {
 	storage.LocalPut(append([]byte{deletedKeyPrefix}, id...), []byte{})
 }
 
-func getContainer(cid []byte) Container {
-	data := storage.LocalGet(append([]byte{containerKeyPrefix}, cid...))
-	if data != nil {
-		return Container{Value: data, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
-	}
-
-	return Container{Value: []byte{}, Sig: interop.Signature{}, Pub: interop.PublicKey{}, Token: []byte{}}
-}
-
 func getOwnerByID(cid []byte) []byte {
-	container := getContainer(cid)
-	if len(container.Value) == 0 {
+	val := storage.LocalGet(append([]byte{infoPrefix}, cid...))
+	if val == nil {
 		return nil
 	}
 
-	return ownerFromBinaryContainer(container.Value)
-}
+	info := std.Deserialize(val).(InfoWithRevision)
 
-func ownerFromBinaryContainer(container []byte) []byte {
-	// V2 format
-	offset := int(container[1])
-	offset = 2 + offset + 4              // version prefix + version size + owner prefix
-	return container[offset : offset+25] // offset + size of owner
+	return scriptHashToAddress(info.Owner)
 }
 
 func nodeFromContainer(cID interop.Hash256, key interop.PublicKey) bool {
