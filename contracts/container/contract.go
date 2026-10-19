@@ -725,20 +725,6 @@ func tryGetInfo(id interop.Hash256) (InfoWithRevision, bool) {
 	return std.Deserialize(val).(InfoWithRevision), true
 }
 
-// GetContainerData returns binary of the container it was created with by ID.
-//
-// If the container is missing, GetContainerData throws [cst.NotFoundError]
-// exception.
-//
-// Deprecated: use [GetInfo] instead.
-func GetContainerData(id []byte) []byte {
-	cnr := storage.LocalGet(append([]byte{containerKeyPrefix}, id...))
-	if cnr == nil {
-		panic(cst.NotFoundError)
-	}
-	return cnr
-}
-
 // Owner method returns a 25 byte Owner ID of the container.
 //
 // If the container doesn't exist, it panics with NotFoundError.

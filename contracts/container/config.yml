@@ -1,7 +1,7 @@
 name: "NeoFS Container"
 supportedstandards: ["NEP-11", "NEP-22"]
 safemethods: ["alias", "count", "containersOf", "owner", "nodes", "replicasNumbers", "verifyPlacementSignatures",
-              "version", "getContainerData", "getEACLData", "getNodeReportSummary", "getReportByNode",
+              "version", "getEACLData", "getNodeReportSummary", "getReportByNode",
               "iterateReports", "iterateAllReportSummaries", "containerQuota", "userQuota", "getTakenSpaceByUser",
               "getBillingStatByNode", "iterateBillingStats", "getInfo", "getRevisionedInfo",
               "symbol", "decimals", "totalSupply", "balanceOf", "tokensOf", "ownerOf", "tokens", "properties",

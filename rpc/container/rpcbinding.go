@@ -227,11 +227,6 @@ func (c *ContractReader) GetBillingStatByNode(cid util.Uint256, pubKey *keys.Pub
 	return itemToContainerEpochBillingStat(unwrap.Item(c.invoker.Call(c.hash, "getBillingStatByNode", cid, pubKey)))
 }
 
-// GetContainerData invokes `getContainerData` method of contract.
-func (c *ContractReader) GetContainerData(id []byte) ([]byte, error) {
-	return unwrap.Bytes(c.invoker.Call(c.hash, "getContainerData", id))
-}
-
 // GetEACLData invokes `getEACLData` method of contract.
 func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
