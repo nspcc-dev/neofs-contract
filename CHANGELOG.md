@@ -12,6 +12,7 @@ Changelog for NeoFS Contract
 ### Removed
 
 ### Fixed
+- Migrated existing container billing statistics to include per-object overhead.
 
 ## [0.27.0] - 2026-09-24
 

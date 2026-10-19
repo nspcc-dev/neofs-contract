@@ -32,10 +32,36 @@ func TestMigration(t *testing.T) {
 
 func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// gather values which can't be fetched via contract API
-	var owners [][]byte
+	var (
+		owners         [][]byte
+		billingBefore  = make(map[string][]int64)
+		reportObjCount = make(map[string]int64)
+	)
 
 	c := migration.NewContract(t, d, "container", migration.ContractOptions{
 		StorageDumpHandler: func(key, value []byte) {
+			switch {
+			case len(key) == 1+interop.Hash256Len+interop.Hash160Len && key[0] == 'f':
+				item, err := stackitem.Deserialize(value)
+				require.NoError(t, err)
+				fields := item.Value().([]stackitem.Item)
+				var sizes = make([]int64, 4)
+				for i, index := range []int{1, 4, 5, 7} {
+					size, err := fields[index].TryInteger()
+					require.NoError(t, err)
+					sizes[i] = size.Int64()
+				}
+				billingBefore[string(key)] = sizes
+			case len(key) == 1+interop.Hash256Len+interop.Hash160Len && key[0] == 'i':
+				item, err := stackitem.Deserialize(value)
+				require.NoError(t, err)
+				fields := item.Value().([]stackitem.Item)
+				objects, err := fields[2].TryInteger()
+				require.NoError(t, err)
+				reportKey := append([]byte{'f'}, key[1:]...)
+				reportObjCount[string(reportKey)] = objects.Int64()
+			}
+
 			const ownerLen = 25
 			if len(key) == ownerLen+32 { // + cid
 				for i := range owners {
@@ -130,8 +156,39 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 	// assert billing info's Account field is filled (< 0.26.1 migration)
 	assertBillingMigration(t, c)
 
+	// assert billing sizes include per-object overhead (< 0.28.0 migration)
+	assertBillingSizeMigration(t, c, billingBefore, reportObjCount)
+
 	// assert containers have default zero versions (< 0.27.0 migration)
 	assertContainerVersions(t, c)
+}
+
+func assertBillingSizeMigration(t *testing.T, c *migration.Contract, before map[string][]int64, objects map[string]int64) {
+	require.NotEmpty(t, before)
+	var migrated int
+	for key, count := range objects {
+		if _, ok := before[key]; ok && count > 0 {
+			migrated++
+		}
+	}
+	require.Positive(t, migrated, "no billing statistics with object counts found")
+
+	c.SeekStorage([]byte{'f'}, func(k, v []byte) bool {
+		oldSizes, ok := before[string(k)]
+		if !ok {
+			return true
+		}
+		item, err := stackitem.Deserialize(v)
+		require.NoError(t, err)
+		fields := item.Value().([]stackitem.Item)
+		overhead := objects[string(k)] * (16 << 10)
+		for i, index := range []int{1, 4, 5, 7} {
+			size, err := fields[index].TryInteger()
+			require.NoError(t, err)
+			require.Equal(t, oldSizes[i]+overhead, size.Int64(), string(k))
+		}
+		return true
+	})
 }
 
 func assertContainerVersions(t *testing.T, c *migration.Contract) {

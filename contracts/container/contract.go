@@ -194,6 +194,10 @@ func _deploy(data any, isUpdate bool) {
 			migrateToContainersWithRevision()
 		}
 
+		if version < 28_000 {
+			migrateBillingSizes()
+		}
+
 		return
 	}
 
@@ -242,6 +246,31 @@ func _deploy(data any, isUpdate bool) {
 	registerNiceNameTLD(addrNNS, nnsRoot)
 
 	runtime.Log("container contract initialized")
+}
+
+func migrateBillingSizes() {
+	it := storage.LocalFind([]byte{billingInfoKeyPrefix}, storage.None)
+	for iterator.Next(it) {
+		kv := iterator.Value(it).(storage.KeyValue)
+		if len(kv.Key) != 1+interop.Hash256Len+interop.Hash160Len {
+			continue
+		}
+
+		reportKey := append([]byte{reportersPrefix}, kv.Key[1:]...)
+		reportRaw := storage.LocalGet(reportKey)
+		if reportRaw == nil {
+			continue
+		}
+
+		billing := std.Deserialize(kv.Value).(EpochBillingStat)
+		report := std.Deserialize(reportRaw).(NodeReport)
+		overhead := report.NumberOfObjects * objectBillingSize
+		billing.LatestContainerSize += overhead
+		billing.LatestEpochAverageSize += overhead
+		billing.PreviousContainerSize += overhead
+		billing.PreviousEpochAverageSize += overhead
+		storage.LocalPut(kv.Key, std.Serialize(billing))
+	}
 }
 
 // nolint:unused
