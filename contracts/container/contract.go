@@ -1009,21 +1009,37 @@ func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 		panic("missing container ID field in eACL BLOB")
 	}
 
-	id := eACL[idOff : idOff+containerIDSize]
+	id := interop.Hash256(eACL[idOff : idOff+containerIDSize])
 
 	infoKey := append([]byte{infoPrefix}, id...)
 	cnrRaw := storage.LocalGet(infoKey)
 	if cnrRaw == nil {
 		panic(cst.NotFoundError)
 	}
-	cnr := std.Deserialize(cnrRaw).(InfoWithRevision)
-	cnr.Revision++
+
+	var justCreated bool
+	for _, ntf := range runtime.GetNotifications(runtime.GetExecutingScriptHash()) {
+		if len(ntf) >= 3 && ntf[1].(string) == "Transfer" {
+			items := ntf[2].([]any)
+			if len(items) == 4 && items[0] == nil &&
+				id.Equals(items[3].(interop.Hash256)) {
+				justCreated = true
+				break
+			}
+		}
+	}
 
 	storage.LocalPut(append(eACLPrefix, id...), eACL)
-	storage.LocalPut(infoKey, std.Serialize(cnr))
 
-	runtime.Notify("EACLChanged", interop.Hash256(id))
-	runtime.Notify("ContainerUpdated", interop.Hash256(id), cnr.Revision)
+	runtime.Notify("EACLChanged", id)
+
+	if !justCreated {
+		cnr := std.Deserialize(cnrRaw).(InfoWithRevision)
+		cnr.Revision++
+
+		storage.LocalPut(infoKey, std.Serialize(cnr))
+		runtime.Notify("ContainerUpdated", id, cnr.Revision)
+	}
 }
 
 // GetEACLData returns binary of container eACL it was put with by the container
