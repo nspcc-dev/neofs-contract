@@ -6,6 +6,7 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
+- Billed container size now includes additional 16K per object to pay for object headers (#635)
 
 ### Updated
 

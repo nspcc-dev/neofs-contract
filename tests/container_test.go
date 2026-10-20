@@ -642,8 +642,8 @@ func TestContainerSizeReports(t *testing.T) {
 				require.True(t, stat.Account.Equals(nodes[0].signer.ScriptHash()))
 				require.EqualValues(t, latestReportTime, stat.LastUpdateTime.Int64())
 				require.EqualValues(t, currentEpoch, stat.LatestEpoch.Int64())
-				require.EqualValues(t, latestReportedValue, stat.LatestContainerSize.Int64())
-				require.EqualValues(t, tc.expectedAverage, stat.LatestEpochAverageSize.Int64())
+				require.EqualValues(t, latestReportedValue+objsNumber*(16<<10), stat.LatestContainerSize.Int64())
+				require.EqualValues(t, tc.expectedAverage+objsNumber*(16<<10), stat.LatestEpochAverageSize.Int64())
 			})
 		}
 	})

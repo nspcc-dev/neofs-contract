@@ -65,7 +65,8 @@ type (
 		Token []byte
 	}
 
-	// EpochBillingStat represents container statistics for a certain epoch.
+	// EpochBillingStat represents container billing statistics for a certain epoch.
+	// Sizes include the billing size of every object.
 	EpochBillingStat struct {
 		Account interop.Hash160
 
@@ -146,6 +147,7 @@ const (
 	defaultTTL     = 3600                 // 1 hour
 
 	nep11TransferAmount = 1 // non-divisible NFT
+	objectBillingSize   = 16 << 10
 )
 
 var (
@@ -190,6 +192,10 @@ func _deploy(data any, isUpdate bool) {
 			storage.LocalDelete([]byte(proxyContractKey))
 
 			migrateToContainersWithRevision()
+		}
+
+		if version < 28_000 {
+			migrateBillingSizes()
 		}
 
 		return
@@ -240,6 +246,32 @@ func _deploy(data any, isUpdate bool) {
 	registerNiceNameTLD(addrNNS, nnsRoot)
 
 	runtime.Log("container contract initialized")
+}
+
+// nolint:unused
+func migrateBillingSizes() {
+	it := storage.LocalFind([]byte{billingInfoKeyPrefix}, storage.None)
+	for iterator.Next(it) {
+		kv := iterator.Value(it).(storage.KeyValue)
+		if len(kv.Key) != 1+interop.Hash256Len+interop.Hash160Len {
+			continue
+		}
+
+		reportKey := append([]byte{reportersPrefix}, kv.Key[1:]...)
+		reportRaw := storage.LocalGet(reportKey)
+		if reportRaw == nil {
+			continue
+		}
+
+		billing := std.Deserialize(kv.Value).(EpochBillingStat)
+		report := std.Deserialize(reportRaw).(NodeReport)
+		overhead := report.NumberOfObjects * objectBillingSize
+		billing.LatestContainerSize += overhead
+		billing.LatestEpochAverageSize += overhead
+		billing.PreviousContainerSize += overhead
+		billing.PreviousEpochAverageSize += overhead
+		storage.LocalPut(kv.Key, std.Serialize(billing))
+	}
 }
 
 // nolint:unused
@@ -1032,6 +1064,7 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 	var (
 		nodeAcc     = contract.CreateStandardAccount(pubKey)
 		storageDiff int
+		billingSize = sizeBytes + objsNumber*objectBillingSize
 		currTime    = runtime.GetTime()
 
 		summaryKey        = append([]byte{reportsSummary}, cid...)
@@ -1071,8 +1104,8 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 		}
 		billingStat = EpochBillingStat{
 			Account:                nodeAcc,
-			LatestEpochAverageSize: sizeBytes,
-			LatestContainerSize:    sizeBytes,
+			LatestEpochAverageSize: billingSize,
+			LatestContainerSize:    billingSize,
 			LatestEpoch:            currEpoch,
 			LastUpdateTime:         currTime,
 		}
@@ -1092,8 +1125,9 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			nextEpochTick = lastEpochTick + epochDuration
 			epochRest     = nextEpochTick - currTime
 		)
+		oldBillingSize := report.ContainerSize + report.NumberOfObjects*objectBillingSize
 		if report.LastUpdateEpoch == currEpoch {
-			billingStat.LatestEpochAverageSize += (sizeBytes - report.ContainerSize) * epochRest / epochDuration
+			billingStat.LatestEpochAverageSize += (billingSize - oldBillingSize) * epochRest / epochDuration
 			billingStat.LastUpdateTime = currTime
 
 			report.NumberOfReports += 1
@@ -1103,12 +1137,12 @@ func PutReport(cid interop.Hash256, sizeBytes, objsNumber int, pubKey interop.Pu
 			billingStat.PreviousEpochAverageSize = billingStat.LatestEpochAverageSize
 			billingStat.LastUpdateTime = currTime
 			billingStat.LatestEpoch = currEpoch
-			billingStat.LatestEpochAverageSize = (report.ContainerSize*(currTime-lastEpochTick) + (sizeBytes * epochRest)) / epochDuration
+			billingStat.LatestEpochAverageSize = (oldBillingSize*(currTime-lastEpochTick) + (billingSize * epochRest)) / epochDuration
 
 			report.LastUpdateEpoch = currEpoch
 			report.NumberOfReports = 1
 		}
-		billingStat.LatestContainerSize = sizeBytes
+		billingStat.LatestContainerSize = billingSize
 		report.ContainerSize = sizeBytes
 		report.NumberOfObjects = objsNumber
 	}
