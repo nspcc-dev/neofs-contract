@@ -248,6 +248,7 @@ func _deploy(data any, isUpdate bool) {
 	runtime.Log("container contract initialized")
 }
 
+// nolint:unused
 func migrateBillingSizes() {
 	it := storage.LocalFind([]byte{billingInfoKeyPrefix}, storage.None)
 	for iterator.Next(it) {
