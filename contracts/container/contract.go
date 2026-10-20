@@ -451,6 +451,11 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 	CreateV2(fromBytes(cnr), invocScript, verifScript, sessionToken)
 }
 
+// CreateV2Overloaded is the same CreateV2 but with the original NeoFS requests.
+func CreateV2Overloaded(cnr Info, originalRequest []byte) {
+	CreateV2(cnr, nil, nil, nil)
+}
+
 // CreateV2 creates container with given info in the contract. Created
 // containers are content-addressed: they may be accessed by SHA-256 checksum of
 // their data. On success, CreateV2 throws 'Transfer' notification event with
@@ -482,6 +487,8 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 // users' requests. IR verifies requests and approves them via multi-signature.
 // Once creation is approved, container is persisted and becomes accessible.
 // Credentials are disposable and do not persist in the chain.
+//
+// Deprecated: use its overloaded version with original request.
 func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.Hash256 {
 	alphabet := common.AlphabetNodes()
 	if !runtime.CheckWitness(common.Multiaddress(alphabet, false)) {
@@ -581,6 +588,11 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 	return false
 }
 
+// RemoveOverloaded is the same Remove but with the original NeoFS requests.
+func RemoveOverloaded(id []byte, originalRequest []byte) {
+	Remove(id, nil, nil, nil)
+}
+
 // Remove removes all data for the referenced container. Remove is no-op if
 // container does not exist. On success, Remove throws 'Transfer' notification
 // event with unset 'to'.
@@ -589,6 +601,8 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 // not passed yet, Remove throws exception containing [cst.ErrorLocked].
 //
 // See [CreateV2] for details.
+//
+// Deprecated: use its overloaded version with original request.
 func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
@@ -905,6 +919,11 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 	return storage.LocalFind(key, storage.ValuesOnly)
 }
 
+// PutEACLOverloaded is the same PutEACL but with the original NeoFS requests.
+func PutEACLOverloaded(eACL []byte, originalRequest []byte) {
+	PutEACL(eACL, nil, nil, nil)
+}
+
 // PutEACL puts given eACL serialized according to the NeoFS API binary protocol
 // for the container it is referenced to. Operation must be allowed in the
 // container's basic ACL. If container does not exist, PutEACL throws
@@ -912,6 +931,8 @@ func Nodes(cID interop.Hash256, placementVector uint8) iterator.Iterator {
 // notification event.
 //
 // See [CreateV2] for details.
+//
+// Deprecated: use its overloaded version with original request.
 func PutEACL(eACL []byte, invocScript, verifScript, sessionToken []byte) {
 	common.CheckAlphabetWitness()
 
