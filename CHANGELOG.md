@@ -7,6 +7,7 @@ Changelog for NeoFS Contract
 
 ### Changed
 - Billed container size now includes additional 16K per object to pay for object headers (#635)
+- Container contract no longer stores containers in NeoFS API binary format (#539)
 
 ### Updated
 

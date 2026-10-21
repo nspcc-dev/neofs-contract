@@ -188,6 +188,7 @@ func _deploy(data any, isUpdate bool) {
 
 		if version < 28_000 {
 			migrateBillingSizes()
+			deleteByPrefix([]byte{'x'})
 		}
 
 		return

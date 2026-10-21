@@ -136,7 +136,7 @@ func testMigrationFromDump(t *testing.T, d *dump.Reader) {
 
 	require.Equal(t, prevContainerCount, newContainerCount, "number of containers should remain")
 	require.ElementsMatch(t, prevContainers, newContainers, "container list should remain")
-	require.True(t, maps.EqualFunc(prevCnrStorageItems, newCnrStorageItems, bytes.Equal), "containers' binary items should remain")
+	require.Empty(t, newCnrStorageItems, "containers' binary items should be dropped")
 	require.True(t, maps.EqualFunc(prevEACLStorageItems, newEACLStorageItems, bytes.Equal), "eACLs' binary items should remain")
 
 	require.Equal(t, len(prevOwnersToContainers), len(newOwnersToContainers))

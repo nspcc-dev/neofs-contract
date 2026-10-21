@@ -119,8 +119,6 @@ Key-value storage format:
    NNS contract reference
  - 'nnsRoot' -> interop.Hash160
    NNS root domain zone for containers
- - 'x<cid>' -> []byte
-   container descriptors encoded into NeoFS API binary protocol format
  - '0x00<cid>' -> std.Serialize(InfoVersioned)
    container descriptors
  - 'd<cid>' -> ""
