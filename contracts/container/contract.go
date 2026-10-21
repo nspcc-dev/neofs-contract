@@ -1606,21 +1606,16 @@ func Tokens() iterator.Iterator {
 //
 // Properties implements optional NEP-11 method.
 func Properties(tokenID []byte) map[string]any {
-	var cnr Info
-	if item := storage.LocalGet(append([]byte{infoPrefix}, tokenID...)); item == nil {
-		binItem := storage.LocalGet(append([]byte{containerKeyPrefix}, tokenID...))
-		if binItem == nil {
-			if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
-				panic(cst.ErrorDeleted)
-			}
-
-			panic(cst.NotFoundError)
+	item := storage.LocalGet(append([]byte{infoPrefix}, tokenID...))
+	if item == nil {
+		if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
+			panic(cst.ErrorDeleted)
 		}
 
-		cnr = fromBytes(binItem)
-	} else {
-		cnr = std.Deserialize(item).(InfoWithRevision).Info
+		panic(cst.NotFoundError)
 	}
+
+	cnr := std.Deserialize(item).(InfoWithRevision).Info
 
 	props := make(map[string]any, 1+len(cnr.Attributes))
 
