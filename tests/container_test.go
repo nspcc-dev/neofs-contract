@@ -1348,7 +1348,6 @@ func TestContainerCreate(t *testing.T) {
 			return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// NNS
@@ -1405,7 +1404,6 @@ func TestContainerCreate(t *testing.T) {
 		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-	require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
@@ -1589,28 +1587,6 @@ func TestContainerPutEACL(t *testing.T) {
 	assertNotificationEvent(t, events[1], "ContainerUpdated", id[:], big.NewInt(2))
 }
 
-func TestGetContainerData(t *testing.T) {
-	cnr := containertest.Container()
-	anyValidCnr := cnr.Marshal()
-	ch := sha256.Sum256(anyValidCnr)
-	anyValidCnrID := ch[:]
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
-
-	inv, balInv, _, _ := newContainerInvoker(t, false)
-	balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
-
-	t.Run("missing", func(t *testing.T) {
-		inv.InvokeFail(t, "container does not exist", "getContainerData", anyValidCnrID)
-	})
-
-	inv.Invoke(t, stackitem.Null{}, "create",
-		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
-
-	inv.Invoke(t, stackitem.Make(anyValidCnr), "getContainerData", anyValidCnrID)
-}
-
 func TestGetEACLData(t *testing.T) {
 	cnr := containertest.Container()
 	anyValidCnr := cnr.Marshal()
@@ -1724,7 +1700,6 @@ func TestContainerCreateV2(t *testing.T) {
 
 	assertSuccessAPI := func(t *testing.T, id cid.ID, cnrFields []stackitem.Item, cnrBytes []byte, ownerID user.ID) {
 		inv.Invoke(t, stackitem.NewStruct(cnrFields), "getInfo", id[:])
-		inv.Invoke(t, stackitem.Make(cnrBytes), "getContainerData", id[:])
 		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", id[:])
 		zeroQuota := stackitem.NewStruct([]stackitem.Item{stackitem.Make(0), stackitem.Make(0)})
 		inv.Invoke(t, zeroQuota, "userQuota", ownerID[:])
@@ -1761,7 +1736,6 @@ func TestContainerCreateV2(t *testing.T) {
 
 		require.Equal(t, stackitem.NewStruct(cnrRevisioned), gotStruct)
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerID[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	}
 
 	assertSuccessNotifications := func(t *testing.T, txHash util.Uint256, fee int64, id cid.ID, domain string, ownerID user.ID) {
@@ -2012,7 +1986,6 @@ func TestContainerCreateV2(t *testing.T) {
 				fields[4] = stackitem.NewArray(attrs)
 
 				tx := inv.Invoke(t, expectedID[:], "createV2", stackitem.NewStruct(fields), nil, nil, nil)
-				inv.Invoke(t, stackitem.Make(expectedBytes), "getContainerData", expectedID[:])
 				inv.Invoke(t, stackitem.NewStruct(fields), "getInfo", expectedID[:])
 				inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", expectedID[:])
 				assertSuccessNotifications(t, tx, containerFee, expectedID, "", ownerID)
@@ -2042,9 +2015,7 @@ func TestContainerCreateV2(t *testing.T) {
 		canonicalID := cid.NewFromMarshalledContainer(canonical)
 		require.NotEqual(t, originalID, canonicalID)
 		inv.Invoke(t, stackitem.Null{}, "put", raw, randomBytes(64), randomBytes(33), nil)
-		inv.Invoke(t, stackitem.Make(raw), "getContainerData", originalID[:])
 		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", originalID[:])
-		inv.InvokeFail(t, containerconst.NotFoundError, "getContainerData", canonicalID[:])
 	})
 }
 
@@ -2334,7 +2305,6 @@ func TestContainerTransfer(t *testing.T) {
 	cmtInv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(usr1Acc[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 1, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)
@@ -2368,7 +2338,6 @@ func TestContainerTransfer(t *testing.T) {
 
 	cnr.SetOwner(user.NewFromScriptHash(usr2Acc))
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(usr2Acc[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 0, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 1, "balanceOf", usr2Acc)
@@ -2387,7 +2356,6 @@ func TestContainerTransfer(t *testing.T) {
 
 	cnr.SetOwner(user.NewFromScriptHash(testContract))
 	assertGetInfo(t, cmtInv, id, cnr)
-	cmtInv.Invoke(t, stackitem.Make(cnr.Marshal()), "getContainerData", id[:])
 	cmtInv.Invoke(t, stackitem.NewBuffer(testContract[:]), "ownerOf", id[:])
 	cmtInv.Invoke(t, 0, "balanceOf", usr1Acc)
 	cmtInv.Invoke(t, 0, "balanceOf", usr2Acc)

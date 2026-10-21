@@ -36,14 +36,6 @@ type ContainerAttribute struct {
 	Value string
 }
 
-// ContainerContainer is a contract-specific container.Container type used by its methods.
-type ContainerContainer struct {
-	Value []byte
-	Sig   []byte
-	Pub   *keys.PublicKey
-	Token []byte
-}
-
 // ContainerEpochBillingStat is a contract-specific container.EpochBillingStat type used by its methods.
 type ContainerEpochBillingStat struct {
 	Account                  util.Uint160
@@ -227,11 +219,6 @@ func (c *ContractReader) GetBillingStatByNode(cid util.Uint256, pubKey *keys.Pub
 	return itemToContainerEpochBillingStat(unwrap.Item(c.invoker.Call(c.hash, "getBillingStatByNode", cid, pubKey)))
 }
 
-// GetContainerData invokes `getContainerData` method of contract.
-func (c *ContractReader) GetContainerData(id []byte) ([]byte, error) {
-	return unwrap.Bytes(c.invoker.Call(c.hash, "getContainerData", id))
-}
-
 // GetEACLData invokes `getEACLData` method of contract.
 func (c *ContractReader) GetEACLData(id []byte) ([]byte, error) {
 	return unwrap.Bytes(c.invoker.Call(c.hash, "getEACLData", id))
@@ -377,44 +364,6 @@ func (c *Contract) AddNextEpochNodesTransaction(cID util.Uint256, placementVecto
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) AddNextEpochNodesUnsigned(cID util.Uint256, placementVector *big.Int, publicKeys keys.PublicKeys) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "addNextEpochNodes", nil, cID, placementVector, publicKeys)
-}
-
-func (c *Contract) scriptForAddStructs() ([]byte, error) {
-	return smartcontract.CreateCallWithAssertScript(c.hash, "addStructs")
-}
-
-// AddStructs creates a transaction invoking `addStructs` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) AddStructs() (util.Uint256, uint32, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return util.Uint256{}, 0, err
-	}
-	return c.actor.SendRun(script)
-}
-
-// AddStructsTransaction creates a transaction invoking `addStructs` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) AddStructsTransaction() (*transaction.Transaction, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return nil, err
-	}
-	return c.actor.MakeRun(script)
-}
-
-// AddStructsUnsigned creates a transaction invoking `addStructs` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) AddStructsUnsigned() (*transaction.Transaction, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return nil, err
-	}
-	return c.actor.MakeUnsignedRun(script, nil)
 }
 
 // CommitContainerListUpdate creates a transaction invoking `commitContainerListUpdate` method of the contract.
@@ -995,159 +944,6 @@ func (res *ContainerAttribute) ToSCParameter() (smartcontract.Parameter, error) 
 	prm, err = smartcontract.NewParameterFromValue(res.Value)
 	if err != nil {
 		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
-	}
-	prms = append(prms, prm)
-
-	return smartcontract.Parameter{Type: smartcontract.ArrayType, Value: prms}, nil
-}
-
-// itemToContainerContainer converts stack item into *ContainerContainer.
-// NULL item is returned as nil pointer without error.
-func itemToContainerContainer(item stackitem.Item, err error) (*ContainerContainer, error) {
-	if err != nil {
-		return nil, err
-	}
-	_, null := item.(stackitem.Null)
-	if null {
-		return nil, nil
-	}
-	var res = new(ContainerContainer)
-	err = res.FromStackItem(item)
-	return res, err
-}
-
-// Ensure *ContainerContainer is a proper [stackitem.Convertible].
-var _ = stackitem.Convertible(&ContainerContainer{})
-
-// Ensure *ContainerContainer is a proper [smartcontract.Convertible].
-var _ = smartcontract.Convertible(&ContainerContainer{})
-
-// FromStackItem retrieves fields of ContainerContainer from the given
-// [stackitem.Item] or returns an error if it's not possible to do to so.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerContainer) FromStackItem(item stackitem.Item) error {
-	arr, ok := item.Value().([]stackitem.Item)
-	if !ok {
-		return errors.New("not an array")
-	}
-	if len(arr) != 4 {
-		return errors.New("wrong number of structure elements")
-	}
-
-	var (
-		index = -1
-		err   error
-	)
-	index++
-	res.Value, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Value: %w", err)
-	}
-
-	index++
-	res.Sig, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Sig: %w", err)
-	}
-
-	index++
-	res.Pub, err = func(item stackitem.Item) (*keys.PublicKey, error) {
-		b, err := item.TryBytes()
-		if err != nil {
-			return nil, err
-		}
-		k, err := keys.NewPublicKeyFromBytes(b, elliptic.P256())
-		if err != nil {
-			return nil, err
-		}
-		return k, nil
-	}(arr[index])
-	if err != nil {
-		return fmt.Errorf("field Pub: %w", err)
-	}
-
-	index++
-	res.Token, err = arr[index].TryBytes()
-	if err != nil {
-		return fmt.Errorf("field Token: %w", err)
-	}
-
-	return nil
-}
-
-// ToStackItem creates [stackitem.Item] representing ContainerContainer.
-// It implements [stackitem.Convertible] interface.
-func (res *ContainerContainer) ToStackItem() (stackitem.Item, error) {
-	if res == nil {
-		return stackitem.Null{}, nil
-	}
-
-	var (
-		err   error
-		itm   stackitem.Item
-		items = make([]stackitem.Item, 0, 4)
-	)
-	itm, err = stackitem.NewByteArray(res.Value), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Value: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Sig), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Sig: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Pub.Bytes()), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Pub: %w", err)
-	}
-	items = append(items, itm)
-
-	itm, err = stackitem.NewByteArray(res.Token), error(nil)
-	if err != nil {
-		return nil, fmt.Errorf("field Token: %w", err)
-	}
-	items = append(items, itm)
-
-	return stackitem.NewStruct(items), nil
-}
-
-// ToSCParameter creates [smartcontract.Parameter] representing ContainerContainer.
-// It implements [smartcontract.Convertible] interface so that ContainerContainer
-// could be used with invokers.
-func (res *ContainerContainer) ToSCParameter() (smartcontract.Parameter, error) {
-	if res == nil {
-		return smartcontract.Parameter{Type: smartcontract.AnyType}, nil
-	}
-
-	var (
-		err  error
-		prm  smartcontract.Parameter
-		prms = make([]smartcontract.Parameter, 0, 4)
-	)
-	prm, err = smartcontract.NewParameterFromValue(res.Value)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Value: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Sig)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Sig: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Pub)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Pub: %w", err)
-	}
-	prms = append(prms, prm)
-
-	prm, err = smartcontract.NewParameterFromValue(res.Token)
-	if err != nil {
-		return smartcontract.Parameter{}, fmt.Errorf("field Token: %w", err)
 	}
 	prms = append(prms, prm)
 
