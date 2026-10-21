@@ -16,24 +16,6 @@ events:
         type: Hash256
       - name: attribute
         type: String
-  - name: PutSuccess
-    parameters:
-      - name: containerID
-        type: Hash256
-      - name: publicKey
-        type: PublicKey
-  - name: Created
-    parameters:
-      - name: containerID
-        type: Hash256
-      - name: owner
-        type: ByteArray # 25 byte N3 address
-  - name: Removed
-    parameters:
-      - name: containerID
-        type: Hash256
-      - name: owner
-        type: ByteArray # 25 byte N3 address
   - name: EACLChanged
     parameters:
       - name: containerID

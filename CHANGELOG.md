@@ -13,6 +13,7 @@ Changelog for NeoFS Contract
 
 ### Removed
 - `addStructs` method from Container contract (#539)
+- `PutSuccess`, `Created` and `Removed` notifications from Container contract (#639)
 
 ### Fixed
 

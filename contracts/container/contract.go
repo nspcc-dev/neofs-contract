@@ -413,7 +413,6 @@ func PutNamed(container []byte, signature interop.Signature,
 	}
 
 	runtime.Log("added new container")
-	runtime.Notify("PutSuccess", containerID, publicKey)
 
 	notifyNEP11Transfer(containerID, nil, cnr.Owner)
 
@@ -423,7 +422,7 @@ func PutNamed(container []byte, signature interop.Signature,
 // Create saves container descriptor serialized according to the NeoFS API
 // binary protocol. Created containers are content-addressed: they may be
 // accessed by SHA-256 checksum of their data. On success, Create throws
-// 'Created' notification event.
+// 'Transfer' notification event with unset 'from'.
 //
 // Created containers are disposable: if they are deleted, they cannot be
 // created again. Create throws [cst.ErrorDeleted] exception on recreation
@@ -454,7 +453,8 @@ func Create(cnr []byte, invocScript, verifScript, sessionToken []byte, name, zon
 
 // CreateV2 creates container with given info in the contract. Created
 // containers are content-addressed: they may be accessed by SHA-256 checksum of
-// their data. On success, CreateV2 throws 'Created' notification event.
+// their data. On success, CreateV2 throws 'Transfer' notification event with
+// unset 'from'.
 //
 // Created containers are disposable: if they are deleted, they cannot be
 // created again. CreateV2 throws [cst.ErrorDeleted] exception on recreation
@@ -550,8 +550,6 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initInfo(cnr)))
 	storage.LocalPut(append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
 
-	runtime.Notify("Created", id, ownerAddr)
-
 	notifyNEP11Transfer(id, nil, cnr.Owner)
 
 	onNEP11Payment(id, nil, cnr.Owner, nil)
@@ -584,8 +582,8 @@ func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool
 }
 
 // Remove removes all data for the referenced container. Remove is no-op if
-// container does not exist. On success, Remove throws 'Removed' notification
-// event.
+// container does not exist. On success, Remove throws 'Transfer' notification
+// event with unset 'to'.
 //
 // If the container has '__NEOFS__LOCK_UNTIL' attribute with timestamp that has
 // not passed yet, Remove throws exception containing [cst.ErrorLocked].
@@ -618,8 +616,6 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 		storage.LocalDelete(domainKey)
 		deleteNNSRecords(domain)
 	}
-
-	runtime.Notify("Removed", interop.Hash256(id), owner)
 
 	notifyNEP11Transfer(id, cnr.Owner, nil)
 }

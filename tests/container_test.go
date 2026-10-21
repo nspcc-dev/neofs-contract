@@ -226,8 +226,8 @@ func TestContainerPut(t *testing.T) {
 			txHash := c.Invoke(t, stackitem.Null{}, "put", putArgs...)
 			res := c.GetTxExecResult(t, txHash)
 			events := res.Events
-			require.Len(t, events, 4)
-			assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
+			require.Len(t, events, 3)
+			assertNotificationEvent(t, events[2], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
 
 			c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
 
@@ -249,8 +249,8 @@ func TestContainerPut(t *testing.T) {
 
 				res := c.GetTxExecResult(t, txHash)
 				events := res.Events
-				require.Len(t, events, 5)
-				assertNotificationEvent(t, events[4], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
+				require.Len(t, events, 4)
+				assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
 
 				expected := stackitem.NewArray([]stackitem.Item{
 					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
@@ -1358,13 +1358,12 @@ func TestContainerCreate(t *testing.T) {
 		// notifications
 		res := exec.GetTxExecResult(t, txHash)
 		events := res.Events
-		require.Len(t, events, 5)
+		require.Len(t, events, 4)
 		committeeAcc := exec.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
 		assertNotificationEvent(t, events[0], "Transfer", nil, exec.Hash[:], big.NewInt(1), []byte("my-domain.container"))
 		assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee))
 		assertNotificationEvent(t, events[2], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee), slices.Concat([]byte{0x10}, id[:]))
-		assertNotificationEvent(t, events[3], "Created", id[:], ownerAddr[:])
-		assertNotificationEvent(t, events[4], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
+		assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 	})
 	t.Run("not enough funds", func(t *testing.T) {
 		owner := exec.NewAccount(t, 0)
@@ -1407,12 +1406,11 @@ func TestContainerCreate(t *testing.T) {
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
-	require.Len(t, events, 4)
+	require.Len(t, events, 3)
 	committeeAcc := exec.Executor.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
 	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee))
 	assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee), slices.Concat([]byte{0x10}, id[:]))
-	assertNotificationEvent(t, events[2], "Created", id[:], ownerAddr[:])
-	assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
+	assertNotificationEvent(t, events[2], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 
 	assertGetInfo(t, inv, id, cnr)
 }
@@ -1507,9 +1505,8 @@ func TestContainerRemove(t *testing.T) {
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
-	require.Len(t, events, 2)
-	assertNotificationEvent(t, events[0], "Removed", id[:], ownerAddr)
-	assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], nil, big.NewInt(1), id[:])
+	require.Len(t, events, 1)
+	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], nil, big.NewInt(1), id[:])
 }
 
 func TestContainerPutEACL(t *testing.T) {
@@ -1742,9 +1739,9 @@ func TestContainerCreateV2(t *testing.T) {
 		res := inv.GetTxExecResult(t, txHash)
 		events := res.Events
 		if domain != "" {
-			require.Len(t, events, 5)
-		} else {
 			require.Len(t, events, 4)
+		} else {
+			require.Len(t, events, 3)
 		}
 
 		committeeAcc := inv.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash()
@@ -1759,9 +1756,8 @@ func TestContainerCreateV2(t *testing.T) {
 		require.Equal(t, balInv.Hash, events[0].ScriptHash)
 		assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(fee))
 		assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(fee), slices.Concat([]byte{0x10}, id[:]))
-		assertNotificationEvent(t, events[2], "Created", id[:], ownerID[:])
-		require.Equal(t, inv.Hash, events[3].ScriptHash)
-		assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
+		require.Equal(t, inv.Hash, events[2].ScriptHash)
+		assertNotificationEvent(t, events[2], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
 	}
 
 	// API
@@ -2058,7 +2054,7 @@ func TestContainerCreateV2WithEACL(t *testing.T) {
 
 	res := inv.GetTxExecResult(t, txHash)
 	events := res.Events
-	require.Len(t, events, 5) // transfer/transferX/created/transfer/eaclchanged, doesn't matter much, but no containerupdate or it'll be the sixth one
+	require.Len(t, events, 4) // transfer/transferX/transfer/eaclchanged, doesn't matter much, but no containerupdate or it'll be the fifth one
 
 	stack, err = inv.TestInvoke(t, "getRevisionedInfo", id[:])
 	require.NoError(t, err)
