@@ -9,32 +9,6 @@ the same arguments.
 
 # Contract notifications
 
-containerPut notification. This notification is produced when a user wants to
-create a new container. Alphabet nodes of the Inner Ring catch the notification and
-validate container data, signature and token if present.
-
-	containerPut:
-	  - name: container
-	    type: ByteArray
-	  - name: signature
-	    type: Signature
-	  - name: publicKey
-	    type: PublicKey
-	  - name: token
-	    type: ByteArray
-
-containerDelete notification. This notification is produced when a container owner
-wants to delete a container. Alphabet nodes of the Inner Ring catch the notification
-and validate container ownership, signature and token if present.
-
-	containerDelete:
-	  - name: containerID
-	    type: ByteArray
-	  - name: signature
-	    type: Signature
-	  - name: token
-	    type: ByteArray
-
 nodesUpdate notification. This notification is produced when a container roster
 is changed. Triggered only by the Alphabet at the beginning of epoch.
 

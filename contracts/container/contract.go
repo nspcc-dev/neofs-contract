@@ -304,7 +304,7 @@ func PutMeta(container []byte, signature interop.Signature, publicKey interop.Pu
 }
 
 // Put method creates a new container if it has been invoked by Alphabet nodes
-// of the Inner Ring. Otherwise, it produces containerPut notification.
+// of the Inner Ring.
 //
 // Container should be a stable marshaled Container structure from API.
 // Signature is a RFC6979 signature of the Container.
