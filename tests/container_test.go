@@ -23,6 +23,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/neotest"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
+	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
@@ -2045,6 +2046,55 @@ func TestContainerCreateV2(t *testing.T) {
 		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", originalID[:])
 		inv.InvokeFail(t, containerconst.NotFoundError, "getContainerData", canonicalID[:])
 	})
+}
+
+func TestContainerCreateV2WithEACL(t *testing.T) {
+	anyValidInvocScript := randomBytes(10)
+	anyValidVerifScript := randomBytes(10)
+	anyValidSessionToken := randomBytes(10)
+
+	inv, balInv, _, _ := newContainerInvoker(t, false)
+
+	owner := inv.NewAccount(t, 0)
+	ownerAcc := owner.ScriptHash()
+	ownerID := user.NewFromScriptHash(ownerAcc)
+
+	cnr := containertest.Container()
+	cnr.SetOwner(ownerID)
+
+	cnrBytes := cnr.Marshal()
+	id := cid.NewFromMarshalledContainer(cnrBytes)
+
+	anyValidEACL := randomBytes(100)
+	anyValidEACL[1] = 0 // CID offset fix
+	copy(anyValidEACL[6:], id[:])
+
+	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+
+	scriptBuilder := smartcontract.NewBuilder()
+	scriptBuilder.InvokeMethod(inv.Hash, "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	scriptBuilder.InvokeMethod(inv.Hash, "putEACL", anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+
+	script, err := scriptBuilder.Script()
+	require.NoError(t, err)
+
+	txHash := inv.InvokeScript(t, script, inv.Signers)
+
+	stack, err := inv.TestInvoke(t, "getEACLData", id[:])
+	require.NoError(t, err)
+	eaclData := stack.Pop().Bytes()
+	require.Equal(t, anyValidEACL, eaclData)
+
+	res := inv.GetTxExecResult(t, txHash)
+	events := res.Events
+	require.Len(t, events, 5) // transfer/transferX/created/transfer/eaclchanged, doesn't matter much, but no containerupdate or it'll be the sixth one
+
+	stack, err = inv.TestInvoke(t, "getRevisionedInfo", id[:])
+	require.NoError(t, err)
+	infoWithRev := stack.Pop().Array()
+	bigRevision, err := infoWithRev[1].TryInteger()
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(1), bigRevision)
 }
 
 func TestContainerSymbol(t *testing.T) {
