@@ -1348,7 +1348,6 @@ func TestContainerCreate(t *testing.T) {
 			return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 		}
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
 
 		// NNS
@@ -1405,7 +1404,6 @@ func TestContainerCreate(t *testing.T) {
 		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 	}
 	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-	require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
@@ -1738,7 +1736,6 @@ func TestContainerCreateV2(t *testing.T) {
 
 		require.Equal(t, stackitem.NewStruct(cnrRevisioned), gotStruct)
 		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerID[:], id[:])))
-		require.EqualValues(t, cnrBytes, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
 	}
 
 	assertSuccessNotifications := func(t *testing.T, txHash util.Uint256, fee int64, id cid.ID, domain string, ownerID user.ID) {

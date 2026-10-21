@@ -121,7 +121,6 @@ const (
 	reportsSummary             = 's'
 	maxNumberOfReportsPerEpoch = 3
 	reportersPrefix            = 'i'
-	containerKeyPrefix         = 'x'
 	ownerKeyPrefix             = 'o'
 	deletedKeyPrefix           = 'd'
 	nodesPrefix                = 'n'
@@ -549,7 +548,6 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 
 	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initInfo(cnr)))
 	storage.LocalPut(append(append([]byte{ownerKeyPrefix}, ownerAddr...), id...), id)
-	storage.LocalPut(append([]byte{containerKeyPrefix}, id...), cnrBytes)
 
 	runtime.Notify("Created", id, ownerAddr)
 
@@ -1582,9 +1580,6 @@ func addContainer(id, owner, container []byte, info Info) {
 	containerListKey = append(containerListKey, id...)
 	storage.LocalPut(containerListKey, id)
 
-	idKey := append([]byte{containerKeyPrefix}, id...)
-	storage.LocalPut(idKey, container)
-
 	storage.LocalPut(append([]byte{infoPrefix}, id...), std.Serialize(initInfo(info)))
 }
 
@@ -1612,7 +1607,6 @@ func removeContainer(id []byte, owner []byte) {
 	storage.LocalDelete(containerQuotaKey(id))
 	storage.LocalDelete(summaryKey)
 
-	storage.LocalDelete(append([]byte{containerKeyPrefix}, id...))
 	storage.LocalDelete(append([]byte{infoPrefix}, id...))
 	storage.LocalDelete(append(eACLPrefix, id...))
 	storage.LocalPut(append([]byte{deletedKeyPrefix}, id...), []byte{})
@@ -2177,10 +2171,8 @@ func SetAttribute(cID interop.Hash256, name, value string, validUntil int, invoc
 	}
 
 	info.Revision++
-	cnrBytes := toBytes(info.Info)
 
 	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
-	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
 	runtime.Notify("ContainerUpdated", cID, info.Revision)
@@ -2378,10 +2370,8 @@ func RemoveAttribute(cID interop.Hash256, name string, validUntil int, invocScri
 	info.Revision++
 
 	util.Remove(info.Attributes, index)
-	cnrBytes := toBytes(info.Info)
 
 	storage.LocalPut(append([]byte{infoPrefix}, cID...), std.Serialize(info))
-	storage.LocalPut(append([]byte{containerKeyPrefix}, cID...), cnrBytes)
 
 	runtime.Notify("AttributeChanged", cID, name)
 	runtime.Notify("ContainerUpdated", cID, info.Revision)
