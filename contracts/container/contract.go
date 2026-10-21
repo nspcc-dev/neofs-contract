@@ -700,24 +700,11 @@ func GetInfo(id interop.Hash256) Info {
 // GetRevisionedInfo reads container with its revision by ID. If the container is
 // missing, GetRevisionedInfo throws [cst.NotFoundError] exception.
 func GetRevisionedInfo(id interop.Hash256) InfoWithRevision {
-	res, ok := tryGetInfo(id)
-	if !ok {
-		panic(cst.NotFoundError)
-	}
-	return res
-}
-
-func tryGetInfo(id interop.Hash256) (InfoWithRevision, bool) {
 	val := storage.LocalGet(append([]byte{infoPrefix}, id...))
 	if val == nil {
-		if val = storage.LocalGet(append([]byte{containerKeyPrefix}, id...)); val != nil {
-			// raw container data is useless in terms of revisions anyway
-			info := fromBytes(val)
-			return initInfo(info), true
-		}
-		return InfoWithRevision{}, false
+		panic(cst.NotFoundError)
 	}
-	return std.Deserialize(val).(InfoWithRevision), true
+	return std.Deserialize(val).(InfoWithRevision)
 }
 
 // Owner method returns a 25 byte Owner ID of the container.
