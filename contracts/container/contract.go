@@ -646,10 +646,12 @@ func Remove(id []byte, invocScript, verifScript, sessionToken []byte) {
 		panic("invalid container ID length")
 	}
 
-	cnr, ok := tryGetInfo(id)
-	if !ok {
+	val := storage.LocalGet(append([]byte{infoPrefix}, id...))
+	if val == nil {
 		return
 	}
+
+	cnr := std.Deserialize(val).(InfoWithRevision)
 
 	if e := checkLock(cnr); e != "" {
 		panic(e)
