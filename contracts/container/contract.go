@@ -560,53 +560,6 @@ func CreateV2(cnr Info, invocScript, verifScript, sessionToken []byte) interop.H
 	return id
 }
 
-// AddStructs makes and saves structures for up to 10 existing containers.
-// Returns true if not all stored containers have been structurized. Recall
-// continues the process. Returning false means all containers have been
-// processed.
-//
-// AddStructs requires Alphabet witness.
-//
-// AddStructs throws NEP-11 'Transfer' event representing token mint for each
-// handled container.
-func AddStructs() bool {
-	common.CheckAlphabetWitness()
-
-	var done int
-	const doneLimit = 10
-	var structKey []byte
-
-	it := storage.LocalFind([]byte{containerKeyPrefix}, storage.RemovePrefix)
-	for iterator.Next(it) {
-		protobufKV := iterator.Value(it).(storage.KeyValue)
-		if structKey == nil {
-			structKey = append([]byte{infoPrefix}, protobufKV.Key...)
-		} else {
-			copy(structKey[1:], protobufKV.Key)
-		}
-
-		if storage.LocalGet(structKey) != nil {
-			continue
-		}
-
-		cnr := fromBytes(protobufKV.Value)
-
-		storage.LocalPut(structKey, std.Serialize(initInfo(cnr)))
-
-		notifyNEP11Transfer(protobufKV.Key, nil, cnr.Owner)
-
-		onNEP11PaymentSafe(protobufKV.Key, nil, cnr.Owner, nil)
-
-		if done == doneLimit-1 {
-			return iterator.Next(it)
-		}
-
-		done++
-	}
-
-	return false
-}
-
 // checkNiceNameAvailable checks if the nice name is available for the container.
 // It panics if the name is taken. Returned value specifies if new domain registration is needed.
 func checkNiceNameAvailable(nnsContractAddr interop.Hash160, domain string) bool {
@@ -1616,12 +1569,6 @@ func Properties(tokenID []byte) map[string]any {
 
 func notifyNEP11Transfer(tokenID []byte, from, to interop.Hash160) {
 	runtime.Notify("Transfer", from, to, nep11TransferAmount, tokenID)
-}
-
-func onNEP11PaymentSafe(tokenID []byte, from, to interop.Hash160, data any) {
-	// recover potential panic, i.e. contract exception
-	defer func() { _ = recover() }()
-	onNEP11Payment(tokenID, from, to, data)
 }
 
 func onNEP11Payment(tokenID []byte, from, to interop.Hash160, data any) {

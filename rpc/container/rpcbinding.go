@@ -366,44 +366,6 @@ func (c *Contract) AddNextEpochNodesUnsigned(cID util.Uint256, placementVector *
 	return c.actor.MakeUnsignedCall(c.hash, "addNextEpochNodes", nil, cID, placementVector, publicKeys)
 }
 
-func (c *Contract) scriptForAddStructs() ([]byte, error) {
-	return smartcontract.CreateCallWithAssertScript(c.hash, "addStructs")
-}
-
-// AddStructs creates a transaction invoking `addStructs` method of the contract.
-// This transaction is signed and immediately sent to the network.
-// The values returned are its hash, ValidUntilBlock value and error if any.
-func (c *Contract) AddStructs() (util.Uint256, uint32, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return util.Uint256{}, 0, err
-	}
-	return c.actor.SendRun(script)
-}
-
-// AddStructsTransaction creates a transaction invoking `addStructs` method of the contract.
-// This transaction is signed, but not sent to the network, instead it's
-// returned to the caller.
-func (c *Contract) AddStructsTransaction() (*transaction.Transaction, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return nil, err
-	}
-	return c.actor.MakeRun(script)
-}
-
-// AddStructsUnsigned creates a transaction invoking `addStructs` method of the contract.
-// This transaction is not signed, it's simply returned to the caller.
-// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
-// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
-func (c *Contract) AddStructsUnsigned() (*transaction.Transaction, error) {
-	script, err := c.scriptForAddStructs()
-	if err != nil {
-		return nil, err
-	}
-	return c.actor.MakeUnsignedRun(script, nil)
-}
-
 // CommitContainerListUpdate creates a transaction invoking `commitContainerListUpdate` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.

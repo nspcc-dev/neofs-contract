@@ -11,6 +11,7 @@ Changelog for NeoFS Contract
 ### Updated
 
 ### Removed
+- `addStructs` method from Container contract (#539)
 
 ### Fixed
 
