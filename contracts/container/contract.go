@@ -1499,24 +1499,17 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		panic("invalid receiver len " + std.Itoa10(len(to)))
 	}
 
-	binKey := append([]byte{containerKeyPrefix}, tokenID...)
-	bin := []byte(storage.LocalGet(binKey)) // Need a proper buffer here to copy() below.
-	if bin == nil {
+	key := append([]byte{infoPrefix}, tokenID...)
+
+	item := storage.LocalGet(key)
+	if item == nil {
 		if storage.LocalGet(append([]byte{deletedKeyPrefix}, tokenID...)) != nil {
 			panic(cst.ErrorDeleted)
 		}
 
 		panic(cst.NotFoundError)
 	}
-
-	key := append([]byte{infoPrefix}, tokenID...)
-
-	var cnr InfoWithRevision
-	if item := storage.LocalGet(key); item == nil {
-		cnr = initInfo(fromBytes(bin))
-	} else {
-		cnr = std.Deserialize(item).(InfoWithRevision)
-	}
+	cnr := std.Deserialize(item).(InfoWithRevision)
 
 	if !runtime.CheckWitness(cnr.Owner) || !runtime.CheckWitness(to) {
 		return false
@@ -1525,8 +1518,6 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 	from := cnr.Owner
 
 	if !from.Equals(to) {
-		// from ownerFromBinaryContainer()
-		off := 2 + int(bin[1]) + 4
 		toAddr := scriptHashToAddress(to)
 
 		cnr.Owner = to
@@ -1537,9 +1528,6 @@ func Transfer(to interop.Hash160, tokenID []byte, data any) bool {
 		storage.LocalPut(key, std.Serialize(cnr))
 		storage.LocalDelete(append(append([]byte{ownerKeyPrefix}, scriptHashToAddress(from)...), tokenID...))
 		storage.LocalPut(append(append([]byte{ownerKeyPrefix}, toAddr...), tokenID...), tokenID)
-
-		copy(bin[off:], toAddr)
-		storage.LocalPut(binKey, bin)
 
 		if cnrSizeItem := storage.LocalGet(append([]byte{reportsSummary}, tokenID...)); cnrSizeItem != nil {
 			cnrSize := convert.ToInteger(cnrSizeItem)
