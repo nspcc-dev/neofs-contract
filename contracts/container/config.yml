@@ -57,8 +57,6 @@ events:
       - name: Revision
         type: Integer
 overloads:
-  putMeta: put
-  putNamedOverloaded: put
   createV2Overloaded: createV2
   removeOverloaded: remove
   putEACLOverloaded: putEACL

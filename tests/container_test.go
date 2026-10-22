@@ -125,25 +125,27 @@ func newProxySponsorInvoker(t *testing.T) (*neotest.ContractInvoker, *neotest.Co
 }
 
 type testContainer struct {
-	id                     [32]byte
-	value, sig, pub, token []byte
-	owner                  user.ID
+	id                 [32]byte
+	value              container.Container
+	structure          *stackitem.Struct
+	invocationScript   []byte
+	verificationScript []byte
+	sessionToken       []byte
 }
 
-func dummyContainer(owner neotest.Signer) testContainer {
+func newTestContainer(owner neotest.Signer) testContainer {
 	ownerID := user.NewFromScriptHash(owner.ScriptHash())
 
 	cnr := containertest.Container()
 	cnr.SetOwner(ownerID)
-	value := cnr.Marshal()
 
 	return testContainer{
-		id:    sha256.Sum256(value),
-		value: value,
-		sig:   randomBytes(64),
-		pub:   randomBytes(33),
-		token: randomBytes(42),
-		owner: ownerID,
+		id:                 cid.NewFromMarshalledContainer(cnr.Marshal()),
+		value:              cnr,
+		structure:          stackitem.NewStruct(containerToStructFields(cnr)),
+		invocationScript:   randomBytes(64),
+		verificationScript: randomBytes(33),
+		sessionToken:       randomBytes(42),
 	}
 }
 
@@ -166,9 +168,9 @@ func TestContainerCount(t *testing.T) {
 	checkCount(t, 2)
 
 	// Same owner.
-	cnt3 := dummyContainer(acc1)
+	cnt3 := newTestContainer(acc1)
 	balanceMint(t, cBal, acc1.ScriptHash(), containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", cnt3.value, cnt3.sig, cnt3.pub, cnt3.token)
+	c.Invoke(t, cnt3.id[:], "createV2", cnt3.structure, cnt3.invocationScript, cnt3.verificationScript, cnt3.sessionToken)
 	checkContainerList(t, c, [][]byte{cnt1.id[:], cnt2.id[:], cnt3.id[:]})
 
 	c.Invoke(t, stackitem.Null{}, "remove", cnt1.id[:], nil, nil, nil)
@@ -203,100 +205,12 @@ func checkContainerList(t *testing.T, c *neotest.ContractInvoker, expected [][]b
 	})
 }
 
-func TestContainerPut(t *testing.T) {
-	for autohashes, name := range map[bool]string{
-		false: "standard deploy",
-		true:  "deploy with no hashes",
-	} {
-		t.Run(name, func(t *testing.T) {
-			c, cBal, _, cNNS := newContainerInvoker(t, autohashes)
-
-			acc := c.NewAccount(t)
-			cnt := dummyContainer(acc)
-			ownerAcc := cnt.owner.ScriptHash()
-
-			putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token}
-			c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
-
-			balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
-
-			cAcc := c.WithSigners(acc)
-			cAcc.InvokeFail(t, common.ErrAlphabetWitnessFailed, "put", putArgs...)
-
-			txHash := c.Invoke(t, stackitem.Null{}, "put", putArgs...)
-			res := c.GetTxExecResult(t, txHash)
-			events := res.Events
-			require.Len(t, events, 3)
-			assertNotificationEvent(t, events[2], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
-
-			c.Invoke(t, stackitem.Null{}, "alias", cnt.id[:])
-
-			var cnr container.Container
-			require.NoError(t, cnr.Unmarshal(cnt.value))
-
-			assertGetInfo(t, c, cnt.id, cnr)
-
-			t.Run("with nice names", func(t *testing.T) {
-				balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
-
-				putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", ""}
-				t.Run("no fee for alias", func(t *testing.T) {
-					c.InvokeFail(t, "insufficient balance to create container", "put", putArgs...)
-				})
-
-				balanceMint(t, cBal, acc.ScriptHash(), containerAliasFee*1, []byte{})
-				txHash := c.Invoke(t, stackitem.Null{}, "put", putArgs...)
-
-				res := c.GetTxExecResult(t, txHash)
-				events := res.Events
-				require.Len(t, events, 4)
-				assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), cnt.id[:])
-
-				expected := stackitem.NewArray([]stackitem.Item{
-					stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:]))),
-				})
-				cNNS.Invoke(t, expected, "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
-				c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
-
-				t.Run("name is already taken", func(t *testing.T) {
-					c.InvokeFail(t, "name is already taken", "put", putArgs...)
-				})
-
-				c.Invoke(t, stackitem.Null{}, "remove", cnt.id[:], nil, nil, nil)
-				cNNS.Invoke(t, stackitem.NewArray([]stackitem.Item{}), "resolve", "mycnt."+containerDomain, int64(recordtype.TXT))
-
-				t.Run("register in advance", func(t *testing.T) {
-					cnt.value[len(cnt.value)-1]++
-					cnt.id = sha256.Sum256(cnt.value)
-
-					cNNS.Invoke(t, stackitem.Null{}, "registerTLD",
-						"cdn", "whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
-
-					cNNS.Invoke(t, true, "register",
-						"domain.cdn", c.CommitteeHash,
-						"whateveriwant@world.com", int64(0), int64(0), int64(100_000), int64(0))
-
-					balanceMint(t, cBal, acc.ScriptHash(), (containerFee+containerAliasFee)*1, []byte{})
-
-					putArgs := []any{cnt.value, cnt.sig, cnt.pub, cnt.token, "domain", "cdn"}
-					c2 := c.WithSigners(c.Committee, acc)
-					c2.Invoke(t, stackitem.Null{}, "put", putArgs...)
-
-					expected = stackitem.NewArray([]stackitem.Item{
-						stackitem.NewByteArray([]byte(base58.Encode(cnt.id[:])))})
-					cNNS.Invoke(t, expected, "resolve", "domain.cdn", int64(recordtype.TXT))
-				})
-			})
-		})
-	}
-}
-
 func addContainer(t *testing.T, c, cBal *neotest.ContractInvoker) (neotest.Signer, testContainer) {
 	acc := c.NewAccount(t)
-	cnt := dummyContainer(acc)
+	cnt := newTestContainer(acc)
 
 	balanceMint(t, cBal, acc.ScriptHash(), containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	c.Invoke(t, cnt.id[:], "createV2", cnt.structure, cnt.invocationScript, cnt.verificationScript, cnt.sessionToken)
 	return acc, cnt
 }
 
@@ -797,13 +711,10 @@ func TestQuotas(t *testing.T) {
 		ownerAcc        = c.NewAccount(t)
 		ownerSH         = ownerAcc.ScriptHash()
 		owner           = user.NewFromScriptHash(ownerSH)
-		cnr             = containertest.Container()
+		cnr             = newTestContainer(ownerAcc)
 	)
-	cnr.SetOwner(owner)
-	rawCnr := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(rawCnr)
 	balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
-	c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+	c.Invoke(t, cnr.id[:], "createV2", cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
 	nodes := []testNodeInfo{
 		newStorageNode(t, c),
@@ -814,8 +725,8 @@ func TestQuotas(t *testing.T) {
 	for _, node := range nodes {
 		nodesKeys = append(nodesKeys, node.pub)
 	}
-	c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, nodesKeys)
-	c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{uint8(len(nodesKeys))})
+	c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnr.id[:], 0, nodesKeys)
+	c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{uint8(len(nodesKeys))})
 
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(1))
 	cNm.Invoke(t, stackitem.Null{}, "newEpoch", int64(2))
@@ -823,16 +734,16 @@ func TestQuotas(t *testing.T) {
 	const node1Report = 1000
 	const node2Report = 10000
 	c.WithSigners(nodes[0].signer).Invoke(t, stackitem.Null{}, "putReport",
-		cID[:], int64(node1Report), int64(node1Report), nodes[0].pub,
+		cnr.id[:], int64(node1Report), int64(node1Report), nodes[0].pub,
 	)
 	c.WithSigners(nodes[1].signer).Invoke(t, stackitem.Null{}, "putReport",
-		cID[:], int64(node2Report), int64(node2Report), nodes[1].pub,
+		cnr.id[:], int64(node2Report), int64(node2Report), nodes[1].pub,
 	)
 
 	t.Run("witness checks", func(t *testing.T) {
 		t.Run("container quota", func(t *testing.T) {
-			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cID[:], 0)
-			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cID[:], 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cnr.id[:], 0)
+			c.WithSigners(c.NewAccount(t)).InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cnr.id[:], 0)
 		})
 
 		t.Run("user quota", func(t *testing.T) {
@@ -846,8 +757,8 @@ func TestQuotas(t *testing.T) {
 			cNm.Invoke(t, stackitem.Null{}, "setConfig", []byte{}, containerconst.AlphabetManagesQuotasKey, true)
 
 			t.Run("container quota", func(t *testing.T) {
-				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setSoftContainerQuota", cID[:], 0)
-				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setHardContainerQuota", cID[:], 0)
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setSoftContainerQuota", cnr.id[:], 0)
+				c.WithSigners(ownerAcc).InvokeFail(t, common.ErrAlphabetWitnessFailed, "setHardContainerQuota", cnr.id[:], 0)
 			})
 
 			t.Run("user quota", func(t *testing.T) {
@@ -860,8 +771,8 @@ func TestQuotas(t *testing.T) {
 			cNm.Invoke(t, stackitem.Null{}, "setConfig", []byte{}, containerconst.AlphabetManagesQuotasKey, false)
 
 			t.Run("container quota", func(t *testing.T) {
-				c.InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cID[:], 0)
-				c.InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cID[:], 0)
+				c.InvokeFail(t, common.ErrWitnessFailed, "setSoftContainerQuota", cnr.id[:], 0)
+				c.InvokeFail(t, common.ErrWitnessFailed, "setHardContainerQuota", cnr.id[:], 0)
 			})
 
 			t.Run("user quota", func(t *testing.T) {
@@ -889,7 +800,7 @@ func TestQuotas(t *testing.T) {
 		})
 
 		t.Run("container quota", func(t *testing.T) {
-			c.Invoke(t, exp, "containerQuota", cID[:])
+			c.Invoke(t, exp, "containerQuota", cnr.id[:])
 		})
 		t.Run("container quota", func(t *testing.T) {
 			c.Invoke(t, exp, "userQuota", owner[:])
@@ -901,23 +812,23 @@ func TestQuotas(t *testing.T) {
 		hardLimit := node1Report
 
 		t.Run("container quota", func(t *testing.T) {
-			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftContainerQuota", cID[:], softLimit)
+			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftContainerQuota", cnr.id[:], softLimit)
 			res := c.GetTxExecResult(t, txH)
-			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(softLimit)), false)
+			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cnr.id[:], big.NewInt(int64(softLimit)), false)
 			exp := stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
 				stackitem.Make(0),
 			})
-			c.Invoke(t, exp, "containerQuota", cID[:])
+			c.Invoke(t, exp, "containerQuota", cnr.id[:])
 
-			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardContainerQuota", cID[:], hardLimit)
+			txH = c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setHardContainerQuota", cnr.id[:], hardLimit)
 			res = c.GetTxExecResult(t, txH)
-			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cID[:], big.NewInt(int64(hardLimit)), true)
+			assertNotificationEvent(t, res.Events[0], "ContainerQuotaSet", cnr.id[:], big.NewInt(int64(hardLimit)), true)
 			exp = stackitem.NewStruct([]stackitem.Item{
 				stackitem.Make(softLimit),
 				stackitem.Make(hardLimit),
 			})
-			c.Invoke(t, exp, "containerQuota", cID[:])
+			c.Invoke(t, exp, "containerQuota", cnr.id[:])
 		})
 		t.Run("user quota", func(t *testing.T) {
 			txH := c.WithSigners(ownerAcc).Invoke(t, stackitem.Null{}, "setSoftUserQuota", owner[:], softLimit)
@@ -955,18 +866,15 @@ func TestTotalUserSpace(t *testing.T) {
 		const numOfCnrs = 10
 		cnrs := make([]cid.ID, 0, numOfCnrs)
 		for range numOfCnrs {
-			cnr := containertest.Container()
-			cnr.SetOwner(owner)
-			rawCnr := cnr.Marshal()
-			cID := cid.NewFromMarshalledContainer(rawCnr)
+			cnr := newTestContainer(ownerAcc)
 
 			balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
-			c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+			c.Invoke(t, cnr.id[:], "createV2", cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-			c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, []any{nodeKey})
-			c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+			c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnr.id[:], 0, []any{nodeKey})
+			c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{1})
 
-			cnrs = append(cnrs, cID)
+			cnrs = append(cnrs, cnr.id)
 		}
 
 		var sum int
@@ -994,13 +902,10 @@ func TestTotalUserSpace(t *testing.T) {
 	})
 
 	t.Run("netmap changes", func(t *testing.T) {
-		cnr := containertest.Container()
-		cnr.SetOwner(owner)
-		rawCnr := cnr.Marshal()
-		cID := cid.NewFromMarshalledContainer(rawCnr)
+		cnr := newTestContainer(ownerAcc)
 
 		balanceMint(t, cBal, ownerSH, containerFee*1, []byte{})
-		c.Invoke(t, stackitem.Null{}, "put", rawCnr, randomBytes(64), randomBytes(33), randomBytes(42))
+		c.Invoke(t, cnr.id[:], "createV2", cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
 		const nodesInNetmap = 10
 		var (
@@ -1014,14 +919,14 @@ func TestTotalUserSpace(t *testing.T) {
 			signers = append(signers, acc)
 			oldNodes = append(oldNodes, key)
 		}
-		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, oldNodes)
-		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnr.id[:], 0, oldNodes)
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{1})
 
 		const spaceMultiplier = 1000
 		var sum int
 		for i := range nodesInNetmap {
 			sum += i * spaceMultiplier
-			c.WithSigners(signers[i]).Invoke(t, stackitem.Null{}, "putReport", cID[:], i*spaceMultiplier, i*spaceMultiplier, oldNodes[i])
+			c.WithSigners(signers[i]).Invoke(t, stackitem.Null{}, "putReport", cnr.id[:], i*spaceMultiplier, i*spaceMultiplier, oldNodes[i])
 		}
 		c.Invoke(t, stackitem.Make(sum), "getTakenSpaceByUser", owner[:])
 
@@ -1030,8 +935,8 @@ func TestTotalUserSpace(t *testing.T) {
 		for i := range newNodes {
 			newSum += i * spaceMultiplier
 		}
-		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cID[:], 0, newNodes)
-		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cID[:], []uint8{1})
+		c.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnr.id[:], 0, newNodes)
+		c.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnr.id[:], []uint8{1})
 		c.Invoke(t, stackitem.Make(newSum), "getTakenSpaceByUser", owner[:])
 	})
 }
@@ -1283,136 +1188,19 @@ func TestContainerAlias(t *testing.T) {
 	})
 
 	t.Run("good", func(t *testing.T) {
-		acc, cnt := addContainer(t, c, cBal)
+		acc := c.NewAccount(t)
 		balanceMint(t, cBal, acc.ScriptHash(), containerFee+containerAliasFee, []byte{})
-		c.Invoke(t, stackitem.Null{}, "putNamed", cnt.value, cnt.sig, cnt.pub, cnt.token, "mycnt", "")
 
-		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", cnt.id[:])
+		cnr := containertest.Container()
+		cnr.SetOwner(user.NewFromScriptHash(acc.ScriptHash()))
+		cnr.SetAttribute("__NEOFS__NAME", "mycnt")
+
+		id := cid.NewFromMarshalledContainer(cnr.Marshal())
+
+		c.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), []byte{}, []byte{}, []byte{})
+
+		c.Invoke(t, stackitem.NewByteArray([]byte("mycnt."+containerDomain)), "alias", id[:])
 	})
-}
-
-func TestContainerCreate(t *testing.T) {
-	cnr := containertest.Container()
-	anyValidCnr := cnr.Marshal()
-	ch := sha256.Sum256(anyValidCnr)
-	anyValidCnrID := ch[:]
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
-	const anyValidDomainName = ""
-	const anyValidDomainZone = ""
-	const anyValidMetaOnChain = false
-
-	exec, balInv, _, nnsInv := newContainerInvoker(t, false)
-	t.Run("invalid container", func(t *testing.T) {
-		t.Skip("TODO")
-	})
-	t.Run("no alphabet witness", func(t *testing.T) {
-		otherAcc := exec.NewAccount(t)
-
-		exec.NewInvoker(exec.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "create",
-			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
-	})
-	t.Run("already deleted", func(t *testing.T) {
-		balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee+containerAliasFee, []byte{})
-
-		exec.Invoke(t, stackitem.Null{}, "create",
-			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
-
-		// TODO: do not mix test with the other ops. Instead, preset contract storage.
-		//  It will be easier with https://github.com/nspcc-dev/neo-go/issues/2926.
-		exec.Invoke(t, stackitem.Null{}, "remove",
-			anyValidCnrID, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
-
-		exec.InvokeFail(t, "container was previously deleted", "create",
-			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
-	})
-	t.Run("domain register failure", func(t *testing.T) {
-		owner := exec.NewAccount(t, 0)
-		ownerAcc := owner.ScriptHash()
-		ownerAddr := user.NewFromScriptHash(ownerAcc)
-		cnr := cnr
-		cnr.SetAttribute("__NEOFS__METAINFO_CONSISTENCY", "foo")
-		cnr.SetAttribute("__NEOFS__NAME", "my-domain")
-		cnr.SetOwner(ownerAddr)
-		cnrBytes := cnr.Marshal()
-		id := cid.NewFromMarshalledContainer(cnrBytes)
-
-		balanceMint(t, balInv, ownerAcc, containerFee+containerAliasFee, []byte{})
-
-		txHash := exec.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "my-domain", "", true)
-
-		// storage
-		getStorageItem := func(key []byte) []byte {
-			return getContractStorageItem(t, exec.Executor, exec.Hash, key)
-		}
-		require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-		require.EqualValues(t, []byte("my-domain.container"), getStorageItem(slices.Concat([]byte("nnsHasAlias"), id[:])))
-
-		// NNS
-		nnsInv.Invoke(t, stackitem.NewArray([]stackitem.Item{
-			stackitem.NewByteArray([]byte(base58.Encode(id[:]))),
-		}), "getRecords", "my-domain.container", int64(recordtype.TXT))
-
-		// notifications
-		res := exec.GetTxExecResult(t, txHash)
-		events := res.Events
-		require.Len(t, events, 4)
-		committeeAcc := exec.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
-		assertNotificationEvent(t, events[0], "Transfer", nil, exec.Hash[:], big.NewInt(1), []byte("my-domain.container"))
-		assertNotificationEvent(t, events[1], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee))
-		assertNotificationEvent(t, events[2], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee+containerAliasFee), slices.Concat([]byte{0x10}, id[:]))
-		assertNotificationEvent(t, events[3], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
-	})
-	t.Run("not enough funds", func(t *testing.T) {
-		owner := exec.NewAccount(t, 0)
-		cnr := cnr
-		cnr.SetOwner(user.NewFromScriptHash(owner.ScriptHash()))
-		cnrBytes := cnr.Marshal()
-
-		exec.InvokeFail(t, "insufficient balance to create container", "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
-
-		balanceMint(t, balInv, owner.ScriptHash(), containerFee-1, []byte{})
-
-		exec.InvokeFail(t, "insufficient balance to create container", "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, anyValidMetaOnChain)
-	})
-	t.Run("payment failure", func(t *testing.T) {
-		t.Skip("TODO")
-	})
-
-	owner := exec.NewAccount(t, 0)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr.SetOwner(ownerAddr)
-	cnr.SetAttribute("__NEOFS__METAINFO_CONSISTENCY", "foo")
-	cnrBytes := cnr.Marshal()
-	id := cid.NewFromMarshalledContainer(cnrBytes)
-
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
-
-	inv := exec
-
-	txHash := inv.Invoke(t, stackitem.Null{}, "create",
-		cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, true)
-
-	// storage
-	getStorageItem := func(key []byte) []byte {
-		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
-	}
-	require.EqualValues(t, id[:], getStorageItem(slices.Concat([]byte{'o'}, ownerAddr[:], id[:])))
-	// notifications
-	res := exec.GetTxExecResult(t, txHash)
-	events := res.Events
-	require.Len(t, events, 3)
-	committeeAcc := exec.Executor.Committee.(neotest.MultiSigner).Single(0).Account().ScriptHash() // type asserted above
-	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee))
-	assertNotificationEvent(t, events[1], "TransferX", ownerAcc[:], committeeAcc[:], big.NewInt(containerFee), slices.Concat([]byte{0x10}, id[:]))
-	assertNotificationEvent(t, events[2], "Transfer", nil, ownerAcc[:], big.NewInt(1), id[:])
-
-	assertGetInfo(t, inv, id, cnr)
 }
 
 func TestContainerRemove(t *testing.T) {
@@ -1475,145 +1263,132 @@ func TestContainerRemove(t *testing.T) {
 	owner := exec.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
 	ownerAddr, _ := base58.Decode(address.Uint160ToString(ownerAcc))
-	cnr := dummyContainer(owner).value
-	id := sha256.Sum256(cnr)
+	cnr := newTestContainer(owner)
 
 	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
-	exec.Invoke(t, stackitem.Null{}, "create",
-		cnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", true)
+	exec.Invoke(t, cnr.id[:], "createV2",
+		cnr.structure, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	txHash := exec.Invoke(t, stackitem.Null{}, "remove",
-		id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		cnr.id[:], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	// storage
 	getStorageItem := func(key []byte) []byte {
 		return getContractStorageItem(t, exec.Executor, exec.Hash, key)
 	}
-	require.Nil(t, getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, id[:])))
-	require.Nil(t, getStorageItem(slices.Concat([]byte{'x'}, id[:])))
-	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, id[:])))
-	require.Nil(t, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
-	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'n'}, id[:])) {
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'o'}, ownerAddr, cnr.id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'x'}, cnr.id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte{'m'}, cnr.id[:])))
+	require.Nil(t, getStorageItem(slices.Concat([]byte("eACL"), cnr.id[:])))
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'n'}, cnr.id[:])) {
 		t.Fatalf("SN item not removed: key %x, val %x", k, v)
 	}
-	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'u'}, id[:])) {
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'u'}, cnr.id[:])) {
 		t.Fatalf("next epoch SN item not removed: key %x, val %x", k, v)
 	}
-	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'r'}, id[:])) {
+	for k, v := range contractStorageItems(t, exec.Executor, exec.Hash, slices.Concat([]byte{'r'}, cnr.id[:])) {
 		t.Fatalf("replica num item not removed: key %x, val %x", k, v)
 	}
-	require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'d'}, id[:])))
+	require.Equal(t, []byte{}, getStorageItem(slices.Concat([]byte{'d'}, cnr.id[:])))
 	// notifications
 	res := exec.GetTxExecResult(t, txHash)
 	events := res.Events
 	require.Len(t, events, 1)
-	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], nil, big.NewInt(1), id[:])
+	assertNotificationEvent(t, events[0], "Transfer", ownerAcc[:], nil, big.NewInt(1), cnr.id[:])
 }
 
 func TestContainerPutEACL(t *testing.T) {
-	cnr := containertest.Container()
-	anyValidCnr := cnr.Marshal()
-	ch := sha256.Sum256(anyValidCnr)
-	anyValidCnrID := ch[:]
+	cntr, cBal, _, _ := newContainerInvoker(t, false)
+
+	owner := cBal.NewAccount(t)
+
+	cnr := newTestContainer(owner)
 	anyValidEACL := randomBytes(100)
 	anyValidEACL[1] = 0 // CID offset fix
-	copy(anyValidEACL[6:], anyValidCnrID)
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
+	copy(anyValidEACL[6:], cnr.id[:])
 
-	cntr, cBal, _, _ := newContainerInvoker(t, false)
 	t.Run("invalid eACL", func(t *testing.T) {
-		balanceMint(t, cBal, cnr.Owner().ScriptHash(), containerFee, []byte{})
-		cntr.Invoke(t, stackitem.Null{}, "create",
-			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+		balanceMint(t, cBal, owner.ScriptHash(), containerFee, []byte{})
+		cntr.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		t.Run("no fields", func(t *testing.T) {
 			for ln := range 2 {
 				cntr.InvokeFail(t, "missing version field in eACL BLOB", "putEACL",
-					make([]byte, ln), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+					make([]byte, ln), cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 			}
 		})
 		t.Run("cut container ID", func(t *testing.T) {
 			for idLn := range 32 {
 				cntr.InvokeFail(t, "missing container ID field in eACL BLOB", "putEACL",
-					anyValidEACL[:6+idLn], anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+					anyValidEACL[:6+idLn], cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 			}
 		})
 	})
 	t.Run("no alphabet witness", func(t *testing.T) {
 		otherAcc := cntr.NewAccount(t)
-		balanceMint(t, cBal, cnr.Owner().ScriptHash(), containerFee, []byte{})
+		balanceMint(t, cBal, owner.ScriptHash(), containerFee, []byte{})
 
-		cntr.Invoke(t, stackitem.Null{}, "create",
-			anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+		cntr.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
 		cntr.NewInvoker(cntr.Hash, otherAcc).InvokeFail(t, "alphabet witness check failed", "putEACL",
-			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			anyValidEACL, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 	t.Run("missing container", func(t *testing.T) {
 		anyValidEACL[6]++ // change container ID
 		cntr.InvokeFail(t, "container does not exist", "putEACL",
-			anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			anyValidEACL, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
-	owner := cntr.NewAccount(t, 0)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr.SetOwner(ownerAddr)
-	cnrBytes := cnr.Marshal()
-	id := sha256.Sum256(cnrBytes)
-	copy(anyValidEACL[6:], id[:])
+	copy(anyValidEACL[6:], cnr.id[:])
 
-	balanceMint(t, cBal, ownerAcc, containerFee, []byte{})
+	balanceMint(t, cBal, owner.ScriptHash(), containerFee, []byte{})
 
 	// TODO: store items manually instead instead of creation call.
 	//  https://github.com/nspcc-dev/neo-go/issues/2926 would help
-	cntr.Invoke(t, stackitem.Null{}, "create",
-		cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+	cntr.Invoke(t, cnr.id[:], "createV2",
+		cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	txHash := cntr.Invoke(t, stackitem.Null{}, "putEACL",
-		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		anyValidEACL, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	// storage
 	getStorageItem := func(key []byte) []byte {
 		return getContractStorageItem(t, cntr.Executor, cntr.Hash, key)
 	}
-	require.EqualValues(t, anyValidEACL, getStorageItem(slices.Concat([]byte("eACL"), id[:])))
+	require.EqualValues(t, anyValidEACL, getStorageItem(slices.Concat([]byte("eACL"), cnr.id[:])))
 	// notifications
 	res := cntr.GetTxExecResult(t, txHash)
 	events := res.Events
 	require.Len(t, events, 2)
-	assertNotificationEvent(t, events[0], "EACLChanged", id[:])
-	assertNotificationEvent(t, events[1], "ContainerUpdated", id[:], big.NewInt(2))
+	assertNotificationEvent(t, events[0], "EACLChanged", cnr.id[:])
+	assertNotificationEvent(t, events[1], "ContainerUpdated", cnr.id[:], big.NewInt(2))
 }
 
 func TestGetEACLData(t *testing.T) {
-	cnr := containertest.Container()
-	anyValidCnr := cnr.Marshal()
-	ch := sha256.Sum256(anyValidCnr)
-	anyValidCnrID := ch[:]
+	inv, balInv, _, _ := newContainerInvoker(t, false)
+
+	owner := balInv.NewAccount(t)
+
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
+
+	cnr := newTestContainer(owner)
 	anyValidEACL := randomBytes(100)
 	anyValidEACL[1] = 0 // CID offset fix
-	copy(anyValidEACL[6:], anyValidCnrID)
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
-
-	inv, balInv, _, _ := newContainerInvoker(t, false)
-	balanceMint(t, balInv, cnr.Owner().ScriptHash(), containerFee, []byte{})
+	copy(anyValidEACL[6:], cnr.id[:])
 
 	t.Run("missing container", func(t *testing.T) {
-		inv.InvokeFail(t, "container does not exist", "getEACLData", anyValidCnrID)
+		inv.InvokeFail(t, "container does not exist", "getEACLData", cnr.id[:])
 	})
 
-	inv.Invoke(t, stackitem.Null{}, "create",
-		anyValidCnr, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, "", "", false)
+	inv.Invoke(t, cnr.id[:], "createV2",
+		cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
 	t.Run("missing", func(t *testing.T) {
-		inv.Invoke(t, stackitem.Null{}, "getEACLData", anyValidCnrID)
+		inv.Invoke(t, stackitem.Null{}, "getEACLData", cnr.id[:])
 	})
 
 	inv.Invoke(t, stackitem.Null{}, "putEACL",
-		anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		anyValidEACL, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-	inv.Invoke(t, stackitem.Make(anyValidEACL), "getEACLData", anyValidCnrID)
+	inv.Invoke(t, stackitem.Make(anyValidEACL), "getEACLData", cnr.id[:])
 }
 
 func TestContainerCreateV2(t *testing.T) {
@@ -1988,31 +1763,6 @@ func TestContainerCreateV2(t *testing.T) {
 			})
 		}
 	})
-
-	t.Run("preserve non-canonical version", func(t *testing.T) {
-		balanceMint(t, balInv, ownerAcc, containerFee, nil)
-
-		var testCnr container.Container
-		testCnr.Init()
-		testCnr.SetOwner(ownerID)
-		var policy netmap.PlacementPolicy
-		require.NoError(t, policy.DecodeString("REP 2"))
-		testCnr.SetPlacementPolicy(policy)
-		msg := testCnr.ProtoMessage()
-		msg.Version.Major, msg.Version.Minor = 2, 0
-		require.NoError(t, testCnr.FromProtoMessage(msg))
-		canonical := testCnr.Marshal()
-		require.Equal(t, []byte{0x0a, 0x02, 0x08, 0x02}, canonical[:4])
-
-		// Existing containers may explicitly encode minor=0. Their original
-		// bytes and CID must remain accessible, without rehashing them on reads.
-		raw := append([]byte{0x0a, 0x04, 0x08, 0x02, 0x10, 0x00}, canonical[4:]...)
-		originalID := cid.NewFromMarshalledContainer(raw)
-		canonicalID := cid.NewFromMarshalledContainer(canonical)
-		require.NotEqual(t, originalID, canonicalID)
-		inv.Invoke(t, stackitem.Null{}, "put", raw, randomBytes(64), randomBytes(33), nil)
-		inv.Invoke(t, stackitem.NewBuffer(ownerID[:]), "owner", originalID[:])
-	})
 }
 
 func TestContainerCreateV2WithEACL(t *testing.T) {
@@ -2024,22 +1774,17 @@ func TestContainerCreateV2WithEACL(t *testing.T) {
 
 	owner := inv.NewAccount(t, 0)
 	ownerAcc := owner.ScriptHash()
-	ownerID := user.NewFromScriptHash(ownerAcc)
 
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerID)
-
-	cnrBytes := cnr.Marshal()
-	id := cid.NewFromMarshalledContainer(cnrBytes)
+	cnr := newTestContainer(owner)
 
 	anyValidEACL := randomBytes(100)
 	anyValidEACL[1] = 0 // CID offset fix
-	copy(anyValidEACL[6:], id[:])
+	copy(anyValidEACL[6:], cnr.id[:])
 
 	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
 
 	scriptBuilder := smartcontract.NewBuilder()
-	scriptBuilder.InvokeMethod(inv.Hash, "createV2", stackitem.NewStruct(containerToStructFields(cnr)), anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+	scriptBuilder.InvokeMethod(inv.Hash, "createV2", cnr.structure, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 	scriptBuilder.InvokeMethod(inv.Hash, "putEACL", anyValidEACL, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
 
 	script, err := scriptBuilder.Script()
@@ -2047,7 +1792,7 @@ func TestContainerCreateV2WithEACL(t *testing.T) {
 
 	txHash := inv.InvokeScript(t, script, inv.Signers)
 
-	stack, err := inv.TestInvoke(t, "getEACLData", id[:])
+	stack, err := inv.TestInvoke(t, "getEACLData", cnr.id[:])
 	require.NoError(t, err)
 	eaclData := stack.Pop().Bytes()
 	require.Equal(t, anyValidEACL, eaclData)
@@ -2056,7 +1801,7 @@ func TestContainerCreateV2WithEACL(t *testing.T) {
 	events := res.Events
 	require.Len(t, events, 4) // transfer/transferX/transfer/eaclchanged, doesn't matter much, but no containerupdate or it'll be the fifth one
 
-	stack, err = inv.TestInvoke(t, "getRevisionedInfo", id[:])
+	stack, err = inv.TestInvoke(t, "getRevisionedInfo", cnr.id[:])
 	require.NoError(t, err)
 	infoWithRev := stack.Pop().Array()
 	bigRevision, err := infoWithRev[1].TryInteger()
@@ -2602,26 +2347,18 @@ func assertGetInfo(t testing.TB, inv *neotest.ContractInvoker, id cid.ID, cnr co
 
 func TestSetAttribute(t *testing.T) {
 	const anyValidUntil = math.MaxUint32
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
 
 	inv, balInv, _, _ := newContainerInvoker(t, false)
 
 	owner := inv.NewAccount(t, 200_0000_0000)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerAddr)
+	cnr := newTestContainer(owner)
 
-	cnrBytes := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(cnrBytes)
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 
 	t.Run("no alphabet witness", func(t *testing.T) {
 		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "setAttribute",
-			cID[:], "any_attribute", "any_value", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			cnr.id[:], "any_attribute", "any_value", anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 	})
 
 	t.Run("invalid container id", func(t *testing.T) {
@@ -2631,17 +2368,14 @@ func TestSetAttribute(t *testing.T) {
 		require.NoError(t, err)
 
 		inv.InvokeFail(t, "container does not exist", "setAttribute", []byte{1, 2, 3}, "CORS", pl,
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("create container", func(t *testing.T) {
-		const anyValidDomainName = ""
-		const anyValidDomainZone = ""
+		_ = inv.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-		_ = inv.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
-
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("passed valid until", func(t *testing.T) {
@@ -2649,23 +2383,23 @@ func TestSetAttribute(t *testing.T) {
 		validUntil := curBlockTime / 1000
 
 		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
-			"setAttribute", cID[:], "any_attribute", "any_value", curBlockTime/1000,
-			anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			"setAttribute", cnr.id[:], "any_attribute", "any_value", curBlockTime/1000,
+			cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("update not whitelisted", func(t *testing.T) {
-		inv.InvokeFail(t, "attribute is immutable", "setAttribute", cID[:], "my-attribute-123", "attribute-value",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "attribute is immutable", "setAttribute", cnr.id[:], "my-attribute-123", "attribute-value",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		inv.InvokeFail(t, "name is empty", "setAttribute", cID[:], "", "attribute-value",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "name is empty", "setAttribute", cnr.id[:], "", "attribute-value",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("empty value", func(t *testing.T) {
-		inv.InvokeFail(t, "value is empty", "setAttribute", cID[:], "my-attribute-123", "",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "value is empty", "setAttribute", cnr.id[:], "my-attribute-123", "",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("store and remove CORS", func(t *testing.T) {
@@ -2682,39 +2416,36 @@ func TestSetAttribute(t *testing.T) {
 		require.NoError(t, err)
 
 		var cnr2 container.Container
-		cnr.CopyTo(&cnr2)
+		cnr.value.CopyTo(&cnr2)
 
-		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash := inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res := inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(2))
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(2))
 
 		cnr2.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cnr.id, cnr2)
 
-		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash = inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "CORS",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res = inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(3))
-		assertGetInfo(t, inv, cID, cnr)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(3))
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("lock", func(t *testing.T) {
-		cp := cnr
-		cnr.CopyTo(&cp)
-		cnr := cp
+		cnr := newTestContainer(owner)
 
-		id := cid.NewFromMarshalledContainer(cnr.Marshal())
-		balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
-		inv.Invoke(t, id[:], "createV2", stackitem.NewStruct(containerToStructFields(cnr)), nil, nil, anyValidSessionToken)
+		balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
+		inv.Invoke(t, cnr.id[:], "createV2", cnr.structure, nil, nil, cnr.sessionToken)
 
 		assertFail := func(t *testing.T, val string, exc string) {
-			inv.InvokeFail(t, exc, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", val,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, exc, "setAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL", val,
+				anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		}
 
 		t.Run("non-int", func(t *testing.T) {
@@ -2739,71 +2470,59 @@ func TestSetAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		txHash := inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", expStr,
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash := inv.Invoke(t, nil, "setAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL", expStr,
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res := inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", id[:], []byte("__NEOFS__LOCK_UNTIL"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", id[:], big.NewInt(2))
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(2))
 
-		cnr.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
-		assertGetInfo(t, inv, id, cnr)
+		cnr.value.SetAttribute("__NEOFS__LOCK_UNTIL", expStr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 
 		t.Run("change", func(t *testing.T) {
 			newVal := strconv.Itoa(int(exp - 1))
 			assertFail(t, newVal, "lock expiration time "+newVal+" is not later than already set "+expStr)
 
 			newVal = strconv.Itoa(int(exp + 1))
-			txHash = inv.Invoke(t, nil, "setAttribute", id[:], "__NEOFS__LOCK_UNTIL", newVal,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			txHash = inv.Invoke(t, nil, "setAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL", newVal,
+				anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 			res = inv.GetTxExecResult(t, txHash)
 			require.Len(t, res.Events, 2)
-			assertNotificationEvent(t, res.Events[0], "AttributeChanged", id[:], []byte("__NEOFS__LOCK_UNTIL"))
-			assertNotificationEvent(t, res.Events[1], "ContainerUpdated", id[:], big.NewInt(3))
+			assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("__NEOFS__LOCK_UNTIL"))
+			assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(3))
 
-			cnr.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
-			assertGetInfo(t, inv, id, cnr)
+			cnr.value.SetAttribute("__NEOFS__LOCK_UNTIL", newVal)
+			assertGetInfo(t, inv, cnr.id, cnr.value)
 		})
 	})
 }
 
 func TestRemoveAttribute(t *testing.T) {
 	const anyValidUntil = math.MaxUint32
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
 
 	inv, balInv, _, _ := newContainerInvoker(t, false)
 
 	owner := inv.NewAccount(t, 200_0000_0000)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerAddr)
+	cnr := newTestContainer(owner)
 
-	cnrBytes := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(cnrBytes)
-
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 	t.Run("no alphabet witness", func(t *testing.T) {
 		inv := inv.NewInvoker(inv.Hash, inv.NewAccount(t))
 		inv.InvokeFail(t, "alphabet witness check failed", "removeAttribute",
-			cID[:], "any_attribute", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			cnr.id[:], "any_attribute", anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("invalid container id", func(t *testing.T) {
 		inv.InvokeFail(t, "container does not exist", "removeAttribute", []byte{1, 2, 3}, "CORS",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("create container", func(t *testing.T) {
-		const anyValidDomainName = ""
-		const anyValidDomainZone = ""
+		_ = inv.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-		_ = inv.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
-
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("passed valid until", func(t *testing.T) {
@@ -2811,18 +2530,18 @@ func TestRemoveAttribute(t *testing.T) {
 		validUntil := curBlockTime / 1000
 
 		inv.InvokeFail(t, "request is valid until "+strconv.FormatUint(validUntil, 10)+"000, now "+strconv.FormatUint(curBlockTime+1, 10),
-			"removeAttribute", cID[:], "any_attribute", curBlockTime/1000,
-			anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			"removeAttribute", cnr.id[:], "any_attribute", curBlockTime/1000,
+			cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("invalid name", func(t *testing.T) {
-		inv.InvokeFail(t, "name is empty", "removeAttribute", cID[:], "",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "name is empty", "removeAttribute", cnr.id[:], "",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("attribute is immutable", func(t *testing.T) {
-		inv.InvokeFail(t, "attribute is immutable", "removeAttribute", cID[:], "random-name",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "attribute is immutable", "removeAttribute", cnr.id[:], "random-name",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("store and remove CORS", func(t *testing.T) {
@@ -2838,25 +2557,25 @@ func TestRemoveAttribute(t *testing.T) {
 		pl, err := json.Marshal(rules)
 		require.NoError(t, err)
 
-		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash := inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res := inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(2))
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(2))
 
 		var cnr2 container.Container
-		cnr.CopyTo(&cnr2)
+		cnr.value.CopyTo(&cnr2)
 		cnr2.SetAttribute("CORS", string(pl))
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cnr.id, cnr2)
 
-		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "CORS",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash = inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "CORS",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res = inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("CORS"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(3))
-		assertGetInfo(t, inv, cID, cnr)
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("CORS"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(3))
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("lock", func(t *testing.T) {
@@ -2865,82 +2584,71 @@ func TestRemoveAttribute(t *testing.T) {
 		exp := expMs / 1000
 		expStr := strconv.Itoa(int(exp))
 
-		txHash := inv.Invoke(t, nil, "setAttribute", cID[:], "__NEOFS__LOCK_UNTIL", expStr,
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash := inv.Invoke(t, nil, "setAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL", expStr,
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res := inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(4))
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(4))
 
 		t.Run("not yet passed", func(t *testing.T) {
 			inv.InvokeFail(t, "lock expiration time "+strconv.Itoa(int(exp*1000))+" has not passed yet, now "+strconv.Itoa(int(curBlockTime+2)),
-				"removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+				"removeAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL",
+				anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		})
 
 		blk := inv.NewUnsignedBlock(t)
 		blk.Timestamp = expMs
 		require.NoError(t, inv.Chain.AddBlock(inv.SignBlock(blk)))
 
-		txHash = inv.Invoke(t, nil, "removeAttribute", cID[:], "__NEOFS__LOCK_UNTIL",
-			anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		txHash = inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "__NEOFS__LOCK_UNTIL",
+			anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		res = inv.GetTxExecResult(t, txHash)
 		require.Len(t, res.Events, 2)
-		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cID[:], []byte("__NEOFS__LOCK_UNTIL"))
-		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cID[:], big.NewInt(5))
+		assertNotificationEvent(t, res.Events[0], "AttributeChanged", cnr.id[:], []byte("__NEOFS__LOCK_UNTIL"))
+		assertNotificationEvent(t, res.Events[1], "ContainerUpdated", cnr.id[:], big.NewInt(5))
 
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 }
 
 func TestSetCORSAttribute(t *testing.T) {
 	const anyValidUntil = math.MaxUint32
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
 
 	inv, balInv, _, _ := newContainerInvoker(t, false)
 
 	owner := inv.NewAccount(t, 200_0000_0000)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerAddr)
-	cnrBytes := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	cnr := newTestContainer(owner)
 
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
-		const anyValidDomainName = ""
-		const anyValidDomainZone = ""
+		_ = inv.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-		_ = inv.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
-
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("allowedMethods", func(t *testing.T) {
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "invalid rule #0: empty rule", "setAttribute", cID[:], "CORS", `[{}]`,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: empty rule", "setAttribute", cnr.id[:], "CORS", `[{}]`,
+				anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		})
 
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedMethods must be defined", "setAttribute", cID[:], "CORS", `[{"field":[]}]`,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "AllowedMethods must be defined", "setAttribute", cnr.id[:], "CORS", `[{"field":[]}]`,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedOrigins must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"]}]`,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "AllowedOrigins must be defined", "setAttribute", cnr.id[:], "CORS", `[{"AllowedMethods":["GET"]}]`,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "AllowedHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]`,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "AllowedHeaders must be defined", "setAttribute", cnr.id[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]`,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 		t.Run("empty allowed methods list", func(t *testing.T) {
-			inv.InvokeFail(t, "ExposeHeaders must be defined", "setAttribute", cID[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"],"AllowedHeaders":["*"]}]`,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "ExposeHeaders must be defined", "setAttribute", cnr.id[:], "CORS", `[{"AllowedMethods":["GET"],"AllowedOrigins":["*"],"AllowedHeaders":["*"]}]`,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("empty allowed methods list", func(t *testing.T) {
@@ -2953,8 +2661,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedMethods is empty", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "AllowedMethods is empty", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("invalid allowed method", func(t *testing.T) {
@@ -2967,8 +2675,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid method METHOD", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: invalid method METHOD", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("empty allowed method", func(t *testing.T) {
@@ -2981,8 +2689,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty method #1", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: empty method #1", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 	})
 
@@ -2998,8 +2706,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "AllowedOrigins is empty", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "AllowedOrigins is empty", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("empty origins", func(t *testing.T) {
@@ -3013,8 +2721,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty origin", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: empty origin", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("to many *", func(t *testing.T) {
@@ -3028,8 +2736,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid origin #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: invalid origin #0: must contain no more than one *", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 	})
 
@@ -3045,8 +2753,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("empty header", func(t *testing.T) {
@@ -3061,8 +2769,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 
 		t.Run("to many *", func(t *testing.T) {
@@ -3077,8 +2785,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: invalid allow header #0: must contain no more than one *", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: invalid allow header #0: must contain no more than one *", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 	})
 
@@ -3095,8 +2803,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "invalid rule #0: empty allowed header #0", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 	})
 
@@ -3115,8 +2823,8 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.InvokeFail(t, "MaxAgeSeconds must be >= 0", "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.InvokeFail(t, "MaxAgeSeconds must be >= 0", "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 		})
 	})
 
@@ -3134,12 +2842,12 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 
-			cnr.SetAttribute("CORS", string(pl))
+			cnr.value.SetAttribute("CORS", string(pl))
 
-			assertGetInfo(t, inv, cID, cnr)
+			assertGetInfo(t, inv, cnr.id, cnr.value)
 		})
 
 		t.Run("update CORS", func(t *testing.T) {
@@ -3155,12 +2863,12 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 
-			cnr.SetAttribute("CORS", string(pl))
+			cnr.value.SetAttribute("CORS", string(pl))
 
-			assertGetInfo(t, inv, cID, cnr)
+			assertGetInfo(t, inv, cnr.id, cnr.value)
 		})
 
 		t.Run("clean CORS", func(t *testing.T) {
@@ -3169,41 +2877,30 @@ func TestSetCORSAttribute(t *testing.T) {
 			pl, err := json.Marshal(rules)
 			require.NoError(t, err)
 
-			inv.Invoke(t, nil, "setAttribute", cID[:], "CORS", pl,
-				anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+			inv.Invoke(t, nil, "setAttribute", cnr.id[:], "CORS", pl,
+				anyValidUntil, cnr.invocationScript, cnr.invocationScript, cnr.sessionToken)
 
-			cnr.SetAttribute("CORS", string(pl))
+			cnr.value.SetAttribute("CORS", string(pl))
 
-			assertGetInfo(t, inv, cID, cnr)
+			assertGetInfo(t, inv, cnr.id, cnr.value)
 		})
 	})
 }
 
 func TestSetS3TAGSAttribute(t *testing.T) {
 	const anyValidUntil = math.MaxUint32
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
 
 	inv, balInv, _, _ := newContainerInvoker(t, false)
 
 	owner := inv.NewAccount(t, 200_0000_0000)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerAddr)
-	cnrBytes := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	cnr := newTestContainer(owner)
 
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
-		const anyValidDomainName = ""
-		const anyValidDomainZone = ""
+		_ = inv.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-		_ = inv.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
-
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("store and remove S3_TAGS", func(t *testing.T) {
@@ -3215,14 +2912,14 @@ func TestSetS3TAGSAttribute(t *testing.T) {
 		require.NoError(t, err)
 
 		var cnr2 container.Container
-		cnr.CopyTo(&cnr2)
+		cnr.value.CopyTo(&cnr2)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.Invoke(t, nil, "setAttribute", cnr.id[:], "S3_TAGS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		cnr2.SetAttribute("S3_TAGS", string(pl))
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cnr.id, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_TAGS", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
-		assertGetInfo(t, inv, cID, cnr)
+		inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "S3_TAGS", anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("key is empty", func(t *testing.T) {
@@ -3235,7 +2932,7 @@ func TestSetS3TAGSAttribute(t *testing.T) {
 		pl, err := json.Marshal(tags)
 		require.NoError(t, err)
 
-		inv.InvokeFail(t, "tag key is empty", "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "tag key is empty", "setAttribute", cnr.id[:], "S3_TAGS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("value is empty", func(t *testing.T) {
@@ -3248,72 +2945,61 @@ func TestSetS3TAGSAttribute(t *testing.T) {
 		pl, err := json.Marshal(tags)
 		require.NoError(t, err)
 
-		inv.InvokeFail(t, "tag k3 value is empty", "setAttribute", cID[:], "S3_TAGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "tag k3 value is empty", "setAttribute", cnr.id[:], "S3_TAGS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 }
 
 func TestSetS3Attributes(t *testing.T) {
 	const anyValidUntil = math.MaxUint32
-	anyValidInvocScript := randomBytes(10)
-	anyValidVerifScript := randomBytes(10)
-	anyValidSessionToken := randomBytes(10)
 
 	inv, balInv, _, _ := newContainerInvoker(t, false)
 
 	owner := inv.NewAccount(t, 200_0000_0000)
-	ownerAcc := owner.ScriptHash()
-	ownerAddr := user.NewFromScriptHash(ownerAcc)
-	cnr := containertest.Container()
-	cnr.SetOwner(ownerAddr)
-	cnrBytes := cnr.Marshal()
-	cID := cid.NewFromMarshalledContainer(cnrBytes)
+	cnr := newTestContainer(owner)
 
-	balanceMint(t, balInv, ownerAcc, containerFee, []byte{})
+	balanceMint(t, balInv, owner.ScriptHash(), containerFee, []byte{})
 	t.Run("create container", func(t *testing.T) {
-		const anyValidDomainName = ""
-		const anyValidDomainZone = ""
+		_ = inv.Invoke(t, cnr.id[:], "createV2",
+			cnr.structure, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 
-		_ = inv.Invoke(t, stackitem.Null{}, "create",
-			cnrBytes, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken, anyValidDomainName, anyValidDomainZone, false)
-
-		assertGetInfo(t, inv, cID, cnr)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("store and remove S3_SETTINGS", func(t *testing.T) {
 		pl := "{}"
 
 		var cnr2 container.Container
-		cnr.CopyTo(&cnr2)
+		cnr.value.CopyTo(&cnr2)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_SETTINGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.Invoke(t, nil, "setAttribute", cnr.id[:], "S3_SETTINGS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		cnr2.SetAttribute("S3_SETTINGS", pl)
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cnr.id, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_SETTINGS", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
-		assertGetInfo(t, inv, cID, cnr)
+		inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "S3_SETTINGS", anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("store and remove S3_NOTIFICATIONS", func(t *testing.T) {
 		pl := "{}"
 
 		var cnr2 container.Container
-		cnr.CopyTo(&cnr2)
+		cnr.value.CopyTo(&cnr2)
 
-		inv.Invoke(t, nil, "setAttribute", cID[:], "S3_NOTIFICATIONS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.Invoke(t, nil, "setAttribute", cnr.id[:], "S3_NOTIFICATIONS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 		cnr2.SetAttribute("S3_NOTIFICATIONS", pl)
-		assertGetInfo(t, inv, cID, cnr2)
+		assertGetInfo(t, inv, cnr.id, cnr2)
 
-		inv.Invoke(t, nil, "removeAttribute", cID[:], "S3_NOTIFICATIONS", anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
-		assertGetInfo(t, inv, cID, cnr)
+		inv.Invoke(t, nil, "removeAttribute", cnr.id[:], "S3_NOTIFICATIONS", anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
+		assertGetInfo(t, inv, cnr.id, cnr.value)
 	})
 
 	t.Run("invalid S3_SETTINGS", func(t *testing.T) {
 		pl := "invalid JSON"
-		inv.InvokeFail(t, "", "setAttribute", cID[:], "S3_SETTINGS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "", "setAttribute", cnr.id[:], "S3_SETTINGS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 
 	t.Run("invalid S3_NOTIFICATIONS", func(t *testing.T) {
 		pl := "invalid JSON"
-		inv.InvokeFail(t, "", "setAttribute", cID[:], "S3_NOTIFICATIONS", pl, anyValidUntil, anyValidInvocScript, anyValidVerifScript, anyValidSessionToken)
+		inv.InvokeFail(t, "", "setAttribute", cnr.id[:], "S3_NOTIFICATIONS", pl, anyValidUntil, cnr.invocationScript, cnr.verificationScript, cnr.sessionToken)
 	})
 }
