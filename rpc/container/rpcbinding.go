@@ -414,6 +414,28 @@ func (c *Contract) CreateV2Unsigned(cnr *ContainerInfo, invocScript []byte, veri
 	return c.actor.MakeUnsignedCall(c.hash, "createV2", nil, cnr, invocScript, verifScript, sessionToken)
 }
 
+// CreateV22 creates a transaction invoking `createV2` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) CreateV22(cnr *ContainerInfo, originalRequest []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "createV2", cnr, originalRequest)
+}
+
+// CreateV22Transaction creates a transaction invoking `createV2` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) CreateV22Transaction(cnr *ContainerInfo, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "createV2", cnr, originalRequest)
+}
+
+// CreateV22Unsigned creates a transaction invoking `createV2` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) CreateV22Unsigned(cnr *ContainerInfo, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "createV2", nil, cnr, originalRequest)
+}
+
 // Put creates a transaction invoking `put` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -456,6 +478,28 @@ func (c *Contract) PutEACLTransaction(eACL []byte, invocScript []byte, verifScri
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) PutEACLUnsigned(eACL []byte, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "putEACL", nil, eACL, invocScript, verifScript, sessionToken)
+}
+
+// PutEACL2 creates a transaction invoking `putEACL` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) PutEACL2(eACL []byte, originalRequest []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "putEACL", eACL, originalRequest)
+}
+
+// PutEACL2Transaction creates a transaction invoking `putEACL` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) PutEACL2Transaction(eACL []byte, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "putEACL", eACL, originalRequest)
+}
+
+// PutEACL2Unsigned creates a transaction invoking `putEACL` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) PutEACL2Unsigned(eACL []byte, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "putEACL", nil, eACL, originalRequest)
 }
 
 // Put2 creates a transaction invoking `put` method of the contract.
@@ -588,6 +632,28 @@ func (c *Contract) RemoveAttributeTransaction(cID util.Uint256, name string, val
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) RemoveAttributeUnsigned(cID util.Uint256, name string, validUntil *big.Int, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "removeAttribute", nil, cID, name, validUntil, invocScript, verifScript, sessionToken)
+}
+
+// Remove2 creates a transaction invoking `remove` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) Remove2(id []byte, originalRequest []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "remove", id, originalRequest)
+}
+
+// Remove2Transaction creates a transaction invoking `remove` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) Remove2Transaction(id []byte, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "remove", id, originalRequest)
+}
+
+// Remove2Unsigned creates a transaction invoking `remove` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) Remove2Unsigned(id []byte, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "remove", nil, id, originalRequest)
 }
 
 // SetAttribute creates a transaction invoking `setAttribute` method of the contract.
