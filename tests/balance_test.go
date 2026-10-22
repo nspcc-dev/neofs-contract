@@ -96,9 +96,9 @@ func TestPayments(t *testing.T) {
 
 	owner := cntI.NewAccount(t)
 	neofsOwnerSH := owner.ScriptHash()
-	cnt := dummyContainer(owner)
+	cnt := newTestContainer(owner)
 	balanceMint(t, balI, owner.ScriptHash(), containerFee*1, []byte{})
-	cntI.Invoke(t, stackitem.Null{}, "put", cnt.value, cnt.sig, cnt.pub, cnt.token)
+	cntI.Invoke(t, cnt.id[:], "createV2", cnt.structure, cnt.invocationScript, cnt.verificationScript, cnt.sessionToken)
 	cntI.Invoke(t, stackitem.Null{}, "addNextEpochNodes", cnt.id[:], 0, nodesKeys)
 	cntI.Invoke(t, stackitem.Null{}, "commitContainerListUpdate", cnt.id[:], []uint8{uint8(len(nodesKeys))})
 
