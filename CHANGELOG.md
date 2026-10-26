@@ -6,16 +6,29 @@ Changelog for NeoFS Contract
 ### Added
 
 ### Changed
-- Billed container size now includes additional 16K per object to pay for object headers (#635)
-- Container contract no longer stores containers in NeoFS API binary format (#539)
 
 ### Updated
+
+### Removed
+
+### Fixed
+
+## [0.28.0] - 2026-10-26
+
+### Added
+- Additional container contract methods to accept original NeoFS requests (#637)
+
+### Changed
+- container.PutEACL increments revision now (#633, #638)
+- Billed container size now includes additional 16K per object to pay for object headers (#635)
+- Container contract no longer stores containers in NeoFS API binary format (#539)
 
 ### Removed
 - `addStructs`, `put`, `putNamed`, `putMeta` methods from Container contract (#539, #640)
 - `PutSuccess`, `Created` and `Removed` notifications from Container contract (#639)
 
 ### Fixed
+- Container protobuf serialization difference with canonical library leading to incorrect CID (#634)
 
 ## [0.27.0] - 2026-09-24
 
@@ -697,7 +710,8 @@ Preview4-testnet version of NeoFS contracts.
 
 Preview4 compatible contracts.
 
-[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.27.0...master
+[Unreleased]: https://github.com/nspcc-dev/neofs-contract/compare/v0.28.0...master
+[0.28.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/nspcc-dev/neofs-contract/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/nspcc-dev/neofs-contract/compare/v0.25.1...v0.26.0
