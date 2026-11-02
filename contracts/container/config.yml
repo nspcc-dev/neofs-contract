@@ -60,3 +60,5 @@ overloads:
   createV2Overloaded: createV2
   removeOverloaded: remove
   putEACLOverloaded: putEACL
+  setAttributeOverloaded: setAttribute
+  removeAttributeOverloaded: removeAttribute
