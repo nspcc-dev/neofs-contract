@@ -524,6 +524,28 @@ func (c *Contract) RemoveAttributeUnsigned(cID util.Uint256, name string, validU
 	return c.actor.MakeUnsignedCall(c.hash, "removeAttribute", nil, cID, name, validUntil, invocScript, verifScript, sessionToken)
 }
 
+// RemoveAttribute2 creates a transaction invoking `removeAttribute` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) RemoveAttribute2(cID util.Uint256, name string, validUntil *big.Int, originalRequest []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "removeAttribute", cID, name, validUntil, originalRequest)
+}
+
+// RemoveAttribute2Transaction creates a transaction invoking `removeAttribute` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) RemoveAttribute2Transaction(cID util.Uint256, name string, validUntil *big.Int, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "removeAttribute", cID, name, validUntil, originalRequest)
+}
+
+// RemoveAttribute2Unsigned creates a transaction invoking `removeAttribute` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) RemoveAttribute2Unsigned(cID util.Uint256, name string, validUntil *big.Int, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "removeAttribute", nil, cID, name, validUntil, originalRequest)
+}
+
 // Remove2 creates a transaction invoking `remove` method of the contract.
 // This transaction is signed and immediately sent to the network.
 // The values returned are its hash, ValidUntilBlock value and error if any.
@@ -566,6 +588,28 @@ func (c *Contract) SetAttributeTransaction(cID util.Uint256, name string, value 
 // Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
 func (c *Contract) SetAttributeUnsigned(cID util.Uint256, name string, value string, validUntil *big.Int, invocScript []byte, verifScript []byte, sessionToken []byte) (*transaction.Transaction, error) {
 	return c.actor.MakeUnsignedCall(c.hash, "setAttribute", nil, cID, name, value, validUntil, invocScript, verifScript, sessionToken)
+}
+
+// SetAttribute2 creates a transaction invoking `setAttribute` method of the contract.
+// This transaction is signed and immediately sent to the network.
+// The values returned are its hash, ValidUntilBlock value and error if any.
+func (c *Contract) SetAttribute2(cID util.Uint256, name string, value string, originalRequest []byte) (util.Uint256, uint32, error) {
+	return c.actor.SendCall(c.hash, "setAttribute", cID, name, value, originalRequest)
+}
+
+// SetAttribute2Transaction creates a transaction invoking `setAttribute` method of the contract.
+// This transaction is signed, but not sent to the network, instead it's
+// returned to the caller.
+func (c *Contract) SetAttribute2Transaction(cID util.Uint256, name string, value string, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeCall(c.hash, "setAttribute", cID, name, value, originalRequest)
+}
+
+// SetAttribute2Unsigned creates a transaction invoking `setAttribute` method of the contract.
+// This transaction is not signed, it's simply returned to the caller.
+// Any fields of it that do not affect fees can be changed (ValidUntilBlock,
+// Nonce), fee values (NetworkFee, SystemFee) can be increased as well.
+func (c *Contract) SetAttribute2Unsigned(cID util.Uint256, name string, value string, originalRequest []byte) (*transaction.Transaction, error) {
+	return c.actor.MakeUnsignedCall(c.hash, "setAttribute", nil, cID, name, value, originalRequest)
 }
 
 // SetHardContainerQuota creates a transaction invoking `setHardContainerQuota` method of the contract.
