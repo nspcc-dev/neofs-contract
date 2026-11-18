@@ -1918,8 +1918,11 @@ func validateCORSExposeHeaders(items []any) string {
 // RemoveAttributeOverloaded is the same RemoveAttribute but with the original
 // NeoFS requests. originalRequest MUST be RemoveAttributeV2, the old RPC is
 // not supported.
-func RemoveAttributeOverloaded(cID interop.Hash256, name string, validUntil int, originalRequest []byte) {
-	RemoveAttribute(cID, name, validUntil, nil, nil, nil)
+func RemoveAttributeOverloaded(cID interop.Hash256, name string, originalRequest []byte) {
+	// math.MaxInt64 as `validUntil` to prevent contracts from interfering with
+	// this check: for new methods, IR will validate requests with
+	// RequestMetaHeader.valid_until_time field.
+	RemoveAttribute(cID, name, 9_223_372_036_854_775_807, nil, nil, nil)
 }
 
 // RemoveAttribute removes container attribute. Not all container attributes can be removed
