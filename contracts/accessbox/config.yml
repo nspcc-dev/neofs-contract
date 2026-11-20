@@ -1,0 +1,5 @@
+name: "NeoFS Access Box"
+supportedstandards: ["NEP-22"]
+safemethods: ["get", "getInfo", "isRevoker", "list", "listRevokers", "version"]
+permissions:
+  - methods: ["update", "transfer"]
