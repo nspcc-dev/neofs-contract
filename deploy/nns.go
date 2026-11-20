@@ -31,6 +31,7 @@ const (
 	domainDesignateNotaryTx     = domainDesignateNotaryPrefix + "tx." + domainBootstrap
 	domainContractAddresses     = "neofs"
 
+	domainAccessBox   = "accessbox"
 	domainAlphabetFmt = "alphabet%d"
 	domainBalance     = "balance"
 	domainContainer   = "container"

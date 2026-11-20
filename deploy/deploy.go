@@ -79,6 +79,11 @@ type AlphabetContractPrm struct {
 	Common CommonDeployPrm
 }
 
+// AccessBoxContractPrm groups deployment parameters of the NeoFS Access Box contract.
+type AccessBoxContractPrm struct {
+	Common CommonDeployPrm
+}
+
 // BalanceContractPrm groups deployment parameters of the NeoFS Balance contract.
 type BalanceContractPrm struct {
 	Common CommonDeployPrm
@@ -123,6 +128,7 @@ type Prm struct {
 	NNS NNSPrm
 
 	AlphabetContract   AlphabetContractPrm
+	AccessBoxContract  AccessBoxContractPrm
 	BalanceContract    BalanceContractPrm
 	ContainerContract  ContainerContractPrm
 	NetmapContract     NetmapContractPrm
@@ -145,6 +151,7 @@ type Prm struct {
 //  4. Alphabet initialization (incl. registration as candidates to validators)
 //  5. deployment/update of the NeoFS system contracts
 //  6. distribution of all available NEO between the Alphabet contracts
+//  7. Access Box contract deployment/update
 //
 // See project documentation for details.
 func Deploy(ctx context.Context, prm Prm) error {
@@ -577,6 +584,25 @@ func Deploy(ctx context.Context, prm Prm) error {
 	}
 
 	prm.Logger.Info("NEO distribution to the Alphabet contracts successfully completed")
+
+	// 7. Access Box
+	//
+	// Access Box resolves the Netmap and Balance contract addresses from NNS.
+	// Both records have been synchronized in the previous steps.
+	syncPrm.tryDeploy = localAccLeads
+	syncPrm.localNEF = prm.AccessBoxContract.Common.NEF
+	syncPrm.localManifest = prm.AccessBoxContract.Common.Manifest
+	syncPrm.domainName = domainAccessBox
+	syncPrm.buildExtraDeployArgs = noExtraDeployArgs
+
+	prm.Logger.Info("synchronizing Access Box contract with the chain...")
+
+	accessBoxContractAddress, err := syncNeoFSContract(ctx, syncPrm)
+	if err != nil {
+		return fmt.Errorf("sync Access Box contract with the chain: %w", err)
+	}
+
+	prm.Logger.Info("Access Box contract successfully synchronized", zap.Stringer("address", accessBoxContractAddress))
 
 	return nil
 }

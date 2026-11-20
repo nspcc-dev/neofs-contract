@@ -22,6 +22,7 @@ Description: This package contains all NeoFS-related contracts.
  .
  FS chain contracts:
  .
+ - accessbox
  - alphabet
  - balance
  - container

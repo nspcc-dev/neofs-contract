@@ -75,7 +75,23 @@ func TestBaseErrors(t *testing.T) {
 		},
 	}
 	_, err = r.ResolveFSContract("blah")
+	require.ErrorIs(t, err, ErrRecordNotFound)
+
+	ti.res = &result.Invoke{
+		State:          "FAULT",
+		FaultException: "token not found",
+	}
+	_, err = r.ResolveFSContract("blah")
+	require.ErrorIs(t, err, ErrDomainNotFound)
+
+	ti.res = &result.Invoke{
+		State:          "FAULT",
+		FaultException: "unexpected error",
+	}
+	_, err = r.ResolveFSContract("blah")
 	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrDomainNotFound)
+	require.NotErrorIs(t, err, ErrRecordNotFound)
 
 	ti.res = &result.Invoke{
 		State: "HALT",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -87,6 +88,7 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 
 	nnsReader := nns.NewReader(from.actor, nnsHash)
 	for _, name := range []string{
+		"accessbox",
 		"alphabet0",
 		"balance",
 		"container",
@@ -98,6 +100,11 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 
 		ctr, err := from.getNeoFSContractByName(name, nnsReader)
 		if err != nil {
+			if name == "accessbox" &&
+				(errors.Is(err, nns.ErrDomainNotFound) || errors.Is(err, nns.ErrRecordNotFound)) {
+				log.Printf("Skipping contract '%s': it is not registered in NNS\n", name)
+				continue
+			}
 			return fmt.Errorf("get '%s' contract state: %w", name, err)
 		}
 
