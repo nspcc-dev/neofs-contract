@@ -79,6 +79,11 @@ type AlphabetContractPrm struct {
 	Common CommonDeployPrm
 }
 
+// AccessBoxContractPrm groups deployment parameters of the NeoFS Access Box contract.
+type AccessBoxContractPrm struct {
+	Common CommonDeployPrm
+}
+
 // BalanceContractPrm groups deployment parameters of the NeoFS Balance contract.
 type BalanceContractPrm struct {
 	Common CommonDeployPrm
@@ -123,6 +128,7 @@ type Prm struct {
 	NNS NNSPrm
 
 	AlphabetContract   AlphabetContractPrm
+	AccessBoxContract  AccessBoxContractPrm
 	BalanceContract    BalanceContractPrm
 	ContainerContract  ContainerContractPrm
 	NetmapContract     NetmapContractPrm
@@ -440,6 +446,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 		[]byte(EpochDurationConfig), encodeUintConfig(prm.NetmapContract.Config.EpochDuration),
 		[]byte(ContainerFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerFee),
 		[]byte(ContainerAliasFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerAliasFee),
+		[]byte(AccessBoxFeeConfig), encodeUintConfig(prm.NetmapContract.Config.AccessBoxFee),
 		[]byte(EigenTrustIterationsConfig), encodeUintConfig(prm.NetmapContract.Config.EigenTrustIterations),
 		[]byte(EigenTrustAlphaConfig), encodeFloatConfig(prm.NetmapContract.Config.EigenTrustAlpha),
 		[]byte(WithdrawFeeConfig), encodeUintConfig(prm.NetmapContract.Config.WithdrawalFee),
@@ -576,6 +583,27 @@ func Deploy(ctx context.Context, prm Prm) error {
 	}
 
 	prm.Logger.Info("NEO distribution to the Alphabet contracts successfully completed")
+
+	// 7. Access Box
+	//
+	// Access Box stores the Netmap and Balance contract addresses during
+	// deployment.
+	syncPrm.tryDeploy = localAccLeads
+	syncPrm.localNEF = prm.AccessBoxContract.Common.NEF
+	syncPrm.localManifest = prm.AccessBoxContract.Common.Manifest
+	syncPrm.domainName = domainAccessBox
+	syncPrm.buildExtraDeployArgs = func() ([]any, error) {
+		return []any{netmapContractAddress, balanceContractAddress}, nil
+	}
+
+	prm.Logger.Info("synchronizing Access Box contract with the chain...")
+
+	accessBoxContractAddress, err := syncNeoFSContract(ctx, syncPrm)
+	if err != nil {
+		return fmt.Errorf("sync Access Box contract with the chain: %w", err)
+	}
+
+	prm.Logger.Info("Access Box contract successfully synchronized", zap.Stringer("address", accessBoxContractAddress))
 
 	return nil
 }

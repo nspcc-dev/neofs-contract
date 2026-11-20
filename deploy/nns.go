@@ -32,6 +32,7 @@ const (
 	domainContractAddresses     = "neofs"
 
 	domainAlphabetFmt = "alphabet%d"
+	domainAccessBox   = "accessbox"
 	domainBalance     = "balance"
 	domainContainer   = "container"
 	domainNetmap      = "netmap"

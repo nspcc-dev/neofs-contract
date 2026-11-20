@@ -4,6 +4,8 @@ Changelog for NeoFS Contract
 ## [Unreleased]
 
 ### Added
+- Access Box FS-chain contract, registered in NNS as `accessbox.neofs`
+- `AccessBoxFee` Netmap configuration setting for charging access-box creation
 
 ### Changed
 
