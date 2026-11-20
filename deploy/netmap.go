@@ -6,6 +6,7 @@ const (
 	EpochDurationConfig        = "EpochDuration"
 	ContainerFeeConfig         = "ContainerFee"
 	ContainerAliasFeeConfig    = "ContainerAliasFee"
+	AccessBoxFeeConfig         = "AccessBoxFee"
 	EigenTrustIterationsConfig = "EigenTrustIterations"
 	EigenTrustAlphaConfig      = "EigenTrustAlpha"
 	WithdrawFeeConfig          = "WithdrawFee"
@@ -29,6 +30,7 @@ type NetworkConfiguration struct {
 	EpochDuration        uint64
 	ContainerFee         uint64
 	ContainerAliasFee    uint64
+	AccessBoxFee         uint64
 	EigenTrustIterations uint64
 	EigenTrustAlpha      float64
 	WithdrawalFee        uint64

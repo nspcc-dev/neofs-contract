@@ -440,6 +440,7 @@ func Deploy(ctx context.Context, prm Prm) error {
 		[]byte(EpochDurationConfig), encodeUintConfig(prm.NetmapContract.Config.EpochDuration),
 		[]byte(ContainerFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerFee),
 		[]byte(ContainerAliasFeeConfig), encodeUintConfig(prm.NetmapContract.Config.ContainerAliasFee),
+		[]byte(AccessBoxFeeConfig), encodeUintConfig(prm.NetmapContract.Config.AccessBoxFee),
 		[]byte(EigenTrustIterationsConfig), encodeUintConfig(prm.NetmapContract.Config.EigenTrustIterations),
 		[]byte(EigenTrustAlphaConfig), encodeFloatConfig(prm.NetmapContract.Config.EigenTrustAlpha),
 		[]byte(WithdrawFeeConfig), encodeUintConfig(prm.NetmapContract.Config.WithdrawalFee),
