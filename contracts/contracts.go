@@ -21,6 +21,7 @@ const (
 
 	nnsDir        = "nns"
 	alphabetDir   = "alphabet"
+	accessBoxDir  = "accessbox"
 	balanceDir    = "balance"
 	containerDir  = "container"
 	netmapDir     = "netmap"
@@ -49,6 +50,7 @@ var (
 		proxyDir,
 		netmapDir,
 		balanceDir,
+		accessBoxDir,
 		reputationDir,
 		containerDir,
 		alphabetDir,

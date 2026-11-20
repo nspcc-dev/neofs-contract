@@ -89,6 +89,7 @@ func overtakeContracts(from *remoteBlockchain, to *dump.Creator) error {
 	for _, name := range []string{
 		"alphabet0",
 		"balance",
+		"accessbox",
 		"container",
 		"netmap",
 		"reputation",
