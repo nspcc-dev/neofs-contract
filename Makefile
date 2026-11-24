@@ -25,7 +25,7 @@ all: fschain mainnet
 fschain: alphabet morph nns
 
 alphabet_sc = alphabet
-morph_sc = balance container netmap proxy reputation
+morph_sc = accessbox balance container netmap proxy reputation
 mainnet_sc = neofs processing
 nns_sc = nns
 

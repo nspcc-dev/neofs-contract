@@ -26,6 +26,7 @@ Main chain (mainnet) contracts:
 
 FS chain contracts:
 
+- accessbox
 - alphabet
 - balance
 - container

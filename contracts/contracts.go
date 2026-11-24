@@ -21,6 +21,7 @@ const (
 
 	nnsDir        = "nns"
 	alphabetDir   = "alphabet"
+	accessBoxDir  = "accessbox"
 	balanceDir    = "balance"
 	containerDir  = "container"
 	netmapDir     = "netmap"
@@ -52,6 +53,7 @@ var (
 		reputationDir,
 		containerDir,
 		alphabetDir,
+		accessBoxDir,
 	}
 	mainContracts = []string{
 		neofsDir,

@@ -2,10 +2,12 @@ package nns
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/unwrap"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 )
 
@@ -21,6 +23,16 @@ const ContractTLD = "neofs"
 
 // nep18Prefix is the string prefix containing NEP-18 address attribute name.
 const nep18Prefix = "address="
+
+var (
+	// ErrDomainNotFound is returned when the requested NNS domain does not
+	// exist.
+	ErrDomainNotFound = errors.New("NNS domain not found")
+
+	// ErrRecordNotFound is returned when the requested NNS domain has no TXT
+	// records.
+	ErrRecordNotFound = errors.New("NNS record not found")
+)
 
 // ContractStateGetter is the interface required for contract state resolution
 // using a known contract ID.
@@ -100,10 +112,20 @@ func AddressFromRecords(strs []string) (util.Uint160, error) {
 // that contracts follow the [ContractTLD] convention, gets simple contract
 // names (like "container" or "netmap") and extracts the hash for the
 // respective NNS record using [AddressFromRecords].
+//
+// It returns [ErrDomainNotFound] if the domain is absent and
+// [ErrRecordNotFound] if the domain has no TXT records.
 func (c *ContractReader) ResolveFSContract(name string) (util.Uint160, error) {
 	strs, err := c.Resolve(name+"."+ContractTLD, TXT)
 	if err != nil {
+		var exception unwrap.Exception
+		if errors.As(err, &exception) && strings.Contains(string(exception), "token not found") {
+			return util.Uint160{}, fmt.Errorf("%w: %w", ErrDomainNotFound, err)
+		}
 		return util.Uint160{}, err
+	}
+	if len(strs) == 0 {
+		return util.Uint160{}, ErrRecordNotFound
 	}
 	return AddressFromRecords(strs)
 }

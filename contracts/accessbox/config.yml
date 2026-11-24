@@ -1,0 +1,10 @@
+name: "NeoFS Access Box"
+supportedstandards: ["NEP-22"]
+safemethods: ["get", "getInfo", "list", "version"]
+permissions:
+  - methods: ["update", "transfer"]
+events:
+  - name: AccessBoxCreated
+    parameters:
+      - name: id
+        type: ByteArray

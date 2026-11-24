@@ -24,10 +24,12 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/neorpc/result"
 	"github.com/nspcc-dev/neo-go/pkg/network"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/invoker"
 	"github.com/nspcc-dev/neo-go/pkg/services/notary"
 	"github.com/nspcc-dev/neo-go/pkg/services/rpcsrv"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	embeddedcontracts "github.com/nspcc-dev/neofs-contract/contracts"
+	contractnns "github.com/nspcc-dev/neofs-contract/rpc/nns"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -229,6 +231,15 @@ func TestContractAutodeploy(t *testing.T) {
 	err = Deploy(ctx, deployPrm)
 	cancel()
 	require.NoError(t, err)
+
+	nnsHash, err := contractnns.InferHash(rpcClient)
+	require.NoError(t, err)
+	nnsReader := contractnns.NewReader(invoker.New(rpcClient, nil), nnsHash)
+	accessBoxHash, err := nnsReader.ResolveFSContract(contractnns.NameAccessBox)
+	require.NoError(t, err)
+	accessBoxState, err := rpcClient.GetContractStateByHash(accessBoxHash)
+	require.NoError(t, err)
+	require.Equal(t, deployPrm.AccessBoxContract.Common.Manifest.Name, accessBoxState.Manifest.Name)
 }
 
 // Copy-pasted from IR.
@@ -240,6 +251,7 @@ func readEmbeddedContracts(deployPrm *Prm) error {
 
 	mRequired := map[string]*CommonDeployPrm{
 		"NameService":        &deployPrm.NNS.Common,
+		"NeoFS Access Box":   &deployPrm.AccessBoxContract.Common,
 		"NeoFS Alphabet":     &deployPrm.AlphabetContract.Common,
 		"NeoFS Balance":      &deployPrm.BalanceContract.Common,
 		"NeoFS Container":    &deployPrm.ContainerContract.Common,
